@@ -1,6 +1,5 @@
 """Writing AniList payloads: anime rows, relationships, people, themes, media."""
 
-from asgiref.sync import async_to_sync, sync_to_async
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
 from django.utils.text import slugify
@@ -40,7 +39,7 @@ def _upsert_person(model, fields: dict):
 class AniListPersistence:
     """Persistence half of ``AniListService``; mixed in with ``AniListClient``."""
 
-    async def process_media_list(self, media_list: list[dict], progress_callback=None):
+    def process_media_list(self, media_list: list[dict], progress_callback=None):
         """Process a list of media items and save/update them in the database.
         Returns stats dict with created anime IDs for theme sync.
         """
@@ -57,7 +56,7 @@ class AniListPersistence:
                 anime_data_dict = self._prepare_anime_data(item, title, title_native, slug)
 
                 # Get or Create
-                anime, created = await self._get_or_create_anime(slug, anime_data_dict)
+                anime, created = self._get_or_create_anime(slug, anime_data_dict)
 
                 if created:
                     stats["created"] += 1
@@ -69,36 +68,36 @@ class AniListPersistence:
                     if "slug" in anime_data_dict:
                         del anime_data_dict["slug"]
 
-                    await self._update_anime(anime, anime_data_dict)
+                    self._update_anime(anime, anime_data_dict)
                     stats["updated"] += 1
                     logger.info(f"Updated Anime: {title}")
 
                 # Handle Relationships & Media
-                await self._handle_relationships_async(anime, item)
+                self._handle_relationships(anime, item)
 
                 # Handle Extended Info (Chars, Staff, Links, Relations)
-                await self._handle_extended_info_async(anime, item)
+                self._handle_extended_info(anime, item)
 
                 # Download images if missing
-                await self._download_and_save_images(anime, item)
+                self._download_and_save_images(anime, item)
 
                 if progress_callback:
-                    await progress_callback(i + 1)
+                    progress_callback(i + 1)
 
             except Exception as e:
                 logger.error(f"Error processing anime {item.get('id')}: {e}", exc_info=True)
                 stats["skipped"] += 1
                 if progress_callback:
-                    await progress_callback(i + 1)
+                    progress_callback(i + 1)
 
         return stats
 
-    async def update_anime_manual(self, anime: Anime, item: dict):
+    def update_anime_manual(self, anime: Anime, item: dict):
         """Manually update a specific Anime instance with AniList data.
         Updates fields but PRESERVES the existing slug to avoid integrity errors/identity shifts.
         """
         try:
-            item = await self._resolve_manual_update_item(anime, item)
+            item = self._resolve_manual_update_item(anime, item)
             if not item:
                 logger.info(
                     f"Skipped manual update for Anime ID {anime.id}: could not resolve matching AniList media"
@@ -110,20 +109,20 @@ class AniListPersistence:
             # Use the EXISTING slug to ensure we don't collide with other records
             anime_data_dict = self._prepare_anime_data(item, title, title_native, anime.slug)
 
-            await self._update_anime(anime, anime_data_dict)
+            self._update_anime(anime, anime_data_dict)
             logger.info(f"Manually Updated Anime ID {anime.id}: {anime.title}")
 
             # Handle extended info
-            await self._handle_relationships_async(anime, item)
-            await self._handle_extended_info_async(anime, item)
-            await self._download_and_save_images(anime, item)
+            self._handle_relationships(anime, item)
+            self._handle_extended_info(anime, item)
+            self._download_and_save_images(anime, item)
 
             return True
         except Exception as e:
             logger.error(f"Error manual update anime {anime.id}: {e}")
             raise e
 
-    async def _resolve_manual_update_item(self, anime: Anime, item: dict) -> dict | None:
+    def _resolve_manual_update_item(self, anime: Anime, item: dict) -> dict | None:
         """Resolve identity mismatches before applying a manual update.
 
         Metadata searches can return ambiguous title matches. This prevents writes that
@@ -137,7 +136,7 @@ class AniListPersistence:
             logger.info(
                 f"AniList mismatch for Anime ID {anime.id}: expected {anime.anilist_id}, got {incoming_anilist_id}. Re-fetching canonical media."
             )
-            canonical_item = await self.get_anime_by_id(anime.anilist_id)
+            canonical_item = self.get_anime_by_id(anime.anilist_id)
             return canonical_item
 
         # Secondary identity: MAL ID (only if AniList ID is unavailable)
@@ -150,14 +149,14 @@ class AniListPersistence:
             logger.info(
                 f"MAL mismatch for Anime ID {anime.id}: expected {anime.mal_id}, got {incoming_mal_id}. Re-fetching canonical media."
             )
-            canonical_item = await self.search_by_mal_id(anime.mal_id)
+            canonical_item = self.search_by_mal_id(anime.mal_id)
             return canonical_item
 
         # Don't attach an identity already owned by another row.
         for field, incoming in (("anilist_id", incoming_anilist_id), ("mal_id", incoming_mal_id)):
             if not incoming or getattr(anime, field):
                 continue
-            existing = await sync_to_async(self._identity_owner)(anime, field, incoming)
+            existing = self._identity_owner(anime, field, incoming)
             if existing:
                 label = "AniList" if field == "anilist_id" else "MAL"
                 logger.info(
@@ -209,7 +208,6 @@ class AniListPersistence:
 
         return None
 
-    @sync_to_async
     def _get_or_create_anime(self, slug, anime_data_dict):
         anilist_id = anime_data_dict.get("anilist_id")
         mal_id = anime_data_dict.get("mal_id")
@@ -239,8 +237,7 @@ class AniListPersistence:
                 return recovered, False
             raise
 
-    @sync_to_async
-    def _handle_relationships_async(self, anime, item):
+    def _handle_relationships(self, anime, item):
         genres = item.get("genres") or []
         for genre_name in genres:
             genre, _ = Genre.objects.get_or_create(
@@ -254,8 +251,7 @@ class AniListPersistence:
 
         sync_relations_from_media(anime, item)
 
-    @sync_to_async
-    def _handle_extended_info_async(self, anime, item):
+    def _handle_extended_info(self, anime, item):
         with transaction.atomic():
             for edge in mapper.character_edges(item):
                 node = edge["node"]
@@ -322,7 +318,7 @@ class AniListPersistence:
         """Parse AniList theme song format: 'Song Title' by Artist (eps X-Y)"""
         return mapper.parse_theme_song(text)
 
-    async def _download_and_save_images(self, anime, item):
+    def _download_and_save_images(self, anime, item):
         try:
             cover_image = mapper.cover_image(item)
 
@@ -337,8 +333,8 @@ class AniListPersistence:
             force_replace = cover_url_changed or banner_url_changed
 
             # Queue background task to download cover and banner images
-            has_cover = await sync_to_async(lambda: bool(anime.cover_image))()
-            has_banner = await sync_to_async(lambda: bool(anime.banner_image))()
+            has_cover = bool(anime.cover_image)
+            has_banner = bool(anime.banner_image)
 
             # Pass mal_id for Jikan fallback
             mal_id = item.get("idMal")
@@ -352,7 +348,7 @@ class AniListPersistence:
                 from ....tasks.images import _queue_image_fetch
 
                 logger.info(f"Queueing background image fetch for {anime.title}")
-                await sync_to_async(_queue_image_fetch)(
+                _queue_image_fetch(
                     anime_id=anime.id,
                     cover_url=cover_url,
                     banner_url=banner_url,
@@ -361,16 +357,15 @@ class AniListPersistence:
                 )
 
             # Check if anime already has a trailer URL
-            has_trailer = await sync_to_async(lambda: bool(anime.trailer_url))()
+            has_trailer = bool(anime.trailer_url)
             if not has_trailer:
                 trailer_url = mapper.trailer_url(item.get("trailer"))
                 if trailer_url:
-                    await self._save_trailer_url(anime, trailer_url)
+                    self._save_trailer_url(anime, trailer_url)
 
         except Exception as e:
             logger.error(f"Error downloading media for {anime.title}: {e}", exc_info=True)
 
-    @sync_to_async
     def _save_image(self, anime, field_name, filename, image_data):
         field = getattr(anime, field_name)
         field.save(filename, ContentFile(image_data), save=True)
@@ -381,25 +376,17 @@ class AniListPersistence:
 
         generate_image_thumbnails.delay(anime.id)
 
-    @sync_to_async
     def _save_trailer_url(self, anime, trailer_url):
         anime.trailer_url = trailer_url
         anime.save()
 
-    @sync_to_async
     def _save_external_url(self, anime, field_name, url):
         """Save external image URL for fallback purposes"""
         setattr(anime, field_name, self.normalize_external_image_url(url))
         anime.save(update_fields=[field_name])
 
     def save_anime_to_db(self, item: dict) -> Anime:
-        """Synchronously save anime data to database (for use in Celery tasks)"""
-        # Use asgiref bridge instead of asyncio.run() to avoid executor/thread
-        # conflicts when called from request threads that already used async_to_sync.
-        return async_to_sync(self._save_anime_to_db_async)(item)
-
-    async def _save_anime_to_db_async(self, item: dict) -> Anime:
-        """Async implementation of save_anime_to_db"""
+        """Create or update the Anime row for an AniList media payload."""
         anilist_id = item.get("id")
         mal_id = item.get("idMal")
         title = item.get("title", {}).get("english") or item.get("title", {}).get("romaji")
@@ -418,23 +405,21 @@ class AniListPersistence:
             if not value:
                 continue
             try:
-                anime = await sync_to_async(Anime.objects.get)(**{field: value})
+                anime = Anime.objects.get(**{field: value})
             except Anime.DoesNotExist:
                 continue
             logger.debug(f"Found anime by {label} ID {value}: {anime.title}")
-            await self._update_anime_async(anime, item, title, title_native, anime.slug)
+            self._update_anime_from_media(anime, item, title, title_native, anime.slug)
             return anime
 
         # Titles are not unique: only fall back to slug matching for payloads without IDs.
         if not (anilist_id or mal_id):
-            existing = await sync_to_async(Anime.objects.filter(slug=base_slug).first)()
+            existing = Anime.objects.filter(slug=base_slug).first()
             if existing:
-                await self._update_anime_async(existing, item, title, title_native, existing.slug)
+                self._update_anime_from_media(existing, item, title, title_native, existing.slug)
                 return existing
 
-        final_slug = await sync_to_async(Anime.available_slug)(
-            base_slug, year=item.get("seasonYear")
-        )
+        final_slug = Anime.available_slug(base_slug, year=item.get("seasonYear"))
 
         # Create new anime with unique slug
         anime_data = with_creation_defaults(
@@ -444,10 +429,10 @@ class AniListPersistence:
         anime_data["mal_id"] = mal_id
 
         try:
-            anime = await sync_to_async(Anime.objects.create)(**anime_data)
+            anime = Anime.objects.create(**anime_data)
             logger.info(f"Created new anime: {title} with slug {final_slug}")
         except IntegrityError as e:
-            recovered = await sync_to_async(self._lookup_existing_anime)(
+            recovered = self._lookup_existing_anime(
                 anilist_id=anilist_id,
                 mal_id=mal_id,
                 slug=final_slug,
@@ -457,7 +442,7 @@ class AniListPersistence:
                 logger.warning(
                     f"Recovered from create integrity conflict for '{title}' (AniList ID: {anilist_id}): {e}"
                 )
-                await self._update_anime_async(recovered, item, title, title_native, recovered.slug)
+                self._update_anime_from_media(recovered, item, title, title_native, recovered.slug)
                 return recovered
             logger.error(f"Failed to create anime '{title}' with slug '{final_slug}': {e}")
             raise
@@ -466,14 +451,14 @@ class AniListPersistence:
             raise
 
         # Handle relationships
-        await self._handle_relationships_async(anime, item)
+        self._handle_relationships(anime, item)
 
         # Download images
-        await self._download_and_save_images(anime, item)
+        self._download_and_save_images(anime, item)
 
         return anime
 
-    async def _update_anime_async(
+    def _update_anime_from_media(
         self, anime: Anime, item: dict, title: str, title_native: str, slug: str
     ):
         """Update an existing anime asynchronously"""
@@ -481,6 +466,6 @@ class AniListPersistence:
         anime_data["anilist_id"] = item.get("id") or anime.anilist_id
         anime_data["mal_id"] = item.get("idMal") or anime.mal_id
 
-        await self._update_anime(anime, anime_data)
-        await self._handle_relationships_async(anime, item)
-        await self._download_and_save_images(anime, item)
+        self._update_anime(anime, anime_data)
+        self._handle_relationships(anime, item)
+        self._download_and_save_images(anime, item)

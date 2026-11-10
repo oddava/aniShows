@@ -10,7 +10,6 @@ import re
 from datetime import UTC, datetime
 
 import httpx
-from asgiref.sync import sync_to_async
 from django.db import IntegrityError
 from django.utils import timezone
 
@@ -136,9 +135,9 @@ class CatalogProviderBase:
         self.last_error_code = ""
         self.last_error_message = ""
 
-    async def close(self):
+    def close(self):
         try:
-            await self.client.aclose()
+            self.client.close()
         except (httpx.HTTPError, RuntimeError, OSError):
             logger.debug("Ignoring error while closing %s client", type(self).__name__)
 
@@ -336,7 +335,6 @@ class CatalogProviderBase:
         anime_data["last_aired_episode"] = previous_episode
         anime_data["last_aired_at"] = previous_airing_date
 
-    @sync_to_async
     def _update_anime(self, anime, anime_data_dict):
         anime_data = dict(anime_data_dict)
         self._apply_recent_airing_transition(anime, anime_data)

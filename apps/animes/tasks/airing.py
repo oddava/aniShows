@@ -11,14 +11,13 @@ Consolidates:
 Into a chained workflow with smart deduplication and batching.
 """
 
-from asgiref.sync import sync_to_async
 from django.utils import timezone
 
 from ...shared.celery import observed_shared_task
 from ..models import Anime
 from ..services.jikan import JikanService
 from ..services.rate_limiting import APICallCache
-from .base import BaseTask, run_async_in_task
+from .base import BaseTask
 
 
 class AiringWorkflowTask(BaseTask):
@@ -66,9 +65,9 @@ class AiringWorkflowTask(BaseTask):
 
         logger.info(f"Starting airing workflow with phases: {phases}")
 
-        return run_async_in_task(self._async_workflow(phases, batch_size, dedup_window))
+        return self._run_workflow(phases, batch_size, dedup_window)
 
-    async def _async_workflow(
+    def _run_workflow(
         self,
         phases: list[str],
         batch_size: int | None,
@@ -77,24 +76,24 @@ class AiringWorkflowTask(BaseTask):
         """Async workflow implementation."""
         results = {}
 
-        async with self.service_context() as service:
+        with self.service_context() as service:
             # Initialize deduplication cache
             call_cache = APICallCache(ttl=dedup_window)
 
             # Phase 1: Sync airing anime
             if "sync" in phases:
                 logger.info("Phase 1: Syncing airing anime")
-                results["sync"] = await self._sync_airing(service, call_cache, batch_size)
+                results["sync"] = self._sync_airing(service, call_cache, batch_size)
 
             # Phase 2: Cleanup finished
             if "cleanup" in phases:
                 logger.info("Phase 2: Cleaning up finished anime")
-                results["cleanup"] = await self._cleanup_finished(service, batch_size)
+                results["cleanup"] = self._cleanup_finished(service, batch_size)
 
             # Phase 3: Backfill missing
             if "backfill" in phases:
                 logger.info("Phase 3: Backfilling missing dates")
-                results["backfill"] = await self._backfill_missing(service, call_cache, batch_size)
+                results["backfill"] = self._backfill_missing(service, call_cache, batch_size)
 
         self.metrics.stop()
 
@@ -104,7 +103,7 @@ class AiringWorkflowTask(BaseTask):
 
         return summary
 
-    async def _sync_airing(
+    def _sync_airing(
         self,
         service: JikanService,
         call_cache: APICallCache,
@@ -119,7 +118,7 @@ class AiringWorkflowTask(BaseTask):
         airing_queryset = Anime.objects.filter(status=Anime.AnimeStatus.airing).order_by("id")
         if batch_size:
             airing_queryset = airing_queryset[:batch_size]
-        airing_anime = await sync_to_async(list)(airing_queryset)
+        airing_anime = list(airing_queryset)
 
         total = len(airing_anime)
         if total == 0:
@@ -150,10 +149,10 @@ class AiringWorkflowTask(BaseTask):
                     continue
 
                 # Airing refresh uses the lightweight resolver so daily sync can cover the full catalog.
-                result = await service.resolve_airing_media_for_anime(anime)
+                result = service.resolve_airing_media_for_anime(anime)
 
                 if result:
-                    await service.update_anime_manual(anime, result)
+                    service.update_anime_manual(anime, result)
 
                     # Check if we got airing date
                     next_airing = result.get("nextAiringEpisode")
@@ -195,7 +194,7 @@ class AiringWorkflowTask(BaseTask):
             "errors": error_count,
         }
 
-    async def _cleanup_finished(
+    def _cleanup_finished(
         self,
         service: JikanService,
         batch_size: int | None,
@@ -211,7 +210,7 @@ class AiringWorkflowTask(BaseTask):
         ).order_by("next_airing_date")
         if batch_size:
             past_airing_queryset = past_airing_queryset[:batch_size]
-        past_airing = await sync_to_async(list)(past_airing_queryset)
+        past_airing = list(past_airing_queryset)
 
         cleared_count = 0
         status_changed_count = 0
@@ -219,7 +218,7 @@ class AiringWorkflowTask(BaseTask):
 
         for anime in past_airing:
             try:
-                result = await service.resolve_airing_media_for_anime(anime)
+                result = service.resolve_airing_media_for_anime(anime)
 
                 if result:
                     anilist_status = result.get("status", "")
@@ -231,7 +230,7 @@ class AiringWorkflowTask(BaseTask):
                         anime.status = Anime.AnimeStatus.finished
                         # Only these fields: the row was loaded before the slow
                         # provider calls, and other syncs may have written since.
-                        await sync_to_async(anime.save)(
+                        anime.save(
                             update_fields=["next_airing_date", "next_airing_episode", "status"]
                         )
                         cleared_count += 1
@@ -241,9 +240,7 @@ class AiringWorkflowTask(BaseTask):
                         # Episode aired but still releasing
                         anime.next_airing_date = None
                         anime.next_airing_episode = None
-                        await sync_to_async(anime.save)(
-                            update_fields=["next_airing_date", "next_airing_episode"]
-                        )
+                        anime.save(update_fields=["next_airing_date", "next_airing_episode"])
                         cleared_count += 1
 
             except Exception:
@@ -258,17 +255,13 @@ class AiringWorkflowTask(BaseTask):
             status=Anime.AnimeStatus.finished,
             next_airing_date__isnull=False,
         )
-        finished_slugs = await sync_to_async(list)(
-            finished_with_dates_queryset.values_list("slug", flat=True)
-        )
-        finished_with_dates = await sync_to_async(
-            Anime.objects.filter(slug__in=finished_slugs).update
-        )(
+        finished_slugs = list(finished_with_dates_queryset.values_list("slug", flat=True))
+        finished_with_dates = Anime.objects.filter(slug__in=finished_slugs).update(
             next_airing_date=None,
             next_airing_episode=None,
         )
         for slug in finished_slugs:
-            await sync_to_async(_invalidate_anime_public_caches)(slug)
+            _invalidate_anime_public_caches(slug)
 
         return {
             "cleared_past_dates": cleared_count,
@@ -277,7 +270,7 @@ class AiringWorkflowTask(BaseTask):
             "errors": error_count,
         }
 
-    async def _backfill_missing(
+    def _backfill_missing(
         self,
         service: JikanService,
         call_cache: APICallCache,
@@ -293,7 +286,7 @@ class AiringWorkflowTask(BaseTask):
         ).order_by("id")
         if batch_size:
             missing_dates_queryset = missing_dates_queryset[:batch_size]
-        missing_dates = await sync_to_async(list)(missing_dates_queryset)
+        missing_dates = list(missing_dates_queryset)
 
         total = len(missing_dates)
         if total == 0:
@@ -309,10 +302,10 @@ class AiringWorkflowTask(BaseTask):
 
         for i, anime in enumerate(missing_dates):
             try:
-                result = await service.resolve_airing_media_for_anime(anime)
+                result = service.resolve_airing_media_for_anime(anime)
 
                 if result:
-                    await service.update_anime_manual(anime, result)
+                    service.update_anime_manual(anime, result)
 
                     next_airing = result.get("nextAiringEpisode")
                     if next_airing and next_airing.get("airingAt"):

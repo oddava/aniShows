@@ -9,11 +9,9 @@ Provides:
 
 import hashlib
 import time
-from contextlib import asynccontextmanager
+from contextlib import contextmanager
 from typing import Any
 
-from asgiref.sync import async_to_sync
-from celery._state import _task_stack
 from django.core.cache import cache
 from django.db import DatabaseError
 
@@ -79,7 +77,6 @@ class BaseTask(ObservedTask):
     - Automatic service management with context manager
     - Metrics collection
     - Structured logging
-    - Async/sync bridge utilities
     - Task deduplication with idempotency keys
     - Task locking to prevent concurrent execution
     """
@@ -197,13 +194,13 @@ class BaseTask(ObservedTask):
         else:
             return self.run(*args, **kwargs)
 
-    @asynccontextmanager
-    async def service_context(self, **kwargs):
+    @contextmanager
+    def service_context(self, **kwargs):
         """Context manager for service lifecycle.
 
         Usage:
-            async with self.service_context() as service:
-                result = await service.do_something()
+            with self.service_context() as service:
+                result = service.do_something()
         """
         service = None
         try:
@@ -211,11 +208,7 @@ class BaseTask(ObservedTask):
             yield service
         finally:
             if service and hasattr(service, "close"):
-                await service.close()
-
-    def run_async(self, coro):
-        """Run async coroutine in sync context."""
-        return run_async_in_task(coro)
+                service.close()
 
     def on_success(self, retval, task_id, args, kwargs):
         """Called when task succeeds."""
@@ -327,34 +320,3 @@ class BaseTask(ObservedTask):
         except (AttributeError, TypeError):
             logger.warning("Failed to emit failure metrics", exc_info=True)
         super().on_failure(exc, task_id, args, kwargs, einfo)
-
-
-# Helper to run async code in sync celery task
-def run_async_in_task(coro):
-    """Helper to run async code in sync celery task context.
-
-    Uses async_to_sync rather than asyncio.run so sync_to_async ORM
-    calls inside the coroutine run on this thread and share its DB connection.
-    With asyncio.run they run on asgiref's executor thread with a second
-    connection, which can't see this thread's uncommitted rows and is never
-    closed by Celery's per-task connection cleanup.
-    """
-    # async_to_sync runs the coroutine on its own loop thread, and Celery's
-    # current-task and request stacks are thread-local. Carry them over, or
-    # self.request.id is None in the coroutine and self.retry() re-raises the
-    # error instead of scheduling a retry.
-    task = _task_stack.top
-    request = task.request_stack.top if task is not None else None
-
-    async def _await():
-        if request is None:
-            return await coro
-        _task_stack.push(task)
-        task.request_stack.push(request)
-        try:
-            return await coro
-        finally:
-            task.request_stack.pop()
-            _task_stack.pop()
-
-    return async_to_sync(_await)()

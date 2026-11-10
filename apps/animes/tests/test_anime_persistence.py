@@ -2,9 +2,8 @@
 
 import datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
-from asgiref.sync import async_to_sync
 from django.test import TestCase
 
 from ..models import Anime
@@ -74,10 +73,10 @@ class SparseUpdateDoesNotClobberTests(TestCase):
 
     def _update(self, service, anime, item):
         with (
-            patch.object(service, "_handle_relationships_async", new=AsyncMock()),
-            patch.object(service, "_download_and_save_images", new=AsyncMock()),
+            patch.object(service, "_handle_relationships", new=MagicMock()),
+            patch.object(service, "_download_and_save_images", new=MagicMock()),
         ):
-            async_to_sync(service._update_anime_async)(
+            service._update_anime_from_media(
                 anime, item, "Frieren", item["title"]["native"], anime.slug
             )
         anime.refresh_from_db()
@@ -100,7 +99,7 @@ class SparseUpdateDoesNotClobberTests(TestCase):
     def test_jikan_sparse_update_keeps_stored_values_and_merges_provider_ids(self):
         anime = _rich_anime()
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
 
         self._update(service, anime, SPARSE_ITEM)
 
@@ -112,7 +111,7 @@ class SparseUpdateDoesNotClobberTests(TestCase):
     def test_jikan_update_without_ids_keeps_stored_provider_ids(self):
         anime = _rich_anime()
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
 
         self._update(service, anime, {**SPARSE_ITEM, "providerIds": {"myanimelist": None}})
 
@@ -121,7 +120,7 @@ class SparseUpdateDoesNotClobberTests(TestCase):
     def test_anilist_sparse_update_keeps_stored_values(self):
         anime = _rich_anime()
         service = AniListService()
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
 
         self._update(service, anime, SPARSE_ITEM)
 
@@ -130,7 +129,7 @@ class SparseUpdateDoesNotClobberTests(TestCase):
     def test_real_new_values_still_update(self):
         anime = _rich_anime()
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
         item = {
             **SPARSE_ITEM,
             "episodes": 29,
@@ -151,7 +150,7 @@ class SparseUpdateDoesNotClobberTests(TestCase):
         anime.next_airing_episode = 5
         anime.save(update_fields=["next_airing_episode"])
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
         airing_at = int(datetime.datetime(2030, 1, 5, 15, tzinfo=datetime.UTC).timestamp())
         item = {**SPARSE_ITEM, "nextAiringEpisode": {"episode": 6, "airingAt": airing_at}}
 
@@ -178,14 +177,14 @@ class AniListCreateDoesNotHijackSlugTests(TestCase):
             "providerIds": {},
         }
         service = AniListService()
-        self.addCleanup(lambda: async_to_sync(service.close)())
+        self.addCleanup(service.close)
 
         with (
-            patch.object(service, "_handle_relationships_async", new=AsyncMock()),
-            patch.object(service, "_handle_extended_info_async", new=AsyncMock()),
-            patch.object(service, "_download_and_save_images", new=AsyncMock()),
+            patch.object(service, "_handle_relationships", new=MagicMock()),
+            patch.object(service, "_handle_extended_info", new=MagicMock()),
+            patch.object(service, "_download_and_save_images", new=MagicMock()),
         ):
-            stats = async_to_sync(service.process_media_list)([remake])
+            stats = service.process_media_list([remake])
 
         self.assertEqual(stats["created"], 1)
         created = Anime.objects.get(anilist_id=999001)

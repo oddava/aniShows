@@ -1,5 +1,5 @@
 from datetime import timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -32,7 +32,7 @@ class OfflineSyncStatePipelineTests(TestCase):
         payload.update(overrides)
         return OfflineAnimeSyncState.objects.create(**payload)
 
-    @patch.object(JikanService, "search_anime", new_callable=AsyncMock)
+    @patch.object(JikanService, "search_anime", new_callable=MagicMock)
     def test_title_only_lookup_failure_marks_row_without_mutating_identity(self, mock_search):
         anime = self._anime("No IDs")
         mock_search.return_value = []
@@ -44,8 +44,8 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertIsNone(anime.anilist_id)
         self.assertIsNone(anime.mal_id)
 
-    @patch.object(JikanService, "refresh_anime_metadata", new_callable=AsyncMock)
-    @patch.object(JikanService, "search_anime", new_callable=AsyncMock)
+    @patch.object(JikanService, "refresh_anime_metadata", new_callable=MagicMock)
+    @patch.object(JikanService, "search_anime", new_callable=MagicMock)
     def test_title_only_lookup_can_enrich_via_exact_match(self, mock_search, mock_update):
         anime = self._anime("Title Only")
         mock_search.return_value = [
@@ -60,10 +60,10 @@ class OfflineSyncStatePipelineTests(TestCase):
         result = OfflineSyncService().sync_metadata_stage(anime)
 
         self.assertEqual(result.status, OfflineAnimeSyncState.StageStatus.SYNCED)
-        mock_update.assert_awaited_once()
+        mock_update.assert_called_once()
 
-    @patch.object(JikanService, "refresh_anime_metadata", new_callable=AsyncMock)
-    @patch.object(JikanService, "search_by_mal_id", new_callable=AsyncMock)
+    @patch.object(JikanService, "refresh_anime_metadata", new_callable=MagicMock)
+    @patch.object(JikanService, "search_by_mal_id", new_callable=MagicMock)
     def test_identity_conflict_never_updates_identity_fields(
         self, mock_search_by_mal_id, mock_update
     ):
@@ -79,9 +79,9 @@ class OfflineSyncStatePipelineTests(TestCase):
         self.assertEqual(anime.mal_id, 222)
         mock_update.assert_not_called()
 
-    @patch.object(JikanService, "refresh_anime_metadata", new_callable=AsyncMock)
-    @patch.object(JikanService, "search_by_mal_id", new_callable=AsyncMock)
-    @patch.object(JikanService, "get_anime_by_id", new_callable=AsyncMock)
+    @patch.object(JikanService, "refresh_anime_metadata", new_callable=MagicMock)
+    @patch.object(JikanService, "search_by_mal_id", new_callable=MagicMock)
+    @patch.object(JikanService, "get_anime_by_id", new_callable=MagicMock)
     def test_metadata_stage_looks_up_by_mal_id_and_keeps_anilist_id(
         self,
         mock_get_by_id,
@@ -100,9 +100,9 @@ class OfflineSyncStatePipelineTests(TestCase):
 
         self.assertEqual(result.status, OfflineAnimeSyncState.StageStatus.SYNCED)
         # Jikan is keyed by MAL ID; the AniList ID only rides along.
-        mock_get_by_id.assert_not_awaited()
-        mock_search_by_mal_id.assert_awaited_once_with(222, anilist_id=111)
-        mock_update.assert_awaited_once()
+        mock_get_by_id.assert_not_called()
+        mock_search_by_mal_id.assert_called_once_with(222, anilist_id=111)
+        mock_update.assert_called_once()
 
     def test_ensure_states_resets_synced_placeholder_rows_back_to_pending(self):
         anime = self._anime(
@@ -341,7 +341,7 @@ class OfflineSyncRecoveryTests(TestCase):
         anime = self._anime("Themes Boom", mal_id=5)
         with patch(
             "apps.animes.services.offline_sync.fetch_themes_from_jikan_with_reason",
-            new=AsyncMock(side_effect=RuntimeError("db down")),
+            new=MagicMock(side_effect=RuntimeError("db down")),
         ):
             result = OfflineSyncService().sync_themes_stage(anime)
 

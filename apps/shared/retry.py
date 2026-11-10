@@ -1,11 +1,11 @@
-import asyncio
+import time
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
 from django.conf import settings
 
 
-async def backoff(seconds: float) -> None:
+def backoff(seconds: float) -> None:
     """Wait before retrying a failed external API call.
 
     Scaled by settings.RETRY_BACKOFF_SCALE (0 in tests, so retries don't add
@@ -13,7 +13,7 @@ async def backoff(seconds: float) -> None:
     """
     delay = seconds * settings.RETRY_BACKOFF_SCALE
     if delay > 0:
-        await asyncio.sleep(delay)
+        time.sleep(delay)
 
 
 def retry_after_seconds(value: str | None) -> float | None:

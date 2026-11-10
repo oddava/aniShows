@@ -5,7 +5,6 @@ Rate limiting and circuit breaker utilities for AniList API.
 Optimized for small EC2 instances with minimal Redis overhead.
 """
 
-import asyncio
 import contextlib
 import time
 from datetime import datetime
@@ -40,7 +39,7 @@ class AniListRateLimiter:
         current_minute = int(time.time()) // self.WINDOW_SECONDS
         return f"anilist:rate:{current_minute}"
 
-    async def acquire(self) -> None:
+    def acquire(self) -> None:
         """Acquire permission to make an API request.
         Blocks until it's safe to proceed.
         """
@@ -51,7 +50,7 @@ class AniListRateLimiter:
 
             if time_since_last < self.min_delay:
                 wait_time = self.min_delay - time_since_last
-                await asyncio.sleep(wait_time)
+                time.sleep(wait_time)
                 continue
 
             # Check global rate limit via Redis
@@ -63,7 +62,7 @@ class AniListRateLimiter:
                 pipe = redis_client.pipeline()
                 pipe.incr(current_key)
                 pipe.expire(current_key, self.WINDOW_SECONDS + 10)
-                results = await asyncio.to_thread(pipe.execute)
+                results = pipe.execute()
                 count = results[0]
 
                 if count <= self.RATE_LIMIT - self.SAFETY_MARGIN:
@@ -72,7 +71,7 @@ class AniListRateLimiter:
 
                 # Rate limit hit, wait until next window
                 logger.warning(f"Rate limit approaching: {count}/{self.RATE_LIMIT} requests")
-                await asyncio.sleep(1)
+                time.sleep(1)
 
             except (AttributeError, *CACHE_ERRORS):
                 # Redis failure, or a cache backend without a raw Redis client
@@ -81,7 +80,7 @@ class AniListRateLimiter:
                 if time_since_last >= self.min_delay:
                     self._local_last_request = time.time()
                     return
-                await asyncio.sleep(self.min_delay)
+                time.sleep(self.min_delay)
 
 
 class CircuitBreaker:

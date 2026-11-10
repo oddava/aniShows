@@ -9,15 +9,15 @@ from .persistence import AniListPersistence
 class AniListService(AniListPersistence, AniListClient):
     """AniList provider: fetch (``AniListClient``), map (``mapper``), save (``AniListPersistence``)."""
 
-    async def resolve_media_for_anime(self, anime: Anime) -> dict | None:
+    def resolve_media_for_anime(self, anime: Anime) -> dict | None:
         """Resolve the safest AniList media payload for an existing Anime row."""
         if anime.anilist_id:
-            item = await self.get_anime_by_id(anime.anilist_id)
+            item = self.get_anime_by_id(anime.anilist_id)
             if item:
                 return item
 
         if anime.mal_id:
-            item = await self.search_by_mal_id(anime.mal_id)
+            item = self.search_by_mal_id(anime.mal_id)
             if item:
                 return item
 
@@ -27,7 +27,7 @@ class AniListService(AniListPersistence, AniListClient):
                 self._set_last_error("not_found", "missing_title")
             return None
 
-        results = await self.search_anime(title)
+        results = self.search_anime(title)
         if not results:
             if not self.last_error_code:
                 self._set_last_error("not_found", f"title:{title}")

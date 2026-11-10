@@ -4,6 +4,7 @@ import asyncio
 import json
 import random
 import re
+import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -12,7 +13,6 @@ from urllib.parse import urlparse, urlunparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
-from asgiref.sync import async_to_sync, sync_to_async
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.base import ContentFile
@@ -66,6 +66,7 @@ class JikanRateLimiter:
         self.max_delay = max_delay
         self.success_streak_threshold = success_streak_threshold
 
+        self._lock = threading.Lock()
         self.current_delay = base_delay
         self.consecutive_429s = 0
         self.last_request_time = 0.0
@@ -73,7 +74,12 @@ class JikanRateLimiter:
         self.total_requests = 0
         self.total_429s = 0
 
-    async def acquire(self) -> None:
+    def acquire(self) -> None:
+        """Block until the next request may go out (global cooldown, then spacing).
+
+        Safe to call from several threads (the detail fetch runs its parts
+        concurrently): the bookkeeping is locked, the sleeps are not.
+        """
         now = time.time()
         try:
             global_cooldown_until = float(cache.get(JIKAN_COOLDOWN_CACHE_KEY) or 0.0)
@@ -81,15 +87,16 @@ class JikanRateLimiter:
             global_cooldown_until = 0.0
 
         if global_cooldown_until > now:
-            await asyncio.sleep(global_cooldown_until - now)
+            time.sleep(global_cooldown_until - now)
 
-        now = time.time()
-        elapsed = now - self.last_request_time
-        if elapsed < self.current_delay:
-            await asyncio.sleep(self.current_delay - elapsed)
+        with self._lock:
+            wait = self.current_delay - (time.time() - self.last_request_time)
+        if wait > 0:
+            time.sleep(wait)
 
-        self.last_request_time = time.time()
-        self.total_requests += 1
+        with self._lock:
+            self.last_request_time = time.time()
+            self.total_requests += 1
 
     def record_success(self) -> None:
         self.consecutive_429s = 0
@@ -271,7 +278,7 @@ class JikanService(CatalogProviderBase):
 
     def __init__(self, enable_caching: bool = True, enable_rate_limiting: bool = True):
         self.base_url = get_jikan_base_url()
-        self.client = httpx.AsyncClient(headers={"Accept": "application/json"}, timeout=15.0)
+        self.client = httpx.Client(headers={"Accept": "application/json"}, timeout=15.0)
         self.rate_limiter = JikanRateLimiter() if enable_rate_limiting else None
         self.call_cache = APICallCache(ttl=1800) if enable_caching else None
         self.circuit_breaker = CircuitBreaker(
@@ -300,7 +307,7 @@ class JikanService(CatalogProviderBase):
     def _record_failure(self):
         self.circuit_breaker.record_failure()
 
-    async def download_image(self, url: str) -> bytes | None:
+    def download_image(self, url: str) -> bytes | None:
         """Download image bytes from a trusted HTTPS URL."""
         if not url:
             return None
@@ -310,8 +317,8 @@ class JikanService(CatalogProviderBase):
             return None
 
         try:
-            await asyncio.sleep(0.2)
-            response = await self.client.get(resolved_url, timeout=10)
+            time.sleep(0.2)
+            response = self.client.get(resolved_url, timeout=10)
             response.raise_for_status()
 
             content_type = (response.headers.get("content-type") or "").lower()
@@ -324,7 +331,6 @@ class JikanService(CatalogProviderBase):
             logger.error(f"Error downloading image {resolved_url}: {exc}")
             return None
 
-    @sync_to_async
     def _save_image(self, anime, field_name, filename, image_data):
         field = getattr(anime, field_name)
         field.save(filename, ContentFile(image_data), save=True)
@@ -333,7 +339,6 @@ class JikanService(CatalogProviderBase):
 
         generate_image_thumbnails.delay(anime.id)
 
-    @sync_to_async
     def _save_external_url(self, anime, field_name, url):
         setattr(anime, field_name, self.normalize_external_image_url(url))
         anime.save(update_fields=[field_name])
@@ -414,7 +419,7 @@ class JikanService(CatalogProviderBase):
 
         return {}
 
-    async def _get(
+    def _get(
         self,
         path: str,
         params: dict[str, Any] | None = None,
@@ -449,9 +454,9 @@ class JikanService(CatalogProviderBase):
             _status = "success"
             try:
                 if self.rate_limiter:
-                    await self.rate_limiter.acquire()
+                    self.rate_limiter.acquire()
 
-                response = await self.client.get(
+                response = self.client.get(
                     f"{self.base_url}{path}",
                     params=params,
                     timeout=request_timeout if request_timeout is not None else self.client.timeout,
@@ -468,7 +473,7 @@ class JikanService(CatalogProviderBase):
                     if max_rate_limit_wait is not None and wait_time > max_rate_limit_wait:
                         return {}
                     if attempt < retry_count - 1:
-                        await asyncio.sleep(wait_time)
+                        time.sleep(wait_time)
                         continue
                     return {}
 
@@ -477,7 +482,7 @@ class JikanService(CatalogProviderBase):
                     if self.rate_limiter:
                         self.rate_limiter.record_error()
                     if attempt < retry_count - 1:
-                        await backoff(min(2**attempt, 15))
+                        backoff(min(2**attempt, 15))
                         continue
                     self._set_last_error("transport_error", f"http_{response.status_code}")
                     self._record_failure()
@@ -514,7 +519,7 @@ class JikanService(CatalogProviderBase):
                 if self.rate_limiter:
                     self.rate_limiter.record_error()
                 if attempt < retry_count - 1:
-                    await backoff(min(2**attempt, 15))
+                    backoff(min(2**attempt, 15))
                     continue
                 self._set_last_error("transport_error", str(exc))
                 self._record_failure()
@@ -524,7 +529,7 @@ class JikanService(CatalogProviderBase):
                 if self.rate_limiter:
                     self.rate_limiter.record_error()
                 if attempt < retry_count - 1:
-                    await backoff(min(2**attempt, 15))
+                    backoff(min(2**attempt, 15))
                     continue
                 self._set_last_error("transport_error", str(exc))
                 self._record_failure()
@@ -555,10 +560,10 @@ class JikanService(CatalogProviderBase):
         self._record_failure()
         return {}
 
-    async def get_recent_updates(self, limit: int = 50) -> list[dict]:
-        results = await self._fetch_current_season_anime(limit=limit)
+    def get_recent_updates(self, limit: int = 50) -> list[dict]:
+        results = self._fetch_current_season_anime(limit=limit)
         if len(results) < limit:
-            fallback_results = await self._fetch_top_airing_anime(limit=limit - len(results))
+            fallback_results = self._fetch_top_airing_anime(limit=limit - len(results))
             results.extend(fallback_results)
 
         deduped_results: list[dict] = []
@@ -574,14 +579,14 @@ class JikanService(CatalogProviderBase):
 
         return deduped_results[:limit]
 
-    async def _fetch_current_season_anime(self, *, limit: int) -> list[dict]:
+    def _fetch_current_season_anime(self, *, limit: int) -> list[dict]:
         results: list[dict] = []
         seen_mal_ids: set[int] = set()
         page = 1
         per_page = min(max(1, limit), self.MAX_PER_PAGE)
 
         while len(results) < limit:
-            payload = await self._get(
+            payload = self._get(
                 "/seasons/now",
                 params={"page": page, "limit": per_page},
                 endpoint="seasons_now",
@@ -601,14 +606,14 @@ class JikanService(CatalogProviderBase):
 
         return results
 
-    async def _fetch_top_airing_anime(self, *, limit: int) -> list[dict]:
+    def _fetch_top_airing_anime(self, *, limit: int) -> list[dict]:
         results: list[dict] = []
         seen_mal_ids: set[int] = set()
         page = 1
         per_page = min(max(1, limit), self.MAX_PER_PAGE)
 
         while len(results) < limit:
-            payload = await self._get(
+            payload = self._get(
                 "/top/anime",
                 params={"filter": "airing", "page": page, "limit": per_page},
                 endpoint="top_airing_anime",
@@ -674,9 +679,9 @@ class JikanService(CatalogProviderBase):
 
         return sorted(items, key=sort_key)
 
-    async def search_anime(self, query_string: str, *, per_page: int = 5) -> list[dict]:
+    def search_anime(self, query_string: str, *, per_page: int = 5) -> list[dict]:
         for variant in self._search_variants(query_string):
-            payload = await self._get(
+            payload = self._get(
                 "/anime",
                 params={"q": variant, "page": 1, "limit": max(1, min(per_page, 10))},
                 endpoint="anime_search",
@@ -692,7 +697,7 @@ class JikanService(CatalogProviderBase):
                 for item in normalized_items:
                     mal_id = item.get("idMal")
                     if mal_id:
-                        full_item = await self.search_by_mal_id(mal_id)
+                        full_item = self.search_by_mal_id(mal_id)
                         if full_item:
                             detailed_items.append(full_item)
                             continue
@@ -701,72 +706,70 @@ class JikanService(CatalogProviderBase):
         self._set_last_error("not_found", f"title:{query_string}")
         return []
 
-    async def get_anime_by_id(self, anilist_id: int) -> dict | None:
+    def get_anime_by_id(self, anilist_id: int) -> dict | None:
         """Fetch by real AniList ID. Jikan only knows MAL IDs, so this needs a local row."""
         if not isinstance(anilist_id, int) or anilist_id <= 0 or anilist_id > self.MAX_INT_32:
             self._set_last_error("invalid_variable", "invalid_anilist_id")
             return None
 
-        mal_id = await self._mal_id_for_anilist_id(anilist_id)
+        mal_id = self._mal_id_for_anilist_id(anilist_id)
         if not mal_id:
             self._set_last_error("not_found", f"anilist_id:{anilist_id}")
             return None
 
-        item = await self._get_full_anime_payload(mal_id, anilist_id=anilist_id)
+        item = self._get_full_anime_payload(mal_id, anilist_id=anilist_id)
         if item:
             return item
         if not self.last_error_code:
             self._set_last_error("not_found", f"anilist_id:{anilist_id}")
         return None
 
-    async def get_airing_anime_by_id(self, anilist_id: int) -> dict | None:
+    def get_airing_anime_by_id(self, anilist_id: int) -> dict | None:
         if not isinstance(anilist_id, int) or anilist_id <= 0 or anilist_id > self.MAX_INT_32:
             self._set_last_error("invalid_variable", "invalid_anilist_id")
             return None
 
-        mal_id = await self._mal_id_for_anilist_id(anilist_id)
+        mal_id = self._mal_id_for_anilist_id(anilist_id)
         if not mal_id:
             self._set_last_error("not_found", f"anilist_id:{anilist_id}")
             return None
 
-        item = await self._get_airing_anime_payload(mal_id, anilist_id=anilist_id)
+        item = self._get_airing_anime_payload(mal_id, anilist_id=anilist_id)
         if item:
             return item
         if not self.last_error_code:
             self._set_last_error("not_found", f"anilist_id:{anilist_id}")
         return None
 
-    async def search_by_mal_id(self, mal_id: int, *, anilist_id: int | None = None) -> dict | None:
+    def search_by_mal_id(self, mal_id: int, *, anilist_id: int | None = None) -> dict | None:
         resolved_mal_id = positive_int(mal_id)
         if not resolved_mal_id or resolved_mal_id > self.MAX_INT_32:
             self._set_last_error("invalid_variable", "invalid_mal_id")
             return None
 
-        item = await self._get_full_anime_payload(resolved_mal_id, anilist_id=anilist_id)
+        item = self._get_full_anime_payload(resolved_mal_id, anilist_id=anilist_id)
         if item:
             return item
         if not self.last_error_code:
             self._set_last_error("not_found", f"mal_id:{resolved_mal_id}")
         return None
 
-    async def search_airing_by_mal_id(
-        self, mal_id: int, *, anilist_id: int | None = None
-    ) -> dict | None:
+    def search_airing_by_mal_id(self, mal_id: int, *, anilist_id: int | None = None) -> dict | None:
         resolved_mal_id = positive_int(mal_id)
         if not resolved_mal_id or resolved_mal_id > self.MAX_INT_32:
             self._set_last_error("invalid_variable", "invalid_mal_id")
             return None
 
-        item = await self._get_airing_anime_payload(resolved_mal_id, anilist_id=anilist_id)
+        item = self._get_airing_anime_payload(resolved_mal_id, anilist_id=anilist_id)
         if item:
             return item
         if not self.last_error_code:
             self._set_last_error("not_found", f"mal_id:{resolved_mal_id}")
         return None
 
-    async def update_anime_manual(self, anime: Anime, item: dict | None = None) -> bool:
+    def update_anime_manual(self, anime: Anime, item: dict | None = None) -> bool:
         """Update local anime fields from Jikan without the heavier media refresh path."""
-        media = item or await self.resolve_media_for_anime(anime)
+        media = item or self.resolve_media_for_anime(anime)
         if not media:
             logger.info("Skipped manual Jikan update for Anime ID %s: no matching media", anime.id)
             return False
@@ -781,12 +784,12 @@ class JikanService(CatalogProviderBase):
         anime_data_dict.pop("slug", None)
 
         # Airing sync only needs fresh schedule/status fields, not a full metadata/image refresh.
-        await self._update_anime(anime, anime_data_dict)
+        self._update_anime(anime, anime_data_dict)
         return True
 
-    async def refresh_anime_metadata(self, anime: Anime, item: dict | None = None) -> bool:
+    def refresh_anime_metadata(self, anime: Anime, item: dict | None = None) -> bool:
         """Hydrate full anime metadata, relationships, and media from Jikan."""
-        media = item or await self.resolve_media_for_anime(anime)
+        media = item or self.resolve_media_for_anime(anime)
         if not media:
             logger.info("Skipped metadata refresh for Anime ID %s: no matching media", anime.id)
             return False
@@ -797,20 +800,20 @@ class JikanService(CatalogProviderBase):
         title_native = title_payload.get("native", "")
         title = title_english or title_romaji or anime.title
 
-        await self._update_anime_async(anime, media, title, title_native, anime.slug)
+        self._update_anime_from_media(anime, media, title, title_native, anime.slug)
         return True
 
-    async def resolve_airing_media_for_anime(self, anime: Anime) -> dict | None:
+    def resolve_airing_media_for_anime(self, anime: Anime) -> dict | None:
         if anime.mal_id:
-            item = await self.search_airing_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
+            item = self.search_airing_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
             if item:
                 return item
 
-        return await self.resolve_media_for_anime(anime)
+        return self.resolve_media_for_anime(anime)
 
-    async def resolve_media_for_anime(self, anime: Anime) -> dict | None:
+    def resolve_media_for_anime(self, anime: Anime) -> dict | None:
         if anime.mal_id:
-            item = await self.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
+            item = self.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
             if item:
                 return item
 
@@ -820,7 +823,7 @@ class JikanService(CatalogProviderBase):
                 self._set_last_error("not_found", "missing_title")
             return None
 
-        results = await self.search_anime(title)
+        results = self.search_anime(title)
         if not results:
             if not self.last_error_code:
                 self._set_last_error("not_found", f"title:{title}")
@@ -862,7 +865,7 @@ class JikanService(CatalogProviderBase):
         if anime.mal_id:
             for candidate in results:
                 if candidate.get("idMal") == anime.mal_id:
-                    return await self.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
+                    return self.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
 
         self._set_last_error("not_found", f"title:{title}")
         return None
@@ -938,7 +941,7 @@ class JikanService(CatalogProviderBase):
 
         return estimated_next_airing
 
-    async def _get_full_anime_payload(
+    def _get_full_anime_payload(
         self,
         mal_id: int,
         *,
@@ -951,14 +954,7 @@ class JikanService(CatalogProviderBase):
             themes_payload,
             stats_payload,
             next_airing,
-        ) = await asyncio.gather(
-            self._get(f"/anime/{mal_id}/full", endpoint="anime_full"),
-            self._get(f"/anime/{mal_id}/characters", endpoint="anime_characters"),
-            self._get(f"/anime/{mal_id}/staff", endpoint="anime_staff"),
-            self._get(f"/anime/{mal_id}/themes", endpoint="anime_themes"),
-            self._get(f"/anime/{mal_id}/statistics", endpoint="anime_statistics"),
-            self._estimate_next_airing_episode(mal_id),
-        )
+        ) = asyncio.run(self._fetch_full_anime_parts(mal_id))
 
         anime_data = anime_payload.get("data")
         if not isinstance(anime_data, dict):
@@ -974,13 +970,34 @@ class JikanService(CatalogProviderBase):
             anilist_id=anilist_id,
         )
 
-    async def _get_airing_anime_payload(
+    async def _fetch_full_anime_parts(self, mal_id: int) -> list:
+        """The five detail endpoints plus the next-episode estimate, concurrently.
+
+        The one async spot in the provider: each part is the ordinary sync
+        call run on a worker thread, so retries, rate limiting and the
+        circuit breaker are the same code as everywhere else. Nothing here
+        touches the ORM, so the threads need no database connection.
+        """
+        return await asyncio.gather(
+            asyncio.to_thread(self._get, f"/anime/{mal_id}/full", endpoint="anime_full"),
+            asyncio.to_thread(
+                self._get, f"/anime/{mal_id}/characters", endpoint="anime_characters"
+            ),
+            asyncio.to_thread(self._get, f"/anime/{mal_id}/staff", endpoint="anime_staff"),
+            asyncio.to_thread(self._get, f"/anime/{mal_id}/themes", endpoint="anime_themes"),
+            asyncio.to_thread(
+                self._get, f"/anime/{mal_id}/statistics", endpoint="anime_statistics"
+            ),
+            asyncio.to_thread(self._estimate_next_airing_episode, mal_id),
+        )
+
+    def _get_airing_anime_payload(
         self,
         mal_id: int,
         *,
         anilist_id: int | None = None,
     ) -> dict | None:
-        anime_payload = await self._get(
+        anime_payload = self._get(
             f"/anime/{mal_id}/full",
             endpoint="anime_full_airing",
         )
@@ -990,7 +1007,7 @@ class JikanService(CatalogProviderBase):
 
         next_airing = self._merge_next_airing_payload(anime_data, None)
         if next_airing is None and self._normalize_status(anime_data.get("status")) == "RELEASING":
-            next_airing = await self._estimate_next_airing_episode(mal_id, anime_data=anime_data)
+            next_airing = self._estimate_next_airing_episode(mal_id, anime_data=anime_data)
 
         return self._normalize_anime_item(
             anime_data,
@@ -1016,12 +1033,8 @@ class JikanService(CatalogProviderBase):
     def _staff_sync_id(cls, mal_id: int | None) -> int | None:
         return cls._service_id_from_mal_id(mal_id, offset=cls.STAFF_ID_OFFSET)
 
-    async def _mal_id_for_anilist_id(self, anilist_id: int) -> int | None:
-        return await sync_to_async(
-            lambda: (
-                Anime.objects.filter(anilist_id=anilist_id).values_list("mal_id", flat=True).first()
-            )
-        )()
+    def _mal_id_for_anilist_id(self, anilist_id: int) -> int | None:
+        return Anime.objects.filter(anilist_id=anilist_id).values_list("mal_id", flat=True).first()
 
     @staticmethod
     def _response_message(response: httpx.Response) -> str:
@@ -1498,8 +1511,7 @@ class JikanService(CatalogProviderBase):
 
         return values
 
-    @sync_to_async
-    def _handle_relationships_async(self, anime, item):
+    def _handle_relationships(self, anime, item):
         genres = item.get("genres") or []
         for genre_name in genres:
             genre, _ = Genre.objects.get_or_create(
@@ -1662,7 +1674,7 @@ class JikanService(CatalogProviderBase):
                     anilist_raw=ending_text[:500],
                 )
 
-    async def _download_and_save_images(self, anime, item):
+    def _download_and_save_images(self, anime, item):
         try:
             cover_image = item.get("coverImage") or {}
             if not isinstance(cover_image, dict):
@@ -1678,8 +1690,8 @@ class JikanService(CatalogProviderBase):
             banner_url_changed = bool(banner_url and banner_url != existing_banner_url)
             force_replace = cover_url_changed or banner_url_changed
 
-            has_cover = await sync_to_async(lambda: bool(anime.cover_image))()
-            has_banner = await sync_to_async(lambda: bool(anime.banner_image))()
+            has_cover = bool(anime.cover_image)
+            has_banner = bool(anime.banner_image)
             mal_id = item.get("idMal")
 
             if (
@@ -1691,7 +1703,7 @@ class JikanService(CatalogProviderBase):
                 from ..tasks.images import _queue_image_fetch
 
                 logger.info(f"Queueing background image fetch for {anime.title}")
-                await sync_to_async(_queue_image_fetch)(
+                _queue_image_fetch(
                     anime_id=anime.id,
                     cover_url=cover_url,
                     banner_url=banner_url,
@@ -1699,14 +1711,14 @@ class JikanService(CatalogProviderBase):
                     force_replace=force_replace,
                 )
 
-            has_trailer = await sync_to_async(lambda: bool(anime.trailer_url))()
+            has_trailer = bool(anime.trailer_url)
             if not has_trailer:
                 trailer = item.get("trailer")
                 if trailer:
                     trailer_id = trailer.get("id")
                     trailer_site = trailer.get("site")
                     if trailer_id and trailer_site and trailer_site.lower() == "youtube":
-                        await self._save_trailer_url(
+                        self._save_trailer_url(
                             anime,
                             f"https://www.youtube.com/watch?v={trailer_id}",
                         )
@@ -1714,15 +1726,11 @@ class JikanService(CatalogProviderBase):
         except Exception as exc:
             logger.error(f"Error downloading media for {anime.title}: {exc}")
 
-    @sync_to_async
     def _save_trailer_url(self, anime, trailer_url):
         anime.trailer_url = trailer_url
         anime.save()
 
     def save_anime_to_db(self, item: dict) -> Anime:
-        return async_to_sync(self._save_anime_to_db_async)(item)
-
-    async def _save_anime_to_db_async(self, item: dict) -> Anime:
         anilist_id = item.get("id")
         mal_id = item.get("idMal")
         title = item.get("title", {}).get("english") or item.get("title", {}).get("romaji")
@@ -1733,7 +1741,7 @@ class JikanService(CatalogProviderBase):
             raise ValueError("Anime must have a title")
 
         base_slug = slugify(title)
-        existing = await sync_to_async(self._lookup_existing_anime)(
+        existing = self._lookup_existing_anime(
             anilist_id=anilist_id,
             mal_id=mal_id,
             slug=base_slug,
@@ -1747,12 +1755,10 @@ class JikanService(CatalogProviderBase):
                 mal_id,
                 existing.title,
             )
-            await self._update_anime_async(existing, item, title, title_native, existing.slug)
+            self._update_anime_from_media(existing, item, title, title_native, existing.slug)
             return existing
 
-        final_slug = await sync_to_async(Anime.available_slug)(
-            base_slug, year=item.get("seasonYear")
-        )
+        final_slug = Anime.available_slug(base_slug, year=item.get("seasonYear"))
 
         anime_data = with_creation_defaults(
             self._prepare_anime_data(item, title, title_native, final_slug)
@@ -1760,10 +1766,10 @@ class JikanService(CatalogProviderBase):
         anime_data["anilist_id"] = anilist_id
         anime_data["mal_id"] = mal_id
         try:
-            anime = await sync_to_async(Anime.objects.create)(**anime_data)
+            anime = Anime.objects.create(**anime_data)
             logger.info(f"Created new anime: {title} with slug {final_slug}")
         except IntegrityError as exc:
-            recovered = await sync_to_async(self._lookup_existing_anime)(
+            recovered = self._lookup_existing_anime(
                 anilist_id=anilist_id,
                 mal_id=mal_id,
                 slug=final_slug,
@@ -1774,15 +1780,15 @@ class JikanService(CatalogProviderBase):
                 logger.warning(
                     f"Recovered from create integrity conflict for '{title}' (MAL ID: {mal_id}): {exc}"
                 )
-                await self._update_anime_async(recovered, item, title, title_native, recovered.slug)
+                self._update_anime_from_media(recovered, item, title, title_native, recovered.slug)
                 return recovered
             raise
 
-        await self._handle_relationships_async(anime, item)
-        await self._download_and_save_images(anime, item)
+        self._handle_relationships(anime, item)
+        self._download_and_save_images(anime, item)
         return anime
 
-    async def _update_anime_async(
+    def _update_anime_from_media(
         self, anime: Anime, item: dict, title: str, title_native: str, slug: str
     ):
         anime_data = self._prepare_anime_data(item, title, title_native, slug)
@@ -1795,11 +1801,11 @@ class JikanService(CatalogProviderBase):
             anime_data.pop("next_airing_episode", None)
             anime_data.pop("next_airing_date", None)
 
-        await self._update_anime(anime, anime_data)
-        await self._handle_relationships_async(anime, item)
-        await self._download_and_save_images(anime, item)
+        self._update_anime(anime, anime_data)
+        self._handle_relationships(anime, item)
+        self._download_and_save_images(anime, item)
 
-    async def get_streaming_episodes_for_anime(
+    def get_streaming_episodes_for_anime(
         self,
         *,
         anilist_id: int | None = None,
@@ -1808,13 +1814,13 @@ class JikanService(CatalogProviderBase):
     ) -> dict | None:
         resolved_mal_id = positive_int(mal_id)
         if resolved_mal_id is None and anilist_id is not None:
-            resolved_mal_id = await self._mal_id_for_anilist_id(anilist_id)
+            resolved_mal_id = self._mal_id_for_anilist_id(anilist_id)
 
         if resolved_mal_id is None:
             self._set_last_error("invalid_variable", "missing_mal_id")
             return None
 
-        payload = await self._get(
+        payload = self._get(
             f"/anime/{resolved_mal_id}/videos/episodes",
             endpoint="anime_videos_episodes",
             **self._query_options_for_budget(request_budget),
@@ -1843,7 +1849,7 @@ class JikanService(CatalogProviderBase):
             "streamingEpisodes": streaming_episodes,
         }
 
-    async def get_recommendations_for_anime(
+    def get_recommendations_for_anime(
         self,
         mal_id: int,
         *,
@@ -1855,7 +1861,7 @@ class JikanService(CatalogProviderBase):
             self._set_last_error("invalid_variable", "invalid_mal_id")
             return []
 
-        payload = await self._get(
+        payload = self._get(
             f"/anime/{resolved_mal_id}/recommendations",
             endpoint="anime_recommendations",
             **self._query_options_for_budget(request_budget),
@@ -1896,14 +1902,14 @@ class JikanService(CatalogProviderBase):
 
         return recommendations
 
-    async def _estimate_next_airing_episode(
+    def _estimate_next_airing_episode(
         self,
         mal_id: int,
         *,
         anime_data: dict[str, Any] | None = None,
     ) -> dict[str, int] | None:
         if anime_data is None:
-            anime_payload = await self._get(f"/anime/{mal_id}", endpoint="anime_core")
+            anime_payload = self._get(f"/anime/{mal_id}", endpoint="anime_core")
             anime_data = anime_payload.get("data")
         if not isinstance(anime_data, dict):
             return None
@@ -1919,7 +1925,7 @@ class JikanService(CatalogProviderBase):
         if not next_airing_at:
             return None
 
-        first_page = await self._get(
+        first_page = self._get(
             f"/anime/{mal_id}/episodes",
             params={"page": 1},
             endpoint="anime_episodes",
@@ -1928,7 +1934,7 @@ class JikanService(CatalogProviderBase):
         last_visible_page = positive_int(pagination.get("last_visible_page")) or 1
         last_page = first_page
         if last_visible_page > 1:
-            last_page = await self._get(
+            last_page = self._get(
                 f"/anime/{mal_id}/episodes",
                 params={"page": last_visible_page},
                 endpoint="anime_episodes",
@@ -1987,13 +1993,13 @@ class JikanService(CatalogProviderBase):
         return max_episode
 
 
-async def fetch_themes_from_jikan(
-    http_client: httpx.AsyncClient,
+def fetch_themes_from_jikan(
+    http_client: httpx.Client,
     mal_id: int,
     rate_limiter: JikanRateLimiter,
     max_retries: int = 3,
 ) -> dict | None:
-    result = await fetch_themes_from_jikan_with_reason(
+    result = fetch_themes_from_jikan_with_reason(
         http_client=http_client,
         mal_id=mal_id,
         rate_limiter=rate_limiter,
@@ -2004,8 +2010,8 @@ async def fetch_themes_from_jikan(
     return None
 
 
-async def fetch_themes_from_jikan_with_reason(
-    http_client: httpx.AsyncClient,
+def fetch_themes_from_jikan_with_reason(
+    http_client: httpx.Client,
     mal_id: int,
     rate_limiter: JikanRateLimiter,
     max_retries: int = 3,
@@ -2019,7 +2025,7 @@ async def fetch_themes_from_jikan_with_reason(
         _start = time.time()
         _status = "success"
         try:
-            response = await http_client.get(url)
+            response = http_client.get(url)
 
             if response.status_code == 429:
                 _status = "rate_limited"
@@ -2036,7 +2042,7 @@ async def fetch_themes_from_jikan_with_reason(
                         attempt + 1,
                         max_retries,
                     )
-                    await asyncio.sleep(wait_time)
+                    time.sleep(wait_time)
                     continue
 
                 return JikanThemesFetchResult(
@@ -2059,7 +2065,7 @@ async def fetch_themes_from_jikan_with_reason(
                         attempt + 1,
                         max_retries,
                     )
-                    await asyncio.sleep(wait_time)
+                    time.sleep(wait_time)
                     continue
 
                 return JikanThemesFetchResult(
@@ -2112,7 +2118,7 @@ async def fetch_themes_from_jikan_with_reason(
                     attempt + 1,
                     max_retries,
                 )
-                await asyncio.sleep(wait_time)
+                time.sleep(wait_time)
                 continue
 
             return JikanThemesFetchResult(
@@ -2134,7 +2140,7 @@ async def fetch_themes_from_jikan_with_reason(
                     attempt + 1,
                     max_retries,
                 )
-                await asyncio.sleep(wait_time)
+                time.sleep(wait_time)
                 continue
 
             return JikanThemesFetchResult(

@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -75,7 +75,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
 
     @patch(
         "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=AsyncMock,
+        new_callable=MagicMock,
     )
     def test_anilist_recommendations_exclude_franchise_entries(self, mock_get_recommendations):
         mock_get_recommendations.return_value = [
@@ -91,7 +91,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
             [item["slug"] for item in response.data],
             [self.anilist_recommendation.slug],
         )
-        mock_get_recommendations.assert_awaited_once_with(
+        mock_get_recommendations.assert_called_once_with(
             self.anime.mal_id,
             limit=12,
             request_budget="interactive",
@@ -99,7 +99,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
 
     @patch(
         "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=AsyncMock,
+        new_callable=MagicMock,
     )
     def test_fallback_recommendations_also_exclude_franchise_entries(
         self, mock_get_recommendations
@@ -117,7 +117,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
 
     @patch(
         "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=AsyncMock,
+        new_callable=MagicMock,
     )
     def test_timeout_uses_fallback_recommendations(self, mock_get_recommendations):
         mock_get_recommendations.side_effect = TimeoutError("AniList timed out")
@@ -132,7 +132,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
 
     @patch(
         "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=AsyncMock,
+        new_callable=MagicMock,
     )
     def test_public_recommendations_include_cache_control_header(self, mock_get_recommendations):
         mock_get_recommendations.return_value = [{"id": 300, "title": "Delicious in Dungeon"}]
@@ -144,7 +144,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
 
     @patch(
         "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=AsyncMock,
+        new_callable=MagicMock,
     )
     def test_authenticated_recommendations_include_user_context(self, mock_get_recommendations):
         mock_get_recommendations.return_value = [{"id": 300, "title": "Delicious in Dungeon"}]

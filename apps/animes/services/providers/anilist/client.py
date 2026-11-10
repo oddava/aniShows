@@ -5,7 +5,7 @@ Jikan instance), so ``_query`` raises; the query builders and response
 handling stay for the AniList-only provider (decision D1).
 """
 
-import asyncio
+import time
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -95,7 +95,7 @@ class AniListClient(CatalogProviderBase):
     MEDIA_FIELDS_WITH_THEMES = MEDIA_FIELDS_WITH_THEMES
 
     def __init__(self, enable_caching: bool = True, enable_rate_limiting: bool = True):
-        self.client = httpx.AsyncClient(headers={"Content-Type": "application/json"}, timeout=15.0)
+        self.client = httpx.Client(headers={"Content-Type": "application/json"}, timeout=15.0)
         self.rate_limiter = AniListRateLimiter() if enable_rate_limiting else None
         self.call_cache = APICallCache(ttl=1800) if enable_caching else None
         self.circuit_breaker = CircuitBreaker(
@@ -107,10 +107,10 @@ class AniListClient(CatalogProviderBase):
     def _parse_graphql_error_code(self, message: str) -> str:
         return mapper.parse_graphql_error_code(message)
 
-    async def _acquire_rate_limit(self):
+    def _acquire_rate_limit(self):
         """Acquire rate limit permission if enabled."""
         if self.rate_limiter:
-            await self.rate_limiter.acquire()
+            self.rate_limiter.acquire()
 
     def _get_cached_result(self, endpoint: str, params: str) -> dict | None:
         """Get cached API result if available."""
@@ -135,7 +135,7 @@ class AniListClient(CatalogProviderBase):
         """Record failed API call."""
         self.circuit_breaker.record_failure()
 
-    async def _query(
+    def _query(
         self,
         query: str,
         variables: dict,
@@ -160,7 +160,7 @@ class AniListClient(CatalogProviderBase):
         self._set_last_error("disabled", self.RUNTIME_ACCESS_DISABLED_MESSAGE)
         raise RuntimeError(self.RUNTIME_ACCESS_DISABLED_MESSAGE)
 
-    async def download_image(self, url: str) -> bytes | None:
+    def download_image(self, url: str) -> bytes | None:
         """Download image from URL with SSRF protection.
         Only allows HTTPS URLs from trusted domains.
         """
@@ -172,8 +172,8 @@ class AniListClient(CatalogProviderBase):
             return None
 
         try:
-            await asyncio.sleep(0.2)  # Polite delay for images too
-            response = await self.client.get(resolved_url, timeout=10)
+            time.sleep(0.2)  # Polite delay for images too
+            response = self.client.get(resolved_url, timeout=10)
             response.raise_for_status()
 
             # Validate content type is an image
@@ -234,7 +234,7 @@ class AniListClient(CatalogProviderBase):
             }}
             """
 
-    async def _fetch_paginated(
+    def _fetch_paginated(
         self,
         variables: dict,
         include_season: bool = False,
@@ -252,7 +252,7 @@ class AniListClient(CatalogProviderBase):
 
         while fetched_count < limit:
             variables.update({"page": page, "perPage": per_page})
-            data = await self._query(query, variables)
+            data = self._query(query, variables)
             page_data = data.get("Page", {})
             media = page_data.get("media", [])
 
@@ -274,28 +274,28 @@ class AniListClient(CatalogProviderBase):
 
         return results[:limit]
 
-    async def get_recent_updates(self, limit: int = 50) -> list[dict]:
-        return await self._fetch_paginated(
+    def get_recent_updates(self, limit: int = 50) -> list[dict]:
+        return self._fetch_paginated(
             variables={"sort": [MediaSort.TRENDING.value]},
             include_season=False,
             limit=limit,
         )
 
-    async def get_top_rated(self, limit: int = 50) -> list[dict]:
-        return await self._fetch_paginated(
+    def get_top_rated(self, limit: int = 50) -> list[dict]:
+        return self._fetch_paginated(
             variables={"sort": [MediaSort.SCORE.value]},
             include_season=False,
             limit=limit,
         )
 
-    async def get_by_season(
+    def get_by_season(
         self,
         season: Literal["WINTER", "SPRING", "SUMMER", "FALL"],
         year: int,
         limit: int = 50,
         sort: MediaSort = MediaSort.POPULARITY,
     ) -> list[dict]:
-        return await self._fetch_paginated(
+        return self._fetch_paginated(
             variables={"season": season, "year": year, "sort": [sort.value]},
             include_season=True,
             limit=limit,
@@ -304,7 +304,7 @@ class AniListClient(CatalogProviderBase):
     def _search_variants(self, query_string: str) -> list[str]:
         return mapper.search_variants(self._sanitize_search_query(query_string))
 
-    async def search_anime(self, query_string: str, *, per_page: int = 5) -> list[dict]:
+    def search_anime(self, query_string: str, *, per_page: int = 5) -> list[dict]:
         """Search anime by title with lightweight sanitization."""
         query = f"""
             query SearchAnime($search: String, $perPage: Int) {{
@@ -318,7 +318,7 @@ class AniListClient(CatalogProviderBase):
 
         for variant in self._search_variants(query_string):
             variables = {"search": variant, "perPage": max(1, min(per_page, 10))}
-            data = await self._query(query, variables)
+            data = self._query(query, variables)
             if not data:
                 continue
             media = data.get("Page", {}).get("media", [])
@@ -327,7 +327,7 @@ class AniListClient(CatalogProviderBase):
 
         return []
 
-    async def get_anime_by_id(self, anilist_id: int) -> dict | None:
+    def get_anime_by_id(self, anilist_id: int) -> dict | None:
         """Fetch a single anime by AniList ID"""
         if not mapper.is_valid_id(anilist_id):
             self._set_last_error("invalid_variable", "invalid_anilist_id")
@@ -342,7 +342,7 @@ class AniListClient(CatalogProviderBase):
         """
 
         variables = {"id": anilist_id}
-        data = await self._query(query, variables)
+        data = self._query(query, variables)
 
         if data and data.get("Media"):
             return data["Media"]
@@ -350,7 +350,7 @@ class AniListClient(CatalogProviderBase):
             self._set_last_error("not_found", f"anilist_id:{anilist_id}")
         return None
 
-    async def get_streaming_episodes_for_anime(
+    def get_streaming_episodes_for_anime(
         self,
         *,
         anilist_id: int | None = None,
@@ -388,7 +388,7 @@ class AniListClient(CatalogProviderBase):
             }}
         """
 
-        data = await self._query(query, variables, **self._query_options_for_budget(request_budget))
+        data = self._query(query, variables, **self._query_options_for_budget(request_budget))
         media = data.get("Media") if isinstance(data, dict) else None
         if isinstance(media, dict):
             return media
@@ -397,7 +397,7 @@ class AniListClient(CatalogProviderBase):
             self._set_last_error("not_found", f"streaming_episodes:{lookup_value}")
         return None
 
-    async def get_recommendations_for_anime(
+    def get_recommendations_for_anime(
         self,
         anilist_id: int,
         *,
@@ -433,7 +433,7 @@ class AniListClient(CatalogProviderBase):
         """
 
         variables = {"id": anilist_id, "perPage": min(limit, self.MAX_PER_PAGE)}
-        data = await self._query(query, variables, **self._query_options_for_budget(request_budget))
+        data = self._query(query, variables, **self._query_options_for_budget(request_budget))
         return mapper.map_recommendations(data, self.normalize_external_image_url)
 
     @classmethod
@@ -450,7 +450,7 @@ class AniListClient(CatalogProviderBase):
 
         return {}
 
-    async def search_by_mal_id(self, mal_id: int) -> dict | None:
+    def search_by_mal_id(self, mal_id: int) -> dict | None:
         """Search for anime by MyAnimeList ID"""
         if not mapper.is_valid_id(mal_id):
             self._set_last_error("invalid_variable", "invalid_mal_id")
@@ -465,7 +465,7 @@ class AniListClient(CatalogProviderBase):
         """
 
         variables = {"idMal": mal_id}
-        data = await self._query(query, variables)
+        data = self._query(query, variables)
 
         if data and data.get("Media"):
             return data["Media"]

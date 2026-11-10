@@ -1,6 +1,6 @@
 import io
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import httpx
 from django.core.cache import cache
@@ -39,9 +39,9 @@ class AnimeWatchEpisodeServiceTests(TestCase):
 
     @patch(
         "apps.animes.services.watch_episodes.JikanService.get_streaming_episodes_for_anime",
-        new_callable=AsyncMock,
+        new_callable=MagicMock,
     )
-    @patch("apps.animes.services.watch_episodes.httpx.AsyncClient.get", new_callable=AsyncMock)
+    @patch("apps.animes.services.watch_episodes.httpx.Client.get", new_callable=MagicMock)
     def test_merges_jikan_episodes_with_anilist_crunchyroll_links(
         self, mock_jikan_get, mock_streams
     ):
@@ -105,9 +105,9 @@ class AnimeWatchEpisodeServiceTests(TestCase):
 
     @patch(
         "apps.animes.services.watch_episodes.JikanService.get_streaming_episodes_for_anime",
-        new_callable=AsyncMock,
+        new_callable=MagicMock,
     )
-    @patch("apps.animes.services.watch_episodes.httpx.AsyncClient.get", new_callable=AsyncMock)
+    @patch("apps.animes.services.watch_episodes.httpx.Client.get", new_callable=MagicMock)
     def test_caches_merged_episode_payload(self, mock_jikan_get, mock_streams):
         mock_streams.return_value = {"idMal": self.anime.mal_id, "streamingEpisodes": []}
         mock_jikan_get.return_value = self._jikan_response(
@@ -128,8 +128,8 @@ class AnimeWatchEpisodeServiceTests(TestCase):
         second = self.service.get_for_anime(self.anime)
 
         self.assertEqual(first, second)
-        mock_streams.assert_awaited_once()
-        mock_jikan_get.assert_awaited_once()
+        mock_streams.assert_called_once()
+        mock_jikan_get.assert_called_once()
 
     def test_falls_back_to_generic_episode_list_when_external_episode_data_is_missing(self):
         anime = Anime.objects.create(
@@ -175,9 +175,9 @@ class AnimeWatchEpisodeServiceTests(TestCase):
 
     @patch(
         "apps.animes.services.watch_episodes.JikanService.get_streaming_episodes_for_anime",
-        new_callable=AsyncMock,
+        new_callable=MagicMock,
     )
-    @patch("apps.animes.services.watch_episodes.httpx.AsyncClient.get", new_callable=AsyncMock)
+    @patch("apps.animes.services.watch_episodes.httpx.Client.get", new_callable=MagicMock)
     def test_interactive_budget_falls_back_quickly_when_jikan_times_out(
         self,
         mock_jikan_get,
