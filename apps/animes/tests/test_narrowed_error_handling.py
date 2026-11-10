@@ -14,6 +14,7 @@ from django_redis.exceptions import ConnectionInterrupted
 from kombu.exceptions import OperationalError as KombuOperationalError
 from PIL import Image
 from redis.exceptions import ConnectionError as RedisConnectionError
+from rest_framework.exceptions import ValidationError
 
 from ..serializers.base import validate_image_content
 from ..services import user_list_side_effects
@@ -93,14 +94,25 @@ class ImageMagicCheckTests(SimpleTestCase):
         Image.new("RGB", (2, 2)).save(buffer, format="PNG")
         return SimpleUploadedFile("a.png", buffer.getvalue(), content_type="image/png")
 
-    def test_unexpected_mime_type_is_logged_but_not_rejected(self):
-        # Long-standing behaviour: only the Pillow check rejects files.
-        with mock.patch("magic.from_buffer", return_value="text/plain"), mock.patch(
-            "apps.shared.logger.logger"
-        ) as logger:
-            upload = validate_image_content(self._png(), 1024 * 1024, "Avatar")
+    def test_accepts_an_allowed_image(self):
+        upload = validate_image_content(self._png(), 1024 * 1024, "Avatar")
         self.assertEqual(upload.name, "a.png")
-        logger.warning.assert_called_once()
+        self.assertEqual(upload.tell(), 0)
+
+    def test_rejects_a_disallowed_mime_type(self):
+        with (
+            mock.patch("magic.from_buffer", return_value="text/plain"),
+            self.assertRaisesMessage(ValidationError, "Invalid file content for Avatar"),
+        ):
+            validate_image_content(self._png(), 1024 * 1024, "Avatar")
+
+    def test_rejects_an_image_format_outside_the_allow_list(self):
+        # BMP is a valid image that Pillow verifies happily; the type check must stop it.
+        buffer = io.BytesIO()
+        Image.new("RGB", (2, 2)).save(buffer, format="BMP")
+        upload = SimpleUploadedFile("a.png", buffer.getvalue(), content_type="image/png")
+        with self.assertRaisesMessage(ValidationError, "Allowed types"):
+            validate_image_content(upload, 1024 * 1024, "Avatar")
 
     def test_libmagic_failure_is_logged(self):
         import magic

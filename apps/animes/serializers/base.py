@@ -34,8 +34,8 @@ def validate_image_content(file, max_size, field_name):
     magic_bytes = file.read(2048)
     file.seek(0)
 
-    # A disallowed MIME type is only logged, not rejected (long-standing
-    # behaviour); the Pillow verification below is what rejects bad files.
+    # The sniffed type must be an allowed image type. If libmagic itself fails,
+    # fall through and let the Pillow verification below decide.
     from ...shared.logger import logger
 
     try:
@@ -44,11 +44,8 @@ def validate_image_content(file, max_size, field_name):
         logger.warning("Image magic validation failed for %s", field_name, exc_info=True)
     else:
         if mime not in ALLOWED_IMAGE_TYPES:
-            logger.warning(
-                "Image magic validation failed for %s: Invalid file content for %s. "
-                "Allowed types: JPEG, PNG, WebP, GIF.",
-                field_name,
-                field_name,
+            raise ValidationError(
+                f"Invalid file content for {field_name}. Allowed types: JPEG, PNG, WebP, GIF."
             )
 
     Image = get_pillow_image_module()
