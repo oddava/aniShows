@@ -23,7 +23,6 @@ from ..services.import_job_service import (
 
 # Max XML file size (10MB)
 MAX_XML_SIZE = 10 * 1024 * 1024
-DEFAULT_MAX_XML_ENTRIES = 5000
 
 
 class ImportExportViewSet(ViewSet):
@@ -44,11 +43,7 @@ class ImportExportViewSet(ViewSet):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        max_xml_entries = getattr(
-            settings,
-            "MAX_IMPORT_XML_ENTRIES",
-            DEFAULT_MAX_XML_ENTRIES,
-        )
+        max_xml_entries = settings.MAX_IMPORT_XML_ENTRIES
         entry_count = len(root.findall("anime"))
         if entry_count > max_xml_entries:
             return error_response(

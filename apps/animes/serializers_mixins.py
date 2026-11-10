@@ -45,7 +45,7 @@ class ImageUrlMixin:
         if not isinstance(thumbnail_field, ImageCacheFile):
             return self._build_url(thumbnail_field)
 
-        if getattr(settings, "IMAGEKIT_GENERATE_DURING_REQUESTS", False):
+        if settings.IMAGEKIT_GENERATE_DURING_REQUESTS:
             try:
                 thumbnail_field.generate()
             except Exception:

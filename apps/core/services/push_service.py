@@ -62,7 +62,7 @@ class PushService:
                     },
                 },
                 data=json.dumps(payload),
-                vapid_private_key=getattr(settings, "VAPID_PRIVATE_KEY", None),
+                vapid_private_key=settings.VAPID_PRIVATE_KEY,
                 vapid_claims=cls.get_vapid_claims(),
             )
 

@@ -38,9 +38,7 @@ class MediaStorage(S3Boto3Storage):
 
         Disabled by default in request paths to avoid blocking uploads on bucket probes.
         """
-        if MediaStorage._bucket_checked or not getattr(
-            settings, "S3_RUNTIME_BUCKET_AUTOCREATE", False
-        ):
+        if MediaStorage._bucket_checked or not settings.S3_RUNTIME_BUCKET_AUTOCREATE:
             return
 
         # Mark as checked before network calls so repeated failures don't stall each upload.
@@ -66,6 +64,6 @@ class MediaStorage(S3Boto3Storage):
 
     def save(self, name, content, max_length=None):
         # Runtime bucket auto-creation is opt-in to keep profile/avatar updates fast.
-        if getattr(settings, "S3_RUNTIME_BUCKET_AUTOCREATE", False):
+        if settings.S3_RUNTIME_BUCKET_AUTOCREATE:
             self._ensure_bucket_exists()
         return super().save(name, content, max_length=max_length)

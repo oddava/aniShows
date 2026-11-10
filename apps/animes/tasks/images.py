@@ -137,7 +137,7 @@ def _queue_image_fetch(
 
 def _is_storage_available() -> bool:
     """Check whether object storage is currently reachable."""
-    if not getattr(settings, "USE_S3", False):
+    if not settings.USE_S3:
         return True
 
     from django.core.files.storage import default_storage

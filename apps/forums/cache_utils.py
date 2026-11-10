@@ -202,7 +202,7 @@ def _get_redis_connection():
 
 
 def buffer_thread_view_increment(thread_id: int) -> None:
-    ttl = max(int(getattr(settings, "FORUM_VIEW_BUFFER_TTL_SECONDS", 7200)), 60)
+    ttl = max(int(settings.FORUM_VIEW_BUFFER_TTL_SECONDS), 60)
     redis_conn = _get_redis_connection()
     if redis_conn is not None:
         key = get_thread_view_buffer_key(thread_id)
@@ -230,7 +230,7 @@ def buffer_thread_view_increment(thread_id: int) -> None:
 def flush_buffered_thread_views(*, max_threads: int | None = None) -> dict[str, int]:
     from .models import Thread
 
-    batch_size = max_threads or max(int(getattr(settings, "FORUM_VIEW_FLUSH_BATCH_SIZE", 500)), 1)
+    batch_size = max_threads or max(int(settings.FORUM_VIEW_FLUSH_BATCH_SIZE), 1)
     flushed = 0
     missing = 0
 
@@ -273,6 +273,6 @@ def flush_buffered_thread_views(*, max_threads: int | None = None) -> dict[str, 
     cache.set(
         THREAD_VIEW_DIRTY_SET_KEY,
         remaining_ids,
-        timeout=max(int(getattr(settings, "FORUM_VIEW_BUFFER_TTL_SECONDS", 7200)), 60),
+        timeout=max(int(settings.FORUM_VIEW_BUFFER_TTL_SECONDS), 60),
     )
     return {"flushed": flushed, "missing": missing, "processed_threads": len(dirty_ids)}

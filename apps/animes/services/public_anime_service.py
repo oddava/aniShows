@@ -1539,7 +1539,7 @@ class AnimePublicPayloadService:
     def legacy_imagekit_cache_path_prefixes(cls) -> tuple[str, ...]:
         return tuple(
             f"/media/{prefix.strip('/')}/"
-            for prefix in getattr(settings, "IMAGEKIT_LEGACY_CACHEFILE_DIRS", ())
+            for prefix in settings.IMAGEKIT_LEGACY_CACHEFILE_DIRS
             if prefix.strip("/")
         )
 

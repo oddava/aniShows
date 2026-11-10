@@ -63,6 +63,8 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 
 # Frontend URL for OAuth callbacks
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# django-cors-headers' own default; development.py and production.py set the real list.
+CORS_ALLOWED_ORIGINS: list[str] = []
 JIKAN_BASE_URL = os.getenv("JIKAN_BASE_URL", "https://api.jikan.moe/v4").strip().rstrip("/")
 
 # Application tuning defaults
@@ -118,6 +120,7 @@ OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS = max(
     _env_int("OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS", 7200),
     60,
 )
+OFFLINE_IMPORT_TRENDING_RANK_LIMIT = _env_int("OFFLINE_IMPORT_TRENDING_RANK_LIMIT", 50)
 
 # =============================================================================
 # APPLICATION DEFINITION
@@ -357,6 +360,9 @@ IMAGEKIT_LEGACY_CACHEFILE_DIRS = tuple(
     for prefix in _parse_csv(os.getenv("IMAGEKIT_LEGACY_CACHEFILE_DIRS", "CACHE/images"))
     if prefix.strip("/")
 )
+# Keep runtime request paths fast; bucket creation is handled by createbuckets init job.
+# Only read by the S3 storage backend.
+S3_RUNTIME_BUCKET_AUTOCREATE = _env_bool("S3_RUNTIME_BUCKET_AUTOCREATE", False)
 
 if USE_S3:
     from botocore.config import Config
@@ -370,8 +376,6 @@ if USE_S3:
     AWS_S3_ADDRESSING_STYLE = "path"
     AWS_DEFAULT_ACL = None
     AWS_S3_FILE_OVERWRITE = False
-    # Keep runtime request paths fast; bucket creation is handled by createbuckets init job.
-    S3_RUNTIME_BUCKET_AUTOCREATE = _env_bool("S3_RUNTIME_BUCKET_AUTOCREATE", False)
 
     MINIO_PUBLIC_DOMAIN = os.getenv("MINIO_PUBLIC_DOMAIN", "localhost:9000")
 

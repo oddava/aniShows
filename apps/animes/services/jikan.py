@@ -32,7 +32,7 @@ JIKAN_COOLDOWN_CACHE_KEY = "jikan:global_cooldown_until"
 def get_jikan_base_url() -> str:
     candidate = DEFAULT_JIKAN_BASE_URL
     if getattr(settings, "configured", False):
-        candidate = getattr(settings, "JIKAN_BASE_URL", DEFAULT_JIKAN_BASE_URL)
+        candidate = settings.JIKAN_BASE_URL
     return (candidate or DEFAULT_JIKAN_BASE_URL).strip().rstrip("/")
 
 

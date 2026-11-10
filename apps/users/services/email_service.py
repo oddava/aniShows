@@ -81,7 +81,7 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
     try:
         from_email = settings.DEFAULT_FROM_EMAIL
         resend_api_key = settings.RESEND_API_KEY
-        email_backend = getattr(settings, "EMAIL_BACKEND", "")
+        email_backend = settings.EMAIL_BACKEND
         resend_base_url = settings.RESEND_API_URL.rstrip("/")
 
         # In tests/local dev, respect Django email backend when Resend isn't configured.

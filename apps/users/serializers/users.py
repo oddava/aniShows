@@ -47,9 +47,9 @@ from ..services.username_sanitizer import validate_username
 
 User = get_user_model()
 
-MAX_AVATAR_SIZE = getattr(settings, "MAX_AVATAR_SIZE", 2 * 1024 * 1024)
-MAX_BANNER_SIZE = getattr(settings, "MAX_BANNER_SIZE", 5 * 1024 * 1024)
-MAX_BIO_LENGTH = getattr(settings, "MAX_BIO_LENGTH", 5000)
+MAX_AVATAR_SIZE = settings.MAX_AVATAR_SIZE
+MAX_BANNER_SIZE = settings.MAX_BANNER_SIZE
+MAX_BIO_LENGTH = settings.MAX_BIO_LENGTH
 ALLOWED_BIO_TAGS = [
     "p",
     "h1",

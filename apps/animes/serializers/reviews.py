@@ -17,7 +17,7 @@ from .anime import AnimeListSerializer
 
 User = get_user_model()
 
-MAX_REVIEW_LENGTH = getattr(settings, "MAX_REVIEW_LENGTH", 5000)
+MAX_REVIEW_LENGTH = settings.MAX_REVIEW_LENGTH
 
 REACTION_EMOJI_MAP = {
     ReviewReaction.ReactionType.THUMBS_UP: "👍",

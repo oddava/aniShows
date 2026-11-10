@@ -15,11 +15,7 @@ from ..models import (
 )
 from ..serializers_mixins import ImageUrlMixin
 
-ALLOWED_IMAGE_TYPES = getattr(
-    settings,
-    "ALLOWED_IMAGE_TYPES",
-    ["image/jpeg", "image/png", "image/webp", "image/gif"],
-)
+ALLOWED_IMAGE_TYPES = settings.ALLOWED_IMAGE_TYPES
 
 
 def validate_image_content(file, max_size, field_name):

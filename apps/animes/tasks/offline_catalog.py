@@ -67,7 +67,7 @@ class OfflineCatalogImportTask(BaseTask):
                 resume=True,
                 enqueue_enrichment=enqueue_enrichment,
             )
-        rank_limit = max(int(getattr(settings, "OFFLINE_IMPORT_TRENDING_RANK_LIMIT", 50)), 1)
+        rank_limit = max(int(settings.OFFLINE_IMPORT_TRENDING_RANK_LIMIT), 1)
         catalog_sync = CatalogSyncService()
         ranked_ids = catalog_sync.get_trending_anime_ids(limit=rank_limit)
         result["trending_ranks_refreshed"] = (
@@ -76,7 +76,7 @@ class OfflineCatalogImportTask(BaseTask):
 
         watch_episode_task_id = None
         changed_ids = result.get("changed_anime_ids") or []
-        if changed_ids and getattr(settings, "ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED", True):
+        if changed_ids and settings.ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED:
             watch_result = sync_watch_episodes_batch.apply_async(
                 kwargs={"anime_ids": changed_ids, "force": True}
             )
@@ -317,7 +317,7 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
         return workflow_key or uuid.uuid4().hex
 
     def _workflow_lock_timeout(self) -> int:
-        return max(getattr(settings, "OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS", 7200), 60)
+        return max(settings.OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS, 60)
 
     def _acquire_workflow_lease(self, workflow_key: str | None) -> bool:
         existing = cache.get(self.workflow_lock_key)
