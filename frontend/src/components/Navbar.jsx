@@ -12,10 +12,13 @@ import {
     Search,
 } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
-import { animeApi, notificationApi } from '../api/client';
+import { navbarSearchKeys, navbarSearchQueries } from '../api/queries/anime';
+import { setUnreadNotificationCount, useUnreadNotificationCount } from '../hooks/useNotifications';
+import { useFreshError, useReportError } from '../hooks/useQueryErrorReport';
 import { useWebSocket } from '../hooks/useWebSocket';
-import logger, { isRequestAbortError } from '../utils/logger';
+import logger from '../utils/logger';
 import {
     applyImageFallback,
     getImageFallbackUrl,
@@ -144,6 +147,8 @@ const useFuzzySearch = (Fuse, data, options = {}) => {
     return { search };
 };
 
+const EMPTY_ANIME_CACHE = [];
+
 export default function Navbar() {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -155,13 +160,13 @@ export default function Navbar() {
     const [isMobileAccountOpen, setIsMobileAccountOpen] = useState(false);
     const [isMobileAnimeOpen, setIsMobileAnimeOpen] = useState(false);
     const [lastScrollY, setLastScrollY] = useState(0);
-    const [allAnimeCache, setAllAnimeCache] = useState([]);
     const [FuseClass, setFuseClass] = useState(null);
     const [selectedIndex, setSelectedIndex] = useState(-1);
-    const [mobileUnreadCount, setMobileUnreadCount] = useState(0);
     const { user, logout, isAuthenticated, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
+    const queryClient = useQueryClient();
+    const userId = user?.id;
     const profileRef = useRef(null);
     const searchRef = useRef(null);
     const searchInputRef = useRef(null);
@@ -170,32 +175,22 @@ export default function Navbar() {
     const accountHoldTimerRef = useRef(null);
     const longPressTriggeredRef = useRef(false);
 
+    // The first 100 titles, matched locally for instant suggestions. Loaded once
+    // per mount; a failure only costs the local matches.
+    const animeCacheQuery = useQuery({ ...navbarSearchQueries.cache(), staleTime: 0, retry: false });
+    const allAnimeCache = animeCacheQuery.data ?? EMPTY_ANIME_CACHE;
+    useReportError(
+        useFreshError(animeCacheQuery, navbarSearchKeys.cache()),
+        animeCacheQuery.errorUpdatedAt,
+        { log: 'Failed to load anime cache:' },
+    );
+
     // Initialize fuzzy search with cache - options are now inside the hook
     const { search: fuzzySearch } = useFuzzySearch(FuseClass, allAnimeCache, {});
 
-    // Load all anime data for fuzzy search on mount
+    // fuse.js only powers the search box, so keep it out of the entry chunk.
     useEffect(() => {
-        const controller = new AbortController();
         let active = true;
-
-        const loadAllAnime = async () => {
-            try {
-                // Load first 100 anime for fuzzy search
-                const response = await animeApi.getAll({ page_size: 100 }, controller.signal);
-                if (active) {
-                    setAllAnimeCache(response.data.results || []);
-                }
-            } catch (error) {
-                if (isRequestAbortError(error)) {
-                    return;
-                }
-                logger.error('Failed to load anime cache:', error);
-            }
-        };
-
-        loadAllAnime();
-
-        // fuse.js only powers the search box, so keep it out of the entry chunk.
         import('fuse.js')
             .then((module) => {
                 if (active) {
@@ -203,10 +198,8 @@ export default function Navbar() {
                 }
             })
             .catch((error) => logger.error('Failed to load fuzzy search:', error));
-
         return () => {
             active = false;
-            controller.abort();
         };
     }, []);
 
@@ -232,55 +225,33 @@ export default function Navbar() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        const fetchUnreadCount = async () => {
-            if (!isAuthenticated) {
-                setMobileUnreadCount(0);
-                return;
-            }
+    // Unread badge: fetched when signed in, then kept current by WebSocket pushes.
+    const unreadCountQuery = useUnreadNotificationCount(userId, {
+        enabled: isAuthenticated,
+        errorLog: 'Failed to fetch mobile notification count:',
+    });
+    const mobileUnreadCount = isAuthenticated ? (unreadCountQuery.data ?? 0) : 0;
 
-            try {
-                const response = await notificationApi.getUnreadCount();
-                setMobileUnreadCount(response.data?.count ?? 0);
-            } catch (error) {
-                logger.error('Failed to fetch mobile notification count:', error);
-            }
-        };
-
-        fetchUnreadCount();
-    }, [isAuthenticated]);
-
+    // Opening the notifications page clears the badge.
     useEffect(() => {
         if (location.pathname === '/notifications') {
-            setMobileUnreadCount(0);
+            setUnreadNotificationCount(queryClient, userId, 0);
         }
-    }, [location.pathname]);
-
-    useEffect(() => {
-        const handleUnreadCountEvent = (event) => {
-            const nextCount = event?.detail?.count;
-            if (typeof nextCount === 'number') {
-                setMobileUnreadCount(nextCount);
-            }
-        };
-
-        window.addEventListener('notifications:unread-count', handleUnreadCountEvent);
-        return () => window.removeEventListener('notifications:unread-count', handleUnreadCountEvent);
-    }, []);
+    }, [location.pathname, queryClient, userId]);
 
     const handleNotificationMessage = useCallback((data) => {
         if (data.type === 'unread_count') {
-            setMobileUnreadCount(data.count ?? 0);
+            setUnreadNotificationCount(queryClient, userId, data.count ?? 0);
             return;
         }
         if (data.type === 'notification' && data.unread_count != null) {
-            setMobileUnreadCount(data.unread_count);
+            setUnreadNotificationCount(queryClient, userId, data.unread_count);
             return;
         }
         if (data.type === 'notification_read' && data.unread_count != null) {
-            setMobileUnreadCount(data.unread_count);
+            setUnreadNotificationCount(queryClient, userId, data.unread_count);
         }
-    }, []);
+    }, [queryClient, userId]);
 
     useWebSocket(
         user ? '/ws/notifications/' : null,
@@ -490,8 +461,11 @@ export default function Navbar() {
                 // Also call the API to search the full database
                 let apiResults = [];
                 try {
-                    const response = await animeApi.getAll({ q: searchQuery.trim(), page_size: 10 });
-                    apiResults = (response.data.results || []).map(item => ({
+                    const results = await queryClient.fetchQuery({
+                        ...navbarSearchQueries.results(searchQuery.trim()),
+                        retry: false,
+                    });
+                    apiResults = results.map(item => ({
                         ...item,
                         isApiResult: true
                     }));
@@ -548,7 +522,7 @@ export default function Navbar() {
                 clearTimeout(searchTimeoutRef.current);
             }
         };
-    }, [searchQuery]);
+    }, [searchQuery, queryClient]);
 
     const handleSearch = (e) => {
         e.preventDefault();

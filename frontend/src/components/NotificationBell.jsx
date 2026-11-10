@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, X, CheckCheck, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { notificationApi } from '../api/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { notificationKeys } from '../api/queries/notifications';
+import {
+    setUnreadNotificationCount,
+    useMarkAllNotificationsRead,
+    useMarkNotificationRead,
+    useUnreadNotificationCount,
+    useUnreadNotifications,
+} from '../hooks/useNotifications';
 import { useAuth } from '../context/AuthContext';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { formatDateTimeInUserTimezone } from '../utils/dateUtils';
@@ -10,18 +18,34 @@ import { getHighlightEntityData, getNotificationTarget } from '../utils/notifica
 
 export const NotificationBell = () => {
     const { user } = useAuth();
-    const [unreadCount, setUnreadCount] = useState(0);
+    const userId = user?.id;
+    const queryClient = useQueryClient();
     const [isOpen, setIsOpen] = useState(false);
-    const [notifications, setNotifications] = useState([]);
-    const [loading, setLoading] = useState(false);
     const dropdownRef = useRef(null);
     const isOpenRef = useRef(false);
+
+    // The badge is pushed over the WebSocket; this only reads the shared count.
+    const { data: unreadCount = 0 } = useUnreadNotificationCount(userId, { enabled: false });
+    // Fetched each time the dropdown opens.
+    const { data: notifications = [], isFetching: loading } = useUnreadNotifications(userId, {
+        enabled: isOpen,
+        errorLog: 'Failed to fetch notifications:',
+    });
+    const markReadMutation = useMarkNotificationRead(userId);
+    const markAllReadMutation = useMarkAllNotificationsRead(userId);
 
     // Keep isOpenRef in sync so the WebSocket handler can check it
     isOpenRef.current = isOpen;
 
     // Handle incoming WebSocket messages for notifications
     const handleWsMessage = useCallback((data) => {
+        const setUnreadCount = (count) => setUnreadNotificationCount(queryClient, userId, count);
+        // Only edits a list that was loaded; the next open fetches it anyway.
+        const setNotifications = (updater) => queryClient.setQueryData(
+            notificationKeys.unread(userId),
+            (prev) => (prev ? updater(prev) : prev),
+        );
+
         switch (data.type) {
             case 'notification':
                 // A new notification arrived — update count and prepend to list if dropdown is open
@@ -77,7 +101,7 @@ export const NotificationBell = () => {
             default:
                 break;
         }
-    }, []);
+    }, [queryClient, userId]);
 
     // Connect to the notifications WebSocket (replaces 30-second polling)
     useWebSocket(
@@ -98,22 +122,7 @@ export const NotificationBell = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const fetchNotifications = async () => {
-        setLoading(true);
-        try {
-            const response = await notificationApi.getAll({ is_read: false });
-            setNotifications(response.data.results || []);
-        } catch (error) {
-            logger.error('Failed to fetch notifications:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleBellClick = () => {
-        if (!isOpen) {
-            fetchNotifications();
-        }
         setIsOpen(!isOpen);
     };
 
@@ -121,9 +130,7 @@ export const NotificationBell = () => {
         e.stopPropagation();
         e.preventDefault();
         try {
-            await notificationApi.markAsRead(notificationId);
-            setNotifications(prev => prev.filter(n => n.id !== notificationId));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            await markReadMutation.mutateAsync(notificationId);
         } catch (error) {
             logger.error('Failed to mark as read:', error);
         }
@@ -131,9 +138,7 @@ export const NotificationBell = () => {
 
     const handleMarkAllAsRead = async () => {
         try {
-            await notificationApi.markAllAsRead();
-            setNotifications([]);
-            setUnreadCount(0);
+            await markAllReadMutation.mutateAsync();
         } catch (error) {
             logger.error('Failed to mark all as read:', error);
         }
@@ -142,9 +147,7 @@ export const NotificationBell = () => {
     const handleNotificationClick = async (notification) => {
         try {
             // Mark as read
-            await notificationApi.markAsRead(notification.id);
-            setNotifications(prev => prev.filter(n => n.id !== notification.id));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            await markReadMutation.mutateAsync(notification.id);
             setIsOpen(false);
 
             const target = getNotificationTarget(notification);

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Navbar from './Navbar';
 
 vi.mock('../context/AuthContext', () => ({
@@ -36,6 +37,14 @@ vi.mock('./Logo', () => ({
     default: () => <span>AniShows</span>,
 }));
 
+const renderNavbar = () => render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+            <Navbar />
+        </MemoryRouter>
+    </QueryClientProvider>
+);
+
 describe('Navbar keyboard shortcuts', () => {
     beforeEach(() => {
         vi.useFakeTimers();
@@ -50,11 +59,7 @@ describe('Navbar keyboard shortcuts', () => {
     });
 
     it('opens search without crashing when document.activeElement is null', () => {
-        render(
-            <MemoryRouter>
-                <Navbar />
-            </MemoryRouter>
-        );
+        renderNavbar();
 
         const input = screen.getByPlaceholderText('Search anime...');
         const activeElementSpy = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null);
@@ -75,11 +80,7 @@ describe('Navbar keyboard shortcuts', () => {
 
     it('does not render a forums link in the header', async () => {
         await act(async () => {
-            render(
-                <MemoryRouter>
-                    <Navbar />
-                </MemoryRouter>
-            );
+            renderNavbar();
 
             await Promise.resolve();
         });
