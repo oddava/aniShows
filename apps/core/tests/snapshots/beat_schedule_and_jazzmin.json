@@ -1,23 +1,13 @@
 {
   "CELERY_BEAT_SCHEDULE": {
-    "backfill-theme-youtube-urls-evening": {
+    "backfill-theme-youtube-urls-twice-daily": {
       "kwargs": {
         "limit": 100
       },
       "options": {
         "queue": "low_priority"
       },
-      "schedule": "<crontab: 30 20 * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls"
-    },
-    "backfill-theme-youtube-urls-morning": {
-      "kwargs": {
-        "limit": 100
-      },
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: 30 8 * * * (m/h/dM/MY/d)>",
+      "schedule": "<crontab: 30 8,20 * * * (m/h/dM/MY/d)>",
       "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls"
     },
     "check-new-episodes": {

@@ -142,13 +142,13 @@ docker run --rm -v "${FRONTEND_VOLUME}:/srv/frontend" alpine:3 test -f /srv/fron
 ok "frontend files deployed"
 
 step "Pulling images"
-"${COMPOSE[@]}" pull web celery beat db pgbouncer redis minio createbuckets caddy umami_db umami \
+"${COMPOSE[@]}" pull web celery beat db redis minio createbuckets caddy umami_db umami \
     jikan jikan_mongodb jikan_typesense
 "${COMPOSE[@]}" build backup
 
 step "Core services (also removes old daphne / extra celery worker containers)"
 "${COMPOSE[@]}" up -d --no-deps --remove-orphans db redis minio
-"${COMPOSE[@]}" up -d --wait db pgbouncer redis minio
+"${COMPOSE[@]}" up -d --wait db redis minio
 "${COMPOSE[@]}" up --no-deps --exit-code-from createbuckets createbuckets >/dev/null \
     || die "bucket setup failed"
 

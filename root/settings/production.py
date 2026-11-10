@@ -151,7 +151,7 @@ CSRF_TRUSTED_ORIGINS = csrf_origins
 # DATABASE CONNECTION POOLING
 # =============================================================================
 
-# CONN_MAX_AGE is set in base.py (600s). Only add production-specific overrides here.
+# CONN_MAX_AGE (600 s) and the optional DB_POOL_MAX_SIZE pool are set in base.py.
 
 # Connection health check to prevent stale connections
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True

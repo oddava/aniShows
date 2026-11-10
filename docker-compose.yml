@@ -22,7 +22,6 @@ x-backend: &backend
     DJANGO_ENV: development
     DB_HOST: db
     DB_PORT: "5432"
-    DB_USE_PGBOUNCER: "False"
     DB_CONN_MAX_AGE: "0"
     REDIS_HOST: redis
     REDIS_PORT: "6379"
