@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -156,21 +155,21 @@ class UserTaskService:
         try:
             if anilist_id:
                 logger.info("Fetching anime by sync ID", extra={"anilist_id": anilist_id})
-                anime_data = asyncio.run(service.get_anime_by_id(anilist_id))
+                anime_data = service.get_anime_by_id(anilist_id)
                 if anime_data:
                     anime = service.save_anime_to_db(anime_data)
                     return anime.id
 
             if mal_id:
                 logger.info("Fetching anime by MAL ID", extra={"mal_id": mal_id})
-                anime_data = asyncio.run(service.search_by_mal_id(mal_id))
+                anime_data = service.search_by_mal_id(mal_id)
                 if anime_data:
                     anime = service.save_anime_to_db(anime_data)
                     return anime.id
 
             if title:
                 logger.info("Searching anime by title", extra={"title": title})
-                results = asyncio.run(service.search_anime(title))
+                results = service.search_anime(title)
                 if results:
                     anime = service.save_anime_to_db(results[0])
                     return anime.id
@@ -181,7 +180,7 @@ class UserTaskService:
             )
             return None
         finally:
-            asyncio.run(service.close())
+            service.close()
 
     @staticmethod
     def cleanup_old_import_jobs(days: int = 30) -> int:

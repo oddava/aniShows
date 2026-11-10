@@ -110,14 +110,14 @@ class AniListImporterTests(TestCase):
                 self.get_calls = 0
                 self.search_calls = 0
 
-            async def get_anime_by_id(self, _anilist_id):
+            def get_anime_by_id(self, _anilist_id):
                 self.get_calls += 1
                 return None
 
-            async def search_by_mal_id(self, _mal_id):
+            def search_by_mal_id(self, _mal_id):
                 return None
 
-            async def search_anime(self, _query_string):
+            def search_anime(self, _query_string):
                 self.search_calls += 1
                 return []
 

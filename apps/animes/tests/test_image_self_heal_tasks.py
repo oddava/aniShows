@@ -1,6 +1,6 @@
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
@@ -60,14 +60,14 @@ class ImageTaskSelfHealTests(TestCase):
 
         service = mock_service_cls.return_value
         mock_service_cls.resolve_fetchable_image_url.side_effect = lambda url: url
-        service.download_image = AsyncMock(return_value=b"cover-bytes")
-        service._save_external_url = AsyncMock()
-        service._save_image = AsyncMock(
+        service.download_image = MagicMock(return_value=b"cover-bytes")
+        service._save_external_url = MagicMock()
+        service._save_image = MagicMock(
             side_effect=Exception(
                 'Could not connect to the endpoint URL: "http://minio:9000/anishows-media/media/cover.jpg"'
             )
         )
-        service.close = AsyncMock()
+        service.close = MagicMock()
 
         result = fetch_anime_images.run(
             anime_id=anime.id,
@@ -84,7 +84,7 @@ class ImageTaskSelfHealTests(TestCase):
         mock_apply_async.assert_called_once()
         self.assertEqual(mock_apply_async.call_args.kwargs["countdown"], 300)
         self.assertEqual(mock_apply_async.call_args.kwargs["kwargs"]["anime_id"], anime.id)
-        service.close.assert_awaited_once()
+        service.close.assert_called_once()
 
     @patch("apps.animes.models.Anime.objects.get")
     @patch("apps.animes.tasks.images.JikanService", autospec=True)
@@ -107,10 +107,10 @@ class ImageTaskSelfHealTests(TestCase):
 
         service = mock_service_cls.return_value
         mock_service_cls.resolve_fetchable_image_url.side_effect = lambda url: url
-        service.download_image = AsyncMock(return_value=b"image-bytes")
-        service._save_external_url = AsyncMock()
-        service._save_image = AsyncMock()
-        service.close = AsyncMock()
+        service.download_image = MagicMock(return_value=b"image-bytes")
+        service._save_external_url = MagicMock()
+        service._save_image = MagicMock()
+        service.close = MagicMock()
 
         result = fetch_anime_images.run(
             anime_id=1234,
@@ -121,18 +121,18 @@ class ImageTaskSelfHealTests(TestCase):
         )
 
         self.assertEqual(result["status"], "success")
-        self.assertEqual(service.download_image.await_count, 2)
-        self.assertEqual(service._save_image.await_count, 2)
-        saved_filenames = [call.args[2] for call in service._save_image.await_args_list]
+        self.assertEqual(service.download_image.call_count, 2)
+        self.assertEqual(service._save_image.call_count, 2)
+        saved_filenames = [call.args[2] for call in service._save_image.call_args_list]
         self.assertIn("force-replace-anime_cover_", saved_filenames[0])
         self.assertIn("force-replace-anime_banner_", saved_filenames[1])
-        service._save_external_url.assert_any_await(
+        service._save_external_url.assert_any_call(
             anime, "cover_image_external_url", "https://img.new/cover.jpg"
         )
-        service._save_external_url.assert_any_await(
+        service._save_external_url.assert_any_call(
             anime, "banner_image_external_url", "https://img.new/banner.jpg"
         )
-        service.close.assert_awaited_once()
+        service.close.assert_called_once()
 
     @patch("apps.animes.tasks.images.cache.add", return_value=True)
     @patch("apps.animes.tasks.images.fetch_anime_images.delay")

@@ -1,0 +1,27 @@
+{
+  "pagination": {"last_visible_page": 1, "has_next_page": false},
+  "data": [
+    {
+      "mal_id": 28,
+      "title": "The Land Where Souls Rest",
+      "episode": "Episode 28",
+      "url": "https://myanimelist.net/anime/52991/Sousou_no_Frieren/episode/28",
+      "images": {"jpg": {"image_url": "https://img1.ak.crunchyroll.com/i/spire2-tmb/frieren28_full.jpg"}}
+    },
+    {
+      "mal_id": 27,
+      "title": "An Era of Humans",
+      "episode": "",
+      "url": "https://myanimelist.net/anime/52991/Sousou_no_Frieren/episode/27",
+      "images": {"jpg": {"image_url": "http://myanimelist.net/images/episode/27.jpg"}}
+    },
+    {
+      "mal_id": 26,
+      "title": null,
+      "episode": null,
+      "url": null,
+      "images": {}
+    },
+    "garbage"
+  ]
+}

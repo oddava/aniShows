@@ -1,5 +1,4 @@
-import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 from django.test import SimpleTestCase, TestCase
@@ -15,24 +14,24 @@ class JikanThemeFetchRetryTests(SimpleTestCase):
     def test_fetch_themes_does_not_retry_on_404(self):
         attempts = 0
 
-        async def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx.Request) -> httpx.Response:
             nonlocal attempts
             attempts += 1
             return httpx.Response(404, request=request, json={"status": 404})
 
         transport = httpx.MockTransport(handler)
 
-        async def run_test():
+        def run_test():
             limiter = JikanRateLimiter(base_delay=0.01)
-            async with httpx.AsyncClient(transport=transport) as client:
-                return await fetch_themes_from_jikan(
+            with httpx.Client(transport=transport) as client:
+                return fetch_themes_from_jikan(
                     client,
                     mal_id=51532,
                     rate_limiter=limiter,
                     max_retries=3,
                 )
 
-        result = asyncio.run(run_test())
+        result = run_test()
 
         self.assertIsNone(result)
         self.assertEqual(attempts, 1)
@@ -40,7 +39,7 @@ class JikanThemeFetchRetryTests(SimpleTestCase):
     def test_fetch_themes_retries_transient_500_then_succeeds(self):
         attempts = 0
 
-        async def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx.Request) -> httpx.Response:
             nonlocal attempts
             attempts += 1
             if attempts < 3:
@@ -53,21 +52,19 @@ class JikanThemeFetchRetryTests(SimpleTestCase):
 
         transport = httpx.MockTransport(handler)
 
-        async def run_test():
+        def run_test():
             limiter = JikanRateLimiter(base_delay=0.01)
-            async with httpx.AsyncClient(transport=transport) as client:
-                with patch(
-                    "apps.animes.services.jikan.asyncio.sleep", new=AsyncMock()
-                ) as sleep_mock:
-                    themes = await fetch_themes_from_jikan(
+            with httpx.Client(transport=transport) as client:
+                with patch("apps.animes.services.jikan.time.sleep", new=MagicMock()) as sleep_mock:
+                    themes = fetch_themes_from_jikan(
                         client,
                         mal_id=1,
                         rate_limiter=limiter,
                         max_retries=3,
                     )
-                return themes, sleep_mock.await_count
+                return themes, sleep_mock.call_count
 
-        result, sleep_calls = asyncio.run(run_test())
+        result, sleep_calls = run_test()
 
         self.assertEqual(result, {"openings": ["OP 1"], "endings": ["ED 1"]})
         self.assertEqual(attempts, 3)
@@ -77,16 +74,16 @@ class JikanThemeFetchRetryTests(SimpleTestCase):
 class JikanServiceDownloadImageTests(SimpleTestCase):
     def _build_service(self, handler) -> JikanService:
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        asyncio.run(service.client.aclose())
+        service.client.close()
         service.base_url = "http://test/v4"
-        service.client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=15.0)
-        self.addCleanup(lambda: asyncio.run(service.close()))
+        service.client = httpx.Client(transport=httpx.MockTransport(handler), timeout=15.0)
+        self.addCleanup(service.close)
         return service
 
     def test_download_image_returns_bytes_for_trusted_image_url(self):
         image_url = "https://cdn.myanimelist.net/images/anime/1/77777.jpg"
 
-        async def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(str(request.url), image_url)
             return httpx.Response(
                 200,
@@ -97,19 +94,19 @@ class JikanServiceDownloadImageTests(SimpleTestCase):
 
         service = self._build_service(handler)
 
-        with patch("apps.animes.services.jikan.asyncio.sleep", new=AsyncMock()) as sleep_mock:
-            result = asyncio.run(service.download_image(image_url))
+        with patch("apps.animes.services.jikan.time.sleep", new=MagicMock()) as sleep_mock:
+            result = service.download_image(image_url)
 
         self.assertEqual(result, b"image-bytes")
-        sleep_mock.assert_awaited_once_with(0.2)
+        sleep_mock.assert_called_once_with(0.2)
 
     def test_download_image_rejects_untrusted_urls_without_request(self):
-        async def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx.Request) -> httpx.Response:
             self.fail(f"Unexpected outbound request to {request.url}")
 
         service = self._build_service(handler)
 
-        result = asyncio.run(service.download_image("https://cdn.example.com/cover.jpg"))
+        result = service.download_image("https://cdn.example.com/cover.jpg")
 
         self.assertIsNone(result)
 
@@ -122,19 +119,19 @@ class JikanServiceNormalizationTests(TestCase):
 
     def _build_service(self, handler) -> JikanService:
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        asyncio.run(service.client.aclose())
+        service.client.close()
         service.base_url = "http://test/v4"
-        service.client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=15.0)
-        self.addCleanup(lambda: asyncio.run(service.close()))
+        service.client = httpx.Client(transport=httpx.MockTransport(handler), timeout=15.0)
+        self.addCleanup(service.close)
         return service
 
     def _build_db_service(self) -> JikanService:
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(lambda: asyncio.run(service.close()))
+        self.addCleanup(service.close)
         return service
 
     def test_get_anime_by_id_normalizes_full_detail_payload(self):
-        async def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
             query = dict(request.url.params)
 
@@ -287,7 +284,7 @@ class JikanServiceNormalizationTests(TestCase):
             raise AssertionError(f"Unhandled request: {request.url}")
 
         service = self._build_service(handler)
-        payload = asyncio.run(service.search_by_mal_id(1))
+        payload = service.search_by_mal_id(1)
 
         self.assertIsNotNone(payload)
         assert payload is not None
@@ -315,7 +312,7 @@ class JikanServiceNormalizationTests(TestCase):
         self.assertEqual(payload["stats"]["statusDistribution"][0]["status"], "CURRENT")
 
     def test_get_anime_by_id_keeps_real_anilist_id_for_existing_rows(self):
-        async def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
             if path == "/v4/anime/1/full":
                 return httpx.Response(
@@ -371,9 +368,9 @@ class JikanServiceNormalizationTests(TestCase):
         with patch.object(
             service,
             "_mal_id_for_anilist_id",
-            new=AsyncMock(return_value=1),
+            new=MagicMock(return_value=1),
         ):
-            payload = asyncio.run(service.get_anime_by_id(111))
+            payload = service.get_anime_by_id(111)
 
         self.assertIsNotNone(payload)
         assert payload is not None
@@ -432,8 +429,8 @@ class JikanServiceNormalizationTests(TestCase):
         }
 
         with (
-            patch.object(service, "_handle_relationships_async", new=AsyncMock()),
-            patch.object(service, "_download_and_save_images", new=AsyncMock()),
+            patch.object(service, "_handle_relationships", new=MagicMock()),
+            patch.object(service, "_download_and_save_images", new=MagicMock()),
         ):
             saved = service.save_anime_to_db(item)
 
@@ -451,8 +448,8 @@ class JikanServiceNormalizationTests(TestCase):
             "seasonYear": 2026,
         }
         with (
-            patch.object(service, "_handle_relationships_async", new=AsyncMock()),
-            patch.object(service, "_download_and_save_images", new=AsyncMock()),
+            patch.object(service, "_handle_relationships", new=MagicMock()),
+            patch.object(service, "_download_and_save_images", new=MagicMock()),
         ):
             second = service.save_anime_to_db(remake)
 
@@ -463,7 +460,7 @@ class JikanServiceNormalizationTests(TestCase):
         self.assertEqual(Anime.objects.filter(title="One Punch Man").count(), 2)
 
     def test_get_recent_updates_prefers_current_season_and_falls_back_to_top_airing(self):
-        async def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
             query = dict(request.url.params)
             if path == "/v4/seasons/now":
@@ -532,14 +529,14 @@ class JikanServiceNormalizationTests(TestCase):
             raise AssertionError(f"Unexpected path: {path}")
 
         service = self._build_service(handler)
-        payload = asyncio.run(service.get_recent_updates(limit=30))
+        payload = service.get_recent_updates(limit=30)
 
         self.assertEqual(len(payload), 2)
         self.assertEqual(payload[0]["idMal"], 10)
         self.assertEqual(payload[1]["idMal"], 20)
 
     def test_get_recent_updates_keeps_paging_when_source_page_contains_duplicates(self):
-        async def handler(request: httpx.Request) -> httpx.Response:
+        def handler(request: httpx.Request) -> httpx.Response:
             path = request.url.path
             query = dict(request.url.params)
 
@@ -666,6 +663,6 @@ class JikanServiceNormalizationTests(TestCase):
             raise AssertionError(f"Unexpected path: {request.url}")
 
         service = self._build_service(handler)
-        payload = asyncio.run(service.get_recent_updates(limit=3))
+        payload = service.get_recent_updates(limit=3)
 
         self.assertEqual([item["idMal"] for item in payload], [1, 2, 3])

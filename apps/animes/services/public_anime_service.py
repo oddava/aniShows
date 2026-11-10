@@ -6,7 +6,6 @@ from datetime import date
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connections
@@ -371,7 +370,7 @@ class AnimeQueryService:
         if anime.mal_id:
             service = JikanService(enable_caching=True, enable_rate_limiting=True)
             try:
-                recommendations = async_to_sync(service.get_recommendations_for_anime)(
+                recommendations = service.get_recommendations_for_anime(
                     anime.mal_id,
                     limit=12,
                     request_budget=service.REQUEST_BUDGET_INTERACTIVE,
@@ -386,7 +385,7 @@ class AnimeQueryService:
                 )
                 recommendations = []
             finally:
-                async_to_sync(service.close)()
+                service.close()
 
             ordered_mal_ids = []
             for recommendation in recommendations:

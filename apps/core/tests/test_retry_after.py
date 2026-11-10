@@ -1,9 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import httpx
-from asgiref.sync import async_to_sync
 from django.test import SimpleTestCase
 
 from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
@@ -39,14 +38,14 @@ class JikanEpisodePageRetryAfterTests(SimpleTestCase):
         )
         ok = httpx.Response(200, json={"data": []}, request=request)
         client = Mock()
-        client.get = AsyncMock(side_effect=[limited, ok])
-        limiter = Mock(acquire=AsyncMock())
+        client.get = MagicMock(side_effect=[limited, ok])
+        limiter = Mock(acquire=MagicMock())
 
-        with patch("apps.animes.services.watch_episodes.asyncio.sleep", new=AsyncMock()) as sleep:
-            payload = async_to_sync(AnimeWatchEpisodeService()._get_jikan_page)(
+        with patch("apps.animes.services.watch_episodes.time.sleep", new=MagicMock()) as sleep:
+            payload = AnimeWatchEpisodeService()._get_jikan_page(
                 client, str(request.url), 1, limiter
             )
 
         self.assertEqual(payload, {"data": []})
-        sleep.assert_awaited_once_with(0.0)
+        sleep.assert_called_once_with(0.0)
         limiter.record_429.assert_called_once_with(cooldown_hint=0.0)

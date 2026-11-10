@@ -3,7 +3,6 @@
 Test settings disable existing loggers, so these tests mock the module logger.
 """
 
-import asyncio
 import io
 from unittest import mock
 
@@ -65,7 +64,7 @@ class CircuitBreakerCacheFailureTests(SimpleTestCase):
         # LocMemCache has no raw Redis client (AttributeError).
         limiter = AniListRateLimiter()
         with mock.patch("apps.animes.services.rate_limiting.logger") as logger:
-            asyncio.run(limiter.acquire())
+            limiter.acquire()
         logger.exception.assert_called_once()
         self.assertGreater(limiter._local_last_request, 0)
 

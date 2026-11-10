@@ -1,0 +1,40 @@
+{
+  "pagination": {
+    "last_visible_page": 1,
+    "has_next_page": false,
+    "current_page": 1,
+    "items": {"count": 2, "total": 2, "per_page": 5}
+  },
+  "data": [
+    {
+      "mal_id": 52991,
+      "url": "https://myanimelist.net/anime/52991/Sousou_no_Frieren",
+      "images": {"jpg": {"image_url": "https://cdn.myanimelist.net/images/anime/1015/138006.jpg"}},
+      "title": "Sousou no Frieren",
+      "title_english": "Frieren: Beyond Journey's End",
+      "title_japanese": "葬送のフリーレン",
+      "type": "TV",
+      "status": "Finished Airing",
+      "episodes": 28,
+      "members": 1043212
+    },
+    {
+      "mal_id": 56885,
+      "url": "https://myanimelist.net/anime/56885",
+      "images": {"jpg": {"image_url": "https://cdn.myanimelist.net/images/anime/1000/141000.jpg"}},
+      "title": "Sousou no Frieren: ●● no Mahou",
+      "title_english": null,
+      "title_japanese": "葬送のフリーレン ～●●の魔法～",
+      "type": "ONA",
+      "source": "Manga",
+      "status": "Finished Airing",
+      "episodes": 30,
+      "aired": {"prop": {"from": {"day": 1, "month": 10, "year": 2023}, "to": {"day": 1, "month": 4, "year": 2024}}},
+      "duration": "2 min per ep",
+      "score": 6.9,
+      "members": 31234,
+      "season": null,
+      "year": null
+    }
+  ]
+}

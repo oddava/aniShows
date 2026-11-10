@@ -1,0 +1,7 @@
+{
+  "pagination": {"last_visible_page": 2, "has_next_page": true},
+  "data": [
+    {"mal_id": 1, "url": "https://myanimelist.net/anime/21/One_Piece/episode/1", "title": "I'm Luffy! The Man Who Will Become the Pirate King!", "title_japanese": "俺はルフィ!海賊王になる男だ!", "title_romanji": "Ore wa Luffy! Kaizoku Ou ni Naru Otoko da!", "aired": "1999-10-20T00:00:00+09:00", "score": 4.21, "filler": false, "recap": false, "forum_url": null},
+    {"mal_id": 2, "url": "https://myanimelist.net/anime/21/One_Piece/episode/2", "title": "Enter the Great Swordsman!", "title_japanese": null, "title_romanji": null, "aired": "1999-11-17T00:00:00+09:00", "score": 4.12, "filler": false, "recap": false, "forum_url": null}
+  ]
+}

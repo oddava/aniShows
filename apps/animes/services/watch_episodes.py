@@ -1,10 +1,9 @@
-import asyncio
 import re
+import time
 from typing import Literal
 from urllib.parse import quote_plus, urlparse
 
 import httpx
-from asgiref.sync import async_to_sync
 from django.core.cache import cache
 
 from ...shared.logger import logger
@@ -40,7 +39,7 @@ class AnimeWatchEpisodeService:
         if cached is not None:
             return cached
 
-        episodes = async_to_sync(self._build_for_anime)(anime, request_budget=request_budget)
+        episodes = self._build_for_anime(anime, request_budget=request_budget)
         cache.set(cache_key, episodes, timeout=self.CACHE_TTL if episodes else self.EMPTY_CACHE_TTL)
         return episodes
 
@@ -62,7 +61,7 @@ class AnimeWatchEpisodeService:
         )
         return f"anime_watch_episodes:{cls.CACHE_VERSION}:{anime_id}:{updated_at_token}"
 
-    async def _build_for_anime(
+    def _build_for_anime(
         self,
         anime: Anime,
         *,
@@ -75,7 +74,7 @@ class AnimeWatchEpisodeService:
             service = JikanService(enable_caching=True, enable_rate_limiting=True)
             try:
                 episode_media = (
-                    await service.get_streaming_episodes_for_anime(
+                    service.get_streaming_episodes_for_anime(
                         anilist_id=anime.anilist_id,
                         mal_id=mal_id,
                         request_budget=request_budget,
@@ -90,13 +89,13 @@ class AnimeWatchEpisodeService:
                     exc_info=True,
                 )
             finally:
-                await service.close()
+                service.close()
 
         mal_id = mal_id or positive_int(episode_media.get("idMal"))
         if not mal_id:
             return self._build_fallback_episodes(anime)
 
-        jikan_episodes = await self._fetch_jikan_episodes(mal_id, request_budget=request_budget)
+        jikan_episodes = self._fetch_jikan_episodes(mal_id, request_budget=request_budget)
         if not jikan_episodes:
             return self._build_fallback_episodes(anime)
 
@@ -125,7 +124,7 @@ class AnimeWatchEpisodeService:
             for episode_number in range(1, episode_count + 1)
         ]
 
-    async def _fetch_jikan_episodes(
+    def _fetch_jikan_episodes(
         self,
         mal_id: int,
         *,
@@ -138,9 +137,9 @@ class AnimeWatchEpisodeService:
         max_retries = 0 if request_budget == self.REQUEST_BUDGET_INTERACTIVE else 3
         request_timeout = 8.0 if request_budget == self.REQUEST_BUDGET_INTERACTIVE else 15.0
 
-        async with httpx.AsyncClient(timeout=request_timeout) as client:
+        with httpx.Client(timeout=request_timeout) as client:
             while True:
-                payload = await self._get_jikan_page(
+                payload = self._get_jikan_page(
                     client,
                     url,
                     page,
@@ -171,22 +170,22 @@ class AnimeWatchEpisodeService:
 
         return episodes
 
-    async def _get_jikan_page(
+    def _get_jikan_page(
         self,
-        client: httpx.AsyncClient,
+        client: httpx.Client,
         url: str,
         page: int,
         limiter: JikanRateLimiter,
         max_retries: int = 3,
     ) -> dict | None:
         for attempt in range(max_retries + 1):
-            await limiter.acquire()
+            limiter.acquire()
             try:
-                response = await client.get(url, params={"page": page})
+                response = client.get(url, params={"page": page})
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 limiter.record_error()
                 if attempt < max_retries:
-                    await backoff(min(2**attempt, 10))
+                    backoff(min(2**attempt, 10))
                     continue
                 logger.warning("Jikan episode fetch failed for page %s: %s", page, exc)
                 return None
@@ -204,14 +203,14 @@ class AnimeWatchEpisodeService:
                     wait_time = min(2**attempt + 1, 60)
                 limiter.record_429(cooldown_hint=wait_time)
                 if attempt < max_retries:
-                    await asyncio.sleep(wait_time)
+                    time.sleep(wait_time)
                     continue
                 return None
 
             if 500 <= response.status_code < 600:
                 limiter.record_error()
                 if attempt < max_retries:
-                    await backoff(min(2**attempt, 10))
+                    backoff(min(2**attempt, 10))
                     continue
                 return None
 

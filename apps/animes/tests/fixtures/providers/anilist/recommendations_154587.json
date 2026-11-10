@@ -1,0 +1,47 @@
+{
+  "Media": {
+    "recommendations": {
+      "nodes": [
+        {
+          "rating": 1520,
+          "mediaRecommendation": {
+            "id": 21827,
+            "idMal": 33352,
+            "title": {"romaji": "Violet Evergarden", "english": "Violet Evergarden", "native": "ヴァイオレット・エヴァーガーデン"},
+            "format": "TV",
+            "status": "FINISHED",
+            "episodes": 13,
+            "averageScore": 85,
+            "popularity": 420000,
+            "coverImage": {"large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx21827.jpg", "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx21827.jpg"}
+          }
+        },
+        {
+          "rating": 300,
+          "mediaRecommendation": {
+            "id": 21827,
+            "idMal": 33352,
+            "title": {"romaji": "Violet Evergarden (dup)"}
+          }
+        },
+        {
+          "rating": 211,
+          "mediaRecommendation": {
+            "id": 101291,
+            "idMal": null,
+            "title": {"romaji": null, "english": null, "native": "約束のネバーランド"},
+            "format": "TV",
+            "status": "FINISHED",
+            "episodes": null,
+            "averageScore": null,
+            "popularity": null,
+            "coverImage": {"large": "https://myanimelist.net/images/anime/1125/96929.jpg"}
+          }
+        },
+        {"rating": 5, "mediaRecommendation": null},
+        "not-a-node",
+        {"rating": 4, "mediaRecommendation": "not-a-media"}
+      ]
+    }
+  }
+}

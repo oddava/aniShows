@@ -1,0 +1,20 @@
+{
+  "Media": {
+    "id": 154587,
+    "idMal": 52991,
+    "streamingEpisodes": [
+      {
+        "title": "Episode 1 - The Journey's End",
+        "thumbnail": "https://img1.ak.crunchyroll.com/i/spire4-tmb/frieren01_full.jpg",
+        "url": "https://www.crunchyroll.com/watch/GG1U2Q0J3/the-journeys-end",
+        "site": "Crunchyroll"
+      },
+      {
+        "title": "Episode 2 - It Didn't Have to Be Magic...",
+        "thumbnail": "https://img1.ak.crunchyroll.com/i/spire2-tmb/frieren02_full.jpg",
+        "url": "https://www.crunchyroll.com/watch/G4VUQ1ZKW/it-didnt-have-to-be-magic",
+        "site": "Crunchyroll"
+      }
+    ]
+  }
+}

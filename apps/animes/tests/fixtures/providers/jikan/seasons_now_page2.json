@@ -1,0 +1,35 @@
+{
+  "pagination": {
+    "last_visible_page": 2,
+    "has_next_page": false,
+    "current_page": 2,
+    "items": {"count": 1, "total": 4, "per_page": 3}
+  },
+  "data": [
+    {
+      "mal_id": 59708,
+      "url": "https://myanimelist.net/anime/59708/Short_Film",
+      "images": {"webp": {"image_url": "https://cdn.myanimelist.net/images/anime/1000/150000.webp"}},
+      "title": "Short Film",
+      "type": "Movie",
+      "source": "Original",
+      "episodes": 1,
+      "status": "Finished Airing",
+      "aired": {"prop": {"from": {"day": null, "month": null, "year": 2024}, "to": {"day": null, "month": null, "year": null}}},
+      "duration": "45 sec",
+      "score": null,
+      "rank": null,
+      "popularity": 9000,
+      "members": 1200,
+      "synopsis": null,
+      "season": null,
+      "year": null,
+      "broadcast": {"day": null, "time": null, "timezone": null},
+      "studios": [],
+      "genres": [],
+      "explicit_genres": [{"name": "Hentai"}],
+      "themes": [{"name": "  Love   Polygon "}]
+    },
+    "not-a-dict"
+  ]
+}

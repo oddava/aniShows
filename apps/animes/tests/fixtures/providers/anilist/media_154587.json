@@ -1,0 +1,165 @@
+{
+  "Media": {
+    "id": 154587,
+    "idMal": 52991,
+    "title": {
+      "romaji": "Sousou no Frieren",
+      "english": "Frieren: Beyond Journey’s End",
+      "native": "葬送のフリーレン"
+    },
+    "format": "TV",
+    "status": "FINISHED",
+    "episodes": 28,
+    "averageScore": 90,
+    "popularity": 412345,
+    "duration": 24,
+    "startDate": {"year": 2023, "month": 9, "day": 29},
+    "endDate": {"year": 2024, "month": 3, "day": 22},
+    "season": "FALL",
+    "seasonYear": 2023,
+    "source": "MANGA",
+    "genres": ["Adventure", "Drama", "Fantasy"],
+    "tags": [
+      {"name": "Elf", "rank": 96, "isGeneralSpoiler": false, "isMediaSpoiler": false},
+      {"name": "Travel", "rank": 93, "isGeneralSpoiler": false, "isMediaSpoiler": false},
+      {"name": "Time Skip", "rank": 80, "isGeneralSpoiler": false, "isMediaSpoiler": true},
+      {"name": "Tragedy", "rank": 70, "isGeneralSpoiler": true, "isMediaSpoiler": false},
+      {"name": "  Male   Protagonist ", "rank": 60, "isGeneralSpoiler": false, "isMediaSpoiler": false},
+      {"name": "elf", "rank": 50, "isGeneralSpoiler": false, "isMediaSpoiler": false}
+    ],
+    "studios": {"nodes": [{"name": "MADHOUSE"}]},
+    "description": "The adventure is over but life goes on for an elf mage just beginning to learn what living is all about. Elf mage Frieren and her courageous fellow adventurers have defeated the Demon King and brought peace to the land. But Frieren will long outlive the rest of her former party.<br><br>\n(Source: Crunchyroll)<br><br>\n<i>Note: The first episode aired with a runtime of 1 hour.</i>",
+    "coverImage": {
+      "large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx154587-n1fmjRv4JQUd.jpg",
+      "extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx154587-n1fmjRv4JQUd.jpg"
+    },
+    "bannerImage": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg",
+    "trailer": {"id": "qgQoQ3cDkq4", "site": "youtube"},
+    "rankings": [
+      {"rank": 1, "type": "RATED", "allTime": true, "context": "highest rated all time"},
+      {"rank": 3, "type": "RATED", "allTime": false, "context": "highest rated"},
+      {"rank": 120, "type": "POPULAR", "allTime": true, "context": "most popular all time"},
+      "not-a-ranking"
+    ],
+    "stats": {
+      "statusDistribution": [
+        {"status": "CURRENT", "amount": 61234},
+        {"status": "PLANNING", "amount": 98765},
+        {"status": "COMPLETED", "amount": 230001},
+        {"status": "DROPPED", "amount": 4321},
+        {"status": "PAUSED", "amount": null}
+      ]
+    },
+    "externalLinks": [
+      {"site": "Official Site", "url": "https://frieren-anime.jp/", "icon": null},
+      {"site": "Crunchyroll", "url": "https://www.crunchyroll.com/series/GG5H5XQX4", "icon": "https://s4.anilist.co/file/anilistcdn/link/icon/5-AWN2pVlluCOO.png"}
+    ],
+    "nextAiringEpisode": null,
+    "relations": {
+      "edges": [
+        {
+          "relationType": "SOURCE",
+          "node": {
+            "id": 118586,
+            "title": {"romaji": "Sousou no Frieren", "english": "Frieren: Beyond Journey’s End", "native": "葬送のフリーレン"},
+            "type": "MANGA",
+            "format": "MANGA",
+            "status": "RELEASING",
+            "coverImage": {"large": "https://s4.anilist.co/file/anilistcdn/media/manga/cover/medium/bx118586-F0Lp86XQV7du.jpg"}
+          }
+        },
+        {
+          "relationType": "SEQUEL",
+          "node": {
+            "id": 182255,
+            "title": {"romaji": "Sousou no Frieren 2nd Season", "english": null, "native": "葬送のフリーレン 第2期"},
+            "type": "ANIME",
+            "format": "TV",
+            "status": "NOT_YET_RELEASED",
+            "coverImage": {"large": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx182255.jpg"}
+          }
+        }
+      ]
+    },
+    "characterPreview": {
+      "edges": [
+        {
+          "role": "MAIN",
+          "node": {
+            "id": 176754,
+            "name": {"full": "Frieren", "native": "フリーレン"},
+            "image": {"large": "https://s4.anilist.co/file/anilistcdn/character/large/b176754-pj2Jy6SBMdL9.png"},
+            "description": "An elf and former member of the hero party."
+          },
+          "voiceActors": [
+            {
+              "id": 119331,
+              "name": {"full": "Atsumi Tanezaki", "native": "種﨑敦美"},
+              "image": {"large": "https://s4.anilist.co/file/anilistcdn/staff/large/n119331-0Dw1Ut0hnGiW.png"},
+              "description": "Atsumi Tanezaki is a Japanese voice actress."
+            }
+          ]
+        },
+        {
+          "role": "SUPPORTING",
+          "node": {
+            "id": null,
+            "name": {"full": "Village Elder", "native": null},
+            "image": {"large": null},
+            "description": null
+          },
+          "voiceActors": [
+            {
+              "id": null,
+              "name": {"full": "Unknown Seiyuu", "native": null},
+              "image": {"large": null},
+              "description": null
+            }
+          ]
+        },
+        {
+          "role": "BACKGROUND",
+          "node": {
+            "id": 176756,
+            "name": {"full": "Himmel", "native": "ヒンメル"},
+            "image": {"large": "https://s4.anilist.co/file/anilistcdn/character/large/b176756.png"},
+            "description": ""
+          },
+          "voiceActors": []
+        }
+      ]
+    },
+    "staffPreview": {
+      "edges": [
+        {
+          "role": "Director",
+          "node": {
+            "id": 106297,
+            "name": {"full": "Keiichirou Saitou", "native": "斎藤圭一郎"},
+            "image": {"large": "https://s4.anilist.co/file/anilistcdn/staff/large/n106297.png"},
+            "description": null
+          }
+        },
+        {
+          "role": "Original Creator",
+          "node": {
+            "id": null,
+            "name": {"full": "Kanehito Yamada", "native": "山田鐘人"},
+            "image": {"large": null},
+            "description": "Manga author."
+          }
+        }
+      ]
+    },
+    "openings": [
+      "\"Yuusha\" by YOASOBI (eps 1-16)",
+      "'Haru' by Yorushika (eps 17-28)",
+      "",
+      "Plain Song by Someone"
+    ],
+    "endings": [
+      "Anytime Anywhere by milet (eps 1-27)",
+      "Untitled Ending"
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "person": {
+        "mal_id": 7339,
+        "url": "https://myanimelist.net/people/7339/Keiichirou_Saitou",
+        "images": {"jpg": {"image_url": "https://cdn.myanimelist.net/images/voiceactors/1/72331.jpg"}},
+        "name": "Saitou, Keiichirou"
+      },
+      "positions": ["Director", "Storyboard", "Episode Director"]
+    },
+    {
+      "person": {
+        "mal_id": 55043,
+        "url": "https://myanimelist.net/people/55043/Tomohiro_Suzuki",
+        "images": {"jpg": {"image_url": "https://cdn.myanimelist.net/images/questionmark_23.gif"}},
+        "name": "Suzuki, Tomohiro"
+      },
+      "positions": ["Series Composition"]
+    },
+    {
+      "person": {
+        "mal_id": 2147483000,
+        "url": "https://myanimelist.net/people/2147483000/Overflow",
+        "images": {},
+        "name": "Overflow, Person"
+      },
+      "positions": []
+    }
+  ]
+}

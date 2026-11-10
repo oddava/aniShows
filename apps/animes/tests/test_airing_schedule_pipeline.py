@@ -1,7 +1,6 @@
 from datetime import UTC, datetime, time, timedelta
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
-from asgiref.sync import async_to_sync
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -75,9 +74,9 @@ class JikanSchedulePersistenceTests(AiringScheduleTestMixin, TestCase):
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
 
         try:
-            updated = async_to_sync(service.update_anime_manual)(anime, item)
+            updated = service.update_anime_manual(anime, item)
         finally:
-            async_to_sync(service.close)()
+            service.close()
 
         anime.refresh_from_db()
 
@@ -136,7 +135,7 @@ class JikanSchedulePersistenceTests(AiringScheduleTestMixin, TestCase):
         service = JikanService(enable_caching=False, enable_rate_limiting=False)
 
         try:
-            async_to_sync(service._update_anime_async)(
+            service._update_anime_from_media(
                 anime,
                 partial_item,
                 "Partial Update Test",
@@ -144,7 +143,7 @@ class JikanSchedulePersistenceTests(AiringScheduleTestMixin, TestCase):
                 anime.slug,
             )
         finally:
-            async_to_sync(service.close)()
+            service.close()
 
         anime.refresh_from_db()
 
@@ -159,7 +158,7 @@ class AiringWorkflowTaskTests(AiringScheduleTestMixin, TestCase):
     def test_sync_airing_uses_lightweight_airing_resolver_for_mal_backed_rows(self):
         anime = self._anime("MAL Backed", mal_id=5114, anilist_id=None)
         task = AiringWorkflowTask()
-        service = AsyncMock()
+        service = MagicMock()
         service.resolve_airing_media_for_anime.return_value = {
             "nextAiringEpisode": {
                 "episode": 2,
@@ -171,10 +170,10 @@ class AiringWorkflowTaskTests(AiringScheduleTestMixin, TestCase):
         call_cache = Mock()
         call_cache.is_recently_updated.return_value = False
 
-        result = async_to_sync(task._sync_airing)(service, call_cache, None)
+        result = task._sync_airing(service, call_cache, None)
 
-        service.resolve_airing_media_for_anime.assert_awaited_once_with(anime)
-        service.update_anime_manual.assert_awaited_once_with(
+        service.resolve_airing_media_for_anime.assert_called_once_with(anime)
+        service.update_anime_manual.assert_called_once_with(
             anime, service.resolve_airing_media_for_anime.return_value
         )
         call_cache.mark_updated.assert_called_once_with(anime.mal_id)

@@ -13,12 +13,11 @@ Smart rate limiting features:
 - Circuit breaker pattern for persistent failures
 """
 
-import asyncio
 import random
 import re
+import time
 
 import httpx
-from asgiref.sync import sync_to_async
 from django.core.management.base import BaseCommand
 
 from ....shared.retry import retry_after_seconds
@@ -71,7 +70,7 @@ class Command(BaseCommand):
             try:
                 anime = Anime.objects.get(id=anime_id)
                 self.stdout.write(f"Processing themes for: {anime.title}")
-                asyncio.run(self.process_single_anime(anime, max_retries, adaptive_delay))
+                self.process_single_anime(anime, max_retries, adaptive_delay)
             except Anime.DoesNotExist:
                 self.stderr.write(f"Anime with ID {anime_id} not found")
                 return
@@ -87,24 +86,24 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS("All anime already have theme songs!"))
                 return
 
-            asyncio.run(self.process_batch(queryset, batch_size, max_retries, adaptive_delay))
+            self.process_batch(queryset, batch_size, max_retries, adaptive_delay)
 
-    async def process_single_anime(self, anime, max_retries: int, adaptive_delay: float):
+    def process_single_anime(self, anime, max_retries: int, adaptive_delay: float):
         """Process themes for a single anime with smart rate limiting"""
         rate_limiter = JikanRateLimiter(base_delay=adaptive_delay)
 
-        async with httpx.AsyncClient(timeout=15.0) as http_client:
+        with httpx.Client(timeout=15.0) as http_client:
             try:
-                mal_id = await self.ensure_mal_id(anime, http_client, rate_limiter)
+                mal_id = self.ensure_mal_id(anime, http_client, rate_limiter)
                 if not mal_id:
                     self.stderr.write(f"Could not find MAL ID for: {anime.title}")
                     return
 
-                themes = await self.fetch_themes_from_jikan(
+                themes = self.fetch_themes_from_jikan(
                     http_client, mal_id, rate_limiter, max_retries
                 )
                 if themes:
-                    await self.save_theme_songs(anime, themes)
+                    self.save_theme_songs(anime, themes)
                     self.stdout.write(self.style.SUCCESS(f"✓ Updated themes for: {anime.title}"))
                 else:
                     self.stderr.write(f"No theme data found for: {anime.title}")
@@ -112,11 +111,9 @@ class Command(BaseCommand):
             except Exception as e:
                 self.stderr.write(f"Error processing {anime.title}: {e!s}")
 
-    async def process_batch(
-        self, queryset, batch_size: int, max_retries: int, adaptive_delay: float
-    ):
+    def process_batch(self, queryset, batch_size: int, max_retries: int, adaptive_delay: float):
         """Process themes for multiple anime with smart rate limiting and batching"""
-        anime_list = await sync_to_async(list)(queryset)
+        anime_list = list(queryset)
         total = len(anime_list)
         processed = 0
         errors = 0
@@ -124,7 +121,7 @@ class Command(BaseCommand):
 
         rate_limiter = JikanRateLimiter(base_delay=adaptive_delay)
 
-        async with httpx.AsyncClient(timeout=15.0) as http_client:
+        with httpx.Client(timeout=15.0) as http_client:
             for i in range(0, total, batch_size):
                 batch = anime_list[i : i + batch_size]
                 batch_num = i // batch_size + 1
@@ -137,7 +134,7 @@ class Command(BaseCommand):
                 # Process batch with rate limiting
                 for anime in batch:
                     processed += 1
-                    success = await self.process_anime_with_backoff(
+                    success = self.process_anime_with_backoff(
                         anime, http_client, rate_limiter, max_retries
                     )
 
@@ -155,7 +152,7 @@ class Command(BaseCommand):
 
                 # Brief pause between batches to avoid burst
                 if i + batch_size < total:
-                    await asyncio.sleep(0.5)
+                    time.sleep(0.5)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -163,25 +160,25 @@ class Command(BaseCommand):
             )
         )
 
-    async def process_anime_with_backoff(
+    def process_anime_with_backoff(
         self, anime, http_client, rate_limiter: JikanRateLimiter, max_retries: int
     ) -> bool:
         """Process a single anime with retry logic and exponential backoff"""
         for attempt in range(max_retries + 1):
             try:
                 # Acquire rate limit permission
-                await rate_limiter.acquire()
+                rate_limiter.acquire()
 
-                mal_id = await self.ensure_mal_id(anime, http_client, rate_limiter)
+                mal_id = self.ensure_mal_id(anime, http_client, rate_limiter)
                 if not mal_id:
                     self.stderr.write(f"✗ No MAL ID for: {anime.title}")
                     return False
 
-                themes = await self.fetch_themes_from_jikan(
+                themes = self.fetch_themes_from_jikan(
                     http_client, mal_id, rate_limiter, max_retries
                 )
                 if themes:
-                    await self.save_theme_songs(anime, themes)
+                    self.save_theme_songs(anime, themes)
                     self.stdout.write(f"✓ {anime.title}")
                     rate_limiter.record_success()
                     return True
@@ -202,7 +199,7 @@ class Command(BaseCommand):
                             f"  Rate limited on {anime.title}, retrying in {wait_time:.1f}s "
                             f"(attempt {attempt + 1}/{max_retries})"
                         )
-                        await asyncio.sleep(wait_time)
+                        time.sleep(wait_time)
                         continue
                     else:
                         self.stderr.write(f"✗ Max retries exceeded for: {anime.title}")
@@ -214,7 +211,7 @@ class Command(BaseCommand):
                         self.stderr.write(
                             f"  Error on {anime.title}: {error_str}, retrying in {wait_time:.1f}s"
                         )
-                        await asyncio.sleep(wait_time)
+                        time.sleep(wait_time)
                         continue
                     else:
                         self.stderr.write(f"✗ Error ({anime.title}): {error_str}")
@@ -222,28 +219,27 @@ class Command(BaseCommand):
 
         return False
 
-    async def ensure_mal_id(self, anime, http_client, rate_limiter: JikanRateLimiter):
+    def ensure_mal_id(self, anime, http_client, rate_limiter: JikanRateLimiter):
         """Ensure the anime has a MAL ID, looking it up via Jikan sync metadata if needed."""
         if anime.mal_id:
             return anime.mal_id
 
         sync_service = JikanService(enable_caching=True, enable_rate_limiting=True)
         try:
-            item = await sync_service.resolve_media_for_anime(anime)
+            item = sync_service.resolve_media_for_anime(anime)
             if item:
                 mal_id = item.get("idMal")
                 sync_id = item.get("id")
                 if mal_id:
-                    await self._save_mal_id(anime, mal_id, sync_id)
+                    self._save_mal_id(anime, mal_id, sync_id)
                     return mal_id
         except Exception:
             logger.warning("Jikan lookup failed for %s", anime.title, exc_info=True)
         finally:
-            await sync_service.close()
+            sync_service.close()
 
         return None
 
-    @sync_to_async
     def _save_mal_id(self, anime, mal_id, anilist_id=None):
         """Save MAL ID (and optionally sync ID) to the anime record."""
         update_fields = []
@@ -256,9 +252,9 @@ class Command(BaseCommand):
         if update_fields:
             anime.save(update_fields=update_fields)
 
-    async def fetch_themes_from_jikan(
+    def fetch_themes_from_jikan(
         self,
-        http_client: httpx.AsyncClient,
+        http_client: httpx.Client,
         mal_id: int,
         rate_limiter: JikanRateLimiter,
         max_retries: int = 3,
@@ -268,7 +264,7 @@ class Command(BaseCommand):
 
         for attempt in range(max_retries + 1):
             try:
-                response = await http_client.get(url)
+                response = http_client.get(url)
 
                 # Handle rate limiting with exponential backoff
                 if response.status_code == 429:
@@ -285,7 +281,7 @@ class Command(BaseCommand):
                             f"Jikan 429 for MAL ID {mal_id}, waiting {wait_time:.1f}s "
                             f"(attempt {attempt + 1}/{max_retries})"
                         )
-                        await asyncio.sleep(wait_time)
+                        time.sleep(wait_time)
                         continue
                     else:
                         logger.error(f"Jikan 429 max retries exceeded for MAL ID {mal_id}")
@@ -297,7 +293,7 @@ class Command(BaseCommand):
                     logger.warning(
                         f"Jikan server error {response.status_code}, retrying in {wait_time:.1f}s"
                     )
-                    await asyncio.sleep(wait_time)
+                    time.sleep(wait_time)
                     continue
 
                 # 4xx errors (except 429 handled above) are non-retryable.
@@ -319,7 +315,7 @@ class Command(BaseCommand):
                 logger.error("Jikan HTTP error for MAL ID %s: %s", mal_id, e)
                 if attempt < max_retries:
                     wait_time = min(2**attempt, 10)
-                    await asyncio.sleep(wait_time)
+                    time.sleep(wait_time)
                     continue
                 return None
             except Exception:
@@ -328,7 +324,6 @@ class Command(BaseCommand):
 
         return None
 
-    @sync_to_async
     def save_theme_songs(self, anime, themes):
         """Save theme songs to database"""
         queryset = ThemeSong.objects.filter(anime=anime)

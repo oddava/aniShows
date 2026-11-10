@@ -1,114 +1,55 @@
+"""Import the anime-offline-database (manami-project) into the catalog.
+
+This module runs an import: it opens the source (local file or release
+asset, zstd or plain JSONL), streams it line by line and hands batches on.
+Parsing records lives in ``offline_catalog_parsing``, matching them to
+existing rows in ``offline_catalog_matching`` and saving them in
+``offline_catalog_persistence``.
+"""
+
 from __future__ import annotations
 
 import io
 import json
-from collections import defaultdict
-from dataclasses import dataclass
-from datetime import date, datetime
+from dataclasses import dataclass, field
 from importlib import import_module
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
 
 import httpx
-from django.db import DataError, IntegrityError, transaction
 from django.utils import timezone
-from django.utils.text import slugify
 
 from ...shared.logger import logger
-from ...shared.public_cache import invalidate_public_cache_keys
-from ..models import Anime, AnimeStudio, OfflineCatalogImport, Studio
-from .jikan import JikanService
+from ..models import Anime, OfflineCatalogImport
+from . import offline_catalog_parsing as parsing
 from .metadata_health import PLACEHOLDER_SYNOPSIS
+from .offline_catalog_parsing import OfflineCatalogEntry
+from .offline_catalog_persistence import OfflineCatalogPersistence
 from .offline_sync import OfflineSyncService
-from .public_anime_service import AnimePublicPayloadService
+
+__all__ = [
+    "DEFAULT_ASSET_NAME",
+    "PLACEHOLDER_SYNOPSIS",
+    "OfflineCatalogEntry",
+    "OfflineCatalogImportService",
+]
 
 DEFAULT_ASSET_NAME = "anime-offline-database.jsonl.zst"
 DEFAULT_BATCH_SIZE = 250
 DEFAULT_ENRICHMENT_CHUNK_SIZE = 100
 DEFAULT_THEME_BASE_DELAY_SECONDS = 1.0
-ANIME_TITLE_MAX_LENGTH = Anime._meta.get_field("title").max_length
-ANIME_TITLE_JP_MAX_LENGTH = Anime._meta.get_field("title_jp").max_length
-ANIME_SLUG_MAX_LENGTH = Anime._meta.get_field("slug").max_length
-ANIME_URL_MAX_LENGTH = Anime._meta.get_field("cover_image_external_url").max_length
-ANIME_SEASON_MAX_LENGTH = Anime._meta.get_field("season").max_length
-ANIME_META_DESCRIPTION_MAX_LENGTH = Anime._meta.get_field("meta_description").max_length
-STUDIO_NAME_MAX_LENGTH = Studio._meta.get_field("name").max_length
-OFFLINE_UPDATE_FIELDS = [
-    "anime_type",
-    "status",
-    "episode_count",
-    "duration_minutes",
-    "release_date",
-    "rating",
-    "cover_image_external_url",
-    "banner_image_external_url",
-    "season",
-    "season_year",
-    "mal_id",
-    "anilist_id",
-    "provider_ids",
-    "synonyms",
-    "producers",
-    "tags",
-    "source_urls",
-    "offline_db_payload",
-    "offline_db_last_seen_at",
-    "offline_db_last_update",
-    "updated_at",
-]
-OFFLINE_ALWAYS_WRITTEN_FIELDS = frozenset(
-    {"offline_db_payload", "offline_db_last_seen_at", "offline_db_last_update", "updated_at"}
-)
 LATEST_DOWNLOAD_URL = (
     "https://github.com/manami-project/anime-offline-database/releases/latest/download/"
     f"{DEFAULT_ASSET_NAME}"
 )
-SEASON_MONTHS = {
-    "WINTER": 1,
-    "SPRING": 4,
-    "SUMMER": 7,
-    "FALL": 10,
-    "UNDEFINED": 1,
-}
-PROVIDER_HOSTS = {
-    "anidb.net": "anidb",
-    "anilist.co": "anilist",
-    "anime-planet.com": "anime_planet",
-    "animecountdown.com": "animecountdown",
-    "animenewsnetwork.com": "animenewsnetwork",
-    "anisearch.com": "anisearch",
-    "kitsu.app": "kitsu",
-    "livechart.me": "livechart",
-    "myanimelist.net": "myanimelist",
-    "notify.moe": "notify_moe",
-    "simkl.com": "simkl",
-}
 
 
 @dataclass(slots=True)
-class OfflineCatalogEntry:
-    raw: dict[str, Any]
-    title: str
-    base_slug: str
-    anime_type: str
-    status: str
-    episode_count: int
-    duration_minutes: int | None
-    rating: float | None
-    season: str
-    season_year: int | None
-    release_date: date | None
-    cover_url: str
-    banner_url: str
-    primary_studio: str | None
-    anilist_id: int | None
-    mal_id: int | None
-    provider_ids: dict[str, Any]
-    synonyms: list[str]
-    producers: list[str]
-    tags: list[str]
-    source_urls: list[str]
+class _ChangedIds:
+    """Anime IDs an import created and updated, in the order it touched them."""
+
+    created: list[int] = field(default_factory=list)
+    updated: list[int] = field(default_factory=list)
 
 
 class _IteratorStream(io.RawIOBase):
@@ -149,7 +90,10 @@ class _IteratorStream(io.RawIOBase):
         return bytes_read
 
 
-class OfflineCatalogImportService:
+class OfflineCatalogImportService(OfflineCatalogPersistence):
+    # Kept as a method for callers that parse source URLs on their own.
+    _extract_provider_ids = staticmethod(parsing.extract_provider_ids)
+
     def __init__(
         self,
         *,
@@ -158,10 +102,7 @@ class OfflineCatalogImportService:
     ):
         self.batch_size = max(1, int(batch_size))
         self.enrichment_chunk_size = max(1, int(enrichment_chunk_size))
-        self._fallback_indexes_loaded = False
-        self._fallback_anime_cache: dict[int, Anime] = {}
-        self._fallback_title_index: dict[str, list[int]] = defaultdict(list)
-        self._fallback_provider_index: dict[tuple[str, str], list[int]] = defaultdict(list)
+        self._init_fallback_indexes()
 
     def run_import(
         self,
@@ -174,22 +115,91 @@ class OfflineCatalogImportService:
         resume: bool = False,
         enqueue_enrichment: bool = False,
     ) -> dict[str, Any]:
-        started_at = timezone.now()
-        import_run = self._prepare_import_run(
+        """Stream the offline database into Anime rows; resumable from the last line."""
+        import_run = self._start_import_run(
             release_tag=release_tag,
             asset_name=asset_name,
             source_url=source_url or self._build_source_url(release_tag, asset_name),
             resume=resume,
         )
+        run_started_at = import_run.started_at
+        summary = self._initial_summary(import_run, release_tag=release_tag, asset_name=asset_name)
+        changed = _ChangedIds()
+
+        try:
+            with self._open_source_stream(
+                source_url=import_run.source_url, source_path=source_path
+            ) as text_stream:
+                self._import_lines(
+                    text_stream,
+                    import_run,
+                    summary,
+                    changed,
+                    seen_at=run_started_at,
+                    resume=resume,
+                    limit=limit,
+                )
+
+            import_run.records_marked_stale = Anime.objects.filter(
+                offline_db_last_seen_at__isnull=False,
+                offline_db_last_seen_at__lt=run_started_at,
+            ).count()
+
+            followup_ids, new_ids = self._followup_ids(changed, run_started_at, resume=resume)
+            if enqueue_enrichment:
+                new_id_set = set(new_ids)
+                summary.update(
+                    self._initialize_sync_states(
+                        new_ids,
+                        [anime_id for anime_id in followup_ids if anime_id not in new_id_set],
+                    )
+                )
+                summary.update(self._enqueue_enrichment(followup_ids, []))
+
+            self._complete_import_run(import_run, summary)
+        except Exception as exc:
+            import_run.status = OfflineCatalogImport.Status.FAILED
+            import_run.error_message = str(exc)
+            import_run.completed_at = timezone.now()
+            import_run.save(update_fields=["status", "error_message", "completed_at", "updated_at"])
+            logger.error("Offline catalog import failed", exc_info=True)
+            raise
+
+        summary.update(
+            {
+                "records_seen": import_run.records_seen,
+                "records_created": import_run.records_created,
+                "records_updated": import_run.records_updated,
+                "records_failed": import_run.records_failed,
+                "records_marked_stale": import_run.records_marked_stale,
+                "changed_anime_ids": list(dict.fromkeys(followup_ids)),
+            }
+        )
+        return summary
+
+    def _start_import_run(
+        self, *, release_tag: str, asset_name: str, source_url: str, resume: bool
+    ) -> OfflineCatalogImport:
+        started_at = timezone.now()
+        import_run = self._prepare_import_run(
+            release_tag=release_tag,
+            asset_name=asset_name,
+            source_url=source_url,
+            resume=resume,
+        )
         import_run.status = OfflineCatalogImport.Status.RUNNING
         import_run.started_at = import_run.started_at or started_at
-        run_started_at = import_run.started_at
         import_run.error_message = ""
         import_run.save(
             update_fields=["status", "started_at", "error_message", "source_url", "release_tag"]
         )
+        return import_run
 
-        summary: dict[str, Any] = {
+    @staticmethod
+    def _initial_summary(
+        import_run: OfflineCatalogImport, *, release_tag: str, asset_name: str
+    ) -> dict[str, Any]:
+        return {
             "import_run_id": import_run.id,
             "release_tag": release_tag,
             "asset_name": asset_name,
@@ -212,194 +222,200 @@ class OfflineCatalogImportService:
             "changed_anime_ids": [],
         }
 
-        metadata_line: dict[str, Any] | None = None
-        line_buffer: list[OfflineCatalogEntry] = []
-        created_ids: list[int] = []
-        updated_ids: list[int] = []
+    def _import_lines(
+        self,
+        text_stream,
+        import_run: OfflineCatalogImport,
+        summary: dict[str, Any],
+        changed: _ChangedIds,
+        *,
+        seen_at,
+        resume: bool,
+        limit: int | None,
+    ) -> None:
+        """Read the JSONL stream: the header line, then entries in batches.
+
+        On a resume, lines up to the last processed one are skipped (only the
+        header is still read from them). A bad line is counted as failed and
+        skipped, never fatal, so a resume does not stop on it again.
+        """
+        has_header = False
+        buffer: list[OfflineCatalogEntry] = []
         skipped_lines = import_run.last_processed_line if resume else 0
         last_line_number = import_run.last_processed_line
 
+        for line_number, raw_line in enumerate(text_stream, start=1):
+            last_line_number = line_number
+
+            raw_line = raw_line.strip()
+            if not raw_line:
+                continue
+
+            if line_number <= skipped_lines:
+                if line_number == 1 and not has_header:
+                    header = self._header_from_skipped_line(raw_line)
+                    if header is not None:
+                        has_header = True
+                        summary["last_update"] = header.get("lastUpdate")
+                continue
+
+            payload = self._parse_line(raw_line, line_number, import_run)
+            if payload is None:
+                continue
+
+            if not has_header and payload.get("$schema"):
+                has_header = True
+                summary["last_update"] = payload.get("lastUpdate")
+                continue
+
+            entry = self._entry_from_payload(payload, line_number)
+            if entry is None:
+                import_run.records_failed += 1
+                import_run.last_processed_line = line_number
+                continue
+
+            buffer.append(entry)
+            import_run.records_seen += 1
+
+            if len(buffer) >= self.batch_size:
+                self._flush_buffer(buffer, import_run, summary, changed, seen_at=seen_at)
+                import_run.last_processed_line = line_number
+                import_run.save(
+                    update_fields=[
+                        "records_seen",
+                        "records_created",
+                        "records_updated",
+                        "records_failed",
+                        "last_processed_line",
+                        "updated_at",
+                    ]
+                )
+                buffer.clear()
+
+            if limit and import_run.records_seen >= limit:
+                import_run.last_processed_line = line_number
+                break
+
+        if buffer:
+            self._flush_buffer(buffer, import_run, summary, changed, seen_at=seen_at)
+        import_run.last_processed_line = max(import_run.last_processed_line, last_line_number)
+
+    @staticmethod
+    def _header_from_skipped_line(raw_line: str) -> dict | None:
         try:
-            with self._open_source_stream(
-                source_url=import_run.source_url, source_path=source_path
-            ) as text_stream:
-                for line_number, raw_line in enumerate(text_stream, start=1):
-                    last_line_number = line_number
+            payload = json.loads(raw_line)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(payload, dict) and payload.get("$schema"):
+            return payload
+        return None
 
-                    raw_line = raw_line.strip()
-                    if not raw_line:
-                        continue
-
-                    if line_number <= skipped_lines:
-                        if line_number == 1 and metadata_line is None:
-                            try:
-                                skipped_payload = json.loads(raw_line)
-                            except json.JSONDecodeError:
-                                skipped_payload = None
-                            if isinstance(skipped_payload, dict) and skipped_payload.get("$schema"):
-                                metadata_line = skipped_payload
-                                summary["last_update"] = skipped_payload.get("lastUpdate")
-                        continue
-
-                    try:
-                        payload = json.loads(raw_line)
-                    except json.JSONDecodeError:
-                        logger.warning(
-                            "Skipping malformed JSON line in offline catalog import",
-                            extra={"line_number": line_number},
-                        )
-                        import_run.records_failed += 1
-                        import_run.last_processed_line = line_number
-                        continue
-                    if not isinstance(payload, dict):
-                        logger.warning(
-                            "Skipping non-object JSON payload in offline catalog import",
-                            extra={"line_number": line_number},
-                        )
-                        import_run.records_failed += 1
-                        import_run.last_processed_line = line_number
-                        continue
-
-                    if metadata_line is None and payload.get("$schema"):
-                        metadata_line = payload
-                        summary["last_update"] = payload.get("lastUpdate")
-                        continue
-
-                    try:
-                        entry = self._prepare_entry(payload)
-                    except Exception:
-                        # One bad record must not fail the run: a resume would
-                        # stop on the same line again.
-                        logger.warning(
-                            "Skipping malformed offline catalog record at line %s",
-                            line_number,
-                            exc_info=True,
-                        )
-                        entry = None
-                    if entry is None:
-                        import_run.records_failed += 1
-                        import_run.last_processed_line = line_number
-                        continue
-
-                    line_buffer.append(entry)
-                    import_run.records_seen += 1
-
-                    if len(line_buffer) >= self.batch_size:
-                        flush_result = self._flush_batch(
-                            line_buffer,
-                            last_update=self._parse_date(summary["last_update"]),
-                            seen_at=run_started_at,
-                        )
-                        created_ids.extend(flush_result["created_ids"])
-                        updated_ids.extend(flush_result["updated_ids"])
-                        import_run.records_created += flush_result["created"]
-                        import_run.records_updated += flush_result["updated"]
-                        import_run.records_failed += flush_result["failed"]
-                        import_run.last_processed_line = line_number
-                        import_run.save(
-                            update_fields=[
-                                "records_seen",
-                                "records_created",
-                                "records_updated",
-                                "records_failed",
-                                "last_processed_line",
-                                "updated_at",
-                            ]
-                        )
-                        line_buffer.clear()
-
-                    if limit and import_run.records_seen >= limit:
-                        import_run.last_processed_line = line_number
-                        break
-
-                if line_buffer:
-                    flush_result = self._flush_batch(
-                        line_buffer,
-                        last_update=self._parse_date(summary["last_update"]),
-                        seen_at=run_started_at,
-                    )
-                    created_ids.extend(flush_result["created_ids"])
-                    updated_ids.extend(flush_result["updated_ids"])
-                    import_run.records_created += flush_result["created"]
-                    import_run.records_updated += flush_result["updated"]
-                    import_run.records_failed += flush_result["failed"]
-                import_run.last_processed_line = max(
-                    import_run.last_processed_line, last_line_number
-                )
-
-            stale_count = Anime.objects.filter(
-                offline_db_last_seen_at__isnull=False,
-                offline_db_last_seen_at__lt=run_started_at,
-            ).count()
-            import_run.records_marked_stale = stale_count
-
-            followup_ids = created_ids + updated_ids
-            new_ids = created_ids
-            if resume:
-                seen_this_run = Anime.objects.filter(offline_db_last_seen_at=run_started_at)
-                followup_ids = list(seen_this_run.values_list("id", flat=True))
-                new_ids = list(
-                    seen_this_run.filter(created_at__gte=run_started_at).values_list(
-                        "id", flat=True
-                    )
-                )
-
-            if enqueue_enrichment:
-                new_id_set = set(new_ids)
-                sync_state_summary = self._initialize_sync_states(
-                    new_ids, [anime_id for anime_id in followup_ids if anime_id not in new_id_set]
-                )
-                summary.update(sync_state_summary)
-                queued = self._enqueue_enrichment(followup_ids, [])
-                summary.update(queued)
-
-            import_run.status = OfflineCatalogImport.Status.COMPLETED
-            import_run.completed_at = timezone.now()
-            import_run.summary = {
-                "last_update": summary["last_update"],
-                "metadata_queued": summary["metadata_queued"],
-                "franchises_queued": summary["franchises_queued"],
-                "themes_queued": summary["themes_queued"],
-                "metadata_task_ids": summary["metadata_task_ids"],
-                "franchises_task_ids": summary["franchises_task_ids"],
-                "themes_task_ids": summary["themes_task_ids"],
-                "sync_states_created": summary["sync_states_created"],
-                "sync_states_updated": summary["sync_states_updated"],
-                "sync_states_total": summary["sync_states_total"],
-            }
-            import_run.save(
-                update_fields=[
-                    "status",
-                    "completed_at",
-                    "records_seen",
-                    "records_created",
-                    "records_updated",
-                    "records_marked_stale",
-                    "records_failed",
-                    "last_processed_line",
-                    "summary",
-                    "updated_at",
-                ]
+    @staticmethod
+    def _parse_line(
+        raw_line: str, line_number: int, import_run: OfflineCatalogImport
+    ) -> dict | None:
+        """The line's JSON object, or None (counted as failed) when it is not one."""
+        try:
+            payload = json.loads(raw_line)
+        except json.JSONDecodeError:
+            logger.warning(
+                "Skipping malformed JSON line in offline catalog import",
+                extra={"line_number": line_number},
             )
-        except Exception as exc:
-            import_run.status = OfflineCatalogImport.Status.FAILED
-            import_run.error_message = str(exc)
-            import_run.completed_at = timezone.now()
-            import_run.save(update_fields=["status", "error_message", "completed_at", "updated_at"])
-            logger.error("Offline catalog import failed", exc_info=True)
-            raise
+            payload = None
+        else:
+            if isinstance(payload, dict):
+                return payload
+            logger.warning(
+                "Skipping non-object JSON payload in offline catalog import",
+                extra={"line_number": line_number},
+            )
+        import_run.records_failed += 1
+        import_run.last_processed_line = line_number
+        return None
 
-        summary.update(
-            {
-                "records_seen": import_run.records_seen,
-                "records_created": import_run.records_created,
-                "records_updated": import_run.records_updated,
-                "records_failed": import_run.records_failed,
-                "records_marked_stale": import_run.records_marked_stale,
-                "changed_anime_ids": list(dict.fromkeys(followup_ids)),
-            }
+    @staticmethod
+    def _entry_from_payload(payload: dict, line_number: int) -> OfflineCatalogEntry | None:
+        try:
+            return parsing.prepare_entry(payload)
+        except Exception:
+            # One bad record must not fail the run: a resume would
+            # stop on the same line again.
+            logger.warning(
+                "Skipping malformed offline catalog record at line %s",
+                line_number,
+                exc_info=True,
+            )
+            return None
+
+    def _flush_buffer(
+        self,
+        buffer: list[OfflineCatalogEntry],
+        import_run: OfflineCatalogImport,
+        summary: dict[str, Any],
+        changed: _ChangedIds,
+        *,
+        seen_at,
+    ) -> None:
+        flush_result = self._flush_batch(
+            buffer,
+            last_update=parsing.parse_date(summary["last_update"]),
+            seen_at=seen_at,
         )
-        return summary
+        changed.created.extend(flush_result["created_ids"])
+        changed.updated.extend(flush_result["updated_ids"])
+        import_run.records_created += flush_result["created"]
+        import_run.records_updated += flush_result["updated"]
+        import_run.records_failed += flush_result["failed"]
+
+    @staticmethod
+    def _followup_ids(
+        changed: _ChangedIds, run_started_at, *, resume: bool
+    ) -> tuple[list[int], list[int]]:
+        """(rows this run touched, rows it created).
+
+        A resumed run only knows its own batches, so it asks the database for
+        every row seen at this run's start time instead.
+        """
+        if not resume:
+            return changed.created + changed.updated, changed.created
+        seen_this_run = Anime.objects.filter(offline_db_last_seen_at=run_started_at)
+        followup_ids = list(seen_this_run.values_list("id", flat=True))
+        new_ids = list(
+            seen_this_run.filter(created_at__gte=run_started_at).values_list("id", flat=True)
+        )
+        return followup_ids, new_ids
+
+    @staticmethod
+    def _complete_import_run(import_run: OfflineCatalogImport, summary: dict[str, Any]) -> None:
+        import_run.status = OfflineCatalogImport.Status.COMPLETED
+        import_run.completed_at = timezone.now()
+        import_run.summary = {
+            "last_update": summary["last_update"],
+            "metadata_queued": summary["metadata_queued"],
+            "franchises_queued": summary["franchises_queued"],
+            "themes_queued": summary["themes_queued"],
+            "metadata_task_ids": summary["metadata_task_ids"],
+            "franchises_task_ids": summary["franchises_task_ids"],
+            "themes_task_ids": summary["themes_task_ids"],
+            "sync_states_created": summary["sync_states_created"],
+            "sync_states_updated": summary["sync_states_updated"],
+            "sync_states_total": summary["sync_states_total"],
+        }
+        import_run.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "records_seen",
+                "records_created",
+                "records_updated",
+                "records_marked_stale",
+                "records_failed",
+                "last_processed_line",
+                "summary",
+                "updated_at",
+            ]
+        )
 
     def _prepare_import_run(
         self,
@@ -524,687 +540,6 @@ class OfflineCatalogImportService:
 
         return _ManagedTextStream()
 
-    def _prepare_entry(self, payload: dict[str, Any]) -> OfflineCatalogEntry | None:
-        title = self._truncate_text(payload.get("title"), ANIME_TITLE_MAX_LENGTH)
-        if not title:
-            return None
-
-        provider_ids = self._extract_provider_ids(payload.get("sources") or [])
-        anime_type = self._map_type(payload.get("type"))
-        status = self._map_status(payload.get("status"))
-        season_info = payload.get("animeSeason") or {}
-        season = self._truncate_text(season_info.get("season") or "", ANIME_SEASON_MAX_LENGTH)
-        season_year = self._coerce_int(season_info.get("year"))
-        if season_year is not None and not 1900 <= season_year <= 2100:
-            season_year = None
-        picture = self._truncate_text(
-            JikanService.normalize_external_image_url(payload.get("picture")),
-            ANIME_URL_MAX_LENGTH,
-        )
-        thumbnail = self._truncate_text(
-            JikanService.normalize_external_image_url(payload.get("thumbnail")),
-            ANIME_URL_MAX_LENGTH,
-        )
-        studio = self._truncate_text(
-            self._pick_primary_studio(payload.get("studios") or []),
-            STUDIO_NAME_MAX_LENGTH,
-        )
-
-        return OfflineCatalogEntry(
-            raw=payload,
-            title=title,
-            base_slug=slugify(title),
-            anime_type=anime_type,
-            status=status,
-            episode_count=max(self._coerce_int(payload.get("episodes"), 0), 0),
-            duration_minutes=self._duration_to_minutes(payload.get("duration")),
-            rating=self._score_to_rating(payload.get("score")),
-            season=season,
-            season_year=season_year,
-            release_date=self._season_to_date(season, season_year),
-            cover_url=picture,
-            banner_url=thumbnail or picture,
-            primary_studio=studio,
-            anilist_id=self._coerce_int(provider_ids.get("anilist")),
-            mal_id=self._coerce_int(provider_ids.get("myanimelist")),
-            provider_ids=provider_ids,
-            synonyms=self._unique_strings(payload.get("synonyms") or []),
-            producers=self._unique_strings(payload.get("producers") or []),
-            tags=self._unique_strings(payload.get("tags") or []),
-            source_urls=self._unique_strings(payload.get("sources") or []),
-        )
-
-    def _flush_batch(
-        self,
-        entries: list[OfflineCatalogEntry],
-        *,
-        last_update: date | None,
-        seen_at,
-    ) -> dict[str, Any]:
-        anilist_ids = {entry.anilist_id for entry in entries if entry.anilist_id}
-        mal_ids = {entry.mal_id for entry in entries if entry.mal_id}
-        titles = {entry.title for entry in entries}
-        slugs = {entry.base_slug for entry in entries if entry.base_slug}
-        studio_names = {entry.primary_studio for entry in entries if entry.primary_studio}
-
-        anilist_map = (
-            Anime.objects.in_bulk(anilist_ids, field_name="anilist_id") if anilist_ids else {}
-        )
-        mal_map = Anime.objects.in_bulk(mal_ids, field_name="mal_id") if mal_ids else {}
-        title_map: dict[str, list[Anime]] = defaultdict(list)
-        for anime in Anime.objects.filter(title__in=titles):
-            title_map[anime.title].append(anime)
-        slug_map = {anime.slug: anime for anime in Anime.objects.filter(slug__in=slugs)}
-        studio_map = self._resolve_studios(studio_names)
-
-        reserved_slugs = set(Anime.objects.filter(slug__in=slugs).values_list("slug", flat=True))
-
-        to_create: list[tuple[Anime, OfflineCatalogEntry, Studio | None]] = []
-        to_update: list[Anime] = []
-        created_ids: list[int] = []
-        updated_ids: list[int] = []
-        created_count = 0
-        updated_count = 0
-        failed_count = 0
-        touched_slugs: list[str] = []
-        pending_create_index: dict[int, int] = {}
-        queued_update_ids: set[int] = set()
-        studio_pairs: list[tuple[Anime, Studio]] = []
-
-        with transaction.atomic():
-            for entry in entries:
-                try:
-                    anime = self._match_existing(entry, anilist_map, mal_map, title_map, slug_map)
-                    studio = studio_map.get(entry.primary_studio) if entry.primary_studio else None
-                    if anime is not None and studio is not None:
-                        studio_pairs.append((anime, studio))
-                    if anime is None:
-                        title = entry.title
-                        slug = self._ensure_unique_slug(
-                            slugify(title), reserved_slugs, year=entry.season_year
-                        )
-                        anime = Anime(
-                            title=title,
-                            title_jp="",
-                            synopsis=PLACEHOLDER_SYNOPSIS,
-                            anime_type=entry.anime_type,
-                            status=entry.status,
-                            episode_count=entry.episode_count,
-                            duration_minutes=entry.duration_minutes or 24,
-                            release_date=entry.release_date,
-                            rating=entry.rating,
-                            cover_image_external_url=entry.cover_url,
-                            banner_image_external_url=entry.banner_url,
-                            meta_description=title[:160],
-                            season="" if entry.season == "UNDEFINED" else entry.season,
-                            season_year=entry.season_year,
-                            mal_id=entry.mal_id,
-                            anilist_id=entry.anilist_id,
-                            provider_ids=entry.provider_ids,
-                            synonyms=self._merged_list([], entry.synonyms),
-                            producers=self._merged_list([], entry.producers),
-                            tags=self._merged_list([], entry.tags),
-                            source_urls=self._merged_list([], entry.source_urls),
-                            offline_db_payload=entry.raw,
-                            offline_db_last_seen_at=seen_at,
-                            offline_db_last_update=last_update,
-                            slug=slug,
-                        )
-                        to_create.append((anime, entry, studio))
-                        if studio is not None:
-                            studio_pairs.append((anime, studio))
-                        pending_create_index[id(anime)] = len(to_create) - 1
-                        reserved_slugs.add(slug)
-                        if anime.anilist_id:
-                            anilist_map[anime.anilist_id] = anime
-                        if anime.mal_id:
-                            mal_map[anime.mal_id] = anime
-                        title_map[anime.title].append(anime)
-                        if anime.slug:
-                            slug_map[anime.slug] = anime
-                    else:
-                        self._apply_offline_updates(anime, entry, last_update, seen_at)
-                        if anime.pk is None:
-                            row_idx = pending_create_index.get(id(anime))
-                            if row_idx is not None:
-                                to_create[row_idx] = (anime, entry, studio)
-                        elif anime.pk not in queued_update_ids:
-                            queued_update_ids.add(anime.pk)
-                            to_update.append(anime)
-                            updated_count += 1
-                            touched_slugs.append(anime.slug)
-
-                        if anime.anilist_id:
-                            anilist_map[anime.anilist_id] = anime
-                        if anime.mal_id:
-                            mal_map[anime.mal_id] = anime
-                        title_map[anime.title].append(anime)
-                        if anime.slug:
-                            slug_map[anime.slug] = anime
-                except Exception:
-                    failed_count += 1
-                    logger.error("Failed to prepare offline catalog entry", exc_info=True)
-
-            if to_create:
-                persist_result = self._persist_creates(
-                    to_create,
-                    last_update=last_update,
-                    seen_at=seen_at,
-                    reserved_slugs=reserved_slugs,
-                )
-                created_count += persist_result["created"]
-                updated_count += persist_result["updated"]
-                failed_count += persist_result["failed"]
-                created_ids.extend(persist_result["created_ids"])
-                updated_ids.extend(persist_result["updated_ids"])
-                touched_slugs.extend(persist_result["touched_slugs"])
-
-            if to_update:
-                by_fields: dict[frozenset[str], list[Anime]] = defaultdict(list)
-                for anime in to_update:
-                    by_fields[frozenset(self._pop_offline_dirty_fields(anime))].append(anime)
-                for fields, rows in by_fields.items():
-                    Anime.objects.bulk_update(rows, sorted(fields), batch_size=self.batch_size)
-                for anime in to_update:
-                    self._index_fallback_anime(anime)
-                updated_ids.extend(anime.id for anime in to_update if anime.id)
-
-            self._attach_primary_studios(studio_pairs)
-
-        if touched_slugs:
-            AnimePublicPayloadService.bump_collection_cache_namespace()
-            invalidate_public_cache_keys(
-                *[
-                    key
-                    for slug in touched_slugs
-                    for key in AnimePublicPayloadService.detail_cache_keys(slug)
-                ]
-            )
-
-        return {
-            "created": created_count,
-            "updated": updated_count,
-            "failed": failed_count,
-            "created_ids": created_ids,
-            "updated_ids": updated_ids,
-        }
-
-    def _persist_creates(
-        self,
-        rows: list[tuple[Anime, OfflineCatalogEntry, Studio | None]],
-        *,
-        last_update: date | None,
-        seen_at,
-        reserved_slugs: set[str],
-    ) -> dict[str, Any]:
-        anime_rows = [anime for anime, _, _ in rows]
-        try:
-            with transaction.atomic():
-                Anime.objects.bulk_create(anime_rows, batch_size=self.batch_size)
-            for anime in anime_rows:
-                self._index_fallback_anime(anime)
-            return {
-                "created": len(anime_rows),
-                "updated": 0,
-                "failed": 0,
-                "created_ids": [anime.id for anime in anime_rows if anime.id],
-                "updated_ids": [],
-                "touched_slugs": [anime.slug for anime in anime_rows],
-            }
-        except (IntegrityError, DataError):
-            logger.warning(
-                "Bulk create hit uniqueness conflict, falling back to row-by-row recovery"
-            )
-
-        summary = {
-            "created": 0,
-            "updated": 0,
-            "failed": 0,
-            "created_ids": [],
-            "updated_ids": [],
-            "touched_slugs": [],
-        }
-        for anime, entry, studio in rows:
-            outcome = self._persist_single_create_with_recovery(
-                anime=anime,
-                entry=entry,
-                studio=studio,
-                last_update=last_update,
-                seen_at=seen_at,
-                reserved_slugs=reserved_slugs,
-            )
-            for key in ("created", "updated", "failed"):
-                summary[key] += outcome[key]
-            summary["created_ids"].extend(outcome["created_ids"])
-            summary["updated_ids"].extend(outcome["updated_ids"])
-            summary["touched_slugs"].extend(outcome["touched_slugs"])
-
-        return summary
-
-    def _persist_single_create_with_recovery(
-        self,
-        *,
-        anime: Anime,
-        entry: OfflineCatalogEntry,
-        studio: Studio | None,
-        last_update: date | None,
-        seen_at,
-        reserved_slugs: set[str],
-    ) -> dict[str, Any]:
-        attempts_remaining = 3
-        while attempts_remaining > 0:
-            attempts_remaining -= 1
-            try:
-                self._sanitize_anime_for_insert(anime)
-                with transaction.atomic():
-                    anime.save(force_insert=True)
-                self._index_fallback_anime(anime)
-                return {
-                    "created": 1,
-                    "updated": 0,
-                    "failed": 0,
-                    "created_ids": [anime.id] if anime.id else [],
-                    "updated_ids": [],
-                    "touched_slugs": [anime.slug],
-                }
-            except DataError as exc:
-                logger.warning(
-                    "Offline import row exceeds model limits; retrying with sanitized fields",
-                    extra={"title": entry.title, "error": str(exc)},
-                )
-                if attempts_remaining <= 0:
-                    break
-                continue
-            except IntegrityError:
-                existing = self._find_conflicting_existing(entry, anime)
-                if existing is not None:
-                    self._apply_offline_updates(existing, entry, last_update, seen_at)
-                    existing.save(update_fields=sorted(self._pop_offline_dirty_fields(existing)))
-                    self._attach_primary_studios([(existing, studio)] if studio else [])
-                    self._index_fallback_anime(existing)
-                    return {
-                        "created": 0,
-                        "updated": 1,
-                        "failed": 0,
-                        "created_ids": [],
-                        "updated_ids": [existing.id] if existing.id else [],
-                        "touched_slugs": [existing.slug],
-                    }
-
-                # Only the slug is unique; the title is stored as-is.
-                reserved_slugs.add(anime.slug)
-                anime.slug = self._ensure_unique_slug(
-                    slugify(anime.title), reserved_slugs, year=entry.season_year
-                )
-                reserved_slugs.add(anime.slug)
-
-        logger.error(
-            "Failed to persist anime row after conflict recovery",
-            extra={"title": entry.title},
-        )
-        return {
-            "created": 0,
-            "updated": 0,
-            "failed": 1,
-            "created_ids": [],
-            "updated_ids": [],
-            "touched_slugs": [],
-        }
-
-    def _find_conflicting_existing(self, entry: OfflineCatalogEntry, anime: Anime) -> Anime | None:
-        if entry.anilist_id:
-            existing = Anime.objects.filter(anilist_id=entry.anilist_id).first()
-            if existing:
-                return existing
-
-        if entry.mal_id:
-            existing = Anime.objects.filter(mal_id=entry.mal_id).first()
-            if existing:
-                return existing
-
-        for by_title in Anime.objects.filter(title=anime.title):
-            if self._is_conflict_match(by_title, entry):
-                return by_title
-
-        by_slug = Anime.objects.filter(slug=anime.slug).first()
-        if by_slug and self._is_conflict_match(by_slug, entry):
-            return by_slug
-
-        fallback_existing = self._find_fallback_existing(entry)
-        if fallback_existing is not None:
-            return fallback_existing
-
-        return None
-
-    def _apply_offline_updates(
-        self,
-        anime: Anime,
-        entry: OfflineCatalogEntry,
-        last_update: date | None,
-        seen_at,
-    ) -> None:
-        before = {field: getattr(anime, field) for field in OFFLINE_UPDATE_FIELDS}
-        self._fill_offline_fields(anime, entry, last_update, seen_at)
-        # Only what this import changed gets written: the instance may have been
-        # loaded long before, and writing every field back would revert other
-        # syncs' updates made since (an airing sync marking a show Finished).
-        changed = {
-            field for field in OFFLINE_UPDATE_FIELDS if getattr(anime, field) != before[field]
-        }
-        changed |= OFFLINE_ALWAYS_WRITTEN_FIELDS
-        anime._offline_dirty_fields = getattr(anime, "_offline_dirty_fields", set()) | changed
-
-    @staticmethod
-    def _pop_offline_dirty_fields(anime: Anime) -> set[str]:
-        fields = getattr(anime, "_offline_dirty_fields", None) or set(OFFLINE_UPDATE_FIELDS)
-        anime._offline_dirty_fields = set()
-        return fields
-
-    def _fill_offline_fields(
-        self,
-        anime: Anime,
-        entry: OfflineCatalogEntry,
-        last_update: date | None,
-        seen_at,
-    ) -> None:
-        provider_ids = dict(anime.provider_ids or {})
-        provider_ids.update(entry.provider_ids)
-        anime.provider_ids = provider_ids
-        anime.synonyms = self._merged_list(anime.synonyms, entry.synonyms)
-        anime.producers = self._merged_list(anime.producers, entry.producers)
-        anime.tags = self._merged_list(anime.tags, entry.tags)
-        anime.source_urls = self._merged_list(anime.source_urls, entry.source_urls)
-        anime.offline_db_payload = entry.raw
-        anime.offline_db_last_seen_at = seen_at
-        anime.offline_db_last_update = last_update
-
-        if not anime.anilist_id and entry.anilist_id:
-            anime.anilist_id = entry.anilist_id
-        if not anime.mal_id and entry.mal_id:
-            anime.mal_id = entry.mal_id
-        if anime.episode_count in (0, None) and entry.episode_count:
-            anime.episode_count = entry.episode_count
-        if (anime.duration_minutes in (0, 24, None)) and entry.duration_minutes:
-            anime.duration_minutes = entry.duration_minutes
-        if anime.rating is None and entry.rating is not None:
-            anime.rating = entry.rating
-        if not anime.release_date and entry.release_date:
-            anime.release_date = entry.release_date
-        if not anime.season and entry.season and entry.season != "UNDEFINED":
-            anime.season = entry.season
-        if not anime.season_year and entry.season_year:
-            anime.season_year = entry.season_year
-        if anime.status == Anime.AnimeStatus.unknown and entry.status:
-            anime.status = entry.status
-        if anime.anime_type == Anime.AnimeType.unknown and entry.anime_type:
-            anime.anime_type = entry.anime_type
-        if not anime.cover_image and not anime.cover_image_external_url and entry.cover_url:
-            anime.cover_image_external_url = entry.cover_url
-        if not anime.banner_image and not anime.banner_image_external_url and entry.banner_url:
-            anime.banner_image_external_url = entry.banner_url
-        if anime.synopsis == "" and PLACEHOLDER_SYNOPSIS:
-            anime.synopsis = PLACEHOLDER_SYNOPSIS
-        if anime.meta_description == "" and anime.title:
-            anime.meta_description = anime.title[:160]
-        anime.updated_at = timezone.now()
-
-    def _attach_primary_studios(self, pairs: list[tuple[Anime, Studio]]) -> None:
-        """Give anime that have no studios yet the offline DB's primary studio."""
-        pairs = [(anime, studio) for anime, studio in pairs if anime.pk and studio is not None]
-        if not pairs:
-            return
-        with_studios = set(
-            AnimeStudio.objects.filter(anime_id__in={anime.pk for anime, _ in pairs})
-            .values_list("anime_id", flat=True)
-            .distinct()
-        )
-        links: dict[int, AnimeStudio] = {}
-        for anime, studio in pairs:
-            if anime.pk not in with_studios and anime.pk not in links:
-                links[anime.pk] = AnimeStudio(anime_id=anime.pk, studio=studio, position=0)
-        if links:
-            AnimeStudio.objects.bulk_create(links.values(), ignore_conflicts=True)
-
-    def _resolve_studios(self, studio_names: set[str | None]) -> dict[str, Studio]:
-        clean_names = {name for name in studio_names if name}
-        if not clean_names:
-            return {}
-
-        existing = {studio.name: studio for studio in Studio.objects.filter(name__in=clean_names)}
-        missing = [Studio(name=name) for name in clean_names if name not in existing]
-        if missing:
-            Studio.objects.bulk_create(missing, ignore_conflicts=True)
-            existing = {
-                studio.name: studio for studio in Studio.objects.filter(name__in=clean_names)
-            }
-        return existing
-
-    def _match_existing(
-        self,
-        entry: OfflineCatalogEntry,
-        anilist_map: dict[int, Anime],
-        mal_map: dict[int, Anime],
-        title_map: dict[str, list[Anime]],
-        slug_map: dict[str, Anime],
-    ) -> Anime | None:
-        if entry.anilist_id and entry.anilist_id in anilist_map:
-            return anilist_map[entry.anilist_id]
-        if entry.mal_id and entry.mal_id in mal_map:
-            return mal_map[entry.mal_id]
-
-        for title_candidate in title_map.get(entry.title, []):
-            if self._is_reasonable_fallback_match(title_candidate, entry):
-                return title_candidate
-
-        slug_candidate = slug_map.get(entry.base_slug)
-        if slug_candidate and self._is_reasonable_fallback_match(slug_candidate, entry):
-            return slug_candidate
-
-        fallback_candidate = self._find_fallback_existing(entry)
-        if fallback_candidate is not None:
-            return fallback_candidate
-
-        return None
-
-    def _find_fallback_existing(self, entry: OfflineCatalogEntry) -> Anime | None:
-        self._ensure_fallback_indexes_loaded()
-
-        provider_candidates: list[int] = []
-        seen_provider_ids: set[int] = set()
-        for provider, value in entry.provider_ids.items():
-            lookup_key = self._provider_lookup_key(provider, value)
-            if lookup_key is None:
-                continue
-            for anime_id in self._fallback_provider_index.get(lookup_key, []):
-                if anime_id in seen_provider_ids:
-                    continue
-                seen_provider_ids.add(anime_id)
-                provider_candidates.append(anime_id)
-
-        for anime_id in provider_candidates:
-            anime = self._get_fallback_anime(anime_id)
-            if anime is not None and self._has_shared_provider_id(anime, entry):
-                return anime
-
-        if entry.anilist_id or entry.mal_id:
-            return None
-
-        title_candidates: list[int] = []
-        seen_title_ids: set[int] = set()
-        for key in self._entry_title_lookup_keys(entry):
-            for anime_id in self._fallback_title_index.get(key, []):
-                if anime_id in seen_title_ids:
-                    continue
-                seen_title_ids.add(anime_id)
-                title_candidates.append(anime_id)
-
-        for anime_id in title_candidates:
-            anime = self._get_fallback_anime(anime_id)
-            if anime is not None and self._is_reasonable_alternate_title_match(anime, entry):
-                return anime
-
-        return None
-
-    def _ensure_fallback_indexes_loaded(self) -> None:
-        if self._fallback_indexes_loaded:
-            return
-
-        rows = Anime.objects.values(
-            "id",
-            "title",
-            "title_jp",
-            "synonyms",
-            "provider_ids",
-        )
-        for row in rows:
-            self._index_fallback_row(row)
-
-        self._fallback_indexes_loaded = True
-
-    def _index_fallback_anime(self, anime: Anime) -> None:
-        if not anime.id:
-            return
-        self._fallback_anime_cache[anime.id] = anime
-        self._index_fallback_row(
-            {
-                "id": anime.id,
-                "title": anime.title,
-                "title_jp": anime.title_jp,
-                "synonyms": anime.synonyms,
-                "provider_ids": anime.provider_ids,
-            }
-        )
-
-    def _index_fallback_row(self, row: dict[str, Any]) -> None:
-        anime_id = self._coerce_int(row.get("id"))
-        if not anime_id:
-            return
-
-        title_keys: set[str] = set()
-        for title in (
-            row.get("title"),
-            row.get("title_jp"),
-            *(row.get("synonyms") or []),
-        ):
-            title_keys.update(self._title_lookup_keys(title))
-
-        for key in title_keys:
-            bucket = self._fallback_title_index[key]
-            if anime_id not in bucket:
-                bucket.append(anime_id)
-
-        for provider, value in (row.get("provider_ids") or {}).items():
-            lookup_key = self._provider_lookup_key(provider, value)
-            if lookup_key is None:
-                continue
-            bucket = self._fallback_provider_index[lookup_key]
-            if anime_id not in bucket:
-                bucket.append(anime_id)
-
-    def _get_fallback_anime(self, anime_id: int) -> Anime | None:
-        cached = self._fallback_anime_cache.get(anime_id)
-        if cached is not None:
-            return cached
-
-        anime = Anime.objects.filter(id=anime_id).first()
-        if anime is not None:
-            self._fallback_anime_cache[anime_id] = anime
-        return anime
-
-    def _entry_title_lookup_keys(self, entry: OfflineCatalogEntry) -> set[str]:
-        lookup_keys = set(self._title_lookup_keys(entry.title))
-        for synonym in entry.synonyms:
-            lookup_keys.update(self._title_lookup_keys(synonym))
-        return lookup_keys
-
-    def _anime_title_lookup_keys(self, anime: Anime) -> set[str]:
-        lookup_keys = set(self._title_lookup_keys(anime.title))
-        lookup_keys.update(self._title_lookup_keys(anime.title_jp))
-        for synonym in anime.synonyms or []:
-            lookup_keys.update(self._title_lookup_keys(synonym))
-        return lookup_keys
-
-    def _title_lookup_keys(self, value: Any) -> set[str]:
-        candidate = str(value or "").strip()
-        if not candidate:
-            return set()
-
-        normalized_space = " ".join(candidate.split()).casefold()
-        lookup_keys = {f"text:{normalized_space}"}
-        slug_key = slugify(candidate)
-        if slug_key:
-            lookup_keys.add(f"slug:{slug_key}")
-        return lookup_keys
-
-    def _provider_lookup_key(self, provider: Any, value: Any) -> tuple[str, str] | None:
-        provider_name = str(provider or "").strip().casefold()
-        if not provider_name or value in (None, ""):
-            return None
-        return provider_name, str(value).strip().casefold()
-
-    def _has_shared_provider_id(self, anime: Anime, entry: OfflineCatalogEntry) -> bool:
-        for provider, value in entry.provider_ids.items():
-            lookup_key = self._provider_lookup_key(provider, value)
-            if lookup_key is None:
-                continue
-            anime_value = (anime.provider_ids or {}).get(provider)
-            anime_lookup_key = self._provider_lookup_key(provider, anime_value)
-            if anime_lookup_key == lookup_key:
-                return True
-        return False
-
-    def _is_reasonable_alternate_title_match(
-        self, anime: Anime, entry: OfflineCatalogEntry
-    ) -> bool:
-        if entry.anilist_id or entry.mal_id:
-            return False
-        if not self._has_compatible_year(anime, entry):
-            return False
-        return bool(
-            self._anime_title_lookup_keys(anime).intersection(self._entry_title_lookup_keys(entry))
-        )
-
-    def _has_compatible_year(self, anime: Anime, entry: OfflineCatalogEntry) -> bool:
-        anime_year = anime.season_year or (anime.release_date.year if anime.release_date else None)
-        if anime_year and entry.season_year:
-            return anime_year == entry.season_year
-        return not (anime_year or entry.season_year)
-
-    def _is_reasonable_fallback_match(self, anime: Anime, entry: OfflineCatalogEntry) -> bool:
-        # If we have canonical provider IDs, only trust ID-based matching.
-        if entry.anilist_id or entry.mal_id:
-            return False
-
-        if not self._has_compatible_year(anime, entry):
-            return False
-        return anime.title.casefold() == entry.title.casefold()
-
-    def _ensure_unique_slug(
-        self, base_slug: str, reserved_slugs: set[str], *, year: int | None = None
-    ) -> str:
-        slug = self._truncate_text(base_slug or "anime", ANIME_SLUG_MAX_LENGTH).strip("-")
-        if not slug:
-            slug = "anime"
-        if not self._is_slug_taken(slug, reserved_slugs):
-            return slug
-        if year:
-            suffix = f"-{year}"
-            candidate = f"{slug[: max(1, ANIME_SLUG_MAX_LENGTH - len(suffix))].rstrip('-')}{suffix}"
-            if not self._is_slug_taken(candidate, reserved_slugs):
-                return candidate
-
-        counter = 2
-        while True:
-            suffix = f"-{counter}"
-            max_base_length = max(1, ANIME_SLUG_MAX_LENGTH - len(suffix))
-            candidate_base = slug[:max_base_length].rstrip("-")
-            if not candidate_base:
-                candidate_base = "anime"[:max_base_length]
-            candidate = f"{candidate_base}{suffix}"
-            if not self._is_slug_taken(candidate, reserved_slugs):
-                return candidate
-            counter += 1
-
     def _enqueue_enrichment(self, created_ids: list[int], updated_ids: list[int]) -> dict[str, Any]:
         changed_ids = list(dict.fromkeys([*created_ids, *updated_ids]))
         if not changed_ids:
@@ -1269,193 +604,6 @@ class OfflineCatalogImportService:
                     extra={"chunk_size": len(chunk)},
                 )
         return {"jobs": jobs, "task_ids": task_ids}
-
-    def _extract_provider_ids(self, source_urls: list[str]) -> dict[str, Any]:
-        provider_ids: dict[str, Any] = {}
-        for url in source_urls:
-            parsed = urlparse(url)
-            host = parsed.netloc.lower().removeprefix("www.")
-            provider = PROVIDER_HOSTS.get(host)
-            if not provider:
-                continue
-
-            extracted: str | int | None = None
-            path_parts = [part for part in parsed.path.split("/") if part]
-            if provider in {
-                "anidb",
-                "anilist",
-                "animecountdown",
-                "anisearch",
-                "kitsu",
-                "livechart",
-                "myanimelist",
-                "simkl",
-            }:
-                extracted = self._extract_numeric_path_id(path_parts)
-            elif provider == "anime_planet":
-                extracted = (
-                    path_parts[-1] if len(path_parts) >= 2 and path_parts[0] == "anime" else None
-                )
-            elif provider == "animenewsnetwork":
-                extracted = parse_qs(parsed.query).get("id", [None])[0]
-            elif provider == "notify_moe":
-                extracted = (
-                    path_parts[-1] if len(path_parts) >= 2 and path_parts[0] == "anime" else None
-                )
-
-            if extracted is None:
-                continue
-
-            provider_ids[provider] = self._coerce_int(extracted, default=extracted)
-
-        return provider_ids
-
-    def _extract_numeric_path_id(self, path_parts: list[str]) -> int | None:
-        for part in path_parts:
-            if part.isdigit():
-                return int(part)
-        return None
-
-    def _is_slug_taken(self, candidate: str, reserved_slugs: set[str]) -> bool:
-        if candidate in reserved_slugs:
-            return True
-        exists = Anime.objects.filter(slug=candidate).exists()
-        if exists:
-            reserved_slugs.add(candidate)
-        return exists
-
-    def _is_conflict_match(self, anime: Anime, entry: OfflineCatalogEntry) -> bool:
-        if entry.anilist_id and anime.anilist_id == entry.anilist_id:
-            return True
-        if entry.mal_id and anime.mal_id == entry.mal_id:
-            return True
-        if entry.anilist_id or entry.mal_id:
-            return False
-        return self._is_reasonable_fallback_match(anime, entry)
-
-    def _coerce_int(self, value: Any, default: Any = None) -> int | Any | None:
-        if value in (None, ""):
-            return default
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
-
-    def _map_type(self, source_type: str | None) -> str:
-        type_map = {
-            "TV": Anime.AnimeType.tv,
-            "MOVIE": Anime.AnimeType.movie,
-            "OVA": Anime.AnimeType.ova,
-            "ONA": Anime.AnimeType.ona,
-            "SPECIAL": Anime.AnimeType.special,
-            "UNKNOWN": Anime.AnimeType.unknown,
-        }
-        return type_map.get((source_type or "UNKNOWN").upper(), Anime.AnimeType.unknown)
-
-    def _map_status(self, source_status: str | None) -> str:
-        status_map = {
-            "FINISHED": Anime.AnimeStatus.finished,
-            "ONGOING": Anime.AnimeStatus.airing,
-            "UPCOMING": Anime.AnimeStatus.upcoming,
-            "UNKNOWN": Anime.AnimeStatus.unknown,
-        }
-        return status_map.get((source_status or "UNKNOWN").upper(), Anime.AnimeStatus.unknown)
-
-    def _duration_to_minutes(self, duration: dict[str, Any] | None) -> int | None:
-        if not duration:
-            return None
-
-        try:
-            value = float(duration.get("value") or 0)
-        except (TypeError, ValueError):
-            return None
-        unit = str(duration.get("unit") or "").upper()
-        if value <= 0:
-            return None
-
-        if unit == "SECONDS":
-            return max(1, round(value / 60))
-        if unit == "MINUTES":
-            return int(value)
-        if unit == "HOURS":
-            return int(value * 60)
-        return None
-
-    def _score_to_rating(self, score: dict[str, Any] | None) -> float | None:
-        if not score:
-            return None
-        value = score.get("arithmeticGeometricMean")
-        if value is None:
-            value = score.get("arithmeticMean")
-        if value is None:
-            value = score.get("median")
-        try:
-            return round(float(value), 1)
-        except (TypeError, ValueError):
-            return None
-
-    def _season_to_date(self, season: str | None, year: int | None) -> date | None:
-        if not year:
-            return None
-        month = SEASON_MONTHS.get((season or "UNDEFINED").upper(), 1)
-        return date(year, month, 1)
-
-    def _pick_primary_studio(self, studios: list[str]) -> str | None:
-        clean = self._unique_strings(studios)
-        if not clean:
-            return None
-        studio_name = clean[0].strip()
-        if studio_name.islower():
-            return studio_name.title()
-        return studio_name
-
-    def _merged_list(self, current: list[str] | None, incoming: list[str]) -> list[str]:
-        return self._unique_strings([*(current or []), *incoming])
-
-    def _unique_strings(self, values: list[str]) -> list[str]:
-        seen: set[str] = set()
-        result: list[str] = []
-        for value in values:
-            clean = str(value).strip()
-            if not clean:
-                continue
-            key = clean.casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            result.append(clean)
-        return result
-
-    def _parse_date(self, value: str | None) -> date | None:
-        if not value:
-            return None
-        try:
-            return datetime.strptime(value, "%Y-%m-%d").date()
-        except ValueError:
-            return None
-
-    def _truncate_text(self, value: Any, max_length: int) -> str:
-        text = str(value or "").strip()
-        if len(text) <= max_length:
-            return text
-        return text[:max_length].rstrip()
-
-    def _sanitize_anime_for_insert(self, anime: Anime) -> None:
-        anime.title = self._truncate_text(anime.title, ANIME_TITLE_MAX_LENGTH)
-        anime.title_jp = self._truncate_text(anime.title_jp, ANIME_TITLE_JP_MAX_LENGTH)
-        anime.slug = self._truncate_text(anime.slug, ANIME_SLUG_MAX_LENGTH).strip("-")
-        if not anime.slug:
-            anime.slug = self._ensure_unique_slug(slugify(anime.title), set())
-        anime.meta_description = self._truncate_text(
-            anime.meta_description, ANIME_META_DESCRIPTION_MAX_LENGTH
-        )
-        anime.season = self._truncate_text(anime.season, ANIME_SEASON_MAX_LENGTH)
-        anime.cover_image_external_url = self._truncate_text(
-            anime.cover_image_external_url, ANIME_URL_MAX_LENGTH
-        )
-        anime.banner_image_external_url = self._truncate_text(
-            anime.banner_image_external_url, ANIME_URL_MAX_LENGTH
-        )
 
     def _get_zstandard(self):
         return import_module("zstandard")
