@@ -1,5 +1,5 @@
 import { createRef } from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -43,6 +43,11 @@ const searchState = (overrides = {}) => ({
 });
 
 describe('NavbarSearch', () => {
+    // Warm the lazily loaded rows so a slow first transform cannot time out.
+    beforeAll(async () => {
+        await import('../SearchSuggestionList');
+    });
+
     it('shows the spinner while the first search is in flight', () => {
         render(<NavbarSearch search={searchState({ isSearching: true })} />);
 
@@ -55,11 +60,11 @@ describe('NavbarSearch', () => {
         expect(screen.getByText('No results found')).toBeInTheDocument();
     });
 
-    it('renders the lazily loaded suggestion rows and wires their handlers', async () => {
+    it('renders the lazily loaded suggestion rows and wires their handlers', { timeout: 10000 }, async () => {
         const state = searchState({ searchSuggestions: SUGGESTIONS, selectedIndex: 0 });
         render(<NavbarSearch search={state} />);
 
-        const first = await screen.findByRole('button', { name: /Beyond Journey/ });
+        const first = await screen.findByRole('button', { name: /Beyond Journey/ }, { timeout: 5000 });
         expect(first).toHaveClass('bg-accent/10');
         expect(screen.getByText('Exact')).toBeInTheDocument();
         expect(screen.getByText('28 eps')).toBeInTheDocument();
@@ -104,7 +109,7 @@ describe('NavbarSearch with useNavbarSearch', () => {
         });
     });
 
-    it('searches the API after typing and shows the results', async () => {
+    it('searches the API after typing and shows the results', { timeout: 10000 }, async () => {
         render(
             <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
                 <MemoryRouter>
@@ -116,7 +121,7 @@ describe('NavbarSearch with useNavbarSearch', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Toggle Search' }));
         fireEvent.change(screen.getByPlaceholderText('Search anime...'), { target: { value: 'frieren' } });
 
-        expect(await screen.findByRole('button', { name: /Beyond Journey/ }, { timeout: 2000 })).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
         await waitFor(() => {
             expect(mockGetAll).toHaveBeenCalledWith({ q: 'frieren', page_size: 10 });
         });
