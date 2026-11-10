@@ -145,7 +145,6 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "django_filters",
     "django_celery_beat",
-    "django_celery_results",
     "corsheaders",
     "allauth",
     "allauth.account",
@@ -611,11 +610,14 @@ CHANNEL_LAYERS = {
 # =============================================================================
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_BROKER_URL)
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "django-db")
+# No result backend: nothing reads task results through Celery (no
+# AsyncResult.get/.state, no chords). Task history lives in core.CeleryTaskResult,
+# filled by apps/core/celery_signals.py. With nothing stored there is nothing to
+# expire, and RESULT_EXPIRES=None also keeps beat from adding celery.backend_cleanup.
+CELERY_RESULT_BACKEND = None
+CELERY_RESULT_EXPIRES = None
 CELERY_ACCEPT_CONTENT = ["application/json"]
 CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_RESULT_EXTENDED = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BROKER_POOL_LIMIT = _env_int("CELERY_BROKER_POOL_LIMIT", 100)
 ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED = True

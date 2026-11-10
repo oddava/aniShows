@@ -9,8 +9,8 @@ As of this refactor:
 - Task entrypoints use a shared task definition helper from `apps/shared/celery.py`.
 - Task wrappers stay thin and delegate to service-layer code where practical.
 - Lifecycle logging is consistent across tasks: start, retry, success, and failure.
-- Persistent task results default to `django-celery-results` via `CELERY_RESULT_BACKEND = "django-db"`.
-- Extended result metadata is enabled with `CELERY_RESULT_EXTENDED = True`.
+- There is no Celery result backend (`CELERY_RESULT_BACKEND = None`); task history is
+  kept in `core.CeleryTaskResult`, filled by the signal handlers in `apps/core/celery_signals.py`.
 
 ## Retry Policies
 
@@ -243,11 +243,6 @@ Beat schedules are defined in [root/settings/base.py](/home/oddava/Projects/aniS
 - `apps.core.tasks.cleanup_tasks.cleanup_old_task_results`
 - daily at `01:00`
 
-`celery-backend-cleanup-daily`
-- `celery.backend_cleanup`
-- daily at `01:30`
-- added in this refactor to clean `django-celery-results` rows using Celery’s standard backend cleanup flow
-
 ### Weekly
 
 `sync-upcoming-weekly`
@@ -270,33 +265,25 @@ Beat schedules are defined in [root/settings/base.py](/home/oddava/Projects/aniS
 
 ## Admin Setup
 
-### Standard Result Backend
+### Task Results
 
-Persistent task result storage uses `django-celery-results`.
+`core.CeleryTaskResult` is the only task-result store. Celery itself stores no
+results: `CELERY_RESULT_BACKEND = None` and `CELERY_RESULT_EXPIRES = None` (so beat
+does not add a `celery.backend_cleanup` entry either). Nothing in the code reads
+results back through Celery (`AsyncResult.get()` / `.state`, chords); the admin
+API and Django admin read `core.CeleryTaskResult`.
 
-Required settings:
-
-- `django_celery_results` in `INSTALLED_APPS`
-- `CELERY_RESULT_BACKEND = "django-db"`
-- `CELERY_RESULT_EXTENDED = True`
-
-Run migrations in the normal deployment flow:
-
-```bash
-make mig
-```
+`django-celery-results` was removed. Databases that ran its migrations still
+have the `django_celery_results_*` tables; they are no longer read or written and
+can be dropped by hand.
 
 ### Admin Views
 
-Two task-history views are available in Django admin:
-
 `core.CeleryTaskResult`
-- Custom operational task history already used by the project.
-- Now shows task name, status, date, and a result preview in the list view.
-
-`django_celery_results.TaskResult`
-- Standard backend-persisted result records from `django-celery-results`.
-- Registered with a compact list view showing task name, status, completion time, and result preview.
+- Operational task history, shown in Django admin and the admin API
+  (`/api/v1/admin/celery/tasks/results/`).
+- Shows task name, status, date, and a result preview in the list view.
+- Old rows are removed by `cleanup-task-results-daily`.
 
 ## Operational Notes
 

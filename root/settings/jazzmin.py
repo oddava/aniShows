@@ -34,7 +34,6 @@ JAZZMIN_SETTINGS = {
         "anime",
         "core",
         "django_celery_beat",
-        "django_celery_results",
     ],
     "custom_links": {
         "core": [
@@ -100,10 +99,6 @@ JAZZMIN_SETTINGS = {
         "django_celery_beat.CrontabSchedule": "fas fa-calendar",
         "django_celery_beat.SolarSchedule": "fas fa-sun",
         "django_celery_beat.ClockedSchedule": "fas fa-stopwatch",
-        # Celery Results
-        "django_celery_results": "fas fa-chart-bar",
-        "django_celery_results.TaskResult": "fas fa-check-circle",
-        "django_celery_results.GroupResult": "fas fa-layer-group",
     },
     "default_icon_parents": "fas fa-chevron-circle-right",
     "default_icon_children": "fas fa-circle",

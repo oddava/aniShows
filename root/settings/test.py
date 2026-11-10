@@ -53,8 +53,6 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 # Tasks will be executed synchronously but errors will be caught
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = False
-# Disable results to avoid backend configuration issues
-CELERY_RESULT_BACKEND = None
 ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED = False
 # Creating an Anime would otherwise run eager metadata enrichment, which calls
 # Jikan and backs off for ~15s once the network guard (conftest.py) fails it.

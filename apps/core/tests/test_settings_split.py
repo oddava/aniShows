@@ -104,3 +104,19 @@ class SettingsSplitTests(SimpleTestCase):
             (1, 2, 3, 4),
         )
         self.assertEqual(schedule["heal-missing-media-30min"]["kwargs"], {"batch_size": 5})
+
+
+class TaskResultStoreTests(SimpleTestCase):
+    """core.CeleryTaskResult is the only task-result store (decision D3)."""
+
+    def test_no_celery_result_backend(self):
+        from celery.backends.base import DisabledBackend
+        from django.conf import settings
+
+        from root.celery import app
+
+        self.assertNotIn("django_celery_results", settings.INSTALLED_APPS)
+        self.assertIsNone(settings.CELERY_RESULT_BACKEND)
+        # Nothing to expire, so beat does not add its own celery.backend_cleanup entry.
+        self.assertIsNone(settings.CELERY_RESULT_EXPIRES)
+        self.assertIsInstance(app.backend, DisabledBackend)

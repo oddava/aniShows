@@ -180,11 +180,6 @@ def build_beat_schedule(
             "kwargs": {"days": 7, "batch_size": 1000},
             "options": {"queue": "low_priority"},
         },
-        "celery-backend-cleanup-daily": {
-            "task": "celery.backend_cleanup",
-            "schedule": crontab(hour=1, minute=30),  # Daily at 1:30 AM
-            "options": {"queue": "low_priority"},
-        },
         "health-check-workers-hourly": {
             "task": "apps.core.tasks.cleanup_tasks.health_check_workers",
             "schedule": crontab(minute=15),  # Every hour at 15 min past

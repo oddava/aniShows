@@ -20,13 +20,6 @@
       "schedule": "<crontab: 30 8 * * * (m/h/dM/MY/d)>",
       "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls"
     },
-    "celery-backend-cleanup-daily": {
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: 30 1 * * * (m/h/dM/MY/d)>",
-      "task": "celery.backend_cleanup"
-    },
     "check-new-episodes": {
       "options": {
         "queue": "default"
@@ -331,9 +324,6 @@
       "django_celery_beat.IntervalSchedule": "fas fa-hourglass-half",
       "django_celery_beat.PeriodicTask": "fas fa-clock",
       "django_celery_beat.SolarSchedule": "fas fa-sun",
-      "django_celery_results": "fas fa-chart-bar",
-      "django_celery_results.GroupResult": "fas fa-layer-group",
-      "django_celery_results.TaskResult": "fas fa-check-circle",
       "forums": "fas fa-comments",
       "forums.Category": "fas fa-folder",
       "forums.Post": "fas fa-reply",
@@ -360,8 +350,7 @@
       "users",
       "anime",
       "core",
-      "django_celery_beat",
-      "django_celery_results"
+      "django_celery_beat"
     ],
     "related_modal_active": false,
     "search_model": [
