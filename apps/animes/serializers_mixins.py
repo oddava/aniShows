@@ -5,18 +5,9 @@ from imagekit.cachefiles import ImageCacheFile
 
 from ..shared.logger import logger
 from ..shared.media_urls import field_media_url, normalize_media_url
+from ..shared.text import decode_escaped_html_entities
 from ..users.services.avatar_service import get_user_avatar_url
 from .services.public_anime_service import build_user_list_status_payload
-
-
-def _decode_escaped_html_entities(value: str) -> str:
-    return (
-        value.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", '"')
-        .replace("&#39;", "'")
-        .replace("&amp;", "&")
-    )
 
 
 class ImageUrlMixin:
@@ -54,7 +45,7 @@ class ImageUrlMixin:
         if not isinstance(thumbnail_field, ImageCacheFile):
             return self._build_url(thumbnail_field)
 
-        if getattr(settings, "IMAGEKIT_GENERATE_DURING_REQUESTS", False):
+        if settings.IMAGEKIT_GENERATE_DURING_REQUESTS:
             try:
                 thumbnail_field.generate()
             except Exception:
@@ -159,7 +150,7 @@ class UserProfileMixin:
         profile = getattr(obj, "userprofile", None)
         if not profile or profile.bio is None:
             return None
-        return _decode_escaped_html_entities(profile.bio)
+        return decode_escaped_html_entities(profile.bio)
 
     def get_is_private(self, obj):
         profile = getattr(obj, "userprofile", None)

@@ -16,9 +16,6 @@ ACTIVE_IMPORT_STATUSES = (
     UserImportJob.ImportStatus.pending,
     UserImportJob.ImportStatus.processing,
 )
-DEFAULT_MAX_ACTIVE_IMPORT_JOBS_PER_USER = 1
-DEFAULT_MAX_IMPORT_JOBS_PER_DAY = 5
-DEFAULT_MAX_IMPORT_TASK_PAYLOAD_BYTES = 512 * 1024
 
 
 @dataclass(slots=True)
@@ -39,17 +36,9 @@ def _task_payload_size_bytes(task_kwargs: dict) -> int:
 
 
 def _validate_import_limits(user, task_kwargs: dict | None = None) -> ImportJobActionResult | None:
-    max_active_jobs = getattr(
-        settings,
-        "MAX_ACTIVE_IMPORT_JOBS_PER_USER",
-        DEFAULT_MAX_ACTIVE_IMPORT_JOBS_PER_USER,
-    )
-    max_daily_jobs = getattr(settings, "MAX_IMPORT_JOBS_PER_DAY", DEFAULT_MAX_IMPORT_JOBS_PER_DAY)
-    max_task_payload_bytes = getattr(
-        settings,
-        "MAX_IMPORT_TASK_PAYLOAD_BYTES",
-        DEFAULT_MAX_IMPORT_TASK_PAYLOAD_BYTES,
-    )
+    max_active_jobs = settings.MAX_ACTIVE_IMPORT_JOBS_PER_USER
+    max_daily_jobs = settings.MAX_IMPORT_JOBS_PER_DAY
+    max_task_payload_bytes = settings.MAX_IMPORT_TASK_PAYLOAD_BYTES
 
     active_count = UserImportJob.objects.filter(
         user=user,

@@ -8,17 +8,8 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from ..shared.logger import logger
+from ..shared.parsing import positive_int
 from .services.notification_service import NotificationService
-
-
-def _positive_int(value) -> int | None:
-    if isinstance(value, bool):
-        return None
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        return None
-    return number if number > 0 else None
 
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
@@ -87,7 +78,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         msg_type = content.get("type")
 
         if msg_type == "mark_read":
-            notification_id = _positive_int(content.get("notification_id"))
+            notification_id = positive_int(content.get("notification_id"), allow_bool=False)
             if notification_id:
                 success = await self._mark_as_read(notification_id)
                 if success:

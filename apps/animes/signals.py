@@ -34,7 +34,7 @@ from .tasks import (
 
 
 def _watch_episode_auto_sync_enabled() -> bool:
-    return getattr(settings, "ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED", True)
+    return settings.ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED
 
 
 def _queue_watch_episode_sync(anime_id: int, *, force: bool = False) -> None:
@@ -102,7 +102,7 @@ def capture_old_anime_watch_identity(sender, instance, **kwargs):
 
 @receiver(post_save, sender=Anime)
 def trigger_metadata_fetch(sender, instance, created, **kwargs):
-    if created and getattr(settings, "ANIME_METADATA_AUTO_ENRICH_ENABLED", True):
+    if created and settings.ANIME_METADATA_AUTO_ENRICH_ENABLED:
         transaction.on_commit(lambda: enrich_metadata.delay(anime_id=instance.id, mode="single"))
 
 

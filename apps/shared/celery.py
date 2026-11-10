@@ -57,7 +57,7 @@ TIME_LIMIT_PRESETS: dict[str, tuple[int, int]] = {
 }
 
 
-# Task kwargs are persisted (result backend, CeleryTaskResult) and logged;
+# Task kwargs are persisted (core.CeleryTaskResult) and logged;
 # these never may be. Bulky payloads are summarised instead of stored.
 SECRET_TASK_KWARGS = frozenset({"access_token", "password", "token", "secret"})
 BULKY_TASK_KWARGS = frozenset({"xml_content"})

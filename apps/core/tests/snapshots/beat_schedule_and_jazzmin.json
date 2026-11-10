@@ -1,0 +1,420 @@
+{
+  "CELERY_BEAT_SCHEDULE": {
+    "backfill-theme-youtube-urls-evening": {
+      "kwargs": {
+        "limit": 100
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 30 20 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls"
+    },
+    "backfill-theme-youtube-urls-morning": {
+      "kwargs": {
+        "limit": 100
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 30 8 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls"
+    },
+    "check-new-episodes": {
+      "options": {
+        "queue": "default"
+      },
+      "schedule": "<crontab: 0 */6 * * * (m/h/dM/MY/d)>",
+      "task": "apps.core.tasks.notifications.check_new_episodes"
+    },
+    "cleanup-old-notifications": {
+      "kwargs": {
+        "days": 90
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 30 2 * * * (m/h/dM/MY/d)>",
+      "task": "apps.core.tasks.notifications.cleanup_old_notifications_task"
+    },
+    "cleanup-task-results-daily": {
+      "kwargs": {
+        "batch_size": 1000,
+        "days": 7
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 0 1 * * * (m/h/dM/MY/d)>",
+      "task": "apps.core.tasks.cleanup_tasks.cleanup_old_task_results"
+    },
+    "collect-queue-metrics-minute": {
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: * * * * * (m/h/dM/MY/d)>",
+      "task": "apps.core.tasks.cleanup_tasks.collect_queue_metrics"
+    },
+    "derive-airing-hourly": {
+      "kwargs": {
+        "limit": 500,
+        "sync_type": "airing"
+      },
+      "options": {
+        "queue": "high_priority"
+      },
+      "schedule": "<crontab: 30 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.sync.sync_anime_catalog"
+    },
+    "enrich-metadata-daily": {
+      "kwargs": {
+        "batch_size": 100,
+        "mode": "backfill"
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 0 3 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.metadata.enrich_metadata"
+    },
+    "flush-forum-view-counts-minute": {
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: * * * * * (m/h/dM/MY/d)>",
+      "task": "apps.core.tasks.cleanup_tasks.flush_forum_view_counts"
+    },
+    "generate-recommendations-daily": {
+      "kwargs": {
+        "limit": 10
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 0 5 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.recommendations.generate_recommendations"
+    },
+    "heal-missing-media-30min": {
+      "kwargs": {
+        "batch_size": 25
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: */30 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.images.heal_missing_anime_media"
+    },
+    "health-check-workers-hourly": {
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 15 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.core.tasks.cleanup_tasks.health_check_workers"
+    },
+    "reconcile-offline-catalog-sync-hourly": {
+      "kwargs": {
+        "anime_ids": [],
+        "batch_size": 25,
+        "chunk_size": 100,
+        "max_rounds": 4,
+        "require_themes": true,
+        "round_interval_minutes": 15,
+        "strict": false
+      },
+      "options": {
+        "queue": "batch"
+      },
+      "schedule": "<crontab: 45 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync"
+    },
+    "send-pending-notifications": {
+      "options": {
+        "queue": "default"
+      },
+      "schedule": "<crontab: */10 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.core.tasks.notifications.send_pending_notifications"
+    },
+    "sync-airing-schedule-daily": {
+      "kwargs": {
+        "phases": [
+          "sync",
+          "cleanup",
+          "backfill"
+        ]
+      },
+      "options": {
+        "queue": "high_priority"
+      },
+      "schedule": "<crontab: 45 1 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.airing.sync_airing_workflow"
+    },
+    "sync-popular-weekly": {
+      "kwargs": {
+        "limit": 500,
+        "sync_type": "airing"
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 0 2 * * 1 (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.sync.sync_anime_catalog"
+    },
+    "sync-seasonal-daily": {
+      "kwargs": {
+        "limit": 100,
+        "sync_type": "seasonal"
+      },
+      "options": {
+        "queue": "default"
+      },
+      "schedule": "<crontab: 0 2 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.sync.sync_anime_catalog"
+    },
+    "sync-themes-daily": {
+      "kwargs": {
+        "limit": 500
+      },
+      "options": {
+        "queue": "high_priority"
+      },
+      "schedule": "<crontab: 0 6 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.themes.sync_theme_songs"
+    },
+    "sync-themes-retry": {
+      "kwargs": {
+        "limit": 200,
+        "retry_failed": true
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 0 18 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.themes.sync_theme_songs"
+    },
+    "sync-trending-hourly": {
+      "kwargs": {
+        "limit": 50,
+        "sync_type": "trending"
+      },
+      "options": {
+        "queue": "high_priority"
+      },
+      "schedule": "<crontab: 5 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.sync.sync_anime_catalog"
+    },
+    "sync-upcoming-weekly": {
+      "kwargs": {
+        "limit": 100,
+        "sync_type": "next_season"
+      },
+      "options": {
+        "queue": "default"
+      },
+      "schedule": "<crontab: 30 3 * * 0 (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.sync.sync_anime_catalog"
+    },
+    "sync-watch-episodes-airing-every-6-hours": {
+      "kwargs": {
+        "force": true,
+        "statuses": [
+          "Airing",
+          "Upcoming"
+        ]
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 15 */6 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.watch_episodes.sync_watch_episodes_batch"
+    },
+    "update-relation-slugs-daily": {
+      "kwargs": {
+        "batch_size": 100
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 30 4 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.franchises.update_relation_slugs"
+    },
+    "update-user-stats-hourly": {
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 10 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.users.tasks.update_all_user_stats"
+    },
+    "user-maintenance-daily": {
+      "kwargs": {
+        "cleanup_imports": true,
+        "cleanup_unverified": true,
+        "import_days": 30,
+        "unverified_days": 7
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 0 7 * * * (m/h/dM/MY/d)>",
+      "task": "apps.users.tasks.run_user_maintenance_workflow"
+    },
+    "warm-profile-cache-hourly": {
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 0 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.users.tasks.warm_profile_cache"
+    }
+  },
+  "JAZZMIN_SETTINGS": {
+    "changeform_format": "horizontal_tabs",
+    "changeform_format_overrides": {
+      "anime.Anime": "horizontal_tabs",
+      "auth.group": "vertical_tabs",
+      "auth.user": "collapsible",
+      "users.CustomUser": "collapsible"
+    },
+    "copyright": "aniShows",
+    "custom_css": null,
+    "custom_js": null,
+    "custom_links": {
+      "core": [
+        {
+          "icon": "fas fa-tasks",
+          "name": "Celery Dashboard",
+          "permissions": [
+            "core.view_celerytaskresult"
+          ],
+          "url": "admin:core_celerytaskresult_changelist"
+        }
+      ]
+    },
+    "default_icon_children": "fas fa-circle",
+    "default_icon_parents": "fas fa-chevron-circle-right",
+    "hide_apps": [],
+    "hide_models": [],
+    "icons": {
+      "animes": "fas fa-film",
+      "animes.Anime": "fas fa-tv",
+      "animes.AnimeCharacter": "fas fa-people-arrows",
+      "animes.AnimeStaff": "fas fa-user-cog",
+      "animes.Character": "fas fa-user-ninja",
+      "animes.Genre": "fas fa-tags",
+      "animes.Review": "fas fa-star",
+      "animes.ReviewReaction": "fas fa-face-smile",
+      "animes.ReviewVote": "fas fa-thumbs-up",
+      "animes.Staff": "fas fa-user-tie",
+      "animes.Studio": "fas fa-building",
+      "animes.UserFavorite": "fas fa-heart",
+      "animes.UserHistory": "fas fa-history",
+      "animes.UserRecommendation": "fas fa-magic",
+      "auth": "fas fa-users-cog",
+      "auth.Group": "fas fa-users",
+      "auth.user": "fas fa-user",
+      "core": "fas fa-cog",
+      "core.AuditLog": "fas fa-history",
+      "core.CeleryTaskResult": "fas fa-tasks",
+      "core.CeleryTaskSchedule": "fas fa-calendar-alt",
+      "core.CeleryWorkerStatus": "fas fa-server",
+      "core.Notification": "fas fa-bell",
+      "core.PushSubscription": "fas fa-satellite-dish",
+      "core.SystemLog": "fas fa-clipboard-list",
+      "django_celery_beat": "fas fa-clock",
+      "django_celery_beat.ClockedSchedule": "fas fa-stopwatch",
+      "django_celery_beat.CrontabSchedule": "fas fa-calendar",
+      "django_celery_beat.IntervalSchedule": "fas fa-hourglass-half",
+      "django_celery_beat.PeriodicTask": "fas fa-clock",
+      "django_celery_beat.SolarSchedule": "fas fa-sun",
+      "forums": "fas fa-comments",
+      "forums.Category": "fas fa-folder",
+      "forums.Post": "fas fa-reply",
+      "forums.PostLike": "fas fa-thumbs-up",
+      "forums.Tag": "fas fa-tag",
+      "forums.Thread": "fas fa-comment-dots",
+      "forums.ThreadLike": "fas fa-thumbs-up",
+      "users": "fas fa-users",
+      "users.CustomUser": "fas fa-user",
+      "users.SocialLinkChangeLog": "fas fa-link",
+      "users.UserActivity": "fas fa-chart-line",
+      "users.UserAnimeList": "fas fa-list",
+      "users.UserFollow": "fas fa-user-friends",
+      "users.UserImportJob": "fas fa-file-import",
+      "users.UserProfile": "fas fa-id-card",
+      "users.UserStats": "fas fa-chart-bar"
+    },
+    "language_chooser": false,
+    "login_logo": null,
+    "login_logo_dark": null,
+    "navigation_expanded": true,
+    "order_with_respect_to": [
+      "auth",
+      "users",
+      "anime",
+      "core",
+      "django_celery_beat"
+    ],
+    "related_modal_active": false,
+    "search_model": [
+      "users.CustomUser",
+      "anime.Anime"
+    ],
+    "show_sidebar": true,
+    "show_ui_builder": true,
+    "site_brand": "aniShows",
+    "site_header": "aniShows",
+    "site_icon": null,
+    "site_logo": null,
+    "site_logo_classes": "img-circle",
+    "site_title": "aniShows Admin",
+    "topmenu_links": [
+      {
+        "name": "Dashboard",
+        "permissions": [
+          "auth.view_user"
+        ],
+        "url": "admin:index"
+      },
+      {
+        "name": "API Admin",
+        "new_window": true,
+        "url": "/api/v1/admin/dashboard/"
+      },
+      {
+        "app": "users"
+      },
+      {
+        "app": "anime"
+      },
+      {
+        "app": "core"
+      }
+    ],
+    "ui_tweaks": {
+      "dark_mode_theme": "darkly",
+      "footer_fixed": false,
+      "navbar": "navbar-dark",
+      "navbar_fixed": false,
+      "sidebar": "sidebar-dark-primary",
+      "sidebar_disable_expand": false,
+      "sidebar_fixed": true,
+      "sidebar_nav_child_indent": true,
+      "sidebar_nav_compact_style": false,
+      "sidebar_nav_flat_style": false,
+      "sidebar_nav_legacy_style": false,
+      "sidebar_nav_small_text": false,
+      "theme": "darkly"
+    },
+    "use_google_fonts_cdn": true,
+    "user_avatar": null,
+    "usermenu_links": [
+      {
+        "name": "API Admin",
+        "new_window": true,
+        "url": "/api/v1/admin/dashboard/"
+      },
+      {
+        "model": "users.CustomUser"
+      }
+    ],
+    "welcome_sign": "Welcome to aniShows Administration"
+  }
+}

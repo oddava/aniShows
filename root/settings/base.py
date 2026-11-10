@@ -63,6 +63,8 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 
 # Frontend URL for OAuth callbacks
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# django-cors-headers' own default; development.py and production.py set the real list.
+CORS_ALLOWED_ORIGINS: list[str] = []
 JIKAN_BASE_URL = os.getenv("JIKAN_BASE_URL", "https://api.jikan.moe/v4").strip().rstrip("/")
 
 # Application tuning defaults
@@ -118,6 +120,7 @@ OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS = max(
     _env_int("OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS", 7200),
     60,
 )
+OFFLINE_IMPORT_TRENDING_RANK_LIMIT = _env_int("OFFLINE_IMPORT_TRENDING_RANK_LIMIT", 50)
 
 # =============================================================================
 # APPLICATION DEFINITION
@@ -142,7 +145,6 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "django_filters",
     "django_celery_beat",
-    "django_celery_results",
     "corsheaders",
     "allauth",
     "allauth.account",
@@ -357,6 +359,9 @@ IMAGEKIT_LEGACY_CACHEFILE_DIRS = tuple(
     for prefix in _parse_csv(os.getenv("IMAGEKIT_LEGACY_CACHEFILE_DIRS", "CACHE/images"))
     if prefix.strip("/")
 )
+# Keep runtime request paths fast; bucket creation is handled by createbuckets init job.
+# Only read by the S3 storage backend.
+S3_RUNTIME_BUCKET_AUTOCREATE = _env_bool("S3_RUNTIME_BUCKET_AUTOCREATE", False)
 
 if USE_S3:
     from botocore.config import Config
@@ -370,8 +375,6 @@ if USE_S3:
     AWS_S3_ADDRESSING_STYLE = "path"
     AWS_DEFAULT_ACL = None
     AWS_S3_FILE_OVERWRITE = False
-    # Keep runtime request paths fast; bucket creation is handled by createbuckets init job.
-    S3_RUNTIME_BUCKET_AUTOCREATE = _env_bool("S3_RUNTIME_BUCKET_AUTOCREATE", False)
 
     MINIO_PUBLIC_DOMAIN = os.getenv("MINIO_PUBLIC_DOMAIN", "localhost:9000")
 
@@ -607,11 +610,14 @@ CHANNEL_LAYERS = {
 # =============================================================================
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_BROKER_URL)
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "django-db")
+# No result backend: nothing reads task results through Celery (no
+# AsyncResult.get/.state, no chords). Task history lives in core.CeleryTaskResult,
+# filled by apps/core/celery_signals.py. With nothing stored there is nothing to
+# expire, and RESULT_EXPIRES=None also keeps beat from adding celery.backend_cleanup.
+CELERY_RESULT_BACKEND = None
+CELERY_RESULT_EXPIRES = None
 CELERY_ACCEPT_CONTENT = ["application/json"]
 CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_RESULT_EXTENDED = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BROKER_POOL_LIMIT = _env_int("CELERY_BROKER_POOL_LIMIT", 100)
 ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED = True
@@ -619,336 +625,21 @@ ANIME_METADATA_AUTO_ENRICH_ENABLED = True
 # Multiplier for retry backoff after failed external API calls (0 in tests).
 RETRY_BACKOFF_SCALE = 1.0
 
-from celery.schedules import crontab
+from .celery_schedule import build_beat_schedule
 
-CELERY_BEAT_SCHEDULE = {
-    # =========================================================================
-    # UNIFIED TASK SCHEDULE
-    # =========================================================================
-    #
-    # Hourly Tasks (staggered refreshes)
-    # -------------------------------------------------------------------------
-    "sync-trending-hourly": {
-        "task": "apps.animes.tasks.sync.sync_anime_catalog",
-        "schedule": crontab(minute=5),  # 5 min past hour
-        "kwargs": {"sync_type": "trending", "limit": 50},
-        "options": {"queue": "high_priority"},
-    },
-    "derive-airing-hourly": {
-        "task": "apps.animes.tasks.sync.sync_anime_catalog",
-        "schedule": crontab(minute=30),  # 30 min past hour
-        "kwargs": {"sync_type": "airing", "limit": 500},
-        "options": {"queue": "high_priority"},
-    },
-    "sync-airing-schedule-daily": {
-        "task": "apps.animes.tasks.airing.sync_airing_workflow",
-        "schedule": crontab(hour=1, minute=45),  # Daily before browse/schedule traffic ramps up
-        "kwargs": {"phases": ["sync", "cleanup", "backfill"]},
-        "options": {"queue": "high_priority"},
-    },
-    # Daily Tasks (Low-traffic hours: 2 AM - 7 AM)
-    # -------------------------------------------------------------------------
-    "sync-seasonal-daily": {
-        "task": "apps.animes.tasks.sync.sync_anime_catalog",
-        "schedule": crontab(hour=2, minute=0),  # 2:00 AM
-        "kwargs": {"sync_type": "seasonal", "limit": 100},
-        "options": {"queue": "default"},
-    },
-    "enrich-metadata-daily": {
-        "task": "apps.animes.tasks.metadata.enrich_metadata",
-        "schedule": crontab(hour=3, minute=0),  # 3:00 AM
-        "kwargs": {"mode": "backfill", "batch_size": 100},
-        "options": {"queue": "low_priority"},
-    },
-    "sync-watch-episodes-airing-every-6-hours": {
-        "task": "apps.animes.tasks.watch_episodes.sync_watch_episodes_batch",
-        "schedule": crontab(hour="*/6", minute=15),
-        "kwargs": {"statuses": ["Airing", "Upcoming"], "force": True},
-        "options": {"queue": "low_priority"},
-    },
-    "generate-recommendations-daily": {
-        "task": "apps.animes.tasks.recommendations.generate_recommendations",
-        "schedule": crontab(hour=5, minute=0),  # 5:00 AM
-        "kwargs": {"limit": 10},
-        "options": {"queue": "low_priority"},
-    },
-    "sync-themes-daily": {
-        "task": "apps.animes.tasks.themes.sync_theme_songs",
-        "schedule": crontab(hour=6, minute=0),  # 6:00 AM
-        "kwargs": {"limit": 500},  # Increased from 100 to 500
-        "options": {"queue": "high_priority"},
-    },
-    "sync-themes-retry": {
-        "task": "apps.animes.tasks.themes.sync_theme_songs",
-        "schedule": crontab(hour=18, minute=0),  # 6:00 PM - retry failed
-        "kwargs": {"limit": 200, "retry_failed": True},
-        "options": {"queue": "low_priority"},
-    },
-    "reconcile-offline-catalog-sync-hourly": {
-        "task": "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync",
-        "schedule": crontab(minute=45),  # Hourly at :45
-        "kwargs": {
-            "anime_ids": [],
-            "batch_size": OFFLINE_RECONCILE_BATCH_SIZE,
-            "chunk_size": OFFLINE_RECONCILE_CHUNK_SIZE,
-            "require_themes": True,
-            "strict": False,
-            "max_rounds": OFFLINE_RECONCILE_MAX_ROUNDS,
-            "round_interval_minutes": OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES,
-        },
-        "options": {"queue": "batch"},
-    },
-    # YouTube URL Backfill Task - Runs twice daily to catch missed themes
-    "backfill-theme-youtube-urls-morning": {
-        "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls",
-        "schedule": crontab(hour=8, minute=30),  # 8:30 AM
-        "kwargs": {"limit": 100},
-        "options": {"queue": "low_priority"},
-    },
-    "backfill-theme-youtube-urls-evening": {
-        "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls",
-        "schedule": crontab(hour=20, minute=30),  # 8:30 PM
-        "kwargs": {"limit": 100},
-        "options": {"queue": "low_priority"},
-    },
-    "user-maintenance-daily": {
-        "task": "apps.users.tasks.run_user_maintenance_workflow",
-        "schedule": crontab(hour=7, minute=0),  # 7:00 AM
-        "kwargs": {
-            "cleanup_unverified": True,
-            "cleanup_imports": True,
-            "unverified_days": 7,
-            "import_days": 30,
-        },
-        "options": {"queue": "low_priority"},
-    },
-    # Profile/cache maintenance
-    "update-user-stats-hourly": {
-        "task": "apps.users.tasks.update_all_user_stats",
-        "schedule": crontab(minute=10),  # Hourly backstop for missed incremental refreshes
-        "options": {"queue": "low_priority"},
-    },
-    "warm-profile-cache-hourly": {
-        "task": "apps.users.tasks.warm_profile_cache",
-        "schedule": crontab(minute=0),  # Every hour
-        "options": {"queue": "low_priority"},
-    },
-    "heal-missing-media-30min": {
-        "task": "apps.animes.tasks.images.heal_missing_anime_media",
-        "schedule": crontab(minute="*/30"),
-        "kwargs": {"batch_size": MEDIA_SELF_HEAL_BATCH_SIZE},
-        "options": {"queue": "low_priority"},
-    },
-    "collect-queue-metrics-minute": {
-        "task": "apps.core.tasks.cleanup_tasks.collect_queue_metrics",
-        "schedule": crontab(minute="*"),
-        "options": {"queue": "low_priority"},
-    },
-    # Weekly Tasks
-    # -------------------------------------------------------------------------
-    "sync-upcoming-weekly": {
-        "task": "apps.animes.tasks.sync.sync_anime_catalog",
-        "schedule": crontab(day_of_week=0, hour=3, minute=30),  # Sunday 3:30 AM
-        "kwargs": {"sync_type": "next_season", "limit": 100},
-        "options": {"queue": "default"},
-    },
-    # Weekly: refresh a broader airing slice from local Anime fields
-    "sync-popular-weekly": {
-        "task": "apps.animes.tasks.sync.sync_anime_catalog",
-        "schedule": crontab(day_of_week=1, hour=2, minute=0),  # Monday 2:00 AM
-        "kwargs": {
-            "sync_type": "airing",
-            "limit": 500,
-        },
-        "options": {"queue": "low_priority"},
-    },
-    # Notification Tasks
-    "check-new-episodes": {
-        "task": "apps.core.tasks.notifications.check_new_episodes",
-        "schedule": crontab(hour="*/6", minute=0),  # Every 6 hours
-        "options": {"queue": "default"},
-    },
-    "send-pending-notifications": {
-        "task": "apps.core.tasks.notifications.send_pending_notifications",
-        "schedule": crontab(minute="*/10"),  # Every 10 minutes
-        "options": {"queue": "default"},
-    },
-    "cleanup-old-notifications": {
-        "task": "apps.core.tasks.notifications.cleanup_old_notifications_task",
-        "schedule": crontab(hour=2, minute=30),  # Daily at 2:30 AM
-        "kwargs": {"days": 90},
-        "options": {"queue": "low_priority"},
-    },
-    # Maintenance Tasks
-    "cleanup-task-results-daily": {
-        "task": "apps.core.tasks.cleanup_tasks.cleanup_old_task_results",
-        "schedule": crontab(hour=1, minute=0),  # Daily at 1:00 AM
-        "kwargs": {"days": 7, "batch_size": 1000},
-        "options": {"queue": "low_priority"},
-    },
-    "celery-backend-cleanup-daily": {
-        "task": "celery.backend_cleanup",
-        "schedule": crontab(hour=1, minute=30),  # Daily at 1:30 AM
-        "options": {"queue": "low_priority"},
-    },
-    "health-check-workers-hourly": {
-        "task": "apps.core.tasks.cleanup_tasks.health_check_workers",
-        "schedule": crontab(minute=15),  # Every hour at 15 min past
-        "options": {"queue": "low_priority"},
-    },
-    "update-relation-slugs-daily": {
-        "task": "apps.animes.tasks.franchises.update_relation_slugs",
-        "schedule": crontab(hour=4, minute=30),  # Daily at 4:30 AM
-        "kwargs": {"batch_size": 100},
-        "options": {"queue": "low_priority"},
-    },
-    "flush-forum-view-counts-minute": {
-        "task": "apps.core.tasks.cleanup_tasks.flush_forum_view_counts",
-        "schedule": crontab(minute="*"),
-        "options": {"queue": "low_priority"},
-    },
-}
+CELERY_BEAT_SCHEDULE = build_beat_schedule(
+    offline_reconcile_batch_size=OFFLINE_RECONCILE_BATCH_SIZE,
+    offline_reconcile_chunk_size=OFFLINE_RECONCILE_CHUNK_SIZE,
+    offline_reconcile_max_rounds=OFFLINE_RECONCILE_MAX_ROUNDS,
+    offline_reconcile_round_interval_minutes=OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES,
+    media_self_heal_batch_size=MEDIA_SELF_HEAL_BATCH_SIZE,
+)
 
 # =============================================================================
 # JAZZMIN SETTINGS
 # =============================================================================
 
-JAZZMIN_SETTINGS = {
-    "site_title": "aniShows Admin",
-    "site_header": "aniShows",
-    "site_brand": "aniShows",
-    "site_logo": None,
-    "login_logo": None,
-    "login_logo_dark": None,
-    "site_logo_classes": "img-circle",
-    "site_icon": None,
-    "welcome_sign": "Welcome to aniShows Administration",
-    "copyright": "aniShows",
-    "search_model": ["users.CustomUser", "anime.Anime"],
-    "user_avatar": None,
-    "topmenu_links": [
-        {"name": "Dashboard", "url": "admin:index", "permissions": ["auth.view_user"]},
-        {"name": "API Admin", "url": "/api/v1/admin/dashboard/", "new_window": True},
-        {"app": "users"},
-        {"app": "anime"},
-        {"app": "core"},
-    ],
-    "usermenu_links": [
-        {"name": "API Admin", "url": "/api/v1/admin/dashboard/", "new_window": True},
-        {"model": "users.CustomUser"},
-    ],
-    "show_sidebar": True,
-    "navigation_expanded": True,
-    "hide_apps": [],
-    "hide_models": [],
-    "order_with_respect_to": [
-        "auth",
-        "users",
-        "anime",
-        "core",
-        "django_celery_beat",
-        "django_celery_results",
-    ],
-    "custom_links": {
-        "core": [
-            {
-                "name": "Celery Dashboard",
-                "url": "admin:core_celerytaskresult_changelist",
-                "icon": "fas fa-tasks",
-                "permissions": ["core.view_celerytaskresult"],
-            }
-        ]
-    },
-    "icons": {
-        # Auth
-        "auth": "fas fa-users-cog",
-        "auth.user": "fas fa-user",
-        "auth.Group": "fas fa-users",
-        # Users app
-        "users": "fas fa-users",
-        "users.CustomUser": "fas fa-user",
-        "users.UserProfile": "fas fa-id-card",
-        "users.UserImportJob": "fas fa-file-import",
-        "users.UserAnimeList": "fas fa-list",
-        "users.UserActivity": "fas fa-chart-line",
-        "users.UserFollow": "fas fa-user-friends",
-        "users.UserStats": "fas fa-chart-bar",
-        "users.SocialLinkChangeLog": "fas fa-link",
-        # Anime app
-        "animes": "fas fa-film",
-        "animes.Anime": "fas fa-tv",
-        "animes.Genre": "fas fa-tags",
-        "animes.Studio": "fas fa-building",
-        "animes.Review": "fas fa-star",
-        "animes.Character": "fas fa-user-ninja",
-        "animes.Staff": "fas fa-user-tie",
-        "animes.AnimeCharacter": "fas fa-people-arrows",
-        "animes.AnimeStaff": "fas fa-user-cog",
-        "animes.UserFavorite": "fas fa-heart",
-        "animes.UserHistory": "fas fa-history",
-        "animes.ReviewVote": "fas fa-thumbs-up",
-        "animes.ReviewReaction": "fas fa-face-smile",
-        "animes.UserRecommendation": "fas fa-magic",
-        # Core app
-        "core": "fas fa-cog",
-        "core.SystemLog": "fas fa-clipboard-list",
-        "core.AuditLog": "fas fa-history",
-        "core.CeleryTaskResult": "fas fa-tasks",
-        "core.CeleryWorkerStatus": "fas fa-server",
-        "core.CeleryTaskSchedule": "fas fa-calendar-alt",
-        "core.Notification": "fas fa-bell",
-        "core.PushSubscription": "fas fa-satellite-dish",
-        # Forums app
-        "forums": "fas fa-comments",
-        "forums.Category": "fas fa-folder",
-        "forums.Tag": "fas fa-tag",
-        "forums.Thread": "fas fa-comment-dots",
-        "forums.Post": "fas fa-reply",
-        "forums.ThreadLike": "fas fa-thumbs-up",
-        "forums.PostLike": "fas fa-thumbs-up",
-        # Celery Beat
-        "django_celery_beat": "fas fa-clock",
-        "django_celery_beat.PeriodicTask": "fas fa-clock",
-        "django_celery_beat.IntervalSchedule": "fas fa-hourglass-half",
-        "django_celery_beat.CrontabSchedule": "fas fa-calendar",
-        "django_celery_beat.SolarSchedule": "fas fa-sun",
-        "django_celery_beat.ClockedSchedule": "fas fa-stopwatch",
-        # Celery Results
-        "django_celery_results": "fas fa-chart-bar",
-        "django_celery_results.TaskResult": "fas fa-check-circle",
-        "django_celery_results.GroupResult": "fas fa-layer-group",
-    },
-    "default_icon_parents": "fas fa-chevron-circle-right",
-    "default_icon_children": "fas fa-circle",
-    "related_modal_active": False,
-    "ui_tweaks": {
-        "theme": "darkly",
-        "dark_mode_theme": "darkly",
-        "navbar": "navbar-dark",
-        "navbar_fixed": False,
-        "footer_fixed": False,
-        "sidebar_fixed": True,
-        "sidebar": "sidebar-dark-primary",
-        "sidebar_nav_small_text": False,
-        "sidebar_disable_expand": False,
-        "sidebar_nav_child_indent": True,
-        "sidebar_nav_compact_style": False,
-        "sidebar_nav_legacy_style": False,
-        "sidebar_nav_flat_style": False,
-    },
-    "custom_css": None,
-    "custom_js": None,
-    "use_google_fonts_cdn": True,
-    "show_ui_builder": True,
-    "changeform_format": "horizontal_tabs",
-    "changeform_format_overrides": {
-        "auth.user": "collapsible",
-        "auth.group": "vertical_tabs",
-        "users.CustomUser": "collapsible",
-        "anime.Anime": "horizontal_tabs",
-    },
-    "language_chooser": False,
-}
+from .jazzmin import JAZZMIN_SETTINGS  # noqa: F401 - a setting, read by Django
 
 # =============================================================================
 # WEB PUSH NOTIFICATIONS (VAPID)

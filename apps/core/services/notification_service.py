@@ -272,7 +272,7 @@ class NotificationService:
 
     @classmethod
     def _unread_count_ttl(cls) -> int:
-        ttl = getattr(settings, "NOTIFICATION_UNREAD_CACHE_TTL", UNREAD_COUNT_CACHE_TTL_SECONDS)
+        ttl = settings.NOTIFICATION_UNREAD_CACHE_TTL
         try:
             return max(int(ttl), 60)
         except (TypeError, ValueError):

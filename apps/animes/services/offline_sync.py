@@ -77,7 +77,7 @@ class StageResult:
 class OfflineSyncService:
     def __init__(self):
         self.inter_stage_delay_seconds = max(
-            int(getattr(settings, "OFFLINE_RECONCILE_INTER_STAGE_DELAY_SECONDS", 60)),
+            int(settings.OFFLINE_RECONCILE_INTER_STAGE_DELAY_SECONDS),
             0,
         )
 

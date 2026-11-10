@@ -11,15 +11,9 @@ from ..core.services.notification_service import NotificationService
 from ..shared.logger import logger
 from .models import UserFollow, UserProfile
 from .services.cache import invalidate_user_caches
+from .services.user_queryset import user_exists
 
 User = get_user_model()
-
-
-def _user_exists(user):
-    """Check if a user still exists in the database (not mid-cascade-delete)."""
-    if not user or not user.pk:
-        return False
-    return User.objects.filter(pk=user.pk).exists()
 
 
 def invalidate_profile_cache(username):
@@ -109,7 +103,7 @@ def handle_new_follower(sender, instance, created, **kwargs):
 @receiver(post_delete, sender=UserFollow)
 def handle_unfollow(sender, instance, **kwargs):
     """Invalidate cache when a follow relationship is deleted."""
-    if not _user_exists(instance.follower) or not _user_exists(instance.following):
+    if not user_exists(instance.follower) or not user_exists(instance.following):
         return
 
     # Invalidate cache for both users
@@ -156,7 +150,7 @@ def update_points_on_vote_delete(sender, instance, **kwargs):
     """Update author's points when a vote is removed."""
     review_author = instance.review.user
 
-    if not _user_exists(review_author):
+    if not user_exists(review_author):
         return
 
     _adjust_points(review_author, -_vote_points(instance.vote_type))

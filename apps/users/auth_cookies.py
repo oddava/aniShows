@@ -25,7 +25,7 @@ CSRF_HEADER_VALUE = "XMLHttpRequest"
 
 
 def _cookie_secure() -> bool:
-    return getattr(settings, "JWT_REFRESH_COOKIE_SECURE", True)
+    return settings.JWT_REFRESH_COOKIE_SECURE
 
 
 def set_refresh_cookie(response, refresh_token: str):
@@ -60,9 +60,9 @@ def get_refresh_cookie(request) -> str | None:
 
 def _allowed_origins(request) -> set[str]:
     origins = {f"{request.scheme}://{request.get_host()}"}
-    origins.update(getattr(settings, "CSRF_TRUSTED_ORIGINS", []))
-    origins.update(getattr(settings, "CORS_ALLOWED_ORIGINS", []))
-    if getattr(settings, "FRONTEND_URL", None):
+    origins.update(settings.CSRF_TRUSTED_ORIGINS)
+    origins.update(settings.CORS_ALLOWED_ORIGINS)
+    if settings.FRONTEND_URL:
         parts = urlsplit(settings.FRONTEND_URL)
         origins.add(f"{parts.scheme}://{parts.netloc}")
     return {origin.rstrip("/") for origin in origins if origin}

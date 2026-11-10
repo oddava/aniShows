@@ -188,7 +188,7 @@ class TestCDNUrlConstruction(TestCase):
         from django.conf import settings
 
         # In test env, CDN vars are empty
-        if not getattr(settings, "CDN_BASE_URL", ""):
+        if not settings.CDN_BASE_URL:
             assert settings.STATIC_URL == "/static/" or settings.STATIC_URL.startswith("http")
 
     @override_settings(
@@ -209,8 +209,8 @@ class TestRedisConfig(TestCase):
         """If REDIS_PASSWORD is set, the URL should contain authentication."""
         from django.conf import settings
 
-        password = getattr(settings, "REDIS_PASSWORD", "")
-        redis_url = getattr(settings, "REDIS_URL", "")
+        password = settings.REDIS_PASSWORD
+        redis_url = settings.REDIS_URL
 
         if password:
             assert f":{password}@" in redis_url, (
@@ -231,11 +231,11 @@ class TestRuntimeScalingToggles(TestCase):
     def test_request_log_sample_rate_is_bounded(self):
         from django.conf import settings
 
-        sample_rate = float(getattr(settings, "REQUEST_LOG_SUCCESS_SAMPLE_RATE", 0.0))
+        sample_rate = float(settings.REQUEST_LOG_SUCCESS_SAMPLE_RATE)
         assert 0.0 <= sample_rate <= 1.0
 
     def test_notification_unread_cache_ttl_is_positive(self):
         from django.conf import settings
 
-        ttl = int(getattr(settings, "NOTIFICATION_UNREAD_CACHE_TTL", 0))
+        ttl = int(settings.NOTIFICATION_UNREAD_CACHE_TTL)
         assert ttl > 0

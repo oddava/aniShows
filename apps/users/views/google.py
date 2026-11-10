@@ -24,7 +24,7 @@ class GoogleLogin(SocialLoginView):
     @classmethod
     def _allowed_callback_urls(cls):
         configured_origins = {settings.FRONTEND_URL}
-        configured_origins.update(getattr(settings, "CORS_ALLOWED_ORIGINS", []))
+        configured_origins.update(settings.CORS_ALLOWED_ORIGINS)
 
         allowed_urls = set()
         for origin in configured_origins:

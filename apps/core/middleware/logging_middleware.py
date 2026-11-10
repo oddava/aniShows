@@ -26,15 +26,15 @@ class LoggingMiddleware:
             "/api/v1/admin/",
             "/api/v1/auth/",
         ]
-        self.request_logging_enabled = bool(getattr(settings, "REQUEST_LOGGING_ENABLED", True))
-        raw_sample_rate = getattr(settings, "REQUEST_LOG_SUCCESS_SAMPLE_RATE", 0.05)
+        self.request_logging_enabled = bool(settings.REQUEST_LOGGING_ENABLED)
+        raw_sample_rate = settings.REQUEST_LOG_SUCCESS_SAMPLE_RATE
         try:
             sample_rate = float(raw_sample_rate)
         except (TypeError, ValueError):
             sample_rate = 0.05
         self.success_sample_rate = min(max(sample_rate, 0.0), 1.0)
-        self.include_query_params = bool(getattr(settings, "REQUEST_LOG_INCLUDE_QUERY_PARAMS", False))
-        self.include_user_agent = bool(getattr(settings, "REQUEST_LOG_INCLUDE_USER_AGENT", True))
+        self.include_query_params = bool(settings.REQUEST_LOG_INCLUDE_QUERY_PARAMS)
+        self.include_user_agent = bool(settings.REQUEST_LOG_INCLUDE_USER_AGENT)
 
     def _is_excluded_path(self, path: str) -> bool:
         return any(path.startswith(excluded_path) for excluded_path in self.excluded_paths)
