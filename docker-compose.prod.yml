@@ -11,11 +11,9 @@ x-backend: &backend
   env_file: .env
   environment:
     DJANGO_ENV: production
-    DB_HOST: pgbouncer
-    DB_PORT: "6432"
-    DB_USE_PGBOUNCER: "True"
-    DB_PGBOUNCER_HOST: pgbouncer
-    DB_PGBOUNCER_PORT: "6432"
+    DB_HOST: db
+    DB_PORT: "5432"
+    DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-5}
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
@@ -31,7 +29,7 @@ x-backend: &backend
     TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
   user: "1000:1000"
   depends_on: &backend-deps
-    pgbouncer:
+    db:
       condition: service_healthy
     redis:
       condition: service_healthy
@@ -101,28 +99,6 @@ services:
         limits:
           memory: 1G
 
-  pgbouncer:
-    image: edoburu/pgbouncer:latest@sha256:85d1e38593617af1b5f7f285e97d407e56c29939683cc7cfe4c8f6dc19f1268b
-    restart: always
-    environment:
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-1}
-      DB_HOST: db
-      DB_NAME: ${DB_NAME:-anishows_db}
-      LISTEN_PORT: "6432"
-      POOL_MODE: transaction
-      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-500}
-      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-20}
-      AUTH_TYPE: scram-sha-256
-      IGNORE_STARTUP_PARAMETERS: extra_float_digits
-    depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "6432", "-U", "${DB_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   redis:
     image: redis:7-alpine

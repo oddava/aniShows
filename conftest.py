@@ -3,6 +3,7 @@ import socket
 import httpx
 import pytest
 import requests
+from django.conf import settings
 from django.core.cache import cache
 
 
@@ -35,11 +36,15 @@ def _no_network(monkeypatch):
         raise requests.ConnectionError("Network access is disabled in tests", request=request)
 
     real_getaddrinfo = socket.getaddrinfo
+    # psycopg 3 resolves the database host in Python (psycopg2 did it inside
+    # libpq), so the configured database hosts must stay resolvable.
+    allowed_hosts = {"localhost", "127.0.0.1", "::1", None}
+    allowed_hosts.update(db.get("HOST") for db in settings.DATABASES.values())
 
     def local_only_getaddrinfo(host, *args, **kwargs):
         # Code under test resolves user-supplied hosts (URL validation); that
         # must not depend on the runner's DNS. Patch the resolver in tests.
-        if host in ("localhost", "127.0.0.1", "::1", None):
+        if host in allowed_hosts:
             return real_getaddrinfo(host, *args, **kwargs)
         raise socket.gaierror(socket.EAI_NONAME, "DNS is disabled in tests")
 

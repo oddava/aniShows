@@ -20,9 +20,9 @@ Use a multi-node topology.
 - run `celery`, `celery_priority`, `celery_images`, `celery_analytics` independently
 
 4. Data tier:
-- Managed PostgreSQL (primary + read replica)
+- Managed PostgreSQL (primary; the app has no read-replica routing)
 - Managed Redis (high availability)
-- PgBouncer enabled between app and Postgres
+- Django's native connection pool (`DB_POOL_MAX_SIZE`) or the provider's pooler; PgBouncer support was removed (refactor plan D2)
 
 5. Static/media:
 - DigitalOcean Spaces + CDN for `/assets` and `/media`
@@ -32,16 +32,14 @@ Use a multi-node topology.
 
 - 3x app droplets: `4 vCPU / 8-16 GB`
 - 2x worker droplets: `4 vCPU / 8 GB`
-- Managed Postgres: CPU-optimized tier with read replica
+- Managed Postgres: CPU-optimized tier
 - Managed Redis: dedicated plan with memory headroom > 2x peak working set
 
 ## App Configuration
 
 Set these production env values:
 
-- `DB_USE_PGBOUNCER=True`
-- `DB_ENABLE_READ_REPLICA_ROUTING=True`
-- `DB_REPLICA_HOSTS=<managed_pg_replica_host>`
+- `DB_POOL_MAX_SIZE=<per-process pool size>`: keep size x processes under Postgres' `max_connections`
 - `REDIS_HOST=<managed_redis_host>`
 - `REDIS_CACHE_MAX_CONNECTIONS=500`
 - `REDIS_CHANNEL_LAYER_CAPACITY=3000`
