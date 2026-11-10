@@ -69,6 +69,7 @@ def _invalidate_anime_public_caches(slug: str) -> None:
             for flag in (0, 1)
         ),
         f"anime_related:v2:{slug}",
+        *AnimePublicPayloadService.schedule_cache_keys(),
     )
 
 

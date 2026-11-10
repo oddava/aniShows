@@ -165,34 +165,51 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        anime_list = list(
-            self.query_service.schedule_queryset(request.user, include_user_context=True)
-        )
-        serializer = AnimeListSerializer(anime_list, many=True, context={"request": request})
-        schedule_days = {day.lower(): [] for day in self.query_service.SCHEDULE_DAY_NAMES}
-        resolved_days = {
-            anime.id: self.query_service.resolve_schedule_day(anime) for anime in anime_list
-        }
+        # Cached like browse-rows: one payload per day filter and adult-content
+        # setting, built without the viewer, then enriched per user.
+        can_view_adult_content = self.query_service.can_view_adult_content(request.user)
+        day_key = requested_day.lower() if requested_day else "all"
+        cache_key = self.payload_service.schedule_cache_key(day_key, can_view_adult_content)
 
-        for item in serializer.data:
-            schedule_day = resolved_days.get(item["id"])
-            if schedule_day:
-                schedule_days[schedule_day.lower()].append(item)
+        def build_payload():
+            anime_list = list(
+                self.query_service.schedule_queryset(request.user, include_user_context=False)
+            )
+            serializer = AnimeListSerializer(anime_list, many=True, context={"request": request})
+            schedule_days = {day.lower(): [] for day in self.query_service.SCHEDULE_DAY_NAMES}
+            resolved_days = {
+                anime.id: self.query_service.resolve_schedule_day(anime) for anime in anime_list
+            }
+            for item in serializer.data:
+                schedule_day = resolved_days.get(item["id"])
+                if schedule_day:
+                    schedule_days[schedule_day.lower()].append(item)
+            # Rows shaped like browse-rows, so the payload validator and the
+            # per-user enrichment apply unchanged.
+            days = [day_key] if requested_day else list(schedule_days)
+            return [{"day": day, "anime_list": schedule_days[day]} for day in days]
+
+        result = self.payload_service.cache_shelf_payload(cache_key, build_payload)
+        rows = self.payload_service.enrich_browse_rows_payload_for_user(result.data, request.user)
+        schedule_days = {row["day"]: row["anime_list"] for row in rows}
 
         if requested_day:
-            key = requested_day.lower()
             response = Response(
-                {"day": key, "items": schedule_days[key], "count": len(schedule_days[key])}
+                {
+                    "day": day_key,
+                    "items": schedule_days[day_key],
+                    "count": len(schedule_days[day_key]),
+                }
             )
-            return self._with_public_cache_control(response, request)
-
-        response = Response(
-            {
-                "days": schedule_days,
-                "counts": {day: len(items) for day, items in schedule_days.items()},
-                "total": sum(len(items) for items in schedule_days.values()),
-            }
-        )
+        else:
+            response = Response(
+                {
+                    "days": schedule_days,
+                    "counts": {day: len(items) for day, items in schedule_days.items()},
+                    "total": sum(len(items) for items in schedule_days.values()),
+                }
+            )
+        response = self._with_cache_status_header(response, result.cache_status)
         return self._with_public_cache_control(response, request)
 
     @action(detail=False, methods=["get"], url_path="browse-rows")

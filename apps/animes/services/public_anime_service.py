@@ -268,6 +268,21 @@ class AnimePublicPayloadService:
         return f"anime_detail_base:{cls.PUBLIC_CACHE_VERSION}:{slug}"
 
     @classmethod
+    def schedule_cache_key(cls, day_key: str, can_view_adult_content: bool) -> str:
+        """``day_key`` is a lowercase day name, or ``"all"`` for the whole week."""
+        return (
+            f"anime_schedule:{cls.PUBLIC_CACHE_VERSION}:day:{day_key}"
+            f":adult:{int(can_view_adult_content)}"
+        )
+
+    @classmethod
+    def schedule_cache_keys(cls) -> tuple[str, ...]:
+        day_keys = ("all", *(day.lower() for day in AnimeQueryService.SCHEDULE_DAY_NAMES))
+        return tuple(
+            cls.schedule_cache_key(day_key, flag) for day_key in day_keys for flag in (False, True)
+        )
+
+    @classmethod
     def detail_cache_keys(cls, slug: str) -> tuple[str, ...]:
         return (
             cls.detail_cache_key(slug),
