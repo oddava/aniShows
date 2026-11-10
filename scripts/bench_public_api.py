@@ -8,8 +8,13 @@ serializer and cache layers without network or proxy noise. For each endpoint:
   are warm; "cold" means *app-cache* cold);
 - **warm**: the same request served from the cache.
 
-It reports the median over ``--rounds`` rounds, plus the query count and the
-total SQL time of the cold request.
+It reports the median (p50) and p95 over ``--rounds`` rounds, plus the query
+count and the total SQL time of the cold request.
+
+To run it against the synthetic 40k catalog (``scripts/seed_perf_catalog.py``)
+in the throwaway test database instead of the dev DB:
+
+    docker compose --profile test run --rm test python scripts/bench_public_api.py --rounds 20
 
 Isolation: it uses its own Redis key prefix and only deletes keys under that
 prefix, so the dev stack's cache is untouched. Request logging is disabled, so
@@ -93,6 +98,9 @@ def _endpoints() -> dict[str, str]:
         "top_rated": reverse("anime-top-rated"),
         "browse_rows": reverse("anime-browse-rows"),
         "schedule": reverse("anime-schedule"),
+        "list_sorted_newest": f"{anime_list}?page_size=24&sort=newest",
+        "list_sorted_trending": f"{anime_list}?page_size=24&sort=trending",
+        "list_season": f"{anime_list}?page_size=24&season=fall&year=2026",
     }
     if genre is not None:
         endpoints["list_genre"] = f"{anime_list}?page_size=24&genre={genre.slug}"
@@ -126,6 +134,12 @@ def _clear_bench_cache() -> None:
         raise SystemExit(f"Unsupported cache backend {type(backend).__name__}.")
 
 
+def _p95(samples: list[float]) -> float:
+    if len(samples) < 2:
+        return round(samples[0], 1)
+    return round(statistics.quantiles(samples, n=20, method="inclusive")[18], 1)
+
+
 def run(rounds: int) -> dict:
     endpoints = _endpoints()
     client = Client()
@@ -146,7 +160,9 @@ def run(rounds: int) -> dict:
         results[name] = {
             "url": url,
             "cold_ms": round(statistics.median(cold), 1),
+            "cold_p95_ms": _p95(cold),
             "warm_ms": round(statistics.median(warm), 1),
+            "warm_p95_ms": _p95(warm),
             "cold_queries": max(query_counts),
             "cold_sql_ms": round(statistics.median(sql_times), 1),
             "response_kb": round(size / 1024, 1),
@@ -164,13 +180,15 @@ def _markdown(results: dict, rounds: int) -> str:
         f"Catalog: {Anime.objects.count():,} anime · rounds: {rounds} · "
         f"warm samples per round: {WARM_REQUESTS} · DEBUG={settings.DEBUG}",
         "",
-        "| Endpoint | Cold p50 (ms) | Warm p50 (ms) | Cold queries | Cold SQL (ms) | Size (KB) |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Endpoint | Cold p50 (ms) | Cold p95 (ms) | Warm p50 (ms) | Warm p95 (ms) "
+        "| Cold queries | Cold SQL (ms) | Size (KB) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for name, row in results.items():
         lines.append(
-            f"| `{name}` | {row['cold_ms']} | {row['warm_ms']} | {row['cold_queries']} | "
-            f"{row['cold_sql_ms']} | {row['response_kb']} |"
+            f"| `{name}` | {row['cold_ms']} | {row['cold_p95_ms']} | {row['warm_ms']} | "
+            f"{row['warm_p95_ms']} | {row['cold_queries']} | {row['cold_sql_ms']} | "
+            f"{row['response_kb']} |"
         )
     return "\n".join(lines)
 
