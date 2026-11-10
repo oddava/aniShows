@@ -1,4 +1,4 @@
-"""Query-string filters for the public anime list, and the adult-content rule."""
+"""Query-string filters for the public anime list, and the adult-content exclusion."""
 
 import json
 from datetime import date
@@ -8,57 +8,15 @@ from django.db.models import Count, Q
 
 from ....shared.parsing import positive_int
 from ....users.models import UserProfile
-from ...models import Anime, Genre
+from ...models import Genre
+from .sorting import VALID_SEASONS
 
 VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
 VALID_TYPES = {"tv", "movie", "ova", "ona", "special", "music"}
-VALID_SEASONS = {"winter", "spring", "summer", "fall"}
 MAX_RATING = 10.0
 MIN_RATING = 0.0
 MIN_SEARCH_LENGTH = 2
 MIN_SYNOPSIS_SEARCH_LENGTH = 3
-ADULT_GENRE_SLUGS = {"erotica", "hentai"}
-ADULT_TAGS = {
-    "ahegao",
-    "anal sex",
-    "ashikoki",
-    "boobjob",
-    "cervix penetration",
-    "cumflation",
-    "cunnilingus",
-    "deepthroat",
-    "defloration",
-    "double penetration",
-    "explicit sex",
-    "facial",
-    "fellatio",
-    "femdom",
-    "futanari",
-    "group sex",
-    "handjob",
-    "incest",
-    "inseki",
-    "irrumatio",
-    "lactation",
-    "masturbation",
-    "mating press",
-    "nakadashi",
-    "netorare",
-    "netorase",
-    "netori",
-    "nsfw",
-    "oyakodon",
-    "prostitution",
-    "public sex",
-    "rape",
-    "rimjob",
-    "sex",
-    "sex toys",
-    "succubus",
-    "squirting",
-    "sumata",
-    "threesome",
-}
 SEASON_MONTH_RANGES = {
     "winter": ((1, 1), (3, 31)),
     "spring": ((4, 1), (6, 30)),
@@ -78,7 +36,7 @@ TEMPORAL_FILTER_PARAMS = ("season", "year", "min_year", "max_year")
 
 
 class ListFilterMixin:
-    """Filters for ``AnimeQueryService``; needs ``_apply_sort`` and ``_adult_tags_q``."""
+    """Filters for ``AnimeQueryService``; needs ``_apply_sort``."""
 
     def _apply_list_filters(self, queryset, request):
         query_params = request.query_params
@@ -241,15 +199,10 @@ class ListFilterMixin:
         user._show_adult_content_cache = resolved
         return resolved
 
-    @classmethod
-    def _exclude_adult_content(cls, queryset):
-        adult_genre_ids = (
-            Anime.objects.using(queryset.db).filter(genres__slug__in=ADULT_GENRE_SLUGS).values("pk")
-        )
-        adult_tag_ids = (
-            Anime.objects.using(queryset.db).filter(cls._adult_tags_q(queryset.db)).values("pk")
-        )
-        return queryset.exclude(pk__in=adult_genre_ids).exclude(pk__in=adult_tag_ids)
+    @staticmethod
+    def _exclude_adult_content(queryset):
+        # ``is_adult`` stores the genre/tag rule (see ``adult_content.py``, D5).
+        return queryset.filter(is_adult=False)
 
     @staticmethod
     def _parse_multi_value_params(params: list[str]) -> list[str]:

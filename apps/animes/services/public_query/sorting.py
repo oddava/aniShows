@@ -1,5 +1,7 @@
 """Sort orders for the public list and the browse shelves.
 
+This module only depends on Django (``Anime.Meta`` imports it for an index).
+
 Each sort key has a small table of *variants*, and each variant is a
 ``SortPlan``: the filters it adds, the annotations it needs (applied in order,
 one ``annotate()`` call each) and the ``ORDER BY``. ``SortContext`` picks the
@@ -7,13 +9,12 @@ variant: shelves are curated (they drop rows without the signal they sort by),
 while the list keeps every row and pushes rows with missing data to the end.
 """
 
+import copy
 from dataclasses import dataclass
 from datetime import date
 
 from django.db.models import Case, F, IntegerField, Q, Value, When
 from django.db.models.functions import Coalesce
-
-from .filters import VALID_SEASONS
 
 CURATED_SHELF_MIN_MEMBER_COUNT = 200_000
 FILTERED_POPULAR_MIN_MEMBER_COUNT = 25_000
@@ -23,6 +24,7 @@ FILTERED_POPULAR_RATED_MIN_MEMBER_COUNT = 5_000
 TEMPORAL_POPULAR_MIN_MEMBER_COUNT = 5_000
 TEMPORAL_POPULAR_MAX_RANK = 15_000
 SEASON_ORDER = {"winter": 0, "spring": 1, "summer": 2, "fall": 3}
+VALID_SEASONS = set(SEASON_ORDER)
 # Base ordering per sort key; unknown keys sort like "popular".
 SORT_MAPPING = {
     "popular": "popularity_rank",
@@ -260,6 +262,25 @@ def sort_plan(sort_key: str, context: SortContext) -> SortPlan:
     if variants is None:  # "title" and unknown keys only order by their base field
         return _default_plan(sort_key)
     return variants[_variant(sort_key, context)]
+
+
+def popular_list_index_expressions() -> list:
+    """The default list ordering (popular, no filters) as index expressions.
+
+    ``Anime.Meta`` builds the partial index ``anime_public_popular_list_idx``
+    (``WHERE NOT is_adult``) from these, so Postgres can read the anonymous
+    default list and search in order instead of sorting the whole table. They
+    come from the same plan the queries use, so the two cannot drift apart;
+    ``test_public_list_index.py`` checks the planner still picks the index.
+    """
+    plan = SORT_TABLE["popular"]["list"]
+    annotations = {name: expr for group in plan.annotations for name, expr in group.items()}
+    expressions = []
+    for name in plan.ordering:
+        field_name = name.removeprefix("-")
+        expression = copy.deepcopy(annotations.get(field_name, F(field_name)))
+        expressions.append(expression.desc() if name.startswith("-") else expression)
+    return expressions
 
 
 def apply_sort_plan(queryset, plan: SortPlan):

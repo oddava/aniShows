@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import connections
 from django.db.models import Avg, Case, Count, Exists, IntegerField, OuterRef, Q, Value, When
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -20,12 +19,11 @@ from ...shared.public_cache import (
     public_cache_stale_key,
 )
 from ...users.models import UserAnimeList
+from ..adult_content import ADULT_GENRE_SLUGS, ADULT_TAGS
 from ..models import Anime, AnimeCharacter, AnimeStaff, UserFavorite
 from .jikan import JikanService
 from .public_query.fields import QueryFieldsMixin
 from .public_query.filters import (
-    ADULT_GENRE_SLUGS,
-    ADULT_TAGS,
     MAX_RATING,
     MIN_RATING,
     MIN_SEARCH_LENGTH,
@@ -248,17 +246,6 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
     @classmethod
     def _current_and_next_seasons(cls) -> tuple[str, int, str, int]:
         return cls.season_window_for_date(date.today())
-
-    @staticmethod
-    def _adult_tags_q(database_alias: str) -> Q:
-        vendor = connections[database_alias].vendor
-        if vendor == "postgresql":
-            return Q(tags__has_any_keys=sorted(ADULT_TAGS))
-
-        condition = Q()
-        for tag in ADULT_TAGS:
-            condition |= Q(tags__icontains=json.dumps(tag))
-        return condition
 
 
 class AnimePublicPayloadService:

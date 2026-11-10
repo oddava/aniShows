@@ -238,12 +238,13 @@ class AniListPersistence:
             raise
 
     def _handle_relationships(self, anime, item):
-        genres = item.get("genres") or []
-        for genre_name in genres:
-            genre, _ = Genre.objects.get_or_create(
-                name=genre_name, defaults={"slug": slugify(genre_name)}
-            )
-            anime.genres.add(genre)
+        genres = [
+            Genre.objects.get_or_create(name=genre_name, defaults={"slug": slugify(genre_name)})[0]
+            for genre_name in item.get("genres") or []
+        ]
+        if genres:
+            # One add() call: one m2m_changed signal (is_adult re-check) per anime.
+            anime.genres.add(*genres)
 
         studio_names = mapper.studio_names(item)
         if studio_names:

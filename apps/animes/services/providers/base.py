@@ -12,8 +12,10 @@ from datetime import UTC, datetime
 import httpx
 from django.db import IntegrityError
 from django.utils import timezone
+from django.utils.text import slugify
 
 from ....shared.logger import logger
+from ...adult_content import is_adult_content
 from ...models import Anime
 
 UNIQUE_ANIME_FIELDS = ("anilist_id", "mal_id", "slug")
@@ -263,8 +265,9 @@ class CatalogProviderBase:
 
         avg_score = item.get("averageScore")
         description = re.sub(r"<[^>]+>", "", item.get("description") or "").strip()
+        tags = self._normalized_tags(item)
 
-        return {
+        anime_data = {
             "title": title,
             "title_jp": title_native or "",
             "slug": slug,
@@ -284,7 +287,7 @@ class CatalogProviderBase:
             "popularity_rank": self._ranked(item, "POPULAR"),
             "status_distribution": self._status_distribution(item),
             "external_links": item.get("externalLinks") or [],
-            "tags": self._normalized_tags(item),
+            "tags": tags,
             "next_airing_episode": next_airing.get("episode"),
             "next_airing_date": datetime.fromtimestamp(next_airing["airingAt"], tz=UTC)
             if next_airing.get("airingAt")
@@ -306,6 +309,18 @@ class CatalogProviderBase:
             "provider_ids": item.get("providerIds") or {},
             "source_urls": item.get("sourceUrls") or [],
         }
+        # A payload can prove a show is adult, but not that it isn't: genres
+        # only accumulate, so the stored row may still have an adult genre this
+        # payload lacks. Anime.save() and the genre signal settle the rest.
+        genres = item.get("genres")
+        genre_slugs = (
+            [slugify(name) for name in genres if isinstance(name, str)]
+            if isinstance(genres, list)
+            else []
+        )
+        if is_adult_content(genre_slugs, tags):
+            anime_data["is_adult"] = True
+        return anime_data
 
     def _apply_recent_airing_transition(self, anime: Anime, anime_data: dict) -> None:
         """Persist the last confirmed aired episode before the schedule advances."""
