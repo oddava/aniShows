@@ -30,6 +30,9 @@ from .relation_links import sync_relations_from_media
 DEFAULT_JIKAN_BASE_URL = "https://api.jikan.moe/v4"
 JIKAN_COOLDOWN_CACHE_KEY = "jikan:global_cooldown_until"
 
+# Returned by one try of JikanService._get to mean "try the request again".
+_RETRY = object()
+
 
 def get_jikan_base_url() -> str:
     candidate = DEFAULT_JIKAN_BASE_URL
@@ -430,15 +433,12 @@ class JikanService(CatalogProviderBase):
         request_timeout: float | None = None,
         endpoint: str | None = None,
     ) -> dict:
-        from .metrics import API_CALL_COUNT, API_CALL_DURATION
+        """GET a Jikan endpoint: cache, circuit breaker, then up to ``retry_count`` tries.
 
+        Returns the JSON payload, or ``{}`` with ``last_error_code`` set.
+        """
         self._reset_last_error()
-
-        params = {
-            key: value for key, value in (params or {}).items() if value not in (None, "", [])
-        }
-        endpoint_name = endpoint or path.strip("/").replace("/", "_") or "root"
-        cache_key = json.dumps({"path": path, "params": params}, sort_keys=True, default=str)
+        params, endpoint_name, cache_key = self._request_identity(path, params, endpoint)
 
         if use_cache:
             cached = self._get_cached_result(endpoint_name, cache_key)
@@ -450,115 +450,174 @@ class JikanService(CatalogProviderBase):
             return {}
 
         for attempt in range(retry_count):
-            _start = time.time()
-            _status = "success"
-            try:
-                if self.rate_limiter:
-                    self.rate_limiter.acquire()
-
-                response = self.client.get(
-                    f"{self.base_url}{path}",
-                    params=params,
-                    timeout=request_timeout if request_timeout is not None else self.client.timeout,
-                )
-
-                if response.status_code == 429:
-                    _status = "rate_limited"
-                    wait_time = retry_after_seconds(response.headers.get("Retry-After"))
-                    if wait_time is None:
-                        wait_time = min(2**attempt, 60)
-                    if self.rate_limiter:
-                        self.rate_limiter.record_429(cooldown_hint=wait_time)
-                    self._set_last_error("rate_limited", f"http_429:{endpoint_name}")
-                    if max_rate_limit_wait is not None and wait_time > max_rate_limit_wait:
-                        return {}
-                    if attempt < retry_count - 1:
-                        time.sleep(wait_time)
-                        continue
-                    return {}
-
-                if 500 <= response.status_code < 600:
-                    _status = "failure"
-                    if self.rate_limiter:
-                        self.rate_limiter.record_error()
-                    if attempt < retry_count - 1:
-                        backoff(min(2**attempt, 15))
-                        continue
-                    self._set_last_error("transport_error", f"http_{response.status_code}")
-                    self._record_failure()
-                    return {}
-
-                if 400 <= response.status_code < 500:
-                    message = self._response_message(response)
-                    if response.status_code == 404:
-                        _status = "not_found"
-                        self._set_last_error("not_found", message or f"http_404:{endpoint_name}")
-                    elif response.status_code in {400, 422}:
-                        _status = "client_error"
-                        self._set_last_error(
-                            "invalid_variable", message or f"http_{response.status_code}"
-                        )
-                    else:
-                        _status = "client_error"
-                        self._set_last_error(
-                            "transport_error", message or f"http_{response.status_code}"
-                        )
-                    return {}
-
-                response.raise_for_status()
-                payload = response.json()
-                self._record_success()
-                self._reset_last_error()
-
-                if use_cache and payload:
-                    self._cache_result(endpoint_name, cache_key, payload)
-
-                return payload
-            except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
-                _status = "failure"
-                if self.rate_limiter:
-                    self.rate_limiter.record_error()
-                if attempt < retry_count - 1:
-                    backoff(min(2**attempt, 15))
-                    continue
-                self._set_last_error("transport_error", str(exc))
-                self._record_failure()
-                return {}
-            except httpx.HTTPError as exc:
-                _status = "failure"
-                if self.rate_limiter:
-                    self.rate_limiter.record_error()
-                if attempt < retry_count - 1:
-                    backoff(min(2**attempt, 15))
-                    continue
-                self._set_last_error("transport_error", str(exc))
-                self._record_failure()
-                return {}
-            except Exception as exc:
-                _status = "failure"
-                if attempt >= retry_count - 1:
-                    self._set_last_error("transport_error", str(exc))
-                    self._record_failure()
-                    return {}
-            finally:
-                try:
-                    API_CALL_DURATION.labels(
-                        service="jikan",
-                        endpoint=endpoint_name,
-                        status=_status,
-                    ).observe(time.time() - _start)
-                    API_CALL_COUNT.labels(
-                        service="jikan",
-                        endpoint=endpoint_name,
-                        status=_status,
-                    ).inc()
-                except Exception:
-                    pass
+            result = self._attempt_get(
+                path,
+                params,
+                endpoint_name,
+                attempt=attempt,
+                is_last=attempt >= retry_count - 1,
+                max_rate_limit_wait=max_rate_limit_wait,
+                request_timeout=request_timeout,
+                cache_key=cache_key if use_cache else None,
+            )
+            if result is not _RETRY:
+                return result
 
         if not self.last_error_code:
             self._set_last_error("transport_error", "retries_exhausted")
         self._record_failure()
         return {}
+
+    @staticmethod
+    def _request_identity(
+        path: str, params: dict[str, Any] | None, endpoint: str | None
+    ) -> tuple[dict[str, Any], str, str]:
+        """(params without empty values, metrics/cache endpoint name, cache key)."""
+        params = {
+            key: value for key, value in (params or {}).items() if value not in (None, "", [])
+        }
+        endpoint_name = endpoint or path.strip("/").replace("/", "_") or "root"
+        cache_key = json.dumps({"path": path, "params": params}, sort_keys=True, default=str)
+        return params, endpoint_name, cache_key
+
+    def _attempt_get(
+        self,
+        path: str,
+        params: dict[str, Any],
+        endpoint_name: str,
+        *,
+        attempt: int,
+        is_last: bool,
+        max_rate_limit_wait: float | None,
+        request_timeout: float | None,
+        cache_key: str | None,
+    ):
+        """One try: the payload, ``{}`` to give up, or ``_RETRY`` to try again."""
+        started = time.time()
+        status = "success"
+        try:
+            if self.rate_limiter:
+                self.rate_limiter.acquire()
+
+            response = self.client.get(
+                f"{self.base_url}{path}",
+                params=params,
+                timeout=request_timeout if request_timeout is not None else self.client.timeout,
+            )
+
+            if response.status_code == 429:
+                status = "rate_limited"
+                return self._after_rate_limit(
+                    response,
+                    endpoint_name,
+                    attempt=attempt,
+                    is_last=is_last,
+                    max_rate_limit_wait=max_rate_limit_wait,
+                )
+
+            if 500 <= response.status_code < 600:
+                status = "failure"
+                return self._after_failure(
+                    f"http_{response.status_code}", attempt=attempt, is_last=is_last
+                )
+
+            if 400 <= response.status_code < 500:
+                status = self._after_client_error(response, endpoint_name)
+                return {}
+
+            return self._accept_payload(response, endpoint_name, cache_key)
+        except httpx.HTTPError as exc:
+            # Timeouts, connection and network errors, and any other transport
+            # or status error (e.g. raise_for_status on a 3xx).
+            status = "failure"
+            return self._after_failure(str(exc), attempt=attempt, is_last=is_last)
+        except Exception as exc:
+            # An undecodable body, for one: retried at once, without backoff.
+            status = "failure"
+            if not is_last:
+                return _RETRY
+            self._set_last_error("transport_error", str(exc))
+            self._record_failure()
+            return {}
+        finally:
+            self._observe_call(endpoint_name, status, started)
+
+    def _after_rate_limit(
+        self,
+        response: httpx.Response,
+        endpoint_name: str,
+        *,
+        attempt: int,
+        is_last: bool,
+        max_rate_limit_wait: float | None,
+    ):
+        """HTTP 429: report it to the limiter, then wait and retry unless over budget."""
+        wait_time = retry_after_seconds(response.headers.get("Retry-After"))
+        if wait_time is None:
+            wait_time = min(2**attempt, 60)
+        if self.rate_limiter:
+            self.rate_limiter.record_429(cooldown_hint=wait_time)
+        self._set_last_error("rate_limited", f"http_429:{endpoint_name}")
+        if max_rate_limit_wait is not None and wait_time > max_rate_limit_wait:
+            return {}
+        if not is_last:
+            time.sleep(wait_time)
+            return _RETRY
+        return {}
+
+    def _after_failure(self, message: str, *, attempt: int, is_last: bool):
+        """A 5xx or transport error: back off and retry; on the last try, trip the breaker."""
+        if self.rate_limiter:
+            self.rate_limiter.record_error()
+        if not is_last:
+            backoff(min(2**attempt, 15))
+            return _RETRY
+        self._set_last_error("transport_error", message)
+        self._record_failure()
+        return {}
+
+    def _after_client_error(self, response: httpx.Response, endpoint_name: str) -> str:
+        """A 4xx: record why (never retried) and return the metrics status."""
+        message = self._response_message(response)
+        if response.status_code == 404:
+            self._set_last_error("not_found", message or f"http_404:{endpoint_name}")
+            return "not_found"
+        if response.status_code in {400, 422}:
+            self._set_last_error("invalid_variable", message or f"http_{response.status_code}")
+        else:
+            self._set_last_error("transport_error", message or f"http_{response.status_code}")
+        return "client_error"
+
+    def _accept_payload(
+        self, response: httpx.Response, endpoint_name: str, cache_key: str | None
+    ) -> dict:
+        response.raise_for_status()
+        payload = response.json()
+        self._record_success()
+        self._reset_last_error()
+
+        if cache_key is not None and payload:
+            self._cache_result(endpoint_name, cache_key, payload)
+
+        return payload
+
+    @staticmethod
+    def _observe_call(endpoint_name: str, status: str, started: float) -> None:
+        from .metrics import API_CALL_COUNT, API_CALL_DURATION
+
+        try:
+            API_CALL_DURATION.labels(
+                service="jikan",
+                endpoint=endpoint_name,
+                status=status,
+            ).observe(time.time() - started)
+            API_CALL_COUNT.labels(
+                service="jikan",
+                endpoint=endpoint_name,
+                status=status,
+            ).inc()
+        except Exception:
+            pass
 
     def get_recent_updates(self, limit: int = 50) -> list[dict]:
         results = self._fetch_current_season_anime(limit=limit)
