@@ -1571,12 +1571,13 @@ class JikanService(CatalogProviderBase):
         return values
 
     def _handle_relationships(self, anime, item):
-        genres = item.get("genres") or []
-        for genre_name in genres:
-            genre, _ = Genre.objects.get_or_create(
-                name=genre_name, defaults={"slug": slugify(genre_name)}
-            )
-            anime.genres.add(genre)
+        genres = [
+            Genre.objects.get_or_create(name=genre_name, defaults={"slug": slugify(genre_name)})[0]
+            for genre_name in item.get("genres") or []
+        ]
+        if genres:
+            # One add() call: one m2m_changed signal (is_adult re-check) per anime.
+            anime.genres.add(*genres)
 
         studio_names = [node.get("name") for node in (item.get("studios") or {}).get("nodes") or []]
         studio_names = [name for name in studio_names if name]

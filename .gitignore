@@ -9,6 +9,8 @@
 scripts/*
 !scripts/run_with_migration_check.sh
 !scripts/bench_public_api.py
+!scripts/seed_perf_catalog.py
+!scripts/explain_public_queries.py
 pyvenv.cfg
 .venv
 pip-selfcheck.json

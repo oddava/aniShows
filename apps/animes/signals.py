@@ -1,10 +1,11 @@
 from django.conf import settings
 from django.db import transaction
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
 from ..shared.public_cache import invalidate_public_cache_keys
 from ..users.models import UserAnimeList
+from .adult_content import ADULT_GENRE_SLUGS, refresh_adult_flags
 from .models import Anime, Genre, Review, Studio, UserFavorite
 from .services.public_anime_service import AnimePublicPayloadService
 from .services.user_list_side_effects import (
@@ -68,6 +69,7 @@ def _invalidate_anime_public_caches(slug: str) -> None:
             for flag in (0, 1)
         ),
         f"anime_related:v2:{slug}",
+        *AnimePublicPayloadService.schedule_cache_keys(),
     )
 
 
@@ -141,6 +143,71 @@ def invalidate_deleted_anime_detail_cache(sender, instance, **kwargs):
 @receiver([post_save, post_delete], sender=Genre)
 def invalidate_genre_cache(sender, instance, **kwargs):
     _invalidate_browse_filter_cache("anime_genres:v1")
+
+
+# --- Anime.is_adult (D5): genre changes re-derive the flag --------------------
+
+
+def _adult_genre_anime_ids(genre, using) -> list[int]:
+    return list(
+        Anime.genres.through.objects.using(using)
+        .filter(genre_id=genre.pk)
+        .values_list("anime_id", flat=True)
+    )
+
+
+@receiver(m2m_changed, sender=Anime.genres.through)
+def sync_adult_flag_on_genre_change(sender, instance, action, reverse, pk_set, using, **kwargs):
+    if not reverse:  # anime.genres.add/remove/set/clear
+        if action == "post_clear" or (
+            action in ("post_add", "post_remove")
+            and pk_set
+            and Genre.objects.using(using)
+            .filter(pk__in=pk_set, slug__in=ADULT_GENRE_SLUGS)
+            .exists()
+        ):
+            refresh_adult_flags([instance.pk], using=using)
+        return
+
+    # genre.anime.add/remove/clear: only an adult genre changes any flag.
+    if instance.slug not in ADULT_GENRE_SLUGS:
+        return
+    if action == "pre_clear":
+        instance._adult_flag_anime_ids = _adult_genre_anime_ids(instance, using)
+    elif action == "post_clear":
+        refresh_adult_flags(getattr(instance, "_adult_flag_anime_ids", ()), using=using)
+    elif action in ("post_add", "post_remove"):
+        refresh_adult_flags(pk_set or (), using=using)
+
+
+@receiver(pre_save, sender=Genre)
+def capture_old_genre_slug(sender, instance, raw=False, using=None, **kwargs):
+    instance._previous_slug = (
+        Genre.objects.using(using).filter(pk=instance.pk).values_list("slug", flat=True).first()
+        if instance.pk and not raw
+        else None
+    )
+
+
+@receiver(post_save, sender=Genre)
+def sync_adult_flag_on_genre_rename(sender, instance, created, raw=False, using=None, **kwargs):
+    previous = getattr(instance, "_previous_slug", None)
+    if created or raw or previous is None or previous == instance.slug:
+        return
+    if previous in ADULT_GENRE_SLUGS or instance.slug in ADULT_GENRE_SLUGS:
+        refresh_adult_flags(_adult_genre_anime_ids(instance, using), using=using)
+
+
+@receiver(pre_delete, sender=Genre)
+def capture_adult_genre_anime(sender, instance, using=None, **kwargs):
+    if instance.slug in ADULT_GENRE_SLUGS:
+        # The cascade removes the links without an m2m_changed signal.
+        instance._adult_flag_anime_ids = _adult_genre_anime_ids(instance, using)
+
+
+@receiver(post_delete, sender=Genre)
+def sync_adult_flag_on_genre_delete(sender, instance, using=None, **kwargs):
+    refresh_adult_flags(getattr(instance, "_adult_flag_anime_ids", ()), using=using)
 
 
 @receiver([post_save, post_delete], sender=Studio)
