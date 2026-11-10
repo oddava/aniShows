@@ -4,6 +4,7 @@ import { favoriteApi } from '../api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import logger from '../utils/logger';
 import AnimeCard from './AnimeCard';
+import { favoriteKeys } from '../api/queries/user';
 
 /**
  * DraggableFavoritesGrid - Unified grid layout with consistent card sizing
@@ -42,7 +43,7 @@ export default function DraggableFavoritesGrid({ favorites, isOwnProfile, userna
                 try {
                     const orderedIds = newItems.map((item, idx) => ({ id: item.id, order: idx }));
                     await favoriteApi.reorder(orderedIds);
-                    queryClient.invalidateQueries({ queryKey: ['favorites', username] });
+                    queryClient.invalidateQueries({ queryKey: favoriteKeys.byUser(username) });
                 } catch (error) {
                     logger.error('Failed to save order:', error);
                     setItems(favorites);

@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { staffApi, staffFavoriteApi } from '../api/client';
+import { staffFavoriteApi } from '../api/client';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
 import EntityFavoriteButton from '../components/common/EntityFavoriteButton';
 import { useAuth } from '../context/AuthContext';
+import { staffKeys, staffQueries } from '../api/queries/anime';
+import { staffFavoriteKeys } from '../api/queries/user';
 
 // Parse markdown-style links [text](url) into React elements
 function parseMarkdownLinks(text) {
@@ -69,8 +71,7 @@ export default function VoiceActorDetail() {
     const [favoriteState, setFavoriteState] = useState({ isFavorite: false, favoriteCount: 0 });
 
     const { data: staff, isLoading, error } = useQuery({
-        queryKey: ['staff', id],
-        queryFn: ({ signal }) => staffApi.getById(id, signal).then(res => res.data),
+        ...staffQueries.detail(id),
         staleTime: 1000 * 60 * 10,
     });
 
@@ -99,9 +100,9 @@ export default function VoiceActorDetail() {
                 isFavorite: response.data.is_favorite,
                 favoriteCount: response.data.favorite_count ?? 0,
             });
-            queryClient.invalidateQueries({ queryKey: ['staff', id] });
+            queryClient.invalidateQueries({ queryKey: staffKeys.detail(id) });
             if (user?.username) {
-                queryClient.invalidateQueries({ queryKey: ['staff-favorites', user.username] });
+                queryClient.invalidateQueries({ queryKey: staffFavoriteKeys.byUser(user.username) });
             }
         },
     });

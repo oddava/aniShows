@@ -4,7 +4,6 @@ import { Helmet } from 'react-helmet-async';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Pin, Lock, Plus, ChevronRight, ArrowLeft, MessageSquare, Eye } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { forumsApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import Pagination from '../../components/common/Pagination';
 import { preloadForumChunks } from '../../App';
@@ -12,6 +11,7 @@ import { ThreadListSkeleton } from '../../components/forums/ForumSkeletons';
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
 import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
+import { forumQueries } from '../../api/queries/forums';
 
 const getThreadPreview = (content) => {
     const plainText = content?.replace(/[#*`]/g, '').replace(/\s+/g, ' ').trim() || '';
@@ -167,15 +167,13 @@ const ForumThreadList = () => {
         isLoading: isCategoryLoading,
         isPlaceholderData: isCategoryPlaceholder
     } = useQuery({
-        queryKey: ['forumCategory', slug],
-        queryFn: () => forumsApi.getCategory(slug),
+        ...forumQueries.category(slug),
         staleTime: 5 * 60 * 1000, // 5 minutes
         placeholderData: keepPreviousData, // Keep showing previous category during load
     });
 
     const { data: tagsData } = useQuery({
-        queryKey: ['forumTags'],
-        queryFn: forumsApi.getTags,
+        ...forumQueries.tags(),
         staleTime: 5 * 60 * 1000,
     });
 
@@ -187,12 +185,7 @@ const ForumThreadList = () => {
         isFetching,
         error: threadsError
     } = useQuery({
-        queryKey: ['forumThreads', slug, selectedTag, page],
-        queryFn: () => forumsApi.getThreads({
-            category__slug: slug,
-            tags__slug: selectedTag || undefined,
-            page
-        }),
+        ...forumQueries.threads(slug, selectedTag, page),
         staleTime: 5 * 60 * 1000,
         placeholderData: keepPreviousData, // Keep showing previous threads during pagination
     });

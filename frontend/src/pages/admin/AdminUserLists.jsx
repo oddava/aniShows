@@ -1,17 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import { adminKeys } from '../../api/queries/admin';
 import DataTable from './components/DataTable';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
-import logger from '../../utils/logger';
+import { useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 import CustomSelect from '../../components/common/CustomSelect';
 
 const AdminUserLists = () => {
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedRows, setSelectedRows] = useState([]);
   const [filters, setFilters] = useState({
     user: '',
@@ -19,39 +17,34 @@ const AdminUserLists = () => {
     status: '',
   });
 
-  const fetchEntries = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page,
-        ...(filters.user && { user: filters.user }),
-        ...(filters.anime && { anime: filters.anime }),
-        ...(filters.status && { status: filters.status }),
-      });
+  const { items: entries, totalPages, isFetching: loading, refetch } = useAdminList({
+    resource: 'user-lists',
+    params: {
+      page,
+      ...(filters.user && { user: filters.user }),
+      ...(filters.anime && { anime: filters.anime }),
+      ...(filters.status && { status: filters.status }),
+    },
+    page,
+    setPage,
+    errorLog: 'Failed to fetch entries:',
+    errorToast: 'Failed to load list entries',
+  });
 
-      const response = await api.get(`/admin/user-lists/?${params}`);
-      setEntries(response.data.results);
-      setTotalPages(Math.ceil(response.data.count / 20));
-    } catch (err) {
-      logger.error('Failed to fetch entries:', err);
-      toast.error('Failed to load list entries');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, filters]);
-
-  useEffect(() => {
-    fetchEntries();
-  }, [fetchEntries]);
+  const invalidate = [adminKeys.resource('user-lists')];
+  const deleteMutation = useAdminMutation((entryId) => api.delete(`/admin/user-lists/${entryId}/`), { invalidate });
+  const bulkDeleteMutation = useAdminMutation(
+    (ids) => api.post('/admin/user-lists/bulk_delete/', { ids }),
+    { invalidate },
+  );
 
   const handleDelete = async (entryId) => {
     if (!confirm('Are you sure you want to delete this list entry?')) {
       return;
     }
     try {
-      await api.delete(`/admin/user-lists/${entryId}/`);
+      await deleteMutation.mutateAsync(entryId);
       toast.success('List entry deleted successfully');
-      fetchEntries();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete entry');
     }
@@ -62,10 +55,9 @@ const AdminUserLists = () => {
       return;
     }
     try {
-      await api.post('/admin/user-lists/bulk_delete/', { ids: selectedRows });
+      await bulkDeleteMutation.mutateAsync(selectedRows);
       toast.success(`${selectedRows.length} list entries deleted successfully`);
       setSelectedRows([]);
-      fetchEntries();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete entries');
     }
@@ -194,7 +186,7 @@ const AdminUserLists = () => {
             ariaLabel="Filter list entries by status"
           />
           <button
-            onClick={() => { setPage(1); fetchEntries(); }}
+            onClick={() => { if (page === 1) refetch(); else setPage(1); }}
             className="px-6 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
           >
             Apply Filters

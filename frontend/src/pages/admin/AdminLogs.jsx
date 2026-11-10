@@ -1,21 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import api from '../../api/client';
-import { toast } from 'react-hot-toast';
-import logger from '../../utils/logger';
+import { useState } from 'react';
+import { adminQueries } from '../../api/queries/admin';
+import { useAdminList, useAdminQuery } from './hooks/useAdminQuery';
 import CustomSelect from '../../components/common/CustomSelect';
 
+const EMPTY_STATS = {
+  by_level: {},
+  by_type: {},
+  total: 0,
+  recent_errors: 0,
+  error_rate: 0,
+};
+
 const AdminLogs = () => {
-  const [logs, setLogs] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [stats, setStats] = useState({
-    by_level: {},
-    by_type: {},
-    total: 0,
-    recent_errors: 0,
-    error_rate: 0,
-  });
   const [filters, setFilters] = useState({
     level: '',
     log_type: '',
@@ -26,56 +23,37 @@ const AdminLogs = () => {
   });
   const [selectedLog, setSelectedLog] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const refreshInterval = useRef(null);
 
-  const fetchLogs = useCallback(async () => {
-    try {
-      const params = new URLSearchParams({
-        page,
-        ...(filters.level && { level: filters.level }),
-        ...(filters.log_type && { log_type: filters.log_type }),
-        ...(filters.search && { search: filters.search }),
-        ...(filters.user && { user: filters.user }),
-        ...(filters.start_date && { start_date: filters.start_date }),
-        ...(filters.end_date && { end_date: filters.end_date }),
-      });
+  // Both refresh every 30 seconds while the page is open ("Live").
+  const logsQuery = useAdminList({
+    resource: 'logs',
+    params: {
+      page,
+      ...(filters.level && { level: filters.level }),
+      ...(filters.log_type && { log_type: filters.log_type }),
+      ...(filters.search && { search: filters.search }),
+      ...(filters.user && { user: filters.user }),
+      ...(filters.start_date && { start_date: filters.start_date }),
+      ...(filters.end_date && { end_date: filters.end_date }),
+    },
+    page,
+    setPage,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true,
+    errorLog: 'Failed to fetch logs:',
+    errorToast: 'Failed to load logs',
+  });
+  const statsQuery = useAdminQuery({
+    ...adminQueries.stats('logs'),
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true,
+    errorLog: 'Failed to fetch stats:',
+  });
 
-      const response = await api.get(`/admin/logs/?${params}`);
-      setLogs(response.data.results);
-      setTotalPages(Math.ceil(response.data.count / 20));
-    } catch (err) {
-      logger.error('Failed to fetch logs:', err);
-      toast.error('Failed to load logs');
-    }
-  }, [page, filters]);
-
-  const fetchStats = useCallback(async () => {
-    try {
-      const response = await api.get('/admin/logs/stats/');
-      setStats(response.data);
-    } catch (err) {
-      logger.error('Failed to fetch stats:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchLogs(), fetchStats()]).then(() => setLoading(false));
-  }, [fetchLogs, fetchStats]);
-
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    refreshInterval.current = setInterval(() => {
-      fetchLogs();
-      fetchStats();
-    }, 30000);
-
-    return () => {
-      if (refreshInterval.current) {
-        clearInterval(refreshInterval.current);
-      }
-    };
-  }, [fetchLogs, fetchStats]);
+  const { items: logs, totalPages } = logsQuery;
+  const stats = statsQuery.data || EMPTY_STATS;
+  // The spinner shows for the first load and for page/filter changes, not for the silent 30s refreshes.
+  const loading = logsQuery.isPending || logsQuery.isPlaceholderData || statsQuery.isPending;
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));

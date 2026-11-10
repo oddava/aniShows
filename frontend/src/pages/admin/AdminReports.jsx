@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
 import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
+import { adminKeys } from '../../api/queries/admin';
+import { useAdminQuery } from './hooks/useAdminQuery';
 import {
   Users, UserPlus, Zap, RefreshCw,
   Film, Tv, Building2, Tags,
@@ -907,64 +910,45 @@ const EngagementTab = ({ data, loading }) => {
 const AdminReports = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [dateRange, setDateRange] = useState('30');
-  const [overviewData, setOverviewData] = useState(null);
-  const [usersData, setUsersData] = useState(null);
-  const [contentData, setContentData] = useState(null);
-  const [engagementData, setEngagementData] = useState(null);
-  const [loading, setLoading] = useState({
-    overview: true,
-    users: false,
-    content: false,
-    engagement: false,
-  });
-  const [exporting, setExporting] = useState(false);
+  const queryClient = useQueryClient();
+  // Set by Refresh so the next request asks the API to rebuild its cached report.
+  const forceRefresh = useRef(false);
 
-  const fetchTabData = useCallback(async (tab, days, forceRefresh = false) => {
-    setLoading(prev => ({ ...prev, [tab]: true }));
-    try {
-      const params = new URLSearchParams({ type: tab, days });
-      if (forceRefresh) {
+  const reportKey = adminKeys.report(activeTab, dateRange);
+  const report = useAdminQuery({
+    queryKey: reportKey,
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams({ type: activeTab, days: dateRange });
+      if (forceRefresh.current) {
+        forceRefresh.current = false;
         params.set('refresh', 'true');
       }
-      const response = await api.get(`/admin/reports/?${params}`);
-      switch (tab) {
-        case 'overview': setOverviewData(response.data); break;
-        case 'users': setUsersData(response.data); break;
-        case 'content': setContentData(response.data); break;
-        case 'engagement': setEngagementData(response.data); break;
-      }
-    } catch (err) {
-      logger.error(`Failed to fetch ${tab} report:`, err);
-      toast.error(`Failed to load ${tab} report`);
-    } finally {
-      setLoading(prev => ({ ...prev, [tab]: false }));
-    }
-  }, []);
-
-  // Fetch overview on mount
-  useEffect(() => {
-    fetchTabData('overview', dateRange);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Refetch when tab or date range changes
-  useEffect(() => {
-    fetchTabData(activeTab, dateRange);
-  }, [activeTab, dateRange]); // eslint-disable-line react-hooks/exhaustive-deps
+      return api.get(`/admin/reports/?${params}`, { signal }).then((response) => response.data);
+    },
+    // A new date range keeps the tab's current figures on screen while it loads,
+    // but another tab's figures never stand in for this one's.
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery?.queryKey[2] === activeTab ? previousData : undefined,
+    errorLog: `Failed to fetch ${activeTab} report:`,
+    errorToast: `Failed to load ${activeTab} report`,
+  });
+  const tabData = report.data ?? null;
+  const isCurrentTabLoading = report.isFetching;
 
   const handleRefresh = () => {
-    switch (activeTab) {
-      case 'overview': setOverviewData(null); break;
-      case 'users': setUsersData(null); break;
-      case 'content': setContentData(null); break;
-      case 'engagement': setEngagementData(null); break;
-    }
-    fetchTabData(activeTab, dateRange, true);
+    forceRefresh.current = true;
+    // Drop the shown figures (as before) and fetch again with refresh=true.
+    queryClient.resetQueries({ queryKey: reportKey, exact: true });
   };
 
+  const exportMutation = useMutation({
+    mutationFn: () => api.get('/admin/stats/export/'),
+  });
+  const exporting = exportMutation.isPending;
+
   const handleExport = async () => {
-    setExporting(true);
     try {
-      const response = await api.get('/admin/stats/export/');
+      const response = await exportMutation.mutateAsync();
       const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -978,12 +962,9 @@ const AdminReports = () => {
     } catch (err) {
       logger.error('Failed to export stats:', err);
       toast.error('Failed to export analytics data');
-    } finally {
-      setExporting(false);
     }
   };
 
-  const isCurrentTabLoading = loading[activeTab];
 
   return (
     <div className="space-y-6">
@@ -1045,22 +1026,22 @@ const AdminReports = () => {
       {/* Tab Content */}
       <div>
         {activeTab === 'overview' && (
-          loading.overview && !overviewData ? (
+          isCurrentTabLoading && !tabData ? (
             <LoadingSpinner text="Analyzing platform data..." />
-          ) : overviewData ? (
-            <OverviewTab stats={overviewData} />
+          ) : tabData ? (
+            <OverviewTab stats={tabData} />
           ) : (
             <EmptyState onRetry={handleRefresh} />
           )
         )}
         {activeTab === 'users' && (
-          <UsersTab data={usersData} loading={loading.users} />
+          <UsersTab data={tabData} loading={isCurrentTabLoading} />
         )}
         {activeTab === 'content' && (
-          <ContentTab data={contentData} loading={loading.content} />
+          <ContentTab data={tabData} loading={isCurrentTabLoading} />
         )}
         {activeTab === 'engagement' && (
-          <EngagementTab data={engagementData} loading={loading.engagement} />
+          <EngagementTab data={tabData} loading={isCurrentTabLoading} />
         )}
       </div>
     </div>

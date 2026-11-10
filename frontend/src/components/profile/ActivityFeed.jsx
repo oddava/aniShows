@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import AnimeMediaImage from '../common/AnimeMediaImage';
 import { formatDateInUserTimezone } from '../../utils/dateUtils';
+import { activityKeys } from '../../api/queries/user';
 
 const STATUS_FILTERS = [
     { value: 'watching', label: 'Watching', color: '#16a34a' },
@@ -286,7 +287,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
         isError,
         refetch,
     } = useInfiniteQuery({
-        queryKey: ['activity-feed', username, filterType, pageSize],
+        queryKey: activityKeys.feed(username, filterType, pageSize),
         queryFn: ({ pageParam }) =>
             activityApi.getFeed({
                 username,

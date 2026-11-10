@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, PieChart, Film, Tags, Building2, Users2, Mic,
@@ -7,7 +7,12 @@ import {
     UserPlus, MessageSquare, ShieldAlert, Tv, Heart, Flag
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { notificationApi } from '../api/client';
+import {
+    useMarkAllNotificationsRead,
+    useMarkNotificationRead,
+    useUnreadNotificationCount,
+    useUnreadNotifications,
+} from '../hooks/useNotifications';
 import logger from '../utils/logger';
 import '../admin.css';
 
@@ -24,26 +29,24 @@ const NOTIF_ICON_MAP = {
 
 const AdminNotifications = () => {
     const [isOpen, setIsOpen] = useState(false);
-    const [unreadCount, setUnreadCount] = useState(0);
-    const [notifications, setNotifications] = useState([]);
-    const [loading, setLoading] = useState(false);
     const dropdownRef = useRef(null);
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const userId = user?.id;
 
-    const fetchUnreadCount = useCallback(async () => {
-        try {
-            const response = await notificationApi.getUnreadCount();
-            setUnreadCount(response.data.count);
-        } catch (err) {
-            logger.error('Failed to fetch notification count:', err);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchUnreadCount();
-        const interval = setInterval(fetchUnreadCount, 30000);
-        return () => clearInterval(interval);
-    }, [fetchUnreadCount]);
+    // Polled every 30 seconds, as before.
+    const { data: unreadCount = 0 } = useUnreadNotificationCount(userId, {
+        refetchInterval: 30000,
+        refetchIntervalInBackground: true,
+        errorLog: 'Failed to fetch notification count:',
+    });
+    // Fetched each time the dropdown opens.
+    const { data: notifications = [], isFetching: loading } = useUnreadNotifications(userId, {
+        enabled: isOpen,
+        errorLog: 'Failed to fetch notifications:',
+    });
+    const markReadMutation = useMarkNotificationRead(userId);
+    const markAllReadMutation = useMarkAllNotificationsRead(userId);
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -55,29 +58,14 @@ const AdminNotifications = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const fetchNotifications = async () => {
-        setLoading(true);
-        try {
-            const response = await notificationApi.getAll({ is_read: false });
-            setNotifications(response.data.results || []);
-        } catch (err) {
-            logger.error('Failed to fetch notifications:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleBellClick = () => {
-        if (!isOpen) fetchNotifications();
         setIsOpen(!isOpen);
     };
 
     const handleMarkAsRead = async (id, e) => {
         e.stopPropagation();
         try {
-            await notificationApi.markAsRead(id);
-            setNotifications(prev => prev.filter(n => n.id !== id));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            await markReadMutation.mutateAsync(id);
         } catch (err) {
             logger.error('Failed to mark notification as read:', err);
         }
@@ -85,9 +73,7 @@ const AdminNotifications = () => {
 
     const handleMarkAllAsRead = async () => {
         try {
-            await notificationApi.markAllAsRead();
-            setNotifications([]);
-            setUnreadCount(0);
+            await markAllReadMutation.mutateAsync();
         } catch (err) {
             logger.error('Failed to mark all as read:', err);
         }
@@ -95,9 +81,7 @@ const AdminNotifications = () => {
 
     const handleNotificationClick = async (notification) => {
         try {
-            await notificationApi.markAsRead(notification.id);
-            setNotifications(prev => prev.filter(n => n.id !== notification.id));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            await markReadMutation.mutateAsync(notification.id);
             setIsOpen(false);
 
             // Navigate to relevant admin page based on type

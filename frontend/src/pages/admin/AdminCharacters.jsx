@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import api from '../../api/client';
+import { adminKeys } from '../../api/queries/admin';
 import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
-import logger from '../../utils/logger';
+import { useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 
 const DEFAULT_FORM = {
   name: '',
@@ -15,42 +16,40 @@ const DEFAULT_FORM = {
 };
 
 const AdminCharacters = () => {
-  const [characters, setCharacters] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedRows, setSelectedRows] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCharacter, setEditingCharacter] = useState(null);
   const [formData, setFormData] = useState(DEFAULT_FORM);
 
-  const fetchCharacters = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page,
-        ...(search && { search }),
-      });
-      const response = await api.get(`/admin/characters/?${params}`);
-      setCharacters(response.data.results || []);
-      setTotalPages(Math.ceil((response.data.count || 0) / 20) || 1);
-    } catch (err) {
-      logger.error('Failed to fetch characters:', err);
-      toast.error('Failed to load characters');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search]);
+  const { items: characters, totalPages, isFetching: loading, refetch } = useAdminList({
+    resource: 'characters',
+    params: {
+      page,
+      ...(search && { search }),
+    },
+    page,
+    setPage,
+    errorLog: 'Failed to fetch characters:',
+    errorToast: 'Failed to load characters',
+  });
 
-  useEffect(() => {
-    fetchCharacters();
-  }, [fetchCharacters]);
+  const invalidate = [adminKeys.resource('characters')];
+  const saveMutation = useAdminMutation(
+    ({ id, data }) => (id ? api.put(`/admin/characters/${id}/`, data) : api.post('/admin/characters/', data)),
+    { invalidate },
+  );
+  const deleteMutation = useAdminMutation((id) => api.delete(`/admin/characters/${id}/`), { invalidate });
+  const bulkDeleteMutation = useAdminMutation(
+    (ids) => api.post('/admin/bulk/', { operation: 'delete', entity: 'characters', ids }),
+    { invalidate },
+  );
 
   const handleSearch = (event) => {
     event.preventDefault();
-    setPage(1);
-    fetchCharacters();
+    if (page === 1) refetch();
+    else setPage(1);
   };
 
   const openCreateModal = () => {
@@ -85,15 +84,9 @@ const AdminCharacters = () => {
     };
 
     try {
-      if (editingCharacter) {
-        await api.put(`/admin/characters/${editingCharacter.id}/`, payload);
-        toast.success('Character updated');
-      } else {
-        await api.post('/admin/characters/', payload);
-        toast.success('Character created');
-      }
+      await saveMutation.mutateAsync({ id: editingCharacter?.id, data: payload });
+      toast.success(editingCharacter ? 'Character updated' : 'Character created');
       closeModal();
-      fetchCharacters();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to save character');
     }
@@ -102,9 +95,8 @@ const AdminCharacters = () => {
   const deleteCharacter = async (id) => {
     if (!confirm('Delete this character?')) return;
     try {
-      await api.delete(`/admin/characters/${id}/`);
+      await deleteMutation.mutateAsync(id);
       toast.success('Character deleted');
-      fetchCharacters();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete character');
     }
@@ -114,14 +106,9 @@ const AdminCharacters = () => {
     if (!selectedRows.length) return;
     if (!confirm(`Delete ${selectedRows.length} characters?`)) return;
     try {
-      await api.post('/admin/bulk/', {
-        operation: 'delete',
-        entity: 'characters',
-        ids: selectedRows,
-      });
+      await bulkDeleteMutation.mutateAsync(selectedRows);
       toast.success('Selected characters deleted');
       setSelectedRows([]);
-      fetchCharacters();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete selected characters');
     }

@@ -1,69 +1,51 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/client';
+import { adminKeys, adminQueries } from '../../api/queries/admin';
 import DataTable from './components/DataTable';
 import BulkActions from './components/BulkActions';
 import { toast } from 'react-hot-toast';
-import logger from '../../utils/logger';
+import { useAdminList, useAdminMutation, useAdminQuery } from './hooks/useAdminQuery';
 
 const AdminFavorites = () => {
-  const [favorites, setFavorites] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState(null);
-  const [statsLoading, setStatsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [userFilter, setUserFilter] = useState('');
   const [animeFilter, setAnimeFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [selectedRows, setSelectedRows] = useState([]);
   const [showStats, setShowStats] = useState(true);
 
-  const fetchFavorites = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page,
-        ...(search && { search }),
-        ...(userFilter && { user: userFilter }),
-        ...(animeFilter && { anime: animeFilter }),
-      });
+  const { items: favorites, totalPages, isFetching: loading, refetch } = useAdminList({
+    resource: 'favorites',
+    params: {
+      page,
+      ...(search && { search }),
+      ...(userFilter && { user: userFilter }),
+      ...(animeFilter && { anime: animeFilter }),
+    },
+    page,
+    setPage,
+    errorLog: 'Failed to fetch favorites:',
+    errorToast: 'Failed to load favorites',
+  });
 
-      const response = await api.get(`/admin/favorites/?${params}`);
-      setFavorites(response.data.results);
-      setTotalPages(Math.ceil(response.data.count / 20));
-    } catch (err) {
-      logger.error('Failed to fetch favorites:', err);
-      toast.error('Failed to load favorites');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search, userFilter, animeFilter]);
+  const { data: stats = null, isFetching: statsLoading } = useAdminQuery({
+    ...adminQueries.stats('favorites'),
+    errorLog: 'Failed to fetch stats:',
+  });
 
-  const fetchStats = useCallback(async () => {
-    setStatsLoading(true);
-    try {
-      const response = await api.get('/admin/favorites/stats/');
-      setStats(response.data);
-    } catch (err) {
-      logger.error('Failed to fetch stats:', err);
-    } finally {
-      setStatsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchFavorites();
-  }, [fetchFavorites]);
-
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+  // adminKeys.resource('favorites') covers the list and the stats.
+  const invalidate = [adminKeys.resource('favorites')];
+  const deleteMutation = useAdminMutation((favoriteId) => api.delete(`/admin/favorites/${favoriteId}/`), { invalidate });
+  const bulkDeleteMutation = useAdminMutation(
+    (ids) => api.post('/admin/bulk/', { operation: 'delete', entity: 'favorites', ids }),
+    { invalidate },
+  );
 
   const handleSearch = (e) => {
     e.preventDefault();
-    setPage(1);
-    fetchFavorites();
+    if (page === 1) refetch();
+    else setPage(1);
   };
 
   const handleDelete = async (favoriteId) => {
@@ -71,10 +53,8 @@ const AdminFavorites = () => {
       return;
     }
     try {
-      await api.delete(`/admin/favorites/${favoriteId}/`);
+      await deleteMutation.mutateAsync(favoriteId);
       toast.success('Favorite deleted successfully');
-      fetchFavorites();
-      fetchStats();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete favorite');
     }
@@ -85,26 +65,24 @@ const AdminFavorites = () => {
       return;
     }
     try {
-      await api.post('/admin/bulk/', {
-        operation: 'delete',
-        entity: 'favorites',
-        ids: selectedRows,
-      });
+      await bulkDeleteMutation.mutateAsync(selectedRows);
       toast.success(`${selectedRows.length} favorites deleted successfully`);
       setSelectedRows([]);
-      fetchFavorites();
-      fetchStats();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete favorites');
     }
   };
 
   const clearFilters = () => {
+    if (!search && !userFilter && !animeFilter && page === 1) {
+      // Nothing changes in the query, so ask for fresh rows like before.
+      refetch();
+      return;
+    }
     setSearch('');
     setUserFilter('');
     setAnimeFilter('');
     setPage(1);
-    fetchFavorites();
   };
 
   const columns = [

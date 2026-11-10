@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { animeApi } from '../api/client';
+import { animeKeys, animeQueries } from '../api/queries/anime';
 
 /**
  * Hook for prefetching anime data to improve perceived performance
@@ -16,31 +17,30 @@ export function usePrefetchAnime() {
     const prefetchNextPage = useCallback((currentParams, nextPage) => {
         if (!nextPage) return;
 
-        const queryKey = [
-            'anime',
-            'list',
-            currentParams.genres?.join(',') || '',
-            currentParams.tags?.join(',') || '',
-            currentParams.sort || 'popular',
-            currentParams.search || '',
-            currentParams.type || '',
-            currentParams.status || '',
-            currentParams.studio || '',
-            currentParams.season || '',
-            currentParams.year || '',
-            currentParams.excludeIds || '',
-            currentParams.shelf || '',
-            currentParams.minRating || '',
-            currentParams.maxRating || '',
-            currentParams.source || '',
-            currentParams.minEpisodes || '',
-            currentParams.maxEpisodes || '',
-            currentParams.minDuration || '',
-            currentParams.maxDuration || '',
-            currentParams.minYear || '',
-            currentParams.maxYear || '',
-            Boolean(currentParams.adultContentEnabled),
-        ];
+        // Same builder as Browse's grid query, so the prefetch fills that entry.
+        const queryKey = animeKeys.browseList({
+            genres: currentParams.genres?.join(',') || '',
+            tags: currentParams.tags?.join(',') || '',
+            sort: currentParams.sort || 'popular',
+            search: currentParams.search || '',
+            type: currentParams.type || '',
+            status: currentParams.status || '',
+            studio: currentParams.studio || '',
+            season: currentParams.season || '',
+            year: currentParams.year || '',
+            excludeIds: currentParams.excludeIds || '',
+            shelf: currentParams.shelf || '',
+            minRating: currentParams.minRating || '',
+            maxRating: currentParams.maxRating || '',
+            source: currentParams.source || '',
+            minEpisodes: currentParams.minEpisodes || '',
+            maxEpisodes: currentParams.maxEpisodes || '',
+            minDuration: currentParams.minDuration || '',
+            maxDuration: currentParams.maxDuration || '',
+            minYear: currentParams.minYear || '',
+            maxYear: currentParams.maxYear || '',
+            adultContentEnabled: Boolean(currentParams.adultContentEnabled),
+        });
 
         // Prefetch with shorter stale time since it's the next page
         queryClient.prefetchInfiniteQuery({
@@ -82,8 +82,7 @@ export function usePrefetchAnime() {
         if (!animeId) return;
 
         queryClient.prefetchQuery({
-            queryKey: ['anime', animeId, 'anonymous'],
-            queryFn: () => animeApi.getBySlug(animeId).then(res => res.data),
+            ...animeQueries.detail(animeId),
             staleTime: 1000 * 60 * 10, // 10 minutes for detail pages
         });
     }, [queryClient]);
@@ -93,8 +92,7 @@ export function usePrefetchAnime() {
      */
     const prefetchTrending = useCallback(() => {
         queryClient.prefetchQuery({
-            queryKey: ['anime', 'hero-trending'],
-            queryFn: () => animeApi.getTrending().then(res => res.data),
+            ...animeQueries.heroTrending(),
             staleTime: 1000 * 60 * 15, // 15 minutes for trending
         });
     }, [queryClient]);
@@ -104,8 +102,7 @@ export function usePrefetchAnime() {
      */
     const prefetchTopRated = useCallback(() => {
         queryClient.prefetchQuery({
-            queryKey: ['anime', 'top-rated'],
-            queryFn: () => animeApi.getTopRated().then(res => res.data),
+            ...animeQueries.topRated(),
             staleTime: 1000 * 60 * 20, // 20 minutes for top rated
         });
     }, [queryClient]);

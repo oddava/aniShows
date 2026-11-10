@@ -5,6 +5,7 @@ import { Film, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { animeApi } from '../api/client';
 import { useTheme } from '../context/ThemeContext';
 import AnimeMediaImage from './common/AnimeMediaImage';
+import { animeKeys } from '../api/queries/anime';
 
 // Relations carry the AniList ID in `id` (null for Jikan-sourced entries) and the MAL ID in `mal_id`.
 const relationKey = (rel) => (rel.id ? `anilist-${rel.id}` : `mal-${rel.mal_id}`);
@@ -29,7 +30,7 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
             const { slug } = response.data;
             if (slug) {
                 // Ensure we don't reuse stale detail payloads for newly linked franchise entries.
-                queryClient.removeQueries({ queryKey: ['anime', slug] });
+                queryClient.removeQueries({ queryKey: animeKeys.bySlug(slug) });
                 navigate(`/anime/${slug}`, {
                     state: {
                         prefetchedRelationCover: rel.cover || null,

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { profileQueries } from '../api/queries/user';
 
 /**
  * Hook to manage user profile data with TanStack Query.
@@ -12,11 +12,7 @@ export function useUserProfile() {
     const { user, isAuthenticated } = useAuth();
 
     return useQuery({
-        queryKey: ['ownProfile'],
-        queryFn: async () => {
-            const response = await authApi.getProfile(true); // Fetch full profile with stats
-            return response.data;
-        },
+        ...profileQueries.own(),
         enabled: isAuthenticated && !!user?.id,
         staleTime: 1000 * 60 * 5, // Cache for 5 minutes
         refetchOnWindowFocus: false,
