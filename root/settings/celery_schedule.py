@@ -179,6 +179,11 @@ def build_beat_schedule(
             "schedule": crontab(minute=15),  # Every hour at 15 min past
             "options": {"queue": "low_priority"},
         },
+        "reconcile-adult-flags-daily": {
+            "task": "apps.animes.tasks.adult_content.reconcile_adult_flags",
+            "schedule": crontab(hour=3, minute=40),  # Daily at 3:40 AM
+            "options": {"queue": "low_priority"},
+        },
         "update-relation-slugs-daily": {
             "task": "apps.animes.tasks.franchises.update_relation_slugs",
             "schedule": crontab(hour=4, minute=30),  # Daily at 4:30 AM

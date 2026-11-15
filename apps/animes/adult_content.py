@@ -15,6 +15,12 @@ now stored on ``Anime.is_adult`` and kept in sync where its inputs change:
 
 ``refresh_adult_flags`` recomputes the flag in SQL from the stored genres and
 tags; the receivers use it, and it is the reference for the backfill migration.
+
+Writes that skip ``save()`` and the m2m signal (``QuerySet.update(tags=...)``,
+``bulk_update`` with ``tags``, a through-model ``bulk_create``) must call
+``refresh_adult_flags`` themselves; ``test_adult_flag_writers.py`` fails when a
+new one appears. ``reconcile_adult_flags`` is the nightly safety net: it fixes
+any drift over the whole table and logs a warning when it finds some.
 """
 
 import json
@@ -22,6 +28,8 @@ import json
 from django.apps import apps
 from django.db import connections
 from django.db.models import Exists, OuterRef, Q
+
+from ..shared.logger import logger
 
 ADULT_GENRE_SLUGS = {"erotica", "hentai"}
 ADULT_TAGS = {
@@ -118,7 +126,31 @@ def refresh_adult_flags(anime_ids, *, using: str = "default") -> int:
     if not ids:
         return 0
     rows = apps.get_model("anime", "Anime").objects.using(using).filter(pk__in=ids)
+    flagged, cleared = _sync_flags(rows, using)
+    return flagged + cleared
+
+
+def reconcile_adult_flags(*, using: str = "default") -> dict:
+    """Fix ``is_adult`` drift across the whole catalog (the nightly safety net).
+
+    Drift means some write changed genres or tags without refreshing the flag.
+    A row wrongly marked not-adult is shown to anonymous visitors, so drift is
+    logged as a warning to make the writer that caused it findable.
+    """
+    rows = apps.get_model("anime", "Anime").objects.using(using)
+    flagged, cleared = _sync_flags(rows, using)
+    if flagged or cleared:
+        logger.warning(
+            "Adult flag drift fixed: %s rows newly flagged adult, %s rows cleared",
+            flagged,
+            cleared,
+        )
+    return {"flagged": flagged, "cleared": cleared}
+
+
+def _sync_flags(rows, using: str) -> tuple[int, int]:
     adult = adult_content_q(using)
     # Two narrow updates, so rows whose flag is already right are not rewritten.
-    changed = rows.filter(adult, is_adult=False).update(is_adult=True)
-    return changed + rows.exclude(adult).filter(is_adult=True).update(is_adult=False)
+    flagged = rows.filter(adult, is_adult=False).update(is_adult=True)
+    cleared = rows.exclude(adult).filter(is_adult=True).update(is_adult=False)
+    return flagged, cleared
