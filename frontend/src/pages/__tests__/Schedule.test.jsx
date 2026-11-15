@@ -399,8 +399,11 @@ describe('Schedule Component', () => {
     const retryButton = screen.getByRole('button', { name: /retry/i });
     fireEvent.click(retryButton);
 
-    // Should trigger page reload
-    expect(window.location.reload).toHaveBeenCalled();
+    // Retries in place (refetch), without reloading the page
+    await waitFor(() => {
+      expect(animeApi.getSchedule).toHaveBeenCalledTimes(2);
+    });
+    expect(window.location.reload).not.toHaveBeenCalled();
   });
 });
 

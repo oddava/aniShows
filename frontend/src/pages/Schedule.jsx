@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -15,6 +15,7 @@ import { ScheduleGridSkeleton } from '../components/skeletons';
 import { LoadingBar } from '../components/LoadingBar';
 import SEO from '../components/SEO';
 import ErrorBoundary from '../components/ErrorBoundary';
+import ErrorState from '../components/common/ErrorState';
 import {
   formatDate,
   getCurrentWeekdayIndex,
@@ -26,6 +27,24 @@ import { profileKeys } from '../api/queries/user';
 // Day names for display
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// "21:30" in the viewer's zone, from the next airing time (or the broadcast slot).
+const formatAirTime = (anime, preferredTimezone) => {
+  if (anime?.next_airing_date) {
+    const time = formatDate(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preferredTimezone);
+    if (time) return `Airs ${time}`;
+  }
+  return null;
+};
+
+const getTimezoneLabel = (preferredTimezone) => {
+  try {
+    const zone = preferredTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return zone ? zone.replace(/_/g, ' ') : 'local time';
+  } catch {
+    return 'local time';
+  }
+};
 
 // Helper to get start of week (Monday) - normalizes to midnight UTC
 const getWeekStart = (date) => {
@@ -39,46 +58,48 @@ const getWeekStart = (date) => {
 };
 
 // Day Selector Component
-const DaySelector = ({ days, selectedDay, onSelect, animeCounts, todayDay }) => {
-  const scrollRef = useRef(null);
+// Monday-first, matching the week range above it. Seven equal columns, so the
+// whole week is visible on a phone without sideways scrolling.
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
+const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, currentWeek, preferredTimezone }) => {
   return (
-    <div className="relative">
-      <div
-        ref={scrollRef}
-        className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 sm:mx-0 sm:px-0"
-      >
-        {days.map((day, index) => {
-          const isSelected = selectedDay === index;
-          const count = animeCounts[index] || 0;
-          const isToday = todayDay === index;
+    <div className="grid grid-cols-7 gap-1.5 sm:gap-2" role="group" aria-label="Day of the week">
+      {WEEK_ORDER.map((index, position) => {
+        const isSelected = selectedDay === index;
+        const count = animeCounts[index] || 0;
+        const isToday = todayDay === index;
+        const date = new Date(currentWeek.getTime() + position * 24 * 60 * 60 * 1000);
+        const dayOfMonth = formatDate(date, { day: 'numeric' }, preferredTimezone);
 
-          return (
-            <button
-              key={day}
-              onClick={() => onSelect(index)}
-              className={`
-                flex-shrink-0 px-3 py-2 rounded-lg border transition-all duration-200 min-w-[60px]
-                ${isSelected
-                  ? 'bg-accent text-white border-accent  '
-                  : 'bg-dark-100 border-gray-800 text-gray-400 hover:border-gray-700 hover:text-white'
-                }
-                ${isToday && !isSelected ? 'border-accent/30' : ''}
-              `}
-            >
-              <div className="text-[11px] font-medium uppercase tracking-wider">
-                {DAY_SHORT[index]}
-              </div>
-              <div className="flex items-center justify-center gap-1 mt-0.5">
-                <span className="text-base font-bold">{count}</span>
-                {count > 0 && (
-                  <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-accent'}`} />
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+        return (
+          <button
+            key={DAY_NAMES[index]}
+            type="button"
+            onClick={() => onSelect(index)}
+            aria-pressed={isSelected}
+            aria-current={isToday ? 'date' : undefined}
+            aria-label={`${DAY_NAMES[index]} ${dayOfMonth}, ${count} ${count === 1 ? 'episode' : 'episodes'}`}
+            className={`
+              relative flex flex-col items-center rounded-xl border py-2 sm:py-2.5 transition-colors duration-200
+              ${isSelected
+                ? 'bg-accent-dark border-transparent text-white'
+                : `bg-dark-100 text-gray-400 hover:text-white hover:border-gray-700 ${isToday ? 'border-accent/40' : 'border-gray-800'}`
+              }
+            `}
+          >
+            <span className={`text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-wider ${isSelected ? 'text-white/80' : isToday ? 'text-accent-light' : ''}`}>
+              {DAY_SHORT[index]}
+            </span>
+            <span className={`text-base sm:text-lg font-bold leading-tight tabular ${isSelected ? 'text-white' : 'text-gray-200'}`}>
+              {dayOfMonth}
+            </span>
+            <span aria-hidden="true" className={`mt-0.5 text-[11px] tabular ${isSelected ? 'text-white/80' : count > 0 ? 'text-gray-400' : 'text-gray-600'}`}>
+              {count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 };
@@ -89,17 +110,19 @@ const WeekNavigator = ({ currentWeek, onPrevWeek, onNextWeek, onToday, preferred
   weekEnd.setDate(weekEnd.getDate() + 6);
 
   return (
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-3 mb-4">
+      <div className="flex items-center gap-2 sm:gap-3">
         <button
+          type="button"
           onClick={onPrevWeek}
-          className="p-2 rounded-lg bg-dark-100 border border-gray-800 text-gray-400 hover:text-white hover:border-gray-700 transition-all"
+          aria-label="Previous week"
+          className="ui-icon-button h-9 w-9"
         >
-          <ChevronLeft className="w-5 h-5" />
+          <ChevronLeft aria-hidden="true" className="w-5 h-5" />
         </button>
 
-        <div className="text-center">
-          <div className="text-white font-semibold">
+        <div className="text-center min-w-[8.5rem]">
+          <div className="text-white font-semibold tabular" aria-live="polite">
             <span>
               {formatDate(currentWeek, { month: 'short', day: 'numeric' }, preferredTimezone)}
               {' - '}
@@ -109,16 +132,19 @@ const WeekNavigator = ({ currentWeek, onPrevWeek, onNextWeek, onToday, preferred
         </div>
 
         <button
+          type="button"
           onClick={onNextWeek}
-          className="p-2 rounded-lg bg-dark-100 border border-gray-800 text-gray-400 hover:text-white hover:border-gray-700 transition-all"
+          aria-label="Next week"
+          className="ui-icon-button h-9 w-9"
         >
-          <ChevronRight className="w-5 h-5" />
+          <ChevronRight aria-hidden="true" className="w-5 h-5" />
         </button>
       </div>
 
       <button
+        type="button"
         onClick={onToday}
-        className="px-4 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 transition-all text-sm font-medium"
+        className="ui-pill-button h-9 py-0"
       >
         Today
       </button>
@@ -134,6 +160,7 @@ export default function Schedule() {
   const adultContentEnabled = Boolean(user?.show_adult_content);
   const [isUpdatingAdultContent, setIsUpdatingAdultContent] = useState(false);
   const preferredTimezone = user?.preferred_timezone;
+  const timezoneLabel = useMemo(() => getTimezoneLabel(preferredTimezone), [preferredTimezone]);
   const todayDayIndex = useMemo(
     () => getCurrentWeekdayIndex(preferredTimezone),
     [preferredTimezone]
@@ -213,7 +240,7 @@ export default function Schedule() {
   ]);
 
   // Fetch schedule data
-  const { data: rawScheduleDays, isLoading, isFetching, error } = useQuery({
+  const { data: rawScheduleDays, isLoading, isFetching, error, refetch } = useQuery({
     ...scheduleQueries.week(isAuthenticated, adultContentEnabled),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -256,16 +283,12 @@ export default function Schedule() {
     return (
       <ErrorBoundary>
         <SEO page="schedule" />
-        <div className="min-h-[60vh] flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-red-400 mb-4">Failed to load schedule</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="btn-primary"
-            >
-              Retry
-            </button>
-          </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+          <ErrorState
+            title="Failed to load schedule"
+            message="This week’s airing times didn’t load. Try again in a moment."
+            onRetry={() => refetch()}
+          />
         </div>
       </ErrorBoundary>
     );
@@ -277,7 +300,14 @@ export default function Schedule() {
       <LoadingBar isLoading={isLoading || isFetching} />
       <div className="min-h-screen pb-20">
         {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          <header className="mb-6">
+            <h1 className="page-title">Airing Schedule</h1>
+            <p className="text-sm text-gray-500 mt-1.5">
+              Times are shown in your time zone ({timezoneLabel}).
+            </p>
+          </header>
+
           {/* Week Navigator */}
           <WeekNavigator
             currentWeek={currentWeek}
@@ -288,18 +318,19 @@ export default function Schedule() {
           />
 
           {/* Day Selector */}
-          <div className="mb-8">
+          <div className="mb-8 sm:mb-10">
             <DaySelector
-              days={DAY_NAMES}
               selectedDay={selectedDay}
               onSelect={setSelectedDay}
               animeCounts={animeCounts}
               todayDay={todayDayIndex}
+              currentWeek={currentWeek}
+              preferredTimezone={preferredTimezone}
             />
           </div>
 
           {/* Selected Day Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6">
             <h2 className="text-lg font-bold text-white/90">
               {DAY_NAMES[selectedDay]}
               <span className="text-gray-500 font-normal ml-2">
@@ -352,18 +383,19 @@ export default function Schedule() {
                   priority={index < 6}
                   index={index}
                   showAiringCountdown
+                  metaText={formatAirTime(anime, preferredTimezone)}
                 />
               ))}
             </div>
           ) : (
-            <div className="text-center py-20">
-              <div className="w-20 h-20 bg-dark-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Bell className="w-8 h-8 text-gray-600" />
+            <div className="ui-empty-state">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-dark-200 mb-5">
+                <Bell aria-hidden="true" className="w-6 h-6 text-gray-500" />
               </div>
               <h3 className="text-lg font-semibold text-white mb-2">
                 No episodes scheduled
               </h3>
-              <p className="text-gray-400 max-w-md mx-auto">
+              <p className="text-sm text-gray-400 max-w-md mx-auto">
                 There are no anime episodes airing on {DAY_NAMES[selectedDay]}.
                 Check other days or weeks to see upcoming releases.
               </p>
