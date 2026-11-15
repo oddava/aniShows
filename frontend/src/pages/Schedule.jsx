@@ -15,8 +15,11 @@ import SEO from '../components/SEO';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorState from '../components/common/ErrorState';
 import {
+  formatCalendarDate,
   formatDate,
   getCurrentWeekdayIndex,
+  getZonedCalendarToday,
+  resolveTimeZone,
   groupScheduleDaysByTimezone,
 } from '../utils/dateUtils';
 import { animeKeys, scheduleKeys, scheduleQueries } from '../api/queries/anime';
@@ -37,16 +40,17 @@ const formatAirTime = (anime, preferredTimezone) => {
 
 const getTimezoneLabel = (preferredTimezone) => {
   try {
-    const zone = preferredTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const zone = resolveTimeZone(preferredTimezone);
     return zone ? zone.replace(/_/g, ' ') : 'local time';
   } catch {
     return 'local time';
   }
 };
 
+// Calendar-day arithmetic on the UTC-anchored dates from getZonedCalendarToday.
 const addDays = (date, days) => {
   const d = new Date(date);
-  d.setDate(d.getDate() + days);
+  d.setUTCDate(d.getUTCDate() + days);
   return d;
 };
 
@@ -63,7 +67,7 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
         const count = animeCounts[index] || 0;
         const isToday = position === 0;
         const date = addDays(startOfToday, position);
-        const dayOfMonth = formatDate(date, { day: 'numeric' }, preferredTimezone);
+        const dayOfMonth = formatCalendarDate(date, { day: 'numeric' });
 
         return (
           <button
@@ -98,7 +102,7 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
 };
 
 // Range line: the dates the strip covers, and a shortcut back to today.
-const RangeHeader = ({ startOfToday, onToday, preferredTimezone }) => {
+const RangeHeader = ({ startOfToday, onToday, isTodaySelected }) => {
   const end = addDays(startOfToday, 6);
 
   return (
@@ -106,16 +110,17 @@ const RangeHeader = ({ startOfToday, onToday, preferredTimezone }) => {
       <div className="text-white font-semibold tabular">
         Next 7 days
         <span className="ml-2 font-normal text-gray-500">
-          {formatDate(startOfToday, { month: 'short', day: 'numeric' }, preferredTimezone)}
+          {formatCalendarDate(startOfToday, { month: 'short', day: 'numeric' })}
           {' – '}
-          {formatDate(end, { month: 'short', day: 'numeric' }, preferredTimezone)}
+          {formatCalendarDate(end, { month: 'short', day: 'numeric' })}
         </span>
       </div>
 
       <button
         type="button"
         onClick={onToday}
-        className="ui-pill-button h-9 py-0"
+        disabled={isTodaySelected}
+        className="ui-pill-button h-9 py-0 disabled:opacity-40 disabled:cursor-default disabled:hover:text-gray-300"
       >
         Today
       </button>
@@ -137,11 +142,8 @@ export default function Schedule() {
     [preferredTimezone]
   );
 
-  const startOfToday = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
+  // Today as a calendar date in the same zone the schedule is grouped by.
+  const startOfToday = useMemo(() => getZonedCalendarToday(preferredTimezone), [preferredTimezone]);
 
   // Get initial day from URL or use today
   const [selectedDay, setSelectedDay] = useState(() => {
@@ -249,7 +251,7 @@ export default function Schedule() {
           <RangeHeader
             startOfToday={startOfToday}
             onToday={handleToday}
-            preferredTimezone={preferredTimezone}
+            isTodaySelected={selectedDay === todayDayIndex}
           />
 
           {/* Day Selector */}
@@ -282,9 +284,12 @@ export default function Schedule() {
               <div className="text-sm text-gray-400">
                 {selectedDayAnime.length} {selectedDayAnime.length === 1 ? 'episode' : 'episodes'}
               </div>
+              {/* Members only: guests would just see a disabled control. */}
+              {isAuthenticated && (
               <button
                 onClick={handleToggleAdultContent}
-                disabled={!isAuthenticated || isUpdatingAdultContent}
+                type="button"
+                disabled={isUpdatingAdultContent}
                 className={`flex items-center justify-center w-[40px] h-[40px] rounded-xl transition-colors ${
                   adultContentEnabled
                     ? 'bg-accent/20 text-accent'
@@ -303,6 +308,7 @@ export default function Schedule() {
               >
                 {adultContentEnabled ? <Eye className="w-[18px] h-[18px]" /> : <EyeOff className="w-[18px] h-[18px]" />}
               </button>
+              )}
             </div>
           </div>
 
@@ -310,7 +316,7 @@ export default function Schedule() {
           {isLoading ? (
             <ScheduleGridSkeleton count={10} />
           ) : selectedDayAnime.length > 0 ? (
-            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 anime-card-grid-gap">
+            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-6 anime-card-grid-gap">
               {selectedDayAnime.map((anime, index) => (
                 <AnimeCard
                   key={anime.id}
@@ -332,7 +338,7 @@ export default function Schedule() {
               </h3>
               <p className="text-sm text-gray-400 max-w-md mx-auto">
                 There are no anime episodes airing on {DAY_NAMES[selectedDay]}.
-                Check other days or weeks to see upcoming releases.
+                Try another day in the strip above.
               </p>
             </div>
           )}

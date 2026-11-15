@@ -28,6 +28,9 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
     const queryClient = useQueryClient();
     const searchRef = useRef(null);
     const searchInputRef = useRef(null);
+    // Generation counter: results are applied only if no newer search started
+    // and the dropdown wasn't dismissed while the request was in flight.
+    const requestIdRef = useRef(0);
 
     // The first 100 titles, matched locally for instant suggestions. Loaded once
     // per mount; a failure only costs the local matches.
@@ -64,6 +67,8 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                 setShowSuggestions(false);
                 setSelectedIndex(-1);
                 setIsSearchExpanded(false);
+                requestIdRef.current += 1; // drop any in-flight results
+                setIsSearching(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -77,6 +82,8 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
         setShowSuggestions(false);
         setSelectedIndex(-1);
         setIsSearchExpanded(false);
+        requestIdRef.current += 1; // drop any in-flight results
+        setIsSearching(false);
         if (searchInputRef.current) {
             searchInputRef.current.blur();
         }
@@ -105,12 +112,10 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                 }
                 e.preventDefault();
                 setIsSearchExpanded(true);
-                setTimeout(() => {
-                    if (searchInputRef.current) {
-                        searchInputRef.current.focus();
-                        setShowSuggestions(true);
-                    }
-                }, 50);
+                // The input is always mounted, so focus now: keys typed right
+                // after the shortcut land in the field instead of being lost.
+                searchInputRef.current.focus();
+                if (searchInputRef.current.value.trim()) setShowSuggestions(true);
             }
 
             // ESC to blur search and close dropdowns
@@ -121,10 +126,14 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                     setShowSuggestions(false);
                     setSelectedIndex(-1);
                     setIsSearchExpanded(false);
+                    requestIdRef.current += 1; // drop any in-flight results
+                    setIsSearching(false);
                 } else {
                     setShowSuggestions(false);
                     setIsProfileOpen(false);
                     setIsSearchExpanded(false);
+                    requestIdRef.current += 1; // drop any in-flight results
+                    setIsSearching(false);
                 }
             }
 
@@ -178,12 +187,18 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
         loadingStartTimeRef.current = Date.now();
         setIsSearching(true);
 
+        const requestId = ++requestIdRef.current;
+        const isCurrent = () => requestIdRef.current === requestId;
+
         searchTimeoutRef.current = setTimeout(async () => {
             try {
-                // Get local fuzzy results for instant feedback
+                // Local fuzzy matches show straight away; API results merge in.
                 const fuzzyResults = fuzzySearchRef.current(searchQuery.trim());
+                if (fuzzyResults.length > 0 && isCurrent()) {
+                    setSearchSuggestions(fuzzyResults.slice(0, 8).map((item) => ({ ...item, isFuzzyMatch: true })));
+                    setShowSuggestions(true);
+                }
 
-                // Also call the API to search the full database
                 let apiResults = [];
                 try {
                     const results = await queryClient.fetchQuery({
@@ -199,19 +214,17 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                     // Fall back to cache-only results if API fails
                 }
 
-                // Combine results: prioritize API results, add unique fuzzy results
+                if (!isCurrent()) return;
+
+                // Combine results: API first (full database), then unique fuzzy matches
                 const seen = new Set();
                 const combined = [];
-
-                // Add API results first (they're from the full database)
                 apiResults.forEach(item => {
                     if (!seen.has(item.id)) {
                         seen.add(item.id);
                         combined.push(item);
                     }
                 });
-
-                // Add fuzzy results that weren't in API results (might have better match scoring)
                 fuzzyResults.forEach(item => {
                     if (!seen.has(item.id)) {
                         seen.add(item.id);
@@ -219,24 +232,20 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                     }
                 });
 
-                // Calculate remaining time to meet minimum loading duration
+                // An empty result waits out a short minimum so "No results"
+                // doesn't flash while the person is still typing.
                 const elapsed = Date.now() - loadingStartTimeRef.current;
-                const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsed);
+                const remainingTime = combined.length > 0 ? 0 : Math.max(0, MIN_LOADING_TIME - elapsed);
 
-                // Delay showing results to prevent flickering
                 setTimeout(() => {
-                    if (combined.length > 0) {
-                        setSearchSuggestions(combined.slice(0, 8));
-                        setShowSuggestions(true);
-                    } else {
-                        // No results - show empty state
-                        setSearchSuggestions([]);
-                        setShowSuggestions(true);
-                    }
+                    if (!isCurrent()) return;
+                    setSearchSuggestions(combined.slice(0, 8));
+                    setShowSuggestions(true);
                     setIsSearching(false);
                 }, remainingTime);
             } catch (error) {
                 logger.error('Search error:', error);
+                if (!isCurrent()) return;
                 setSearchSuggestions([]);
                 setIsSearching(false);
             }
@@ -257,6 +266,8 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
             setShowSuggestions(false);
             setSelectedIndex(-1);
             setIsSearchExpanded(false);
+            requestIdRef.current += 1; // drop any in-flight results
+            setIsSearching(false);
             if (searchInputRef.current) {
                 searchInputRef.current.blur();
             }

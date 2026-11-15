@@ -171,7 +171,7 @@ describe('Schedule Component', () => {
       expect(screen.getByText(/No episodes scheduled/i)).toBeInTheDocument();
     });
 
-    const emptyStateParagraph = screen.getByText(/Check other days or weeks/i);
+    const emptyStateParagraph = screen.getByText(/Try another day/i);
     expect(emptyStateParagraph).toBeInTheDocument();
   });
 

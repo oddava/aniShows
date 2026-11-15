@@ -136,6 +136,8 @@ export default function AppRoutes() {
                     <Route path="forums/category/:slug" element={<ForumThreadList />} />
                     <Route path="forums/category/:slug/create" element={<CreateThread />} />
                     <Route path="forums/thread/:id" element={<ForumThreadDetail />} />
+                    {/* Inside Layout, so a dead link still has the nav and footer. */}
+                    <Route path="*" element={<NotFound />} />
                 </Route>
 
                 <Route
@@ -165,7 +167,6 @@ export default function AppRoutes() {
                     <Route path="logs" element={<AdminLogs />} />
                     <Route path="review-reports" element={<AdminReviewReports />} />
                 </Route>
-                <Route path="*" element={<NotFound />} />
             </Routes>
         </Suspense>
     );

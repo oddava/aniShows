@@ -144,40 +144,47 @@ export default function TopFilterBar({
                 
                 {/* Search Input - Main Anchor */}
                 <div className="flex-1 relative group">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-400 group-focus-within:text-accent transition-colors" />
+                    <Search aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-400 group-focus-within:text-accent transition-colors" />
                     <input
                         ref={inputRef}
-                        type="text"
+                        type="search"
+                        aria-label="Search anime"
+                        enterKeyHint="search"
+                        autoComplete="off"
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
                         onFocus={() => { isSearchFocusedRef.current = true; }}
                         onBlur={() => { isSearchFocusedRef.current = false; }}
                         placeholder="Search anime..."
-                        className="w-full rounded-xl bg-dark-200 pl-11 pr-10 py-3 text-base text-white outline-none transition-all placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-accent/50 focus:bg-dark-100"
+                        className="w-full rounded-xl bg-dark-200 pl-11 pr-10 py-3 text-base text-white transition-colors placeholder:text-gray-500 focus:bg-dark-100 [&::-webkit-search-cancel-button]:appearance-none"
                     />
                     {searchInput && (
                         <button
+                            type="button"
                             onClick={clearSearch}
-                            className="flat-control absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-dark p-1 text-gray-400 hover:text-white"
+                            aria-label="Clear search"
+                            className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-dark p-1 text-gray-400 hover:text-white"
                         >
-                            <X className="w-3.5 h-3.5" />
+                            <X aria-hidden="true" className="w-3.5 h-3.5" />
                         </button>
                     )}
                 </div>
 
                 {/* Compact Year Stepper */}
                 <div className="hidden sm:flex items-center bg-dark-200 rounded-xl p-1 h-[48px]">
-                    <button 
+                    <button
+                        type="button"
                         onClick={() => handleYearStep(-1)}
                         className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-100 transition-colors"
                         aria-label="Previous year"
                     >
                         <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <span className="w-12 text-center text-sm font-bold text-gray-300">
-                        {currentYear || 'Year'}
+                    <span className="w-[4.5rem] text-center text-sm font-semibold text-gray-300 tabular" aria-live="polite">
+                        {currentYear || 'Any year'}
                     </span>
-                    <button 
+                    <button
+                        type="button"
                         onClick={() => handleYearStep(1)}
                         className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-100 transition-colors"
                         aria-label="Next year"
@@ -186,8 +193,10 @@ export default function TopFilterBar({
                     </button>
                 </div>
 
-                {/* Adult Content Toggle */}
+                {/* Adult Content Toggle (members only; guests would see a dead control) */}
+                {canToggleAdultContent && (
                 <button
+                    type="button"
                     onClick={onToggleAdultContent}
                     disabled={isUpdatingAdultContent || !canToggleAdultContent}
                     className={`flex flex-shrink-0 items-center justify-center w-[48px] h-[48px] rounded-xl transition-colors ${
@@ -206,8 +215,9 @@ export default function TopFilterBar({
                                 : 'Explicit hentai: hidden'
                     }
                 >
-                    {adultContentEnabled ? <Eye className="w-[18px] h-[18px]" /> : <EyeOff className="w-[18px] h-[18px]" />}
+                    {adultContentEnabled ? <Eye aria-hidden="true" className="w-[18px] h-[18px]" /> : <EyeOff aria-hidden="true" className="w-[18px] h-[18px]" />}
                 </button>
+                )}
 
                 {/* Advanced Filters Button */}
                 <button

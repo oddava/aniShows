@@ -1,3 +1,4 @@
+import { Star } from 'lucide-react';
 import {
     applyImageFallback,
     getImageFallbackUrl,
@@ -31,10 +32,11 @@ export default function SearchSuggestionList({
     setSelectedIndex,
     handleSuggestionClick,
     handleSearch,
+    idPrefix = 'navbar-search',
 }) {
     return (
         <>
-            <div role="listbox" id="navbar-search-listbox" aria-label="Search suggestions">
+            <div role="listbox" id={`${idPrefix}-listbox`} aria-label="Search suggestions">
             {searchSuggestions.map((anime, index) => {
                 const imageUrl = getOptimizedImageUrl(anime, 'cover', 'small');
                 const fallbackImageUrl = getImageFallbackUrl(anime, 'cover');
@@ -42,7 +44,7 @@ export default function SearchSuggestionList({
                 return (
                     <div
                         key={anime.id}
-                        id={`navbar-search-option-${index}`}
+                        id={`${idPrefix}-option-${index}`}
                         role="option"
                         aria-selected={selectedIndex === index}
                         onClick={() => handleSuggestionClick(anime.slug)}
@@ -65,7 +67,7 @@ export default function SearchSuggestionList({
                             </h4>
                             <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
                                 <span className="text-gray-500">{anime.anime_type}</span>
-                                {anime.episode_count && (
+                                {anime.episode_count > 0 && (
                                     <>
                                         <span className="text-gray-600">•</span>
                                         <span>{anime.episode_count} eps</span>
@@ -73,11 +75,11 @@ export default function SearchSuggestionList({
                                 )}
                             </div>
                         </div>
-                        {anime.rating && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-yellow-500/10 rounded-md flex-shrink-0">
-                                <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-tighter">Rating</span>
-                                <span className="text-xs font-semibold text-yellow-500">{anime.rating}</span>
-                            </div>
+                        {Number(anime.rating) > 0 && (
+                            <span className="flex items-center gap-1 flex-shrink-0 text-xs font-semibold text-yellow-400 tabular">
+                                <Star aria-hidden="true" className="w-3 h-3 fill-current" />
+                                <span className="sr-only">Rating </span>{anime.rating}
+                            </span>
                         )}
                         {anime.isExactMatch && (
                             <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full flex-shrink-0">

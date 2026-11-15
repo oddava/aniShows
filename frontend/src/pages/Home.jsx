@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
-import { Play, Pause, Star, ChevronRight, Plus, Check, Loader2, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Play, Pause, Star, ChevronRight, Plus, Check, Loader2 } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ import logger from '../utils/logger';
 import SEO from '../components/SEO';
 import SectionHeader from '../components/common/SectionHeader';
 import ErrorState from '../components/common/ErrorState';
+import HeroSearch from '../components/home/HeroSearch';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
 import { animeKeys, animeQueries } from '../api/queries/anime';
 import { listKeys, recommendationQueries, userQueries } from '../api/queries/user';
@@ -262,8 +263,6 @@ function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, i
 }
 
 function GuestIntroHero({ showAuthLinks = true }) {
-    const navigate = useNavigate();
-    const [query, setQuery] = useState('');
     const formRef = useRef(null);
 
     // While this search field is on screen, the navbar's search pill hides
@@ -283,14 +282,9 @@ function GuestIntroHero({ showAuthLinks = true }) {
         };
     }, []);
 
-    const handleSubmit = (event) => {
-        event.preventDefault();
-        const trimmed = query.trim();
-        navigate(trimmed ? `/browse?q=${encodeURIComponent(trimmed)}` : '/browse');
-    };
 
     return (
-        <section className="relative overflow-hidden border-b border-gray-900 pt-28 pb-16 sm:pt-40 sm:pb-24">
+        <section className="relative overflow-hidden border-b border-gray-900 pt-24 pb-12 sm:pt-40 sm:pb-24">
             <div aria-hidden="true" className="absolute inset-0 bg-dark">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_15%_10%,color-mix(in_srgb,var(--color-accent)_13%,transparent)_0%,transparent_65%)]" />
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-dark" />
@@ -307,23 +301,7 @@ function GuestIntroHero({ showAuthLinks = true }) {
                         you already love.
                     </p>
 
-                    <form ref={formRef} role="search" onSubmit={handleSubmit} className="relative max-w-lg mb-5">
-                        <label htmlFor="home-search" className="sr-only">Search anime</label>
-                        <Search aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-500 pointer-events-none" />
-                        <input
-                            id="home-search"
-                            type="search"
-                            value={query}
-                            onChange={(event) => setQuery(event.target.value)}
-                            placeholder="Search anime by title"
-                            autoComplete="off"
-                            enterKeyHint="search"
-                            className="w-full h-12 sm:h-[52px] rounded-xl bg-dark-100 pl-11 pr-28 text-[15px] text-white placeholder:text-gray-500"
-                        />
-                        <button type="submit" className="btn-primary absolute right-1.5 top-1/2 -translate-y-1/2 h-9 sm:h-10 px-4 text-sm">
-                            Search
-                        </button>
-                    </form>
+                    <HeroSearch ref={formRef} />
 
                     {showAuthLinks && (
                     <p className="text-sm text-gray-500">
@@ -522,7 +500,9 @@ function CurrentlyWatchingSection() {
                 <AnimeCard
                     anime={entry.anime}
                     userListEntry={entry}
-                    metaText={`Ep ${entry.episodes_watched || 0} / ${entry.anime?.episode_count || '?'}`}
+                    metaText={entry.anime?.episode_count
+                        ? `Ep ${entry.episodes_watched || 0} / ${entry.anime.episode_count}`
+                        : `Ep ${entry.episodes_watched || 0}`}
                 />
             )}
         />

@@ -56,6 +56,11 @@ export default function BrowseResults({
           />
         ) : (
           <>
+            {currentSearch && (
+              <h2 role="status" className="section-title mb-5 normal-case tracking-normal font-semibold text-sm">
+                Results for &ldquo;<span className="text-gray-200">{currentSearch}</span>&rdquo;
+              </h2>
+            )}
             <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 anime-card-grid-gap">
               {allAnime.map((anime, index) => (
                   <AnimeCard

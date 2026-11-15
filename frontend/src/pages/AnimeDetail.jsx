@@ -245,8 +245,8 @@ export default function AnimeDetail() {
             </div>
 
             {/* Content Container */}
-            <div className="relative -mt-32 px-4 sm:px-6 lg:px-8 pb-16">
-                <div className="max-w-[1440px] mx-auto">
+            <div className="relative -mt-32 pb-16">
+                <div className="page-container">
                     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_300px] gap-8 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
                         <PosterColumn {...trackingProps} />
@@ -261,7 +261,7 @@ export default function AnimeDetail() {
                             />
 
                             {/* Tab Navigation */}
-                            <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-1.5 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
+                            <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] sm:[mask-image:none] ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
                                 data-title="Navigation"
                             >
                                 {tabsWithCounts.map((tab) => (

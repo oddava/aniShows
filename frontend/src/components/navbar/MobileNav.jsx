@@ -1,20 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Bell, CalendarDays, Compass, Home, User } from 'lucide-react';
 
 /**
  * The mobile bottom navigation island (Home, Browse, Schedule, Notifs when
  * signed in, Account), shown on
- * the main sections only. A long press on Account opens its menu; a tap goes
- * to the user's profile.
+ * the main sections only. Account opens a small menu (Profile, Settings,
+ * Sign Out) on tap, click, Enter or Space.
  */
 export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadCount, currentUserProfilePath }) {
     const [isMobileAccountOpen, setIsMobileAccountOpen] = useState(false);
-    const navigate = useNavigate();
     const location = useLocation();
     const mobileAccountRef = useRef(null);
-    const accountHoldTimerRef = useRef(null);
-    const longPressTriggeredRef = useRef(false);
+    const accountButtonRef = useRef(null);
 
     // Close the popovers when clicking outside them
     useEffect(() => {
@@ -31,13 +29,18 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
         setIsMobileAccountOpen(false);
     }, [location.pathname]);
 
+    // Escape closes the account menu and puts focus back on its button.
     useEffect(() => {
-        return () => {
-            if (accountHoldTimerRef.current) {
-                clearTimeout(accountHoldTimerRef.current);
+        if (!isMobileAccountOpen) return undefined;
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setIsMobileAccountOpen(false);
+                accountButtonRef.current?.focus();
             }
         };
-    }, []);
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [isMobileAccountOpen]);
 
     const isProfileRoute = location.pathname === '/profile'
         || location.pathname.startsWith('/profile/')
@@ -76,37 +79,6 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
     const mobilePopoverBackground = 'color-mix(in srgb, var(--color-dark-50) 94%, transparent)';
     const mobilePopoverTipBackground = 'color-mix(in srgb, var(--color-dark-50) 94%, transparent)';
 
-    const startAccountHold = () => {
-        longPressTriggeredRef.current = false;
-        if (accountHoldTimerRef.current) {
-            clearTimeout(accountHoldTimerRef.current);
-        }
-        accountHoldTimerRef.current = setTimeout(() => {
-            longPressTriggeredRef.current = true;
-            setIsMobileAccountOpen(true);
-        }, 350);
-    };
-
-    const endAccountHold = () => {
-        if (accountHoldTimerRef.current) {
-            clearTimeout(accountHoldTimerRef.current);
-            accountHoldTimerRef.current = null;
-        }
-        if (!longPressTriggeredRef.current) {
-            setIsMobileAccountOpen(false);
-            if (!isOnCurrentUserProfile) {
-                navigate(currentUserProfilePath);
-            }
-        }
-    };
-
-    const cancelAccountHold = () => {
-        if (accountHoldTimerRef.current) {
-            clearTimeout(accountHoldTimerRef.current);
-            accountHoldTimerRef.current = null;
-        }
-    };
-
     if (!showMobileIsland) return null;
 
     return (
@@ -125,7 +97,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                         aria-current={location.pathname === '/' ? 'page' : undefined}
                         className={mobileTabClasses(location.pathname === '/')}
                     >
-                        <Home className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                        <Home aria-hidden="true" className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                         <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Home</span>
                     </Link>
                     <Link
@@ -156,7 +128,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                     {mobileUnreadCount > 9 ? '9+' : mobileUnreadCount}
                                 </span>
                             )}
-                            <Bell className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                            <Bell aria-hidden="true" className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                         </span>
                         <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Notifs</span>
                     </Link>
@@ -165,27 +137,30 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                         {isAuthenticated ? (
                             <>
                                 <button
+                                    ref={accountButtonRef}
                                     type="button"
-                                    onPointerDown={startAccountHold}
-                                    onPointerUp={endAccountHold}
-                                    onPointerLeave={cancelAccountHold}
-                                    onPointerCancel={cancelAccountHold}
-                                    onContextMenu={(e) => e.preventDefault()}
+                                    onClick={() => setIsMobileAccountOpen((open) => !open)}
+                                    aria-haspopup="menu"
+                                    aria-expanded={isMobileAccountOpen}
+                                    aria-controls="mobile-account-menu"
                                     className={`w-full ${mobileTabClasses(isProfileRoute || isPathActive('/settings'))}`}
                                 >
                                     {user?.avatar ? (
                                         <img
                                             src={user.avatar}
-                                            alt={user.username}
+                                            alt=""
                                             className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-white/15"
                                         />
                                     ) : (
-                                        <User className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                                        <User aria-hidden="true" className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                                     )}
                                     <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Account</span>
                                 </button>
                                 {isMobileAccountOpen && (
                                     <div
+                                        id="mobile-account-menu"
+                                        role="menu"
+                                        aria-label="Account"
                                         className="absolute bottom-full right-0 mb-2.5 w-36 overflow-hidden rounded-xl border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.6)] backdrop-blur-xl"
                                         style={{ background: mobilePopoverBackground }}
                                     >
@@ -195,6 +170,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                         />
                                         {!isOnCurrentUserProfile && (
                                             <Link
+                                                role="menuitem"
                                                 to={currentUserProfilePath}
                                                 className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
                                             >
@@ -203,6 +179,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                         )}
                                         {!isPathActive('/settings') && (
                                             <Link
+                                                role="menuitem"
                                                 to="/settings"
                                                 className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
                                             >
@@ -210,6 +187,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                             </Link>
                                         )}
                                         <button
+                                            role="menuitem"
                                             type="button"
                                             onClick={() => {
                                                 logout();
@@ -227,7 +205,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                 to={mobileProfilePath}
                                 className={mobileTabClasses(location.pathname === '/login' || location.pathname === '/register')}
                             >
-                                <User className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                                <User aria-hidden="true" className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                                 <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">{mobileProfileLabel}</span>
                             </Link>
                         )}
