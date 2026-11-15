@@ -26,6 +26,7 @@ import ReviewsSection from '../components/animeDetail/ReviewsSection';
 import RecommendationsSidebar from '../components/animeDetail/RecommendationsSidebar';
 import useAnimeDetailTabData from '../components/animeDetail/useAnimeDetailTabData';
 import useAnimeReviews from '../components/animeDetail/useAnimeReviews';
+import ErrorState from '../components/common/ErrorState';
 
 export default function AnimeDetail() {
     const { slug, '*': tabPath } = useParams();
@@ -49,7 +50,7 @@ export default function AnimeDetail() {
     const animeDetailQueryKey = useMemo(() => animeKeys.detail(slug, user?.id), [slug, user?.id]);
 
     // Queries
-    const { data: anime, isLoading, isError } = useQuery({
+    const { data: anime, isLoading, isError, error, refetch } = useQuery({
         ...animeQueries.detail(slug, user?.id),
         staleTime: 300000, // 5 minutes
         gcTime: 600000, // 10 minutes
@@ -142,11 +143,28 @@ export default function AnimeDetail() {
     // Loading & Error states
     if (isLoading) return <AnimeDetailSkeleton />;
 
+    const isNotFound = !isError || error?.response?.status === 404;
     if (isError || !anime) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center">
-                <p className="text-gray-400 mb-4">Anime not found</p>
-                <Link to="/browse" className="btn-primary">Browse Anime</Link>
+            <div className="min-h-[70vh] flex items-center justify-center px-4 pt-24">
+                {isNotFound ? (
+                    <div className="ui-empty-state w-full max-w-lg">
+                        <h1 className="text-lg font-semibold text-white mb-2">Anime not found</h1>
+                        <p className="text-sm text-gray-400 mb-6">
+                            This page may have moved, or the title isn’t in the catalog yet.
+                        </p>
+                        <Link to="/browse" className="btn-primary text-sm">Browse Anime</Link>
+                    </div>
+                ) : (
+                    <ErrorState
+                        className="w-full max-w-lg"
+                        title="Couldn’t load this anime"
+                        message="The server didn’t respond. Try again in a moment."
+                        onRetry={() => refetch()}
+                    >
+                        <Link to="/browse" className="btn-secondary text-sm">Browse Anime</Link>
+                    </ErrorState>
+                )}
             </div>
         );
     }

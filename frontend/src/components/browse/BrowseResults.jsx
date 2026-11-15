@@ -3,6 +3,7 @@ import AnimeCard from '../AnimeCard';
 import AnimeListRow from './AnimeListRow';
 import AnimeMinimalCard from './AnimeMinimalCard';
 import EmptyState from './EmptyState';
+import ErrorState from '../common/ErrorState';
 import { GridSkeleton, ListSkeleton, MinimalSkeleton } from '../skeletons';
 import VirtualizedAnimeList from '../VirtualizedAnimeList';
 
@@ -27,17 +28,13 @@ export default function BrowseResults({
   loadMoreRef,
 }) {
   const errorState = (
-    <div className="text-center py-16">
-      <p className="text-red-400 mb-4">Failed to load anime</p>
-      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-        <button onClick={() => refetch()} className="btn-primary">
-          Try Again
-        </button>
-        <button onClick={() => window.location.reload()} className="btn-secondary">
-          Reload Page
-        </button>
-      </div>
-    </div>
+    <ErrorState
+      className="my-4 col-span-full"
+      title="Failed to load anime"
+      message="The catalog didn’t respond. Your filters are kept; try again."
+      onRetry={() => refetch()}
+      retryLabel="Try Again"
+    />
   );
 
   // Grid View
