@@ -17,7 +17,20 @@ from rest_framework.test import APIClient
 
 from apps.animes.tests.catalog_fixtures import PUBLIC_ENDPOINTS, build_catalog, build_viewer
 
+# Signed-in variants of the anonymous endpoints. A signed-in viewer adds per-user
+# work (list status, favourites, the adult-content preference), so these get
+# their own budgets. Kept here rather than in PUBLIC_ENDPOINTS, which the API
+# contract snapshot also iterates.
+SIGNED_IN_ENDPOINTS = {
+    f"{name}_signed_in": (PUBLIC_ENDPOINTS[name][0], True)
+    for name in ("search", "trending", "browse_rows", "schedule")
+}
+ENDPOINTS = {**PUBLIC_ENDPOINTS, **SIGNED_IN_ENDPOINTS}
+
 # Cold-cache query counts measured on 2026-11-09, before the Phase 1+ refactors.
+# The signed-in budgets and detail_authenticated were measured on 2026-11-16.
+# Signing in adds 3 queries to each of these endpoints (the per-viewer
+# enrichment applied after the shared cache), independent of row count.
 BUDGETS = {
     "list": 4,
     "list_authenticated": 7,
@@ -27,11 +40,24 @@ BUDGETS = {
     "schedule": 4,
     "detail": 8,
     "public_profile": 4,
+    "detail_authenticated": 11,
+    "search_signed_in": 7,
+    "trending_signed_in": 7,
+    "browse_rows_signed_in": 11,
+    "schedule_signed_in": 7,
 }
 
 # Endpoints that list catalog rows. Their payload must include every fixture
 # row, or the "no N+1" comparison would pass on an empty response.
-LISTING_ENDPOINTS = {"list", "list_authenticated", "search", "trending", "browse_rows", "schedule"}
+LISTING_ENDPOINTS = {
+    "list",
+    "list_authenticated",
+    "search",
+    "trending",
+    "browse_rows",
+    "schedule",
+    *SIGNED_IN_ENDPOINTS,
+}
 
 
 def _cold_query_count(client: APIClient, url: str) -> tuple[int, str]:
@@ -50,7 +76,7 @@ def _no_side_effect_tasks(monkeypatch):
 @pytest.mark.django_db
 @pytest.mark.parametrize("name", list(BUDGETS))
 def test_public_endpoint_query_budget(name):
-    build_url, authenticated = PUBLIC_ENDPOINTS[name]
+    build_url, authenticated = ENDPOINTS[name]
     first_batch = build_catalog(3)
     viewer = build_viewer(first_batch)
     client = APIClient()
