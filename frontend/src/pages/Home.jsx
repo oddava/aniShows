@@ -423,22 +423,25 @@ function MemberCarouselHero({
                                 <Play aria-hidden="true" className="w-4 h-4 fill-current" />
                                 View Details
                             </Link>
-                            <button
-                                type="button"
-                                onClick={onAddToList}
-                                disabled={heroListLoading || isHeroInList}
-                                aria-busy={heroListLoading}
-                                className="btn-secondary min-w-[140px] px-6 py-2.5 sm:px-7 sm:py-3 disabled:opacity-100 disabled:cursor-default"
-                            >
-                                {heroListLoading ? (
-                                    <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />
-                                ) : isHeroInList ? (
+                            {isHeroInList ? (
+                                <span className="inline-flex items-center gap-2 px-2 text-sm font-semibold text-gray-300">
                                     <Check aria-hidden="true" className="w-4 h-4 text-emerald-400" />
-                                ) : (
-                                    <Plus aria-hidden="true" className="w-4 h-4" />
-                                )}
-                                {isHeroInList ? 'In List' : 'Add to List'}
-                            </button>
+                                    In your list
+                                </span>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={onAddToList}
+                                    disabled={heroListLoading}
+                                    aria-busy={heroListLoading}
+                                    className="btn-secondary min-w-[140px] px-6 py-2.5 sm:px-7 sm:py-3"
+                                >
+                                    {heroListLoading
+                                        ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />
+                                        : <Plus aria-hidden="true" className="w-4 h-4" />}
+                                    Add to List
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
@@ -502,6 +505,7 @@ function CurrentlyWatchingSection() {
                 <AnimeCard
                     anime={entry.anime}
                     userListEntry={entry}
+                    showProgress
                     metaText={entry.anime?.episode_count
                         ? `Ep ${entry.episodes_watched || 0} / ${entry.anime.episode_count}`
                         : `Ep ${entry.episodes_watched || 0}`}

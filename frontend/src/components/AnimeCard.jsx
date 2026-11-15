@@ -53,6 +53,9 @@ function AnimeCard({
     showAiringCountdown = false,
     showMeta = false,
     metaText = null,
+    // Touch screens have no hover, so the quick "+1 episode" pill would sit on
+    // every poster; only shelves built around progress opt in.
+    showProgress = false,
 }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
@@ -440,7 +443,7 @@ function AnimeCard({
                     )}
                     {/* Watching Progress Overlay */}
                     {isAuthenticated && listStatus === 'Watching' && (
-                        <div className={`absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-200 flex ${airingCountdown ? '[@media(hover:none)]:bottom-11' : ''}`}>
+                        <div className={`absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 flex ${showProgress ? '[@media(hover:none)]:opacity-100' : ''} ${showProgress && airingCountdown ? '[@media(hover:none)]:bottom-11' : ''}`}>
                             <div className="h-6 sm:h-7 px-2.5 rounded-md flex items-center justify-between gap-2.5 bg-black/50 text-white border border-white/20 shadow-none pointer-events-auto">
                                 <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide">
                                     {anime.episode_count 
@@ -487,7 +490,7 @@ function AnimeCard({
                         </h3>
                     </div>
                     {metaLine && (
-                        <p className="mt-1 text-[11.5px] text-gray-500 tabular truncate">{metaLine}</p>
+                        <p className={`mt-1 text-[11.5px] text-gray-500 tabular truncate ${showProgress && listStatus === 'Watching' ? '[@media(hover:none)]:hidden' : ''}`}>{metaLine}</p>
                     )}
                 </Link>
             </div>
@@ -506,6 +509,7 @@ const arePropsEqual = (prevProps, nextProps) => {
     if (prevProps.showAiringCountdown !== nextProps.showAiringCountdown) return false;
     if (prevProps.showMeta !== nextProps.showMeta) return false;
     if (prevProps.metaText !== nextProps.metaText) return false;
+    if (prevProps.showProgress !== nextProps.showProgress) return false;
 
     const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;
     const nextEntry = nextProps.userListEntry || nextProps.anime.user_list_status;

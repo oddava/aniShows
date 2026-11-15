@@ -76,8 +76,6 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
     `;
 
     const mobileIslandBackground = 'var(--color-surface-glass)';
-    const mobilePopoverBackground = 'color-mix(in srgb, var(--color-dark-50) 94%, transparent)';
-    const mobilePopoverTipBackground = 'color-mix(in srgb, var(--color-dark-50) 94%, transparent)';
 
     if (!showMobileIsland) return null;
 
@@ -168,13 +166,8 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                     <div
                                         id="mobile-account-menu"
                                         aria-label="Account"
-                                        className="absolute bottom-full right-0 mb-2.5 w-40 overflow-hidden rounded-xl border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.6)] backdrop-blur-xl"
-                                        style={{ background: mobilePopoverBackground }}
+                                        className="absolute bottom-full right-0 mb-2.5 w-40 rounded-xl border border-white/10 bg-dark-100 p-1 shadow-lg shadow-black/40"
                                     >
-                                        <div
-                                            className="absolute -bottom-1.5 right-4 h-3 w-3 rotate-45 border-r border-b border-white/12"
-                                            style={{ backgroundColor: mobilePopoverTipBackground }}
-                                        />
                                         {!isOnCurrentUserProfile && (
                                             <Link
                                                 to={currentUserProfilePath}

@@ -115,6 +115,8 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                 // The input is always mounted, so focus now: keys typed right
                 // after the shortcut land in the field instead of being lost.
                 searchInputRef.current.focus();
+                // A leftover query is selected, so typing replaces it.
+                searchInputRef.current.select();
                 if (searchInputRef.current.value.trim()) setShowSuggestions(true);
             }
 

@@ -29,8 +29,8 @@ export default function TitleSection({
     return (
         <div className="text-left mb-8">
             <div className="lg:hidden mb-8">
-                <div className="flex max-w-[360px] items-end gap-4">
-                    <div className="w-[118px] flex-shrink-0">
+                <div className="flex max-w-[360px] md:max-w-[420px] items-end gap-4">
+                    <div className="w-[118px] md:w-40 flex-shrink-0">
                         <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-dark-200 shadow-xl shadow-black/40 ring-1 ring-white/10">
                             {!isCoverLoaded && (
                                 <div
@@ -41,7 +41,7 @@ export default function TitleSection({
                             <img
                                 src={coverUrl}
                                 srcSet={coverSrcSet}
-                                sizes="118px"
+                                sizes="(min-width: 768px) 160px, 118px"
                                 alt={anime.title}
                                 onLoad={() => setIsCoverLoaded(true)}
                                 onError={(event) => {

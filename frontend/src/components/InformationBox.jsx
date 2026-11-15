@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Tv, Hash, Clock, Calendar, BookOpen, Building2, Users, Bell, ExternalLink } from 'lucide-react';
 import {
@@ -37,7 +38,12 @@ const getFilterPillStyles = (accentColor) => ({
     backgroundColor: accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)',
 });
 
+const TAG_PREVIEW_COUNT = 12;
+
 export default function InformationBox({ anime, className, accentColor }) {
+    const [showAllTags, setShowAllTags] = useState(false);
+    const tagCount = anime?.tags?.length || 0;
+    const visibleTags = showAllTags ? anime?.tags || [] : (anime?.tags || []).slice(0, TAG_PREVIEW_COUNT);
     const totalMembers = getStatusDistributionTotal(
         normalizeStatusDistribution(anime?.status_distribution)
     );
@@ -191,9 +197,9 @@ export default function InformationBox({ anime, className, accentColor }) {
                 {anime.tags && anime.tags.length > 0 && (
                     <div className="pt-5 mt-5 border-t border-white/5">
                         <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">Tags</p>
-                        <div className="max-h-64 overflow-y-auto pr-1">
-                            <div className="flex flex-wrap gap-2">
-                                {anime.tags.map((tag) => (
+                        <div>
+                            <div id={`tags-${anime.id}`} className="flex flex-wrap gap-2">
+                                {visibleTags.map((tag) => (
                                     <Link
                                         key={tag}
                                         to={getBrowseFilterHref('tags', tag)}
@@ -212,6 +218,17 @@ export default function InformationBox({ anime, className, accentColor }) {
                                     </Link>
                                 ))}
                             </div>
+                            {tagCount > TAG_PREVIEW_COUNT && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllTags((value) => !value)}
+                                    aria-expanded={showAllTags}
+                                    aria-controls={`tags-${anime.id}`}
+                                    className="mt-3 -ml-1 rounded-md px-1 py-0.5 text-xs font-semibold text-gray-400 hover:text-white transition-colors"
+                                >
+                                    {showAllTags ? 'Show less' : `Show all ${tagCount}`}
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}

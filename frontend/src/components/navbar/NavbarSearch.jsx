@@ -63,7 +63,7 @@ export default function NavbarSearch({ search }) {
                             }
                         }}
                         className={`absolute left-0 z-10 flex items-center transition-colors duration-200 ${isSearchExpanded ? 'h-[36px] w-[36px] justify-center pointer-events-none' : 'w-10 h-10 lg:w-full lg:h-9 justify-center lg:justify-start lg:gap-2.5 lg:pl-3 lg:pr-2 rounded-full lg:bg-dark-100 lg:border lg:border-white/5 text-gray-300 hover:text-white hover:bg-white/10 lg:hover:bg-dark-100 lg:hover:border-white/10 cursor-pointer pointer-events-auto'}`}
-                        aria-label="Toggle Search"
+                        aria-label="Search anime"
                         aria-keyshortcuts="/ Control+K"
                         tabIndex={isSearchExpanded ? -1 : 0}
                     >

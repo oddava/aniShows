@@ -24,13 +24,13 @@ export default function StatusDistribution({
                     {title}
                 </h3>
             )}
-            <div className="grid grid-cols-5 gap-1 mb-4">
+            <div className="flex justify-between gap-1 mb-4">
                 {STATUSES.map(({ key, label, color }) => {
                     const count = distribution[key];
                     const isActive = count > 0;
                     return (
-                        <div key={key} className="flex min-w-0 flex-col items-center text-center">
-                            <span className={`max-w-full truncate font-bold leading-none tabular tracking-tight ${isActive ? 'text-gray-200 text-sm' : 'text-gray-600 text-sm'}`}>
+                        <div key={key} className="flex flex-col items-center text-center">
+                            <span className={`whitespace-nowrap font-bold leading-none tabular tracking-tight ${isActive ? 'text-gray-200 text-[13px]' : 'text-gray-600 text-[13px]'}`}>
                                 {formatCompactCount(count)}
                             </span>
                             <span 

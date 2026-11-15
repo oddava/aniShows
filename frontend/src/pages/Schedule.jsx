@@ -294,9 +294,8 @@ export default function Schedule() {
                     ? 'bg-accent/20 text-accent'
                     : 'bg-dark-200 text-gray-400 hover:text-white'
                 } ${!isAuthenticated || isUpdatingAdultContent ? 'opacity-60 cursor-not-allowed' : ''}`}
-                aria-label={
-                  adultContentEnabled ? 'Hide explicit hentai content' : 'Show explicit hentai content'
-                }
+                aria-label="Show explicit content"
+                aria-pressed={adultContentEnabled}
                 title={
                   !isAuthenticated
                     ? 'Log in to change explicit content visibility'
@@ -305,7 +304,7 @@ export default function Schedule() {
                       : 'Explicit hentai: hidden'
                 }
               >
-                {adultContentEnabled ? <Eye className="w-[18px] h-[18px]" /> : <EyeOff className="w-[18px] h-[18px]" />}
+                {adultContentEnabled ? <Eye aria-hidden="true" className="w-[18px] h-[18px]" /> : <EyeOff aria-hidden="true" className="w-[18px] h-[18px]" />}
               </button>
               )}
             </div>

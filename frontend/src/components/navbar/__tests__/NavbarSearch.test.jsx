@@ -134,7 +134,7 @@ describe('NavbarSearch with useNavbarSearch', () => {
             </QueryClientProvider>
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Toggle Search' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
         fireEvent.change(screen.getByPlaceholderText('Search anime...'), { target: { value: 'frieren' } });
 
         expect(await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe('NavbarSearch with useNavbarSearch', () => {
             </QueryClientProvider>
         );
 
-        await user.click(screen.getByRole('button', { name: 'Toggle Search' }));
+        await user.click(screen.getByRole('button', { name: 'Search anime' }));
         await user.type(screen.getByPlaceholderText('Search anime...'), 'frieren');
         expect(await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
         await user.keyboard('{ArrowDown}');
@@ -188,7 +188,7 @@ describe('NavbarSearch with useNavbarSearch', () => {
             </QueryClientProvider>
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Toggle Search' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
         const input = screen.getByPlaceholderText('Search anime...');
         fireEvent.change(input, { target: { value: 'frieren' } });
         await waitFor(() => expect(mockGetAll).toHaveBeenCalledWith({ q: 'frieren', page_size: 10 }));

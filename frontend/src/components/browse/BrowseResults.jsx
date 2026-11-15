@@ -51,7 +51,7 @@ export default function BrowseResults({
         ) : allAnime.length === 0 ? (
           <EmptyState
             onClearFilters={clearAllFilters}
-            hasActiveFilters={hasActiveFilters || currentSearch !== ''}
+            hasActiveFilters={hasActiveFilters}
             searchQuery={currentSearch}
           />
         ) : (
@@ -99,7 +99,7 @@ export default function BrowseResults({
         ) : allAnime.length === 0 ? (
           <EmptyState
             onClearFilters={clearAllFilters}
-            hasActiveFilters={hasActiveFilters || currentSearch !== ''}
+            hasActiveFilters={hasActiveFilters}
             searchQuery={currentSearch}
           />
         ) : allAnime.length > 20 ? (
@@ -148,7 +148,7 @@ export default function BrowseResults({
         <div className="col-span-full">
           <EmptyState
             onClearFilters={clearAllFilters}
-            hasActiveFilters={hasActiveFilters || currentSearch !== ''}
+            hasActiveFilters={hasActiveFilters}
             searchQuery={currentSearch}
           />
         </div>

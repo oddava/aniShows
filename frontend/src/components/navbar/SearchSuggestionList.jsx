@@ -76,7 +76,7 @@ export default function SearchSuggestionList({
                                 {anime.episode_count > 0 && (
                                     <>
                                         <span className="text-gray-600">•</span>
-                                        <span>{anime.episode_count} eps</span>
+                                        <span>{anime.episode_count} {anime.episode_count === 1 ? 'ep' : 'eps'}</span>
                                     </>
                                 )}
                             </div>
