@@ -149,8 +149,25 @@ def reconcile_adult_flags(*, using: str = "default") -> dict:
 
 
 def _sync_flags(rows, using: str) -> tuple[int, int]:
+    """Set ``is_adult`` where it is wrong; returns (newly flagged, newly cleared).
+
+    ``update()`` skips the save signals, so the changed rows' cached public
+    payloads are dropped here: an adult title must not linger in a cached
+    anonymous list or detail page.
+    """
     adult = adult_content_q(using)
-    # Two narrow updates, so rows whose flag is already right are not rewritten.
-    flagged = rows.filter(adult, is_adult=False).update(is_adult=True)
-    cleared = rows.exclude(adult).filter(is_adult=True).update(is_adult=False)
+    to_flag = dict(rows.filter(adult, is_adult=False).values_list("pk", "slug"))
+    to_clear = dict(rows.exclude(adult).filter(is_adult=True).values_list("pk", "slug"))
+    # Narrow updates, so rows whose flag is already right are not rewritten.
+    flagged = rows.filter(adult, is_adult=False, pk__in=to_flag).update(is_adult=True)
+    cleared = rows.exclude(adult).filter(is_adult=True, pk__in=to_clear).update(is_adult=False)
+    if flagged or cleared:
+        _invalidate_public_caches([*to_flag.values(), *to_clear.values()])
     return flagged, cleared
+
+
+def _invalidate_public_caches(slugs: list[str]) -> None:
+    from .signals import _invalidate_anime_public_caches  # signals imports this module
+
+    for slug in slugs:
+        _invalidate_anime_public_caches(slug)

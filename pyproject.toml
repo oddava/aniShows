@@ -181,7 +181,6 @@ known-first-party = ["apps", "root"]
 "apps/animes/management/commands/copy_thumbnails_to_s3.py" = ["BLE001"]
 "apps/animes/management/commands/generate_thumbnails.py" = ["BLE001"]
 "apps/animes/management/commands/populate_franchises.py" = ["BLE001"]
-"apps/animes/management/commands/populate_themes.py" = ["BLE001"]
 "apps/animes/management/commands/warm_watch_episodes.py" = ["BLE001"]
 "apps/users/management/commands/populate_user_stats.py" = ["BLE001"]
 

@@ -57,6 +57,18 @@ def backfill_theme_youtube_urls(self, limit: int = 100):
     return result
 
 
+@observed_shared_task(retry_policy="standard", time_limit_preset="quick")
+def sync_theme_songs(self, *args, **kwargs):
+    """Retired with Jikan (D1): AniList has no theme data, so there is nothing to sync.
+
+    Still registered so messages queued before the upgrade (and old full-sync
+    chains waiting on it) finish instead of being dropped as unknown tasks.
+    Remove once no such messages can be left, a release after D1.
+    """
+    logger.info("Skipped retired task sync_theme_songs (kwargs=%s)", sorted(kwargs))
+    return {"status": "skipped", "reason": "retired"}
+
+
 def _generate_youtube_url_sync(title: str, artist: str, song_type: str, anime_title: str) -> str:
     """A YouTube search URL for a theme song (title, artist, anime, opening/ending)."""
     query_parts = []

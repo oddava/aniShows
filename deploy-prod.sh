@@ -145,8 +145,8 @@ step "Pulling images"
 "${COMPOSE[@]}" pull web celery beat db redis minio createbuckets caddy umami_db umami
 "${COMPOSE[@]}" build backup
 
-step "Core services (also removes orphaned containers: old daphne / celery workers, the Jikan stack)"
-"${COMPOSE[@]}" up -d --no-deps --remove-orphans db redis minio
+step "Core services"
+"${COMPOSE[@]}" up -d --no-deps db redis minio
 "${COMPOSE[@]}" up -d --wait db redis minio
 "${COMPOSE[@]}" up --no-deps --exit-code-from createbuckets createbuckets >/dev/null \
     || die "bucket setup failed"
@@ -155,6 +155,11 @@ step "Migrations"
 "${COMPOSE[@]}" run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 \
     web python manage.py migrate --noinput
 ok "migrations applied"
+# Production configuration warnings (e.g. core.W001: no Safe Browsing key).
+# Warnings are printed; only errors stop the deploy.
+"${COMPOSE[@]}" run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 \
+    web python manage.py check --deploy --fail-level ERROR \
+    || die "manage.py check --deploy reported errors"
 
 step "Workers, backups, analytics"
 "${COMPOSE[@]}" up -d --no-deps celery beat backup
@@ -163,6 +168,15 @@ step "Workers, backups, analytics"
 
 step "Web (rolling, ${SCALE_WEB} replicas)"
 roll_web
+
+# Only now that the new web and workers serve: drop containers whose service
+# is gone (old daphne / celery workers, the Jikan stack removed in D1).
+"${COMPOSE[@]}" up -d --no-deps --no-recreate --remove-orphans db redis minio
+leftover_volumes="$(docker volume ls -q | grep -E '_jikan_(mongodb|typesense)_data$' || true)"
+if [ -n "$leftover_volumes" ]; then
+    warn "Jikan data volumes are no longer used; remove them to free disk:"
+    echo "    docker volume rm ${leftover_volumes//$'\n'/ }"
+fi
 
 step "Clearing application cache"
 "${COMPOSE[@]}" exec -T web python -c "from django.core.cache import cache; cache.clear()" \

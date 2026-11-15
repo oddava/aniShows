@@ -41,10 +41,11 @@ Branch `fix/anilist-only-and-fixes`. Local only: no push, no PR, no deploy.
    and honours `Retry-After`/`X-RateLimit-*`. Batch queries (`id_in`, 50 per
    call) keep the hourly airing refresh at a handful of requests instead of
    one per show.
-4. **Cast replacement:** Jikan wrote characters/staff with synthetic IDs
-   (1.6e9+/1.7e9+ offsets). When an AniList payload carries a cast, the anime's
-   cast links are replaced, so old Jikan links do not pile up next to the new
-   ones. Orphaned synthetic rows are left in place (harmless; deletable later).
+4. **Cast:** AniList payloads carry a 10-person preview, so stored cast links
+   are never deleted for being absent from it. Jikan wrote people under
+   synthetic IDs (1.6e9+/1.7e9+ offsets); when the same person (by name)
+   arrives from AniList, the old link is retired and the person's favourites
+   move to the AniList row. The old rows stay (unlinked, harmless).
 5. **Schedule:** AniList has no broadcast day/time; it is derived from
    `nextAiringEpisode.airingAt` in Asia/Tokyo, which is what the schedule's
    fallback already assumes.
@@ -101,3 +102,17 @@ baseline, frontend lint + vitest for the admin page change.
 
 Council of exactly two reviewers (Claude Opus 5.5, GPT 6.1 Sol at high
 effort); fix and re-review until both approve.
+
+## Rollout (after the council review)
+
+- Migration 0055 removes the theme fields from Django's state only; the
+  columns stay (with database defaults) so the old replicas keep working
+  while `deploy-prod.sh` rolls the web containers. **Next release:** add a
+  migration that drops `anime_anime.themes_checked_at`,
+  `anime_offlineanimesyncstate.themes_status` and `.themes_attempt_count`,
+  and delete the retired `sync_theme_songs` task stub.
+- `deploy-prod.sh` removes the orphaned Jikan containers only after the new
+  web and workers serve, runs `manage.py check --deploy` (shows `core.W001`
+  when the Safe Browsing key is missing), and prints the
+  `docker volume rm` command for the unused `*_jikan_mongodb_data` and
+  `*_jikan_typesense_data` volumes (~2 GB); it does not delete data itself.

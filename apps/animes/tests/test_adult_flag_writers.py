@@ -128,6 +128,16 @@ class TestReconcile:
         }
         logger.warning.assert_called_once()
 
+    def test_fixed_rows_drop_their_cached_public_payloads(self):
+        hidden = self._anime("cached-stale")
+        Anime.objects.filter(pk=hidden.pk).update(tags=["sex"])
+        with (
+            mock.patch("apps.animes.adult_content.logger"),
+            mock.patch("apps.animes.signals._invalidate_anime_public_caches") as invalidate,
+        ):
+            reconcile_adult_flags()
+        invalidate.assert_called_once_with("cached-stale")
+
     def test_no_drift_is_silent(self):
         self._anime("clean", tags=["comedy"])
         self._anime("adult", tags=["sex"])

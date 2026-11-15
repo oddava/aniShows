@@ -426,3 +426,37 @@ class OfflineSyncRecoveryTests(TestCase):
         self.assertEqual(result["complete"], 1)
         self.assertEqual(result["pending"], 0)
         self.assertGreater(state.next_attempt_at, timezone.now() + timedelta(days=365))
+
+
+class OfflineSyncResetPipelineTests(TestCase):
+    _anime = OfflineSyncStatePipelineTests._anime
+    _state = OfflineSyncStatePipelineTests._state
+
+    def test_reset_pipeline_resets_every_row_except_manual_decisions(self):
+        quarantined = OfflineAnimeSyncState.StageStatus.QUARANTINED
+        plain = self._state(
+            self._anime("Plain"),
+            metadata_status=quarantined,
+            quarantined=True,
+            quarantine_context={"stage": "metadata", "attempts": 2},
+        )
+        empty_context = self._state(self._anime("Empty"), metadata_status=quarantined)
+        manual = self._state(
+            self._anime("Manual"),
+            metadata_status=quarantined,
+            quarantined=True,
+            quarantine_context={"manual": True, "action": "mark_skipped"},
+        )
+
+        result = OfflineSyncService().ensure_states_for_anime_ids(
+            [plain.anime_id, empty_context.anime_id, manual.anime_id], reset_pipeline=True
+        )
+
+        # Rows without a "manual" key used to be skipped too (a NULL JSON lookup).
+        self.assertEqual(result["updated"], 2)
+        for state in (plain, empty_context):
+            state.refresh_from_db()
+            self.assertEqual(state.metadata_status, OfflineAnimeSyncState.StageStatus.PENDING)
+            self.assertFalse(state.quarantined)
+        manual.refresh_from_db()
+        self.assertTrue(manual.quarantined)

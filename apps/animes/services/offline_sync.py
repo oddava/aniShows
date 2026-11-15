@@ -78,9 +78,11 @@ class OfflineSyncService(OfflineSyncPolicy):
 
         updated = 0
         if reset_pipeline:
-            # An admin's skip or merge decision outlives any reset.
+            # An admin's skip or merge decision outlives any reset. Containment,
+            # not a key lookup: ``NOT (ctx -> 'manual' = true)`` is NULL for rows
+            # without the key, so those would never be reset.
             queryset = OfflineAnimeSyncState.objects.filter(anime_id__in=ids).exclude(
-                quarantine_context__manual=True
+                quarantine_context__contains={"manual": True}
             )
             updated = queryset.update(
                 metadata_status=OfflineAnimeSyncState.StageStatus.PENDING,

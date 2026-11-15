@@ -76,7 +76,11 @@ class ThemeYoutubeBackfillTests(TestCase):
         )
         self.assertEqual(linked.youtube_url, "https://y/1")
 
-    def test_theme_sync_task_is_gone(self):
-        from .. import tasks
+    def test_theme_sync_is_retired_but_queued_messages_still_run(self):
+        from celery import current_app
 
-        self.assertFalse(hasattr(tasks, "sync_theme_songs"))
+        from ..tasks.themes import sync_theme_songs
+
+        self.assertIn("apps.animes.tasks.themes.sync_theme_songs", current_app.tasks)
+        result = sync_theme_songs.apply(kwargs={"limit": 500, "retry_failed": True}).get()
+        self.assertEqual(result, {"status": "skipped", "reason": "retired"})
