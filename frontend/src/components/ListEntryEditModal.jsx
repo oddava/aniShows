@@ -322,7 +322,7 @@ export default function ListEntryEditModal({
                         <button
                             type="submit"
                             disabled={isSaving}
-                            className="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-black text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex items-center justify-center rounded-2xl bg-accent-dark px-5 py-3 text-sm font-black text-white transition-colors hover:bg-accent-dark/90 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             {isSaving ? 'Saving...' : 'Save'}
                         </button>

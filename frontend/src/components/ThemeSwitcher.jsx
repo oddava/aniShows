@@ -52,7 +52,7 @@ export default function ThemeSwitcher() {
                             >
                                 {t.name}
                                 {isActive && (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+                                    <div className="w-1.5 h-1.5 rounded-full bg-accent-dark" />
                                 )}
                             </button>
                         );

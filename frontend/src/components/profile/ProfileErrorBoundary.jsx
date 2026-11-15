@@ -84,7 +84,7 @@ function FullPageErrorFallback({ error, onRetry }) {
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                     <button
                         onClick={onRetry}
-                        className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-accent text-white rounded-xl font-medium hover:bg-accent/80 transition-colors"
+                        className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-accent-dark text-white rounded-xl font-medium hover:bg-accent-dark/85 transition-colors"
                     >
                         <RefreshCw className="w-4 h-4" />
                         Try Again

@@ -7,7 +7,7 @@ const Pill = ({ active, label, onClick }) => (
     onClick={onClick}
     className={`px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
       active
-        ? 'bg-accent text-white'
+        ? 'bg-accent-dark text-white'
         : 'bg-dark-200/60 text-gray-400 hover:bg-dark-200 hover:text-gray-200'
     }`}
   >
@@ -200,7 +200,7 @@ const DualRangeFilter = ({
       </div>
       <div className="relative h-2 rounded-full bg-dark-300/80">
         <div
-          className="absolute h-full bg-accent rounded-full"
+          className="absolute h-full bg-accent-dark rounded-full"
           style={{ left: `${minPercent}%`, width: `${maxPercent - minPercent}%` }}
         />
         <input

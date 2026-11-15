@@ -49,7 +49,7 @@ export default function NavbarSearch({ search }) {
     }, [isSearchExpanded, showSuggestions]);
 
     return (
-        <div className="flex-1 flex justify-end mx-2 lg:mx-4" ref={searchRef}>
+        <div className="nav-search-slot flex-1 flex justify-end mx-2 lg:mx-4" ref={searchRef}>
             <div className={`relative transition-[width,max-width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${isSearchExpanded ? 'w-full max-w-[16rem] lg:max-w-[22rem]' : 'w-10 lg:w-52'}`}>
                 <form onSubmit={handleSearch} className="relative group/search flex items-center justify-end w-full h-full">
                     {/* Search Icon / Toggle Button */}
@@ -95,7 +95,8 @@ export default function NavbarSearch({ search }) {
                         role="combobox"
                         aria-autocomplete="list"
                         aria-expanded={showSuggestions}
-                        aria-controls="navbar-search-suggestions"
+                        aria-controls={searchSuggestions.length > 0 ? 'navbar-search-listbox' : undefined}
+                        aria-activedescendant={showSuggestions && selectedIndex >= 0 ? `navbar-search-option-${selectedIndex}` : undefined}
                         tabIndex={isSearchExpanded ? 0 : -1}
                         className={`w-full rounded-full border border-white/5 bg-dark-100 py-2 pl-10 pr-8 text-sm text-white placeholder:text-gray-500 transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] focus:border-accent/40 focus:bg-dark-100 focus:outline-none focus:ring-4 focus:ring-accent/20 ${isSearchExpanded ? 'opacity-100 scale-x-100 pointer-events-auto origin-right' : 'opacity-0 scale-x-75 pointer-events-none border-transparent bg-transparent origin-right'}`}
                     />
@@ -111,7 +112,7 @@ export default function NavbarSearch({ search }) {
                                 searchInputRef.current?.focus();
                             }}
                             className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-1.5 py-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
-                            aria-label="CLEAR"
+                            aria-label="Clear search"
                         >
                             <span className="text-[10px] font-bold">CLEAR</span>
                         </button>
@@ -127,8 +128,7 @@ export default function NavbarSearch({ search }) {
 
                 {/* Enhanced Search Suggestions Dropdown - Always visible when active */}
                 <div
-                    id="navbar-search-suggestions"
-                    aria-hidden={!showSuggestions}
+                    inert={!showSuggestions}
                     className={`absolute left-0 right-0 top-full z-50 mt-3 max-h-[70vh] overflow-y-auto overflow-hidden rounded-2xl border border-white/10 bg-dark-100 shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] origin-top ${showSuggestions ? 'opacity-100 translate-y-0' : 'pointer-events-none opacity-0 -translate-y-1'
                         }`}
                 >

@@ -5,7 +5,7 @@ import Logo from './Logo';
 export default function Footer({ className = '' }) {
     return (
         <footer className={`bg-dark-50 pt-8 md:pt-16 pb-24 md:pb-8 ${className}`}>
-            <div className="max-w-7xl mx-auto px-4">
+            <div className="max-w-7xl mx-auto px-4 md:px-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
                     {/* Brand */}
                     <div className="col-span-1 md:col-span-2">
@@ -13,8 +13,8 @@ export default function Footer({ className = '' }) {
                             <Logo textClassName="text-2xl font-bold text-white" />
                         </Link>
                         <p className="text-gray-400 mb-6 max-w-sm">
-                            Discover, track, and share your favorite anime series.
-                            Join our community of passionate fans.
+                            Track what you watch, rate what you finish, and find
+                            what to watch next.
                         </p>
                         <div className="flex gap-3">
                             <a

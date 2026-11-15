@@ -5,9 +5,12 @@ import {
 } from '../../utils/imageUtils';
 
 // Highlight matching text
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Highlight matching text (the query is escaped: "a(" must not throw)
 const highlightMatch = (text, query) => {
     if (!query || !text) return text;
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, 'gi'));
     return parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
             <span key={i} className="text-accent font-semibold">{part}</span>
@@ -31,23 +34,28 @@ export default function SearchSuggestionList({
 }) {
     return (
         <>
+            <div role="listbox" id="navbar-search-listbox" aria-label="Search suggestions">
             {searchSuggestions.map((anime, index) => {
                 const imageUrl = getOptimizedImageUrl(anime, 'cover', 'small');
                 const fallbackImageUrl = getImageFallbackUrl(anime, 'cover');
 
                 return (
-                    <button
+                    <div
                         key={anime.id}
+                        id={`navbar-search-option-${index}`}
+                        role="option"
+                        aria-selected={selectedIndex === index}
                         onClick={() => handleSuggestionClick(anime.slug)}
                         onMouseEnter={() => setSelectedIndex(index)}
-                        className={`w-full flex items-center gap-3 border-l-2 p-3 text-left transition-colors ${selectedIndex === index
+                        className={`w-full cursor-pointer flex items-center gap-3 border-l-2 p-3 text-left transition-colors ${selectedIndex === index
                             ? 'bg-accent/10 border-accent'
                             : 'border-transparent hover:bg-dark-50'
                             }`}
                     >
                         <img
                             src={imageUrl}
-                            alt={anime.title}
+                            alt=""
+                            loading="lazy"
                             onError={(event) => applyImageFallback(event, fallbackImageUrl)}
                             className="w-10 h-14 object-cover rounded-md flex-shrink-0 shadow-sm"
                         />
@@ -76,11 +84,14 @@ export default function SearchSuggestionList({
                                 Exact
                             </span>
                         )}
-                    </button>
+                    </div>
                 );
             })}
+            </div>
 
             <button
+                type="button"
+                tabIndex={-1}
                 onClick={handleSearch}
                 className="w-full py-3 px-4 text-center text-sm font-medium text-accent hover:bg-dark-50 transition-colors border-t border-gray-700/50 flex items-center justify-center gap-2"
             >

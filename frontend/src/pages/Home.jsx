@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Play, Star, ChevronRight, Plus, Check, Loader2, Search } from 'lucide-react';
+import { Play, Pause, Star, ChevronRight, Plus, Check, Loader2, Search } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import logger from '../utils/logger';
 import SEO from '../components/SEO';
 import SectionHeader from '../components/common/SectionHeader';
+import ErrorState from '../components/common/ErrorState';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
 import { animeKeys, animeQueries } from '../api/queries/anime';
 import { listKeys, recommendationQueries, userQueries } from '../api/queries/user';
@@ -19,11 +20,17 @@ export default function Home() {
     const [heroListLoading, setHeroListLoading] = useState(false);
     const [locallyAddedIds, setLocallyAddedIds] = useState(new Set());
     const [heroPaused, setHeroPaused] = useState(false);
+    const [heroStopped, setHeroStopped] = useState(false);
     const revealRefs = useRef([]);
     const observer = useRef(null);
 
     // Hero carousel data is fetched only for authenticated users
-    const { data: memberTrending } = useQuery({
+    const {
+        data: memberTrending,
+        isLoading: memberTrendingLoading,
+        isError: memberTrendingError,
+        refetch: refetchMemberTrending,
+    } = useQuery({
         ...animeQueries.trending('member-home'),
         staleTime: 1000 * 60 * 15, // 15 minutes
         gcTime: 1000 * 60 * 30,
@@ -32,7 +39,12 @@ export default function Home() {
     });
 
     // Guests still get sections data even though the hero is static
-    const { data: guestTrending, isLoading: guestTrendingLoading } = useQuery({
+    const {
+        data: guestTrending,
+        isLoading: guestTrendingLoading,
+        isError: guestTrendingError,
+        refetch: refetchGuestTrending,
+    } = useQuery({
         ...animeQueries.trending('guest-home'),
         staleTime: 1000 * 60 * 15,
         gcTime: 1000 * 60 * 30,
@@ -40,7 +52,9 @@ export default function Home() {
     });
 
     const trending = isAuthenticated ? memberTrending : guestTrending;
-    const trendingLoading = isAuthenticated ? !memberTrending : guestTrendingLoading;
+    const trendingLoading = isAuthenticated ? memberTrendingLoading : guestTrendingLoading;
+    const trendingError = isAuthenticated ? memberTrendingError : guestTrendingError;
+    const refetchTrending = isAuthenticated ? refetchMemberTrending : refetchGuestTrending;
     const heroCarousel = memberTrending?.slice(0, 5) || [];
 
     const { data: topRated, isLoading: topRatedLoading } = useQuery({
@@ -54,13 +68,13 @@ export default function Home() {
     // Auto-advance, paused while the hero is hovered/focused, and off entirely
     // for people who ask for reduced motion.
     useEffect(() => {
-        if (!isAuthenticated || heroCarousel.length === 0 || heroPaused) return;
+        if (!isAuthenticated || heroCarousel.length === 0 || heroPaused || heroStopped) return;
         if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
         const interval = setInterval(() => {
             setCurrentHeroIndex((prev) => (prev + 1) % heroCarousel.length);
         }, 8000);
         return () => clearInterval(interval);
-    }, [isAuthenticated, heroCarousel.length, heroPaused]);
+    }, [isAuthenticated, heroCarousel.length, heroPaused, heroStopped]);
 
     useEffect(() => {
         if (!isAuthenticated) return;
@@ -138,19 +152,21 @@ export default function Home() {
         <>
             <SEO page="home" />
             <div className="min-h-screen home-page">
-                {isAuthenticated ? (
+                {isAuthenticated && (memberTrendingLoading || heroCarousel.length > 0) ? (
                     <MemberCarouselHero
                         heroCarousel={heroCarousel}
                         currentHeroIndex={currentHeroIndex}
                         onSelectHero={setCurrentHeroIndex}
                         onPauseChange={setHeroPaused}
+                        isStopped={heroStopped}
+                        onToggleStopped={() => setHeroStopped((prev) => !prev)}
                         heroAnime={heroAnime}
                         heroListLoading={heroListLoading}
                         isHeroInList={isHeroInList}
                         onAddToList={handleAddToList}
                     />
                 ) : (
-                    <GuestIntroHero />
+                    <GuestIntroHero showAuthLinks={!isAuthenticated} />
                 )}
 
                 {/* Main Content Area */}
@@ -163,6 +179,8 @@ export default function Home() {
                         viewAllTo="/browse?sort=trending"
                         items={trending?.slice(0, 6)}
                         isLoading={trendingLoading}
+                        isError={trendingError}
+                        onRetry={refetchTrending}
                         emptyText="No trending anime right now."
                     />
 
@@ -205,14 +223,21 @@ export default function Home() {
 const SHELF_ROW_CLASSES = 'flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0 snap-x snap-mandatory md:snap-none scroll-px-4 overscroll-x-contain';
 const SHELF_ITEM_CLASSES = 'flex-shrink-0 w-[42vw] max-w-[180px] xs:w-[160px] md:w-auto md:max-w-none h-full snap-start';
 
-function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, emptyText, hideWhenEmpty = false, renderItem }) {
+function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, isError = false, onRetry, emptyText, hideWhenEmpty = false, renderItem }) {
     const headingId = `shelf-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-    if (!isLoading && hideWhenEmpty && !(items?.length > 0)) return null;
+    if (!isLoading && !isError && hideWhenEmpty && !(items?.length > 0)) return null;
 
     return (
         <section ref={revealRef} aria-labelledby={headingId} className={`px-4 md:px-6 ${revealRef ? 'reveal' : ''}`}>
             <div className="max-w-7xl mx-auto">
                 <SectionHeader id={headingId} title={title} subtitle={subtitle} viewAllTo={viewAllTo} />
+                {isError && !isLoading ? (
+                    <ErrorState
+                        title={`Couldn’t load ${title.toLowerCase()}`}
+                        message="This shelf didn’t load. The rest of the page is fine."
+                        onRetry={onRetry}
+                    />
+                ) : (
                 <div className={SHELF_ROW_CLASSES}>
                     {isLoading ? (
                         Array.from({ length: 6 }, (_, i) => (
@@ -230,14 +255,33 @@ function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, e
                         <p className="w-full text-center py-8 text-sm text-gray-500">{emptyText}</p>
                     )}
                 </div>
+                )}
             </div>
         </section>
     );
 }
 
-function GuestIntroHero() {
+function GuestIntroHero({ showAuthLinks = true }) {
     const navigate = useNavigate();
     const [query, setQuery] = useState('');
+    const formRef = useRef(null);
+
+    // While this search field is on screen, the navbar's search pill hides
+    // (see .nav-search-slot in index.css) so there is only one at a time.
+    useEffect(() => {
+        const root = document.documentElement;
+        const form = formRef.current;
+        if (!form || typeof IntersectionObserver === 'undefined') return undefined;
+        const io = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting) root.dataset.heroSearch = 'visible';
+            else delete root.dataset.heroSearch;
+        }, { rootMargin: '-64px 0px 0px 0px' });
+        io.observe(form);
+        return () => {
+            io.disconnect();
+            delete root.dataset.heroSearch;
+        };
+    }, []);
 
     const handleSubmit = (event) => {
         event.preventDefault();
@@ -246,16 +290,16 @@ function GuestIntroHero() {
     };
 
     return (
-        <section className="relative flex items-center overflow-hidden border-b border-gray-900 min-h-[480px] sm:min-h-[560px] h-[60vh]">
+        <section className="relative overflow-hidden border-b border-gray-900 pt-28 pb-16 sm:pt-40 sm:pb-24">
             <div aria-hidden="true" className="absolute inset-0 bg-dark">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_15%_10%,color-mix(in_srgb,var(--color-accent)_13%,transparent)_0%,transparent_65%)]" />
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-dark" />
             </div>
 
-            <div className="relative z-10 w-full px-4 md:px-6 mt-10 sm:mt-14">
+            <div className="relative z-10 w-full px-4 md:px-6">
                 <div className="max-w-7xl mx-auto">
                 <div className="max-w-2xl">
-                    <h1 className="text-[2rem] leading-[1.08] sm:text-4xl lg:text-5xl sm:leading-[1.04] font-extrabold text-white/90 tracking-tight mb-4 sm:mb-5">
+                    <h1 className="text-[1.75rem] leading-[1.1] sm:text-4xl lg:text-5xl sm:leading-[1.04] font-extrabold text-white/90 tracking-tight mb-4 sm:mb-5">
                         Discover, Track, and Share Your Anime Journey
                     </h1>
                     <p className="text-base sm:text-lg text-gray-400 mb-7 sm:mb-8 max-w-xl leading-relaxed">
@@ -263,7 +307,7 @@ function GuestIntroHero() {
                         you already love.
                     </p>
 
-                    <form role="search" onSubmit={handleSubmit} className="relative max-w-lg mb-5">
+                    <form ref={formRef} role="search" onSubmit={handleSubmit} className="relative max-w-lg mb-5">
                         <label htmlFor="home-search" className="sr-only">Search anime</label>
                         <Search aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-500 pointer-events-none" />
                         <input
@@ -281,6 +325,7 @@ function GuestIntroHero() {
                         </button>
                     </form>
 
+                    {showAuthLinks && (
                     <p className="text-sm text-gray-500">
                         <Link to="/register" className="font-semibold text-gray-200 hover:text-white underline decoration-white/20 underline-offset-4 hover:decoration-white/50 transition-colors">
                             Create a free account
@@ -291,6 +336,7 @@ function GuestIntroHero() {
                         </Link>
                         <span className="hidden sm:inline"> to keep your list in sync.</span>
                     </p>
+                    )}
                 </div>
                 </div>
             </div>
@@ -303,6 +349,8 @@ function MemberCarouselHero({
     currentHeroIndex,
     onSelectHero,
     onPauseChange,
+    isStopped,
+    onToggleStopped,
     heroAnime,
     heroListLoading,
     isHeroInList,
@@ -316,7 +364,7 @@ function MemberCarouselHero({
         <section
             aria-roledescription="carousel"
             aria-label="Trending now"
-            className="relative h-[60vh] min-h-[480px] sm:min-h-[560px] flex items-center overflow-hidden"
+            className="relative h-[62vh] min-h-[460px] max-h-[680px] flex items-end pb-10 sm:pb-14 overflow-hidden"
             onMouseEnter={() => onPauseChange(true)}
             onMouseLeave={() => onPauseChange(false)}
             onFocus={() => onPauseChange(true)}
@@ -348,10 +396,10 @@ function MemberCarouselHero({
                 <div className="absolute inset-0 bg-gradient-to-r from-dark/80 via-dark/20 to-transparent" />
             </div>
 
-            <div className="relative z-10 w-full px-4 md:px-6 mt-12 sm:mt-16">
+            <div className="relative z-10 w-full px-4 md:px-6">
                 <div className="max-w-7xl mx-auto">
                 {heroAnime && (
-                    <div key={heroAnime.id} className="max-w-2xl page-enter" aria-live="polite">
+                    <div key={heroAnime.id} className="max-w-2xl page-enter" aria-live={isStopped ? 'polite' : 'off'}>
                         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-[1.05] mb-3 line-clamp-2">
                             {heroAnime.title}
                         </h1>
@@ -416,12 +464,26 @@ function MemberCarouselHero({
                 )}
 
                 {heroCarousel.length > 1 && (
-                    <div className="mt-8 sm:mt-10 flex items-center gap-1.5" role="group" aria-label="Choose slide">
+                    <div className="mt-7 sm:mt-9 flex items-center gap-1.5" role="group" aria-label="Choose slide">
+                        <button
+                            type="button"
+                            onClick={onToggleStopped}
+                            aria-label={isStopped ? 'Resume slideshow' : 'Pause slideshow'}
+                            aria-pressed={isStopped}
+                            className="mr-1.5 w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                        >
+                            {isStopped
+                                ? <Play aria-hidden="true" className="w-3 h-3 fill-current" />
+                                : <Pause aria-hidden="true" className="w-3 h-3 fill-current" />}
+                        </button>
                         {heroCarousel.map((anime, index) => (
                             <button
                                 key={anime.id}
                                 type="button"
-                                onClick={() => onSelectHero(index)}
+                                onClick={() => {
+                                    onSelectHero(index);
+                                    if (!isStopped) onToggleStopped();
+                                }}
                                 aria-label={`Show ${anime.title}`}
                                 aria-current={index === currentHeroIndex}
                                 className="group py-2 px-0.5"
@@ -457,7 +519,11 @@ function CurrentlyWatchingSection() {
             viewAllTo="/profile/anime_list"
             items={watching}
             renderItem={(entry) => (
-                <AnimeCard anime={entry.anime} userListEntry={entry} showProgress={true} />
+                <AnimeCard
+                    anime={entry.anime}
+                    userListEntry={entry}
+                    metaText={`Ep ${entry.episodes_watched || 0} / ${entry.anime?.episode_count || '?'}`}
+                />
             )}
         />
     );

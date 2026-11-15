@@ -95,7 +95,7 @@ export default function BadgesSettings() {
                     <button
                         onClick={handleSave}
                         disabled={updateMutation.isPending || userBadges.length === 0}
-                        className="px-6 py-2 bg-accent hover:bg-accent-dark text-white font-medium rounded-lg transition-colors disabled:opacity-50 shrink-0"
+                        className="px-6 py-2 bg-accent-dark hover:bg-violet-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 shrink-0"
                     >
                         {updateMutation.isPending ? 'Saving...' : 'Save Badges'}
                     </button>
@@ -149,7 +149,7 @@ export default function BadgesSettings() {
                                     `}
                                 >
                                     {isSelected && (
-                                        <div className="absolute top-2 right-2 w-6 h-6 bg-accent rounded-full flex items-center justify-center shadow-lg transform scale-100 transition-transform">
+                                        <div className="absolute top-2 right-2 w-6 h-6 bg-accent-dark rounded-full flex items-center justify-center shadow-lg transform scale-100 transition-transform">
                                             <Check className="w-4 h-4 text-white" />
                                         </div>
                                     )}

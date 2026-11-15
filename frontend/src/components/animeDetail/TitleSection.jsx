@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ChevronDown, Heart, Pencil, Plus } from 'lucide-react';
 import StatusSelector from '../StatusSelector';
-import InformationBox from '../InformationBox';
 import { applyImageFallback } from '../../utils/imageUtils';
 
 /**
@@ -130,13 +129,6 @@ export default function TitleSection({
                 </div>
             )}
 
-            <div className="lg:hidden mt-6 sm:mt-8 mb-8 sm:mb-12 space-y-4 sm:space-y-6">
-                <InformationBox
-                    anime={anime}
-                    accentColor={accentColor}
-                    className="max-h-[22rem] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
-                />
-            </div>
         </div>
     );
 }

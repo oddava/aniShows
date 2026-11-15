@@ -65,6 +65,7 @@ export default function BrowseResults({
                     rank={currentSort === 'rating' ? (index + 1) : null}
                     priority={index < 6}
                     index={index}
+                    showMeta
                   />
                 ))}
             </div>

@@ -88,9 +88,19 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
             // "/" (outside text fields) or Ctrl/Cmd+K (anywhere) focuses search
             const isSlash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey;
             const isCommandK = (e.metaKey || e.ctrlKey) && !e.altKey && e.key?.toLowerCase() === 'k';
-            if (isSlash || isCommandK) {
+            // Pages with their own search box (Browse) don't mount the nav input.
+            if ((isSlash || isCommandK) && searchInputRef.current) {
                 // "/" is a character; let it through when typing in a field
                 if (isSlash && isActiveElementEditable()) {
+                    return;
+                }
+                // Guest home: the hero search is on screen and the nav pill is hidden.
+                const heroSearch = document.documentElement.dataset.heroSearch === 'visible'
+                    ? document.getElementById('home-search')
+                    : null;
+                if (heroSearch) {
+                    e.preventDefault();
+                    heroSearch.focus();
                     return;
                 }
                 e.preventDefault();

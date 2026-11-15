@@ -500,7 +500,7 @@ export default function StatusSelector({
                                 <button
                                     onClick={() => handleEpisodeChange(episodesWatched + 1)}
                                     disabled={isLoading || (totalEpisodes > 0 && episodesWatched >= totalEpisodes)}
-                                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-accent/20 hover:bg-accent text-accent hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-accent/20 disabled:hover:text-accent flex-shrink-0"
+                                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-accent/20 hover:bg-accent-dark text-accent hover:text-white transition-all disabled:opacity-30 disabled:hover:bg-accent/20 disabled:hover:text-accent flex-shrink-0"
                                 >
                                     <Plus className="w-4 h-4" />
                                 </button>
@@ -515,7 +515,7 @@ export default function StatusSelector({
                             style={{ width: `${Math.min(progressPercentage, 100)}%` }}
                             className={`h-full rounded-full transition-all duration-700 ease-out ${totalEpisodes > 0 && episodesWatched >= totalEpisodes
                                 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]'
-                                : 'bg-accent shadow-[0_0_8px_rgba(var(--color-accent-rgb),0.4)]'}`}
+                                : 'bg-accent-dark shadow-[0_0_8px_rgba(var(--color-accent-rgb),0.4)]'}`}
                         />
                     </div>
                     <div className="flex items-center gap-1.5 bg-dark-100/50 px-2 py-0.5 rounded-md border border-white/5">
@@ -529,7 +529,7 @@ export default function StatusSelector({
                     <div className="absolute -bottom-1 left-4 right-4 h-1 sm:h-1.5 bg-dark-100 rounded-b-xl overflow-hidden opacity-80 z-0">
                         <div
                             style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-                            className={`h-full rounded-r-full ${totalEpisodes > 0 && episodesWatched >= totalEpisodes ? 'bg-green-500' : 'bg-accent'}`}
+                            className={`h-full rounded-r-full ${totalEpisodes > 0 && episodesWatched >= totalEpisodes ? 'bg-green-500' : 'bg-accent-dark'}`}
                         />
                     </div>
                 )}

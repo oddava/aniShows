@@ -62,7 +62,7 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
                         canReview ? (
                             <button
                                 onClick={() => setIsWritingReview(true)}
-                                className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl  text-white font-bold bg-accent"
+                                className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl  text-white font-bold bg-accent-dark"
                                 style={{
                                     backgroundColor: accentColor || '#75698d'
                                 }}

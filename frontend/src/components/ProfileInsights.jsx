@@ -413,7 +413,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                                                     </div>
                                                     <div className="relative h-1.5 bg-dark-400 rounded-full overflow-hidden p-[1px] shadow-inner">
                                                         <div
-                                                            className="h-full bg-accent transition-[width] duration-1000"
+                                                            className="h-full bg-accent-dark transition-[width] duration-1000"
                                                             style={{ width: `${progress}%` }}
                                                         />
                                                     </div>

@@ -11,7 +11,7 @@ const Pill = ({ active, label, onClick }) => (
         onClick={onClick}
         className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
             active 
-            ? 'bg-accent text-white' 
+            ? 'bg-accent-dark text-white' 
             : 'bg-dark-200/50 text-gray-400 hover:bg-dark-200 hover:text-gray-300'
         }`}
     >
@@ -217,13 +217,13 @@ export default function TopFilterBar({
                 >
                     <Filter className="w-[18px] h-[18px]" />
                     {hasActiveFilters && (
-                        <span className="absolute top-3 right-3 w-2 h-2 bg-accent rounded-full border-2 border-dark-200" />
+                        <span className="absolute top-3 right-3 w-2 h-2 bg-accent-dark rounded-full border-2 border-dark-200" />
                     )}
                 </button>
             </div>
 
             {/* Quick Filters Pill Row */}
-            <div className="w-full overflow-x-auto custom-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="w-full overflow-x-auto custom-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] sm:[mask-image:none]">
                 <div className="flex items-center gap-4 min-w-max">
                     {/* Format Group */}
                     <div className="flex items-center gap-1.5 pr-4 border-r border-gray-800/50">

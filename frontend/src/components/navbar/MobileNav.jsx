@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, CalendarDays, Clapperboard, Compass, Home, User } from 'lucide-react';
+import { Bell, CalendarDays, Compass, Home, User } from 'lucide-react';
 
 /**
- * The mobile bottom navigation island (Home, Anime, Notifs, Account), shown on
+ * The mobile bottom navigation island (Home, Browse, Schedule, Notifs when
+ * signed in, Account), shown on
  * the main sections only. A long press on Account opens its menu; a tap goes
  * to the user's profile.
  */
 export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadCount, currentUserProfilePath }) {
     const [isMobileAccountOpen, setIsMobileAccountOpen] = useState(false);
-    const [isMobileAnimeOpen, setIsMobileAnimeOpen] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
     const mobileAccountRef = useRef(null);
-    const mobileAnimeRef = useRef(null);
     const accountHoldTimerRef = useRef(null);
     const longPressTriggeredRef = useRef(false);
 
@@ -23,9 +22,6 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
             if (mobileAccountRef.current && !mobileAccountRef.current.contains(event.target)) {
                 setIsMobileAccountOpen(false);
             }
-            if (mobileAnimeRef.current && !mobileAnimeRef.current.contains(event.target)) {
-                setIsMobileAnimeOpen(false);
-            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -33,7 +29,6 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
 
     useEffect(() => {
         setIsMobileAccountOpen(false);
-        setIsMobileAnimeOpen(false);
     }, [location.pathname]);
 
     useEffect(() => {
@@ -117,58 +112,42 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
     return (
         <nav
             aria-label="Primary"
-            className="md:hidden fixed bottom-[max(0.4rem,env(safe-area-inset-bottom))] inset-x-[0.45rem] z-[1001] mx-auto w-auto max-w-[350px] select-none"
+            className="md:hidden fixed bottom-[max(0.4rem,env(safe-area-inset-bottom))] inset-x-[0.45rem] z-[1001] mx-auto w-auto max-w-[380px] select-none"
             style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
         >
             <div
                 className="rounded-[1.45rem] border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.55)] backdrop-blur-2xl backdrop-saturate-150"
                 style={{ background: mobileIslandBackground }}
             >
-                <div className="grid grid-cols-4 gap-0.5">
+                <div className={`grid ${isAuthenticated ? 'grid-cols-5' : 'grid-cols-4'} gap-0.5`}>
                     <Link
                         to="/"
+                        aria-current={location.pathname === '/' ? 'page' : undefined}
                         className={mobileTabClasses(location.pathname === '/')}
                     >
                         <Home className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                         <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Home</span>
                     </Link>
-                    <div className="relative min-w-0" ref={mobileAnimeRef}>
-                        <button
-                            type="button"
-                            onClick={() => setIsMobileAnimeOpen((prev) => !prev)}
-                            className={`w-full ${mobileTabClasses(isPathActive('/browse') || isPathActive('/schedule'))}`}
-                        >
-                            <Clapperboard className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
-                            <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Anime</span>
-                        </button>
-                        {isMobileAnimeOpen && (
-                            <div
-                                className="absolute bottom-full left-0 mb-2.5 w-36 overflow-hidden rounded-xl border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.6)] backdrop-blur-xl"
-                                style={{ background: mobilePopoverBackground }}
-                            >
-                                <div
-                                    className="absolute -bottom-1.5 left-4 h-3 w-3 rotate-45 border-r border-b border-white/12"
-                                    style={{ backgroundColor: mobilePopoverTipBackground }}
-                                />
-                                <Link
-                                    to="/browse"
-                                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
-                                >
-                                    <Compass className="h-3.5 w-3.5 text-gray-300" />
-                                    Browse
-                                </Link>
-                                <Link
-                                    to="/schedule"
-                                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
-                                >
-                                    <CalendarDays className="h-3.5 w-3.5 text-gray-300" />
-                                    Schedule
-                                </Link>
-                            </div>
-                        )}
-                    </div>
+                    <Link
+                        to="/browse"
+                        aria-current={isPathActive('/browse') ? 'page' : undefined}
+                        className={mobileTabClasses(isPathActive('/browse'))}
+                    >
+                        <Compass aria-hidden="true" className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                        <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Browse</span>
+                    </Link>
+                    <Link
+                        to="/schedule"
+                        aria-current={isPathActive('/schedule') ? 'page' : undefined}
+                        className={mobileTabClasses(isPathActive('/schedule'))}
+                    >
+                        <CalendarDays aria-hidden="true" className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
+                        <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Schedule</span>
+                    </Link>
+                    {isAuthenticated && (
                     <Link
                         to="/notifications"
+                        aria-label={mobileUnreadCount > 0 ? `Notifications, ${mobileUnreadCount} unread` : 'Notifications'}
                         className={mobileTabClasses(isPathActive('/notifications'))}
                     >
                         <span className="relative inline-flex">
@@ -181,6 +160,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                         </span>
                         <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Notifs</span>
                     </Link>
+                    )}
                     <div className="relative min-w-0" ref={mobileAccountRef}>
                         {isAuthenticated ? (
                             <>

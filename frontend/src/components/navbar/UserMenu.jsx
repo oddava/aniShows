@@ -50,7 +50,7 @@ export default function UserMenu({
                             {user?.avatar ? (
                                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                             ) : (
-                                <div className="w-full h-full bg-accent flex items-center justify-center">
+                                <div className="w-full h-full bg-accent-dark flex items-center justify-center">
                                     <span className="text-sm font-bold text-white uppercase">{user?.username?.charAt(0)}</span>
                                 </div>
                             )}
@@ -74,7 +74,7 @@ export default function UserMenu({
                                         {user?.avatar ? (
                                             <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                         ) : (
-                                            <div className="w-full h-full bg-accent flex items-center justify-center">
+                                            <div className="w-full h-full bg-accent-dark flex items-center justify-center">
                                                 <span className="text-xl font-bold text-white uppercase">{user?.username?.charAt(0)}</span>
                                             </div>
                                         )}
@@ -107,7 +107,7 @@ export default function UserMenu({
                                     </span>
                                     {mobileUnreadCount > 0 && (
                                         <span
-                                            className="w-2.5 h-2.5 rounded-full bg-accent shadow-[0_0_0_2px_rgba(17,24,39,1)]"
+                                            className="w-2.5 h-2.5 rounded-full bg-accent-dark shadow-[0_0_0_2px_rgba(17,24,39,1)]"
                                             aria-label="New notifications"
                                         />
                                     )}
@@ -134,10 +134,10 @@ export default function UserMenu({
                 </div>
             ) : (
                 <>
-                    <Link to="/login" className="text-gray-300 hover:text-white transition-colors font-medium px-3 py-2 focus:outline-none">
+                    <Link to="/login" className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
                         Sign In
                     </Link>
-                    <Link to="/register" className="btn-primary text-sm py-2 px-4 focus:outline-none">
+                    <Link to="/register" className="btn-primary text-sm py-2 px-4">
                         Get Started
                     </Link>
                 </>

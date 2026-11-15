@@ -2,8 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ChevronLeft,
-  ChevronRight,
   Bell,
   Eye,
   EyeOff,
@@ -46,30 +44,25 @@ const getTimezoneLabel = (preferredTimezone) => {
   }
 };
 
-// Helper to get start of week (Monday) - normalizes to midnight UTC
-const getWeekStart = (date) => {
+const addDays = (date, days) => {
   const d = new Date(date);
-  // Reset to midnight local time
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
+  d.setDate(d.getDate() + days);
   return d;
 };
 
-// Day Selector Component
-// Monday-first, matching the week range above it. Seven equal columns, so the
-// whole week is visible on a phone without sideways scrolling.
-const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
-const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, currentWeek, preferredTimezone }) => {
+// Day Selector Component
+// The schedule lists each show's *next* airing, so the strip is the coming
+// seven days starting today, not a calendar week. Seven equal columns, so the
+// whole strip fits on a phone without sideways scrolling.
+const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday, preferredTimezone }) => {
   return (
-    <div className="grid grid-cols-7 gap-1.5 sm:gap-2" role="group" aria-label="Day of the week">
-      {WEEK_ORDER.map((index, position) => {
+    <div className="grid grid-cols-7 gap-1.5 sm:gap-2" role="group" aria-label="Day">
+      {Array.from({ length: 7 }, (_, position) => (todayDay + position) % 7).map((index, position) => {
         const isSelected = selectedDay === index;
         const count = animeCounts[index] || 0;
-        const isToday = todayDay === index;
-        const date = new Date(currentWeek.getTime() + position * 24 * 60 * 60 * 1000);
+        const isToday = position === 0;
+        const date = addDays(startOfToday, position);
         const dayOfMonth = formatDate(date, { day: 'numeric' }, preferredTimezone);
 
         return (
@@ -95,7 +88,7 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, currentWeek
               {dayOfMonth}
             </span>
             <span aria-hidden="true" className={`mt-0.5 text-[11px] tabular ${isSelected ? 'text-white/80' : count > 0 ? 'text-gray-400' : 'text-gray-600'}`}>
-              {count}
+              <span>{count}</span> ep
             </span>
           </button>
         );
@@ -104,41 +97,19 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, currentWeek
   );
 };
 
-// Week Navigator Component
-const WeekNavigator = ({ currentWeek, onPrevWeek, onNextWeek, onToday, preferredTimezone }) => {
-  const weekEnd = new Date(currentWeek);
-  weekEnd.setDate(weekEnd.getDate() + 6);
+// Range line: the dates the strip covers, and a shortcut back to today.
+const RangeHeader = ({ startOfToday, onToday, preferredTimezone }) => {
+  const end = addDays(startOfToday, 6);
 
   return (
     <div className="flex items-center justify-between gap-3 mb-4">
-      <div className="flex items-center gap-2 sm:gap-3">
-        <button
-          type="button"
-          onClick={onPrevWeek}
-          aria-label="Previous week"
-          className="ui-icon-button h-9 w-9"
-        >
-          <ChevronLeft aria-hidden="true" className="w-5 h-5" />
-        </button>
-
-        <div className="text-center min-w-[8.5rem]">
-          <div className="text-white font-semibold tabular" aria-live="polite">
-            <span>
-              {formatDate(currentWeek, { month: 'short', day: 'numeric' }, preferredTimezone)}
-              {' - '}
-              {formatDate(weekEnd, { month: 'short', day: 'numeric' }, preferredTimezone)}
-            </span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={onNextWeek}
-          aria-label="Next week"
-          className="ui-icon-button h-9 w-9"
-        >
-          <ChevronRight aria-hidden="true" className="w-5 h-5" />
-        </button>
+      <div className="text-white font-semibold tabular">
+        Next 7 days
+        <span className="ml-2 font-normal text-gray-500">
+          {formatDate(startOfToday, { month: 'short', day: 'numeric' }, preferredTimezone)}
+          {' – '}
+          {formatDate(end, { month: 'short', day: 'numeric' }, preferredTimezone)}
+        </span>
       </div>
 
       <button
@@ -166,20 +137,11 @@ export default function Schedule() {
     [preferredTimezone]
   );
 
-  // Get initial week from URL or use current week
-  const [currentWeek, setCurrentWeek] = useState(() => {
-    const weekParam = searchParams.get('week');
-    let date;
-    if (weekParam) {
-      // Trim any whitespace and parse the date; fallback to today if invalid
-      const trimmedParam = weekParam.trim();
-      const parsed = new Date(trimmedParam + 'T00:00:00');
-      date = isNaN(parsed.getTime()) ? new Date() : parsed;
-    } else {
-      date = new Date();
-    }
-    return getWeekStart(date);
-  });
+  const startOfToday = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
   // Get initial day from URL or use today
   const [selectedDay, setSelectedDay] = useState(() => {
@@ -193,22 +155,12 @@ export default function Schedule() {
 
 
 
-  // Update URL when week or day changes
+  // Keep the selected day in the URL so it survives reloads and can be shared.
   useEffect(() => {
-    // Safety check: if currentWeek is invalid, reset to today
-    if (!currentWeek || isNaN(currentWeek.getTime())) {
-      setCurrentWeek(getWeekStart(new Date()));
-      return;
-    }
     const params = new URLSearchParams();
-    // Use local date string (YYYY-MM-DD) to avoid UTC shift issues
-    const year = currentWeek.getFullYear();
-    const month = String(currentWeek.getMonth() + 1).padStart(2, '0');
-    const day = String(currentWeek.getDate()).padStart(2, '0');
-    params.set('week', `${year}-${month}-${day}`);
     params.set('day', DAY_NAMES[selectedDay].toLowerCase());
     setSearchParams(params, { replace: true });
-  }, [currentWeek, selectedDay, setSearchParams]);
+  }, [selectedDay, setSearchParams]);
 
   const handleToggleAdultContent = useCallback(async () => {
     if (!isAuthenticated || isUpdatingAdultContent) return;
@@ -260,22 +212,7 @@ export default function Schedule() {
     return groupedScheduleDays[DAY_NAMES[selectedDay].toLowerCase()] || [];
   }, [groupedScheduleDays, selectedDay]);
 
-  // Week navigation handlers
-  const handlePrevWeek = () => {
-    const newWeek = new Date(currentWeek);
-    newWeek.setDate(newWeek.getDate() - 7);
-    setCurrentWeek(newWeek);
-  };
-
-  const handleNextWeek = () => {
-    const newWeek = new Date(currentWeek);
-    newWeek.setDate(newWeek.getDate() + 7);
-    setCurrentWeek(newWeek);
-  };
-
   const handleToday = () => {
-    const today = new Date();
-    setCurrentWeek(getWeekStart(today));
     setSelectedDay(getCurrentWeekdayIndex(preferredTimezone));
   };
 
@@ -309,10 +246,8 @@ export default function Schedule() {
           </header>
 
           {/* Week Navigator */}
-          <WeekNavigator
-            currentWeek={currentWeek}
-            onPrevWeek={handlePrevWeek}
-            onNextWeek={handleNextWeek}
+          <RangeHeader
+            startOfToday={startOfToday}
             onToday={handleToday}
             preferredTimezone={preferredTimezone}
           />
@@ -324,7 +259,7 @@ export default function Schedule() {
               onSelect={setSelectedDay}
               animeCounts={animeCounts}
               todayDay={todayDayIndex}
-              currentWeek={currentWeek}
+              startOfToday={startOfToday}
               preferredTimezone={preferredTimezone}
             />
           </div>
@@ -336,7 +271,7 @@ export default function Schedule() {
               <span className="text-gray-500 font-normal ml-2">
                 {/* Convert JS day index (0=Sun) to Monday-start offset (Mon=0, Tue=1, ..., Sun=6) */}
                 {formatDate(
-                  new Date(currentWeek.getTime() + ((selectedDay + 6) % 7) * 24 * 60 * 60 * 1000),
+                  addDays(startOfToday, (selectedDay - todayDayIndex + 7) % 7),
                   { month: 'short', day: 'numeric' },
                   preferredTimezone
                 )}

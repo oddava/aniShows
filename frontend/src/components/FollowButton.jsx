@@ -264,10 +264,10 @@ export default function FollowButton({
         }
 
         if (isFollowBack) {
-            return 'bg-accent/80 text-white hover:bg-accent border border-accent';
+            return 'bg-accent-dark/85 text-white hover:bg-accent-dark border border-accent';
         }
 
-        return 'bg-accent text-white hover:bg-accent/80';
+        return 'bg-accent-dark text-white hover:bg-accent-dark/85';
     };
 
     const title = isFriends 

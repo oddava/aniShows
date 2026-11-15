@@ -27,6 +27,7 @@ import RecommendationsSidebar from '../components/animeDetail/RecommendationsSid
 import useAnimeDetailTabData from '../components/animeDetail/useAnimeDetailTabData';
 import useAnimeReviews from '../components/animeDetail/useAnimeReviews';
 import ErrorState from '../components/common/ErrorState';
+import InformationBox from '../components/InformationBox';
 
 export default function AnimeDetail() {
     const { slug, '*': tabPath } = useParams();
@@ -191,7 +192,7 @@ export default function AnimeDetail() {
             tab.id === 'staff' ? staffTotal : 0
     }));
 
-    const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');
+    const mappedAccent = isRetro ? 'var(--color-accent-fill)' : (accentColor || 'var(--color-accent-fill)');
 
     // Shared by the large-screen poster column and the small-screen header
     const trackingProps = {
@@ -274,6 +275,14 @@ export default function AnimeDetail() {
                                     />
                                 ))}
                             </div>
+
+                            {/* Phones/tablets: key facts sit at the top of Overview, under
+                                the tabs, so the tabs stay near the title. */}
+                            {activeTab === DEFAULT_TAB_ID && (
+                                <div className="lg:hidden mb-8">
+                                    <InformationBox anime={anime} accentColor={accentColor} />
+                                </div>
+                            )}
 
                             {/* Tab Content */}
                             <AnimeDetailTabContent

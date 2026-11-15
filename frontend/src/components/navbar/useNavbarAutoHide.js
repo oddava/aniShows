@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * Desktop navbar auto-hide: hides after 1.5 s idle or when scrolling down,
- * shows on scroll up, near the top of the page or when the pointer is in the
+ * Desktop navbar auto-hide: hides when scrolling down, shows on scroll up,
+ * near the top of the page, on keyboard focus or when the pointer is in the
  * top 90 px. Never hides while the user is interacting (hovering, search
  * expanded, profile menu open, suggestions shown, search in flight).
  */
@@ -24,22 +24,10 @@ export default function useNavbarAutoHide({ isSearchExpanded, isProfileOpen, sho
     useEffect(() => { showSuggestionsRef.current = showSuggestions; }, [showSuggestions]);
     useEffect(() => { isSearchingRef.current = isSearching; }, [isSearching]);
 
+    // No idle timer: the bar only hides on a downward scroll (see below) and
+    // comes back on scroll-up, so it never disappears while someone reads.
     const startHideTimer = useCallback(() => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => {
-            const isInteracting = 
-                isHoveredRef.current || 
-                isSearchExpandedRef.current || 
-                isProfileOpenRef.current || 
-                showSuggestionsRef.current || 
-                isSearchingRef.current;
-                
-            // Near the top of the page there is nothing for the bar to cover,
-            // so it stays put rather than vanishing while someone reads.
-            if (!isInteracting && window.scrollY >= 100) {
-                setIsVisible(false);
-            }
-        }, 1500); // Hide after 1.5 seconds of idle time
     }, []);
 
     // Watch for interactions closing to resume hide timer
@@ -113,7 +101,6 @@ export default function useNavbarAutoHide({ isSearchExpanded, isProfileOpen, sho
             window.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('focusin', handleFocusIn);
             document.removeEventListener('focusout', handleFocusOut);
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
     }, [lastScrollY, startHideTimer]);
 

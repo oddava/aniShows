@@ -33,7 +33,7 @@ export default function ProfileAnimeCard({ anime, episodesWatched = 0, showProgr
                     {showProgress && (
                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
                             <div
-                                className={`h-full ${progress >= 100 ? 'bg-green-500' : 'bg-accent'}`}
+                                className={`h-full ${progress >= 100 ? 'bg-green-500' : 'bg-accent-dark'}`}
                                 style={{ width: `${Math.min(progress, 100)}%` }}
                             />
                         </div>

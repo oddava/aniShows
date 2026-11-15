@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,6 +29,10 @@ export default function Navbar() {
 
     const currentUserProfilePath = user?.username ? `/u/${user.username}` : '/profile';
 
+    // Browse has its own search box at the top of the page; one is enough.
+    const location = useLocation();
+    const showNavSearch = location.pathname.replace(/\/+$/, '') !== '/browse';
+
     return (
         <>
             <MobileTopBar />
@@ -57,7 +61,7 @@ export default function Navbar() {
                             )}
 
                             {/* Search - Collapsible */}
-                            <NavbarSearch search={search} />
+                            {showNavSearch ? <NavbarSearch search={search} /> : <div className="flex-1" />}
                         </div>
 
                         {/* Right Section: Auth */}

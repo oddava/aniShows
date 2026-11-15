@@ -229,7 +229,7 @@ function AnimeListContent({
                         key={tab.value}
                         onClick={() => setListStatusFilter(tab.value)}
                         className={`px-5 py-2 rounded-lg font-bold text-sm transition-colors ${listStatusFilter === tab.value
-                            ? 'bg-accent text-white'
+                            ? 'bg-accent-dark text-white'
                             : 'text-gray-500 hover:text-gray-200 hover:bg-dark-50'
                             }`}
                     >
@@ -253,14 +253,14 @@ function AnimeListContent({
                 <div className="flex items-center gap-1 bg-dark-100 rounded-lg p-1 border border-gray-800">
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-accent-dark text-white' : 'text-gray-400 hover:text-white'}`}
                         title="Grid view"
                     >
                         <LayoutGrid className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'}`}
+                        className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-accent-dark text-white' : 'text-gray-400 hover:text-white'}`}
                         title="List view"
                     >
                         <LayoutList className="w-4 h-4" />
@@ -384,7 +384,7 @@ function AnimeListView({
                                 <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 px-2">
                                     <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden">
                                         <div
-                                            className={`h-full ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1 ? 'bg-green-500' : 'bg-accent'}`}
+                                            className={`h-full ${((item.episodes_watched || 0) / item.anime.episode_count) >= 1 ? 'bg-green-500' : 'bg-accent-dark'}`}
                                             style={{ width: `${Math.min(((item.episodes_watched || 0) / item.anime.episode_count) * 100, 100)}%` }}
                                         />
                                     </div>

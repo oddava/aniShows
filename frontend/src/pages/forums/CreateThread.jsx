@@ -159,7 +159,7 @@ const CreateThread = () => {
                                     autoFocus
                                 />
                                 {/* Character Limit Progress Bar */}
-                                <div className="absolute bottom-0 left-0 h-[2px] bg-accent transition-all duration-300" style={{ width: `${(title.length / 100) * 100}%`, opacity: title.length > 0 ? 1 : 0 }} />
+                                <div className="absolute bottom-0 left-0 h-[2px] bg-accent-dark transition-all duration-300" style={{ width: `${(title.length / 100) * 100}%`, opacity: title.length > 0 ? 1 : 0 }} />
                             </div>
 
                             {/* Rich Text Editor */}

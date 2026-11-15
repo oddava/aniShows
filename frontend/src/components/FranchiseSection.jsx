@@ -132,7 +132,7 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
                 </div>
             )}
 
-            <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x snap-mandatory">
+            <div className="flex items-start gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x snap-mandatory">
                 {displayRelations.map((rel) => (
                     <FranchiseCard
                         key={relationKey(rel)}
@@ -210,7 +210,7 @@ function FranchiseCard({ rel, label, onFetch }) {
         return (
             <Link
                 to={`/anime/${rel.slug}`}
-                className="relative flex-shrink-0 w-28 snap-start cursor-pointer group"
+                className="relative flex flex-col justify-start flex-shrink-0 w-28 snap-start cursor-pointer group"
                 title={rel.title}
             >
                 {cardContent}
@@ -221,8 +221,9 @@ function FranchiseCard({ rel, label, onFetch }) {
     // Anime not in DB yet - fetch on click, then navigate
     return (
         <button
+            type="button"
             onClick={() => onFetch(rel)}
-            className="relative flex-shrink-0 w-28 snap-start cursor-pointer group text-left"
+            className="relative flex flex-col justify-start flex-shrink-0 w-28 snap-start cursor-pointer group text-left"
             title={rel.title}
         >
             {cardContent}

@@ -211,7 +211,7 @@ export const NotificationBell = () => {
                                     onClick={() => handleNotificationClick(notification)}
                                     className="flex items-start gap-3 px-4 py-3 hover:bg-dark-50 transition-colors cursor-pointer border-l-2 border-transparent hover:border-accent"
                                 >
-                                    <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-accent" />
+                                    <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-accent-dark" />
                                     <div className="flex-1 min-w-0">
                                         {(() => {
                                             const { displayText, entity, startIndex } = getHighlightEntityData(notification);

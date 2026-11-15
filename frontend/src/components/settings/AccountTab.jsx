@@ -195,7 +195,7 @@ export default function AccountTab({ user, account, isPrivate, handlePrivacyTogg
                     <button
                         onClick={handlePrivacyToggle}
                         className={`relative w-14 h-7 rounded-full transition-colors duration-200 
-                                ${isPrivate ? 'bg-accent' : 'bg-dark-50 border border-gray-700'}`}
+                                ${isPrivate ? 'bg-accent-dark' : 'bg-dark-50 border border-gray-700'}`}
                     >
                         <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
                                 ${isPrivate ? 'left-8' : 'left-1'}`} />

@@ -16,7 +16,7 @@ export default function CategoryRow({
     };
 
     return (
-        <section className="px-4 md:px-0 pb-2 mb-8 md:mb-12">
+        <section className="pb-2 mb-8 md:mb-12">
             <div className="max-w-7xl mx-auto">
                 <SectionHeader
                     title={title}
@@ -38,6 +38,7 @@ export default function CategoryRow({
                                     anime={anime}
                                     titleLanguage={titleLanguage}
                                     priority={index < eagerCount}
+                                    showMeta
                                 />
                             </div>
                         ))

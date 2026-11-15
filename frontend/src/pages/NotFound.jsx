@@ -9,7 +9,7 @@ export default function NotFound() {
             <div className="min-h-[80vh] flex flex-col items-center justify-center text-center px-4">
             <div className="bg-dark-100 p-8 md:p-12 rounded-2xl border border-gray-800 shadow-xl max-w-lg w-full relative overflow-hidden">
                 {/* Background Decoration */}
-                <div className="absolute top-0 left-0 h-1.5 w-full bg-accent" />
+                <div className="absolute top-0 left-0 h-1.5 w-full bg-accent-dark" />
 
                 <div className="mb-8 relative">
                     <AlertCircle className="w-24 h-24 text-accent relative z-10 mx-auto" strokeWidth={1.5} />

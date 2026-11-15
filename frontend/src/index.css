@@ -285,6 +285,17 @@
   .skip-link:focus-visible {
     transform: translateY(0);
   }
+
+  /* Guest home: the hero has its own search field, so the navbar's stays
+     out of the way until that field scrolls off screen. */
+  .nav-search-slot {
+    transition: opacity var(--dur-base) ease, visibility var(--dur-base);
+  }
+
+  html[data-hero-search="visible"] .nav-search-slot {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 
 @layer utilities {

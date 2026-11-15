@@ -391,7 +391,7 @@ function AnimeCard({
                                                     aria-checked={listStatus === option.value}
                                                     onClick={(e) => handleStatusChange(e, option.value)}
                                                     className={`w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-semibold rounded-md transition-colors touch-manipulation
-                                                        ${listStatus === option.value ? 'bg-accent text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
+                                                        ${listStatus === option.value ? 'bg-accent-dark text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
                                                 >
                                                     <option.icon className="w-3 h-3" />
                                                     {option.label}
@@ -451,7 +451,9 @@ function AnimeCard({
                 </div>
 
                 {/* Title/Info Footer */}
-                <Link to={`/anime/${anime.slug}`} className="mt-3 block" tabIndex={-1} aria-hidden="true"
+                {/* Same target as the poster link, so it stays out of the tab order, but
+                    it is not hidden: screen readers still get the title and meta. */}
+                <Link to={`/anime/${anime.slug}`} className="mt-3 block" tabIndex={-1}
                 >
                     <div className="flex items-start gap-1.5">
                         {listStatus && currentStatusOption && (

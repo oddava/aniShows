@@ -356,7 +356,7 @@ const ImportPage = () => {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="px-6 py-2 bg-accent text-dark font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                                    className="px-6 py-2 bg-accent-dark text-dark font-semibold rounded-lg hover:bg-accent-dark/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                                 >
                                     {loading ? (
                                         <>
@@ -410,7 +410,7 @@ const ImportPage = () => {
                                 <button
                                     type="submit"
                                     disabled={loading || !selectedFile}
-                                    className="w-full px-6 py-2 bg-accent text-dark font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                                    className="w-full px-6 py-2 bg-accent-dark text-dark font-semibold rounded-lg hover:bg-accent-dark/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                                 >
                                     {loading ? (
                                         <>
@@ -448,7 +448,7 @@ const ImportPage = () => {
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="px-6 py-2 bg-accent text-dark font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                                    className="px-6 py-2 bg-accent-dark text-dark font-semibold rounded-lg hover:bg-accent-dark/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                                 >
                                     {loading ? (
                                         <>

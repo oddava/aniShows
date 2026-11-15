@@ -515,9 +515,9 @@ function ModalFollowButton({ username, isFollowing, isFollower, onToggle }) {
             return 'bg-gray-700/50 text-gray-300 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50 border border-gray-600';
         }
         if (isFollowBack) {
-            return 'bg-accent/80 text-white hover:bg-accent border border-accent';
+            return 'bg-accent-dark/85 text-white hover:bg-accent-dark border border-accent';
         }
-        return 'bg-accent text-white hover:bg-accent/80';
+        return 'bg-accent-dark text-white hover:bg-accent-dark/85';
     };
 
     return (

@@ -64,14 +64,14 @@ describe('NavbarSearch', () => {
         const state = searchState({ searchSuggestions: SUGGESTIONS, selectedIndex: 0 });
         render(<NavbarSearch search={state} />);
 
-        const first = await screen.findByRole('button', { name: /Beyond Journey/ }, { timeout: 5000 });
+        const first = await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 });
         expect(first).toHaveClass('bg-accent/10');
         expect(screen.getByText('Exact')).toBeInTheDocument();
         expect(screen.getByText('28 eps')).toBeInTheDocument();
         // The matching part of the title is highlighted.
         expect(screen.getAllByText('Fri', { selector: 'span.text-accent' })).toHaveLength(1);
 
-        fireEvent.mouseEnter(screen.getByRole('button', { name: /Fire Force/ }));
+        fireEvent.mouseEnter(screen.getByRole('option', { name: /Fire Force/ }));
         expect(state.setSelectedIndex).toHaveBeenCalledWith(1);
 
         fireEvent.click(first);
@@ -85,7 +85,7 @@ describe('NavbarSearch', () => {
         const state = searchState();
         render(<NavbarSearch search={state} />);
 
-        fireEvent.click(screen.getByRole('button', { name: 'CLEAR' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 
         expect(state.setSearchQuery).toHaveBeenCalledWith('');
         expect(state.setShowSuggestions).toHaveBeenCalledWith(false);
@@ -121,7 +121,7 @@ describe('NavbarSearch with useNavbarSearch', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Toggle Search' }));
         fireEvent.change(screen.getByPlaceholderText('Search anime...'), { target: { value: 'frieren' } });
 
-        expect(await screen.findByRole('button', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
+        expect(await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
         await waitFor(() => {
             expect(mockGetAll).toHaveBeenCalledWith({ q: 'frieren', page_size: 10 });
         });

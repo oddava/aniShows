@@ -80,7 +80,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
                                     />
                                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-dark-400/80 z-20">
                                         <div
-                                            className="h-full bg-accent transition-[width] duration-300"
+                                            className="h-full bg-accent-dark transition-[width] duration-300"
                                             style={{ width: `${progress}%` }}
                                         />
                                     </div>
@@ -258,7 +258,7 @@ function GenreOverviewSidebar({ username, isPrivate }) {
                     </div>
                     <div className="h-2 bg-dark-400/50 rounded-full overflow-hidden">
                         <div
-                            className="h-full bg-accent rounded-full transition-all duration-500"
+                            className="h-full bg-accent-dark rounded-full transition-all duration-500"
                             style={{ width: '100%' }}
                         />
                     </div>

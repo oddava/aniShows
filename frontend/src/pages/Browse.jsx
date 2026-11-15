@@ -260,7 +260,7 @@ export default function Browse() {
       <LoadingBar isLoading={isLoading || isFetching || isTabSwitching} />
       {theme === 'retro-anime' && <SakuraAnimation />}
 
-      <div className="pt-4 pb-0 sm:py-8 px-3 sm:px-4 lg:px-6">
+      <div className="pt-4 pb-0 sm:py-8 px-4 md:px-6">
         <div className="max-w-[1600px] mx-auto">
 
 
