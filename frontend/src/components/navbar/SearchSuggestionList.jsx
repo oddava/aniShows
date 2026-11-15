@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Star } from 'lucide-react';
 import {
     applyImageFallback,
@@ -33,6 +34,13 @@ export default function SearchSuggestionList({
     handleSearch,
     idPrefix = 'navbar-search',
 }) {
+    // Keep the arrow-key selection visible inside the scrolling dropdown
+    // (focus stays in the input; only the list scrolls).
+    useEffect(() => {
+        if (selectedIndex < 0) return;
+        document.getElementById(`${idPrefix}-option-${selectedIndex}`)?.scrollIntoView?.({ block: 'nearest' });
+    }, [selectedIndex, idPrefix]);
+
     return (
         <>
             <div role="listbox" id={`${idPrefix}-listbox`} aria-label="Search suggestions">

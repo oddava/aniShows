@@ -94,6 +94,20 @@ describe('NavbarSearch', () => {
     });
 });
 
+describe('SearchSuggestionList keyboard selection', () => {
+    it('scrolls the arrow-key selection into view inside the dropdown', { timeout: 10000 }, async () => {
+        const scrollIntoView = vi.fn();
+        Element.prototype.scrollIntoView = scrollIntoView;
+        const state = searchState({ searchSuggestions: SUGGESTIONS, selectedIndex: 1 });
+        render(<NavbarSearch search={state} />);
+
+        const second = await screen.findByRole('option', { name: /Fire Force/ }, { timeout: 5000 });
+        await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' }));
+        expect(scrollIntoView.mock.contexts.at(-1)).toBe(second);
+        delete Element.prototype.scrollIntoView;
+    });
+});
+
 function SearchHarness() {
     const search = useNavbarSearch({ setIsProfileOpen: vi.fn() });
     return <NavbarSearch search={search} />;

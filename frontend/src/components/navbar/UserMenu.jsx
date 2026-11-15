@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Settings, User } from 'lucide-react';
 
@@ -18,6 +18,20 @@ export default function UserMenu({
     currentUserProfilePath,
 }) {
     const profileRef = useRef(null);
+    const profileButtonRef = useRef(null);
+    const profileMenuId = useId();
+
+    // Escape closes the dropdown and returns focus to its button.
+    useEffect(() => {
+        if (!isProfileOpen) return undefined;
+        const onKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            setIsProfileOpen(false);
+            profileButtonRef.current?.focus();
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [isProfileOpen, setIsProfileOpen]);
 
     // Close the dropdown when clicking outside it
     useEffect(() => {
@@ -42,8 +56,13 @@ export default function UserMenu({
                 <div className="relative" ref={profileRef}>
                     {/* Profile Button */}
                     <button
+                        ref={profileButtonRef}
+                        type="button"
                         onClick={() => setIsProfileOpen(!isProfileOpen)}
-                        className="relative group flex items-center gap-3 rounded-full border border-white/5 bg-black/20 pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40 hover:shadow-[0_0_20px_rgba(117,105,141,0.12)] focus:outline-none focus:ring-2 focus:ring-accent/30"
+                        aria-expanded={isProfileOpen}
+                        aria-controls={isProfileOpen ? profileMenuId : undefined}
+                        aria-label={`Account menu for ${user?.username || 'you'}${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
+                        className="relative group flex items-center gap-3 rounded-full border border-white/5 bg-black/20 pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40 hover:shadow-[0_0_20px_rgba(117,105,141,0.12)]"
                     >
                         {/* Avatar or Placeholder */}
                         <div className="w-7 h-7 rounded-full overflow-hidden border border-transparent group-hover:border-white/20 transition-all duration-300">
@@ -56,7 +75,7 @@ export default function UserMenu({
                             )}
                         </div>
                         {isAuthenticated && mobileUnreadCount > 0 && (
-                            <span className="absolute top-1 left-7 w-2h-2 bg-red-500 rounded-full ring-2 ring-dark shadow-sm z-10" />
+                            <span className="absolute top-1 left-7 w-2 h-2 bg-red-500 rounded-full ring-2 ring-dark shadow-sm z-10" />
                         )}
                         <span className="text-sm font-semibold text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
                             {user?.username}
@@ -66,7 +85,7 @@ export default function UserMenu({
 
                     {/* Enhanced Dropdown Menu */}
                     {isProfileOpen && (
-                        <div className="absolute right-0 top-full mt-4 w-72 py-2 rounded-2xl border border-white/10 bg-dark/95 backdrop-blur-xl shadow-2xl origin-top-right animate-in fade-in zoom-in-95 duration-200 z-[1001]">
+                        <div id={profileMenuId} className="absolute right-0 top-full mt-4 w-72 py-2 rounded-2xl border border-white/10 bg-dark/95 backdrop-blur-xl shadow-2xl origin-top-right animate-in fade-in zoom-in-95 duration-200 z-[1001]">
                             {/* User Info Header */}
                             <div className="px-4 py-3 border-b border-white/10 bg-white/5 mx-2 rounded-xl mb-2">
                                 <div className="flex items-center gap-3">

@@ -421,7 +421,7 @@ function AnimeCard({
 
 
                     {airingCountdown && (
-                        <div className={`absolute bottom-2 left-2 right-2 z-30 pointer-events-none transition-opacity duration-200 ${listStatus === 'Watching' ? 'group-hover:opacity-0' : ''}`}>
+                        <div className={`absolute bottom-2 left-2 right-2 z-30 pointer-events-none transition-opacity duration-200 ${listStatus === 'Watching' && isAuthenticated ? 'group-hover:opacity-0 group-focus-within:opacity-0 [@media(hover:none)]:opacity-0' : ''}`}>
                             <div className="h-7 px-2.5 rounded-md backdrop-blur-md flex items-center bg-black/65 text-gray-100">
                                 <span className="text-[11px] font-medium tracking-wide text-gray-100">
                                     {airingCountdown}
@@ -431,7 +431,7 @@ function AnimeCard({
                     )}
                     {/* Watching Progress Overlay */}
                     {isAuthenticated && listStatus === 'Watching' && (
-                        <div className="absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex">
+                        <div className="absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-200 flex">
                             <div className="h-6 sm:h-7 px-2.5 rounded-md flex items-center justify-between gap-2.5 bg-black/50 text-white border border-white/20 shadow-none pointer-events-auto">
                                 <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide">
                                     {anime.episode_count 
