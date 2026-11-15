@@ -15,7 +15,7 @@ import {
 } from '../utils/imageUtils';
 import logger from '../utils/logger';
 import { animeKeys, seasonalKeys } from '../api/queries/anime';
-import { listKeys, profileKeys } from '../api/queries/user';
+import { listKeys, profileKeys, userKeys } from '../api/queries/user';
 
 const STATUS_OPTIONS = [
     { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-emerald-400', dotColor: 'bg-emerald-400' },
@@ -131,9 +131,15 @@ function AnimeCard({
         return [anime.anime_type, Number.isFinite(year) ? year : null].filter(Boolean).join(' · ') || null;
     }, [metaText, showMeta, anime.anime_type, anime.release_date]);
 
-    const invalidateAnimeViews = useCallback(() => {
+    // Everything that shows this entry: anime grids, the user's lists and
+    // profile stats, and Home's "Currently Watching" shelf (its key is not
+    // under listKeys.all, so it needs its own invalidation).
+    const invalidateAfterListChange = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: animeKeys.all });
         queryClient.invalidateQueries({ queryKey: seasonalKeys.all });
+        queryClient.invalidateQueries({ queryKey: listKeys.all });
+        queryClient.invalidateQueries({ queryKey: userKeys.watching });
+        queryClient.invalidateQueries({ queryKey: profileKeys.own });
     }, [queryClient]);
 
     useEffect(() => {
@@ -223,9 +229,7 @@ function AnimeCard({
                 const response = await listApi.add({ anime_id: anime.id, status: newStatus });
                 setListId(response.data.id);
             }
-            invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: listKeys.all });
-            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            invalidateAfterListChange();
         } catch (error) {
             logger.error('Error updating list:', error);
             setListStatus(previousStatus);
@@ -233,7 +237,7 @@ function AnimeCard({
         } finally {
             setIsLoading(false);
         }
-    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, queryClient, invalidateAnimeViews]);
+    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, invalidateAfterListChange]);
 
     const handleRemoveFromList = useCallback(async (e) => {
         e.preventDefault();
@@ -251,9 +255,7 @@ function AnimeCard({
         setIsLoading(true);
         try {
             await listApi.remove(previousId);
-            invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: listKeys.all });
-            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            invalidateAfterListChange();
         } catch (error) {
             logger.error('Error removing from list:', error);
             setListStatus(previousStatus);
@@ -261,7 +263,7 @@ function AnimeCard({
         } finally {
             setIsLoading(false);
         }
-    }, [listId, listStatus, isLoading, queryClient, invalidateAnimeViews]);
+    }, [listId, listStatus, isLoading, invalidateAfterListChange]);
 
     const handleQuickProgress = useCallback(async (e) => {
         e.preventDefault();
@@ -276,16 +278,14 @@ function AnimeCard({
         try {
             const entryId = userListEntry?.id || listId;
             await listApi.update(entryId, { episodes_watched: newEpisodes });
-            invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: listKeys.all });
-            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            invalidateAfterListChange();
         } catch (error) {
             logger.error("Failed to update progress", error);
             setLocalEpisodesWatched(previousEpisodes);
         } finally {
             setIsLoading(false);
         }
-    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, queryClient, invalidateAnimeViews]);
+    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, invalidateAfterListChange]);
 
     const toggleStatusMenu = useCallback((e) => {
         e.preventDefault();
