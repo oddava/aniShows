@@ -151,6 +151,8 @@ class FranchiseImportNewAnimeTests(TestCase):
         service.get_anime_by_id.assert_called_once_with(5005)
         service.search_by_mal_id.assert_not_called()
         service.close.assert_called_once()
+        # A user is waiting on this request: no rate-limit waits, one try.
+        self.assertEqual(mock_service_cls.call_args.kwargs["request_budget"], "interactive")
 
     def test_falls_back_to_the_mal_id(self, mock_service_cls, _enrich):
         payload = {"id": 6006, "idMal": 66, "title": {"romaji": "Via MAL"}}

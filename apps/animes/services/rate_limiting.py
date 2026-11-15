@@ -16,73 +16,109 @@ from django.core.cache import cache
 
 from ...shared.errors import CACHE_ERRORS
 
+# Reading the shared pause value: the cache can fail, or hold something odd.
+_PAUSE_ERRORS: tuple[type[Exception], ...] = (TypeError, ValueError, *CACHE_ERRORS)
+# Breaker state: the cache can fail, or hold a value of the wrong type.
+_STATE_ERRORS: tuple[type[Exception], ...] = (TypeError, *CACHE_ERRORS)
+
 
 class AniListRateLimiter:
     """Distributed rate limiter using Redis for multi-worker coordination.
 
     AniList documents 90 requests per minute per IP but has run in a degraded
     mode at 30; ``ANILIST_RATE_LIMIT_PER_MINUTE`` sets the limit (default 30).
-    Every worker counts against one per-minute Redis counter, and each process
-    also spaces its own requests, keeping a 10% margin under the limit.
+    Every worker counts against one per-minute Redis counter, keeping a 10%
+    margin under the limit, and background callers also space their own
+    requests. A 429 from AniList pauses every worker (``pause``), not only the
+    one that got it.
     """
 
     WINDOW_SECONDS = 60
+    PAUSE_KEY = "anilist:paused_until"
+    # How long to sleep before asking again when this minute's slots are gone.
+    FULL_WINDOW_RETRY_SECONDS = 1.0
 
     def __init__(self, rate_limit: int | None = None):
         limit = rate_limit or settings.ANILIST_RATE_LIMIT_PER_MINUTE
         self.rate_limit = max(int(limit), 1)
         self.safety_margin = max(self.rate_limit // 10, 1) if self.rate_limit > 1 else 0
         self.min_delay = self.WINDOW_SECONDS / (self.rate_limit - self.safety_margin)
-        self._local_last_request = 0
-        self._local_count = 0
+        self._local_last_request = 0.0
 
     def _get_current_window_key(self) -> str:
         """Get Redis key for current minute window."""
         current_minute = int(time.time()) // self.WINDOW_SECONDS
         return f"anilist:rate:{current_minute}"
 
-    def acquire(self) -> None:
-        """Acquire permission to make an API request.
-        Blocks until it's safe to proceed.
-        """
-        while True:
-            # Local throttling first (faster, no Redis call)
-            now = time.time()
-            time_since_last = now - self._local_last_request
+    def acquire(self, max_wait: float | None = None) -> bool:
+        """Wait for a request slot; False if none is free within ``max_wait`` seconds.
 
-            if time_since_last < self.min_delay:
-                wait_time = self.min_delay - time_since_last
-                time.sleep(wait_time)
+        ``max_wait=None`` (background tasks) waits as long as needed and keeps
+        this process's requests spaced out. A bounded wait (requests made while
+        a user waits) skips the spacing and gives up instead of holding the
+        web worker; the caller reports it as rate limited.
+        """
+        deadline = None if max_wait is None else time.monotonic() + max(max_wait, 0.0)
+
+        def can_wait(seconds: float) -> bool:
+            return deadline is None or time.monotonic() + seconds <= deadline
+
+        while True:
+            wait = self._paused_for()
+            if max_wait is None:
+                wait = max(wait, self.min_delay - (time.time() - self._local_last_request))
+            if wait > 0:
+                if not can_wait(wait):
+                    return False
+                time.sleep(wait)
                 continue
 
-            # Check global rate limit via Redis
-            current_key = self._get_current_window_key()
+            if self._take_shared_slot():
+                self._local_last_request = time.time()
+                return True
 
-            try:
-                # Use pipeline for atomic operation
-                redis_client = cache.client.get_client()
-                pipe = redis_client.pipeline()
-                pipe.incr(current_key)
-                pipe.expire(current_key, self.WINDOW_SECONDS + 10)
-                results = pipe.execute()
-                count = results[0]
+            logger.warning("AniList rate limit reached for this minute (%s/min)", self.rate_limit)
+            if not can_wait(self.FULL_WINDOW_RETRY_SECONDS):
+                return False
+            time.sleep(self.FULL_WINDOW_RETRY_SECONDS)
 
-                if count <= self.rate_limit - self.safety_margin:
-                    self._local_last_request = time.time()
-                    return
+    def _take_shared_slot(self) -> bool:
+        """Count one request against this minute's shared budget; False if it is used up."""
+        current_key = self._get_current_window_key()
+        cache_client = getattr(cache, "client", None)
+        if cache_client is None:
+            # A cache backend without a raw Redis client (tests, local
+            # development): only this process's spacing applies.
+            return True
+        redis_client = cache_client.get_client()
+        try:
+            pipe = redis_client.pipeline()
+            pipe.incr(current_key)
+            pipe.expire(current_key, self.WINDOW_SECONDS + 10)
+            count = pipe.execute()[0]
+        except CACHE_ERRORS:
+            logger.warning(
+                "Redis rate limiter unavailable; using local spacing only", exc_info=True
+            )
+            return True
+        return count <= self.rate_limit - self.safety_margin
 
-                # Rate limit hit, wait until next window
-                logger.warning(f"Rate limit approaching: {count}/{self.rate_limit} requests")
-                time.sleep(1)
+    def _paused_for(self) -> float:
+        """Seconds left on a pause set after a 429 by any worker."""
+        try:
+            paused_until = float(cache.get(self.PAUSE_KEY) or 0.0)
+        except _PAUSE_ERRORS:
+            return 0.0
+        return max(paused_until - time.time(), 0.0)
 
-            except (AttributeError, *CACHE_ERRORS):
-                # Redis failure, or a cache backend without a raw Redis client
-                # (AttributeError): fall back to local rate limiting.
-                logger.exception("Redis rate limiter failed; using local fallback")
-                if time_since_last >= self.min_delay:
-                    self._local_last_request = time.time()
-                    return
-                time.sleep(self.min_delay)
+    def pause(self, seconds: float) -> None:
+        """Stop every worker's requests for ``seconds`` (AniList answered 429)."""
+        if seconds <= 0:
+            return
+        until = time.time() + seconds
+        with contextlib.suppress(*_PAUSE_ERRORS):
+            if until > float(cache.get(self.PAUSE_KEY) or 0.0):
+                cache.set(self.PAUSE_KEY, until, timeout=int(seconds) + 5)
 
 
 class CircuitBreaker:
@@ -154,7 +190,7 @@ class CircuitBreaker:
 
             return False  # CLOSED state - normal operation
 
-        except (TypeError, *CACHE_ERRORS):
+        except _STATE_ERRORS:
             # TypeError: a last-failure value that is not a datetime.
             logger.exception("Circuit breaker check failed")
             return False  # Fail open on error
@@ -196,7 +232,7 @@ class CircuitBreaker:
                     f"API calls will fail fast for {self.recovery_timeout}s"
                 )
 
-        except (TypeError, *CACHE_ERRORS):
+        except _STATE_ERRORS:
             # TypeError: a failure counter that is not a number.
             logger.exception("Failed to record circuit breaker failure")
 

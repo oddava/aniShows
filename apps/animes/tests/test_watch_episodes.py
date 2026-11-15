@@ -49,6 +49,33 @@ class AnimeWatchEpisodeServiceTests(TestCase):
         return payload
 
     @patch(SCHEDULE_PATH, new_callable=MagicMock)
+    def test_nothing_aired_yet_lists_no_episodes(self, mock_schedule):
+        # The stored total (12 planned episodes) must not be listed as watchable.
+        self.anime.episode_count = 12
+        self.anime.save(update_fields=["episode_count"])
+        for payload in (
+            self._schedule(status="NOT_YET_RELEASED", episodes=12),
+            self._schedule(
+                status="RELEASING",
+                episodes=12,
+                nextAiringEpisode={"episode": 1, "airingAt": _ts(2026, 12, 1)},
+            ),
+        ):
+            cache.clear()
+            mock_schedule.return_value = payload
+            self.assertEqual(self.service.get_for_anime(self.anime), [])
+
+    @patch(SCHEDULE_PATH, new_callable=MagicMock)
+    def test_unknown_episode_data_falls_back_to_the_stored_total(self, mock_schedule):
+        self.anime.episode_count = 3
+        self.anime.save(update_fields=["episode_count"])
+        mock_schedule.return_value = self._schedule(status="FINISHED", episodes=None)
+
+        episodes = self.service.get_for_anime(self.anime)
+
+        self.assertEqual([episode["number"] for episode in episodes], [1, 2, 3])
+
+    @patch(SCHEDULE_PATH, new_callable=MagicMock)
     def test_builds_episodes_from_the_anilist_schedule_and_streams(self, mock_schedule):
         mock_schedule.return_value = self._schedule(
             streamingEpisodes=[

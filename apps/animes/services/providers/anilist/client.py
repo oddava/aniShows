@@ -119,8 +119,17 @@ class AniListClient(CatalogProviderBase):
     MEDIA_FIELDS = MEDIA_FIELDS
     AIRING_FIELDS = AIRING_FIELDS
 
-    def __init__(self, enable_caching: bool = True, enable_rate_limiting: bool = True):
+    def __init__(
+        self,
+        enable_caching: bool = True,
+        enable_rate_limiting: bool = True,
+        *,
+        request_budget: Literal["default", "interactive"] = "default",
+    ):
         self.api_url = (settings.ANILIST_API_URL or DEFAULT_ANILIST_API_URL).strip()
+        # "interactive": a user is waiting (a web request), so every query is
+        # capped at one try, no waiting for a rate-limit slot, a short timeout.
+        self.request_budget = request_budget
         self.client = httpx.Client(
             headers={"Content-Type": "application/json", "Accept": "application/json"},
             timeout=15.0,
@@ -136,10 +145,11 @@ class AniListClient(CatalogProviderBase):
     def _parse_graphql_error_code(self, message: str) -> str:
         return mapper.parse_graphql_error_code(message)
 
-    def _acquire_rate_limit(self):
-        """Acquire rate limit permission if enabled."""
+    def _acquire_rate_limit(self, max_wait: float | None = None) -> bool:
+        """Wait for a request slot (if rate limiting is on); False if none came in ``max_wait``."""
         if self.rate_limiter:
-            self.rate_limiter.acquire()
+            return self.rate_limiter.acquire(max_wait=max_wait)
+        return True
 
     def _get_cached_result(self, endpoint: str, params: str) -> dict | None:
         """Get cached API result if available."""
@@ -181,6 +191,18 @@ class AniListClient(CatalogProviderBase):
         ``not_found`` and ``invalid_variable`` are not.
         """
         self._reset_last_error()
+        if self.request_budget == self.REQUEST_BUDGET_INTERACTIVE:
+            interactive = self._query_options_for_budget(self.REQUEST_BUDGET_INTERACTIVE)
+            unbounded = float("inf")
+            retry_count = min(retry_count, interactive["retry_count"])
+            max_rate_limit_wait = min(
+                interactive["max_rate_limit_wait"],
+                unbounded if max_rate_limit_wait is None else max_rate_limit_wait,
+            )
+            request_timeout = min(
+                interactive["request_timeout"],
+                unbounded if request_timeout is None else request_timeout,
+            )
         operation = _operation_name(query)
         cache_key = json.dumps({"query": query, "variables": variables}, sort_keys=True)
 
@@ -228,7 +250,12 @@ class AniListClient(CatalogProviderBase):
         started = time.time()
         status = "success"
         try:
-            self._acquire_rate_limit()
+            if not self._acquire_rate_limit(max_wait=max_rate_limit_wait):
+                # Every slot is taken (or AniList asked everyone to back off):
+                # a caller with a wait budget gets "rate limited" now.
+                status = "rate_limited"
+                self._set_last_error("rate_limited", f"local_rate_limit:{operation}")
+                return {}
             response = self.client.post(
                 self.api_url,
                 json={"query": query, "variables": variables},
@@ -297,6 +324,8 @@ class AniListClient(CatalogProviderBase):
         wait_time = min(wait_time, self.MAX_RATE_LIMIT_WAIT_SECONDS)
         self._set_last_error("rate_limited", f"http_429:{operation}")
         logger.warning("AniList rate limited %s; retry in %.1fs", operation, wait_time)
+        if self.rate_limiter:
+            self.rate_limiter.pause(wait_time)
         if is_last or (limit is not None and wait_time > limit):
             return {}
         backoff(wait_time)
@@ -321,9 +350,16 @@ class AniListClient(CatalogProviderBase):
             self._set_last_error("not_found", message)
             return "not_found"
         if status_code in {400, 422} or statuses & {400, 422}:
+            # A bad variable (an ID out of range) is final. Anything else here
+            # means AniList rejected the query itself (a schema change, the
+            # complexity limit): our bug or theirs, so it stays retryable
+            # (transport_error) instead of blocking rows, and is logged loudly.
             code = self._parse_graphql_error_code(message)
-            self._set_last_error("invalid_variable" if code == "transport_error" else code, message)
-            logger.warning("AniList rejected %s: %s", operation, message)
+            self._set_last_error(code, message)
+            if code == "invalid_variable":
+                logger.warning("AniList rejected a variable in %s: %s", operation, message)
+            else:
+                logger.error("AniList rejected the %s query: %s", operation, message)
             return "client_error"
         self._set_last_error(self._parse_graphql_error_code(message), message)
         return "client_error"
@@ -418,36 +454,27 @@ class AniListClient(CatalogProviderBase):
         limit: int = 50,
         custom_query: str | None = None,
     ) -> list[dict]:
-        results = []
+        """Up to ``limit`` media, page by page.
+
+        ``perPage`` stays the same on every page: AniList offsets pages by
+        ``(page - 1) * perPage``, so a smaller last page would re-read rows.
+        """
+        results: list[dict] = []
         page = variables.get("page", 1)
-        per_page = min(limit, self.FULL_MEDIA_PER_PAGE)
-
-        # If limit is large (e.g. 1000), we loop pages until we hit limit or no more pages
-        fetched_count = 0
-
+        per_page = max(1, min(limit, self.FULL_MEDIA_PER_PAGE))
         query = custom_query if custom_query else self.anime_query(include_season)
 
-        while fetched_count < limit:
-            variables.update({"page": page, "perPage": per_page})
-            data = self._query(query, variables)
+        while len(results) < limit:
+            data = self._query(query, {**variables, "page": page, "perPage": per_page})
             page_data = data.get("Page", {})
             media = page_data.get("media", [])
-
             if not media:
                 break
 
             results.extend(media)
-            fetched_count += len(media)
-
-            page_info = page_data.get("pageInfo", {})
-            if not page_info.get("hasNextPage"):
+            if not page_data.get("pageInfo", {}).get("hasNextPage"):
                 break
-
             page += 1
-            # Adjust per_page for the last request if near limit
-            remaining = limit - fetched_count
-            if remaining < per_page:
-                per_page = remaining
 
         return results[:limit]
 
@@ -619,14 +646,14 @@ class AniListClient(CatalogProviderBase):
             return None
         definitions, arguments, variables = lookup
         query = f"""
-            query GetAnimeEpisodes({definitions}, $page: Int) {{
+            query GetAnimeEpisodes({definitions}, $page: Int, $withStreaming: Boolean!) {{
                 Media({arguments}) {{
                     id
                     idMal
                     episodes
                     status
                     nextAiringEpisode {{ episode airingAt }}
-                    streamingEpisodes {{ title thumbnail url site }}
+                    streamingEpisodes @include(if: $withStreaming) {{ title thumbnail url site }}
                     airingSchedule(notYetAired: false, page: $page, perPage: 50) {{
                         pageInfo {{ hasNextPage }}
                         nodes {{ episode airingAt }}
@@ -644,7 +671,9 @@ class AniListClient(CatalogProviderBase):
         result: dict | None = None
         schedule: list[dict] = []
         for page in range(1, max_pages + 1):
-            data = self._query(query, {**variables, "page": page}, **options)
+            # Streaming links are per anime, not per page: only the first page asks.
+            page_variables = {**variables, "page": page, "withStreaming": page == 1}
+            data = self._query(query, page_variables, **options)
             media = data.get("Media")
             if not isinstance(media, dict):
                 break

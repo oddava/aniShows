@@ -185,9 +185,11 @@ class TestQuery:
                 ),
                 ("invalid_variable", 'Variable "$id" got invalid value'),
             ),
+            # The query itself was rejected (schema change, complexity limit):
+            # not the row's fault, so it stays retryable later.
             (
                 httpx.Response(400, json={"errors": [{"message": "Syntax Error", "status": 400}]}),
-                ("invalid_variable", "Syntax Error"),
+                ("transport_error", "Syntax Error"),
             ),
             (httpx.Response(403, json={}), ("transport_error", "http_403:GetThing")),
         ],
@@ -261,10 +263,12 @@ class TestQuery:
         install(monkeypatch, {"GetThing": sequence(httpx.Response(503), ok(MEDIA))})
         service = AniListService(enable_caching=False, enable_rate_limiting=True)
         calls = []
-        monkeypatch.setattr(service.rate_limiter, "acquire", lambda: calls.append(1))
+        monkeypatch.setattr(
+            service.rate_limiter, "acquire", lambda max_wait=None: calls.append(max_wait) or True
+        )
 
         assert query(service) == MEDIA
-        assert len(calls) == 2
+        assert calls == [None, None]
         service.close()
 
 
@@ -381,7 +385,11 @@ class TestBatchAndDetailQueries:
         anilist.get_episode_schedule(mal_id=1, request_budget="interactive")
 
         assert len(http.requests) == AniListService.EPISODE_SCHEDULE_INTERACTIVE_PAGES
-        assert http.operations()[0][1] == {"idMal": 1, "page": 1}
+        # Streaming links only on the first page.
+        assert [variables for _, variables in http.operations()[:2]] == [
+            {"idMal": 1, "page": 1, "withStreaming": True},
+            {"idMal": 1, "page": 2, "withStreaming": False},
+        ]
         assert http.requests[0].extensions["timeout"]["read"] == 8.0
 
     def test_episode_schedule_not_found(self, monkeypatch, anilist):
@@ -474,3 +482,88 @@ class TestAniListClientState:
         assert service._get_cached_result("graphql", "k") is None
         resolve(service._acquire_rate_limit())
         resolve(service.close())
+
+
+class TestRequestsWhileAUserWaits:
+    """Interactive calls must not hold a web worker waiting for a rate-limit slot."""
+
+    @pytest.fixture
+    def limited(self):
+        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        yield service
+        service.close()
+
+    @staticmethod
+    def no_sleeping(monkeypatch):
+        def fail(seconds):
+            raise AssertionError(f"slept {seconds}s")
+
+        monkeypatch.setattr("apps.animes.services.rate_limiting.time.sleep", fail)
+
+    def test_full_window_fails_fast_without_a_request(self, monkeypatch, limited):
+        http = install(monkeypatch, {"GetThing": MEDIA})
+        monkeypatch.setattr(limited.rate_limiter, "_take_shared_slot", lambda: False)
+        self.no_sleeping(monkeypatch)
+
+        assert query(limited, max_rate_limit_wait=0.0) == {}
+        assert limited.last_error_code == "rate_limited"
+        assert http.requests == []
+
+    def test_interactive_service_caps_every_query(self, monkeypatch):
+        http = install(monkeypatch, {"GetThing": httpx.Response(503)})
+        service = AniListService(
+            enable_caching=False, enable_rate_limiting=True, request_budget="interactive"
+        )
+        monkeypatch.setattr(service.rate_limiter, "_take_shared_slot", lambda: False)
+        self.no_sleeping(monkeypatch)
+
+        assert query(service) == {}
+        assert service.last_error_code == "rate_limited"
+        assert http.requests == []
+
+        monkeypatch.setattr(service.rate_limiter, "_take_shared_slot", lambda: True)
+        assert query(service) == {}
+        assert len(http.requests) == 1  # one try only
+        assert http.requests[0].extensions["timeout"]["read"] == 8.0
+        service.close()
+
+    def test_a_429_pauses_every_worker(self, monkeypatch, limited):
+        install(monkeypatch, {"GetThing": httpx.Response(429, headers={"Retry-After": "30"})})
+        assert query(limited, max_rate_limit_wait=0.0) == {}
+
+        other_worker = AniListService(enable_caching=False, enable_rate_limiting=True)
+        http = install(monkeypatch, {"GetThing": MEDIA})
+        self.no_sleeping(monkeypatch)
+        assert query(other_worker, max_rate_limit_wait=0.0) == {}
+        assert other_worker.last_error_code == "rate_limited"
+        assert http.requests == []
+        other_worker.close()
+
+    def test_background_calls_wait_out_the_pause(self, monkeypatch):
+        limiter = AniListRateLimiter()
+        limiter.pause(5)
+        slept = []
+
+        def sleep(seconds):
+            slept.append(seconds)
+            cache.delete(AniListRateLimiter.PAUSE_KEY)
+
+        monkeypatch.setattr("apps.animes.services.rate_limiting.time.sleep", sleep)
+
+        assert limiter.acquire() is True
+        assert 4 < slept[0] <= 5
+
+
+class TestPagination:
+    def test_last_page_keeps_the_page_size_so_no_row_repeats(self, monkeypatch, anilist):
+        def page(variables, _request):
+            first = (variables["page"] - 1) * variables["perPage"]
+            media = [{"id": first + n + 1} for n in range(variables["perPage"])]
+            return {"Page": {"pageInfo": {"hasNextPage": True}, "media": media}}
+
+        http = install(monkeypatch, {"GetAnime": page})
+
+        ids = [item["id"] for item in anilist.get_recent_updates(limit=40)]
+
+        assert ids == list(range(1, 41))
+        assert [variables["perPage"] for _, variables in http.operations()] == [25, 25]

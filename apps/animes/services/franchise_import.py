@@ -62,7 +62,9 @@ class FranchiseImportService:
 
         self._enforce_rate_limit(rate_limit_key or client_ip)
 
-        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        service = AniListService(
+            enable_caching=False, enable_rate_limiting=True, request_budget="interactive"
+        )
         try:
             item = service.get_anime_by_id(anilist_id) if anilist_id else None
             if not item and mal_id:
@@ -110,7 +112,9 @@ class FranchiseImportService:
 
     def _refresh_existing_anime(self, anime: Anime) -> None:
         """Fetch fresh sync data for an existing anime with missing media metadata."""
-        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        service = AniListService(
+            enable_caching=False, enable_rate_limiting=True, request_budget="interactive"
+        )
         try:
             item = service.resolve_media_for_anime(anime)
             if item:

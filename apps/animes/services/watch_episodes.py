@@ -100,6 +100,9 @@ class AnimeWatchEpisodeService:
         streaming_index = self._index_streaming_episodes(media.get("streamingEpisodes") or [])
         episode_total = self._released_episode_count(media, aired_at, streaming_index)
         if episode_total <= 0:
+            if self._nothing_aired_yet(media):
+                return []
+            # AniList knows the show but not its episodes: list the stored total.
             return self._build_fallback_episodes(anime)
 
         return [
@@ -127,6 +130,12 @@ class AnimeWatchEpisodeService:
         if media.get("status") == "FINISHED":
             return max(positive_int(media.get("episodes")) or 0, known)
         return known
+
+    @staticmethod
+    def _nothing_aired_yet(media: dict) -> bool:
+        """AniList says no episode is out: not released yet, or episode 1 is next."""
+        next_episode = positive_int((media.get("nextAiringEpisode") or {}).get("episode"))
+        return media.get("status") == "NOT_YET_RELEASED" or next_episode == 1
 
     @staticmethod
     def _aired_dates(schedule: list[dict]) -> dict[int, str]:

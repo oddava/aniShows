@@ -1,6 +1,7 @@
 """``AniListService``: the GraphQL client and persistence as one provider."""
 
 from collections.abc import Iterable
+from typing import Literal
 
 from ....models import Anime
 from . import mapper
@@ -11,8 +12,18 @@ from .persistence import AniListPersistence
 class AniListService(AniListPersistence, AniListClient):
     """AniList provider: fetch (``AniListClient``), map (``mapper``), save (``AniListPersistence``)."""
 
-    def __init__(self, enable_caching: bool = True, enable_rate_limiting: bool = True):
-        super().__init__(enable_caching=enable_caching, enable_rate_limiting=enable_rate_limiting)
+    def __init__(
+        self,
+        enable_caching: bool = True,
+        enable_rate_limiting: bool = True,
+        *,
+        request_budget: Literal["default", "interactive"] = "default",
+    ):
+        super().__init__(
+            enable_caching=enable_caching,
+            enable_rate_limiting=enable_rate_limiting,
+            request_budget=request_budget,
+        )
         # Airing payloads fetched in bulk by ``prefetch_airing``, by ("anilist"|"mal", id).
         self._airing_payloads: dict[tuple[str, int], dict] = {}
 

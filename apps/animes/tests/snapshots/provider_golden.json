@@ -11,7 +11,8 @@
           "options": {},
           "variables": {
             "id": 154587,
-            "page": 1
+            "page": 1,
+            "withStreaming": true
           }
         }
       ],
@@ -53,7 +54,8 @@
           },
           "variables": {
             "idMal": 52991,
-            "page": 1
+            "page": 1,
+            "withStreaming": true
           }
         }
       ],
