@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { LoadingBar } from '../components/LoadingBar';
 import ActiveFilterChips from '../components/browse/ActiveFilterChips';
 import AdvancedFiltersPanel from '../components/browse/AdvancedFiltersPanel';
@@ -34,6 +35,14 @@ import { profileKeys } from '../api/queries/user';
 
 export default function Browse() {
   const searchInputRef = useRef(null);
+  const location = useLocation();
+
+  // Arriving from the mobile top bar's search button: put the cursor in the box.
+  useEffect(() => {
+    if (location.state?.focusSearch) {
+      searchInputRef.current?.focus();
+    }
+  }, [location.key, location.state]);
 
   // State
   const [showFilters, setShowFilters] = useState(false);

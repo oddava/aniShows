@@ -34,7 +34,9 @@ export default function useNavbarAutoHide({ isSearchExpanded, isProfileOpen, sho
                 showSuggestionsRef.current || 
                 isSearchingRef.current;
                 
-            if (!isInteracting) {
+            // Near the top of the page there is nothing for the bar to cover,
+            // so it stays put rather than vanishing while someone reads.
+            if (!isInteracting && window.scrollY >= 100) {
                 setIsVisible(false);
             }
         }, 1500); // Hide after 1.5 seconds of idle time
@@ -83,14 +85,34 @@ export default function useNavbarAutoHide({ isSearchExpanded, isProfileOpen, sho
             }
         };
 
+        // Keyboard focus inside the bar keeps it visible (it is still
+        // focusable while hidden, so focus must reveal it).
+        const handleFocusIn = (e) => {
+            if (e.target?.closest?.('[data-autohide-nav]')) {
+                isHoveredRef.current = true;
+                setIsVisible(true);
+                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            }
+        };
+        const handleFocusOut = (e) => {
+            if (e.target?.closest?.('[data-autohide-nav]') && !e.relatedTarget?.closest?.('[data-autohide-nav]')) {
+                isHoveredRef.current = false;
+                startHideTimer();
+            }
+        };
+
         // Initialize state listener
         startHideTimer();
 
         window.addEventListener('scroll', handleScroll, { passive: true });
         window.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('focusin', handleFocusIn);
+        document.addEventListener('focusout', handleFocusOut);
         return () => {
             window.removeEventListener('scroll', handleScroll);
             window.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('focusin', handleFocusIn);
+            document.removeEventListener('focusout', handleFocusOut);
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
     }, [lastScrollY, startHideTimer]);

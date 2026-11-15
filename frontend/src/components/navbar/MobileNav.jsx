@@ -70,11 +70,10 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
     };
 
     const mobileTabClasses = (isActive) => `
-        group relative min-w-0 flex h-12 flex-col items-center justify-center rounded-lg border border-transparent px-0.5 transition-colors duration-200 outline-none
-        focus:outline-none focus-visible:outline-none focus-visible:ring-0 [-webkit-tap-highlight-color:transparent]
+        group relative min-w-0 flex h-12 flex-col items-center justify-center rounded-[1.1rem] border border-transparent px-0.5 transition-colors duration-200 [-webkit-tap-highlight-color:transparent]
         ${isActive
-            ? 'border-transparent text-white'
-            : 'text-gray-300/90 hover:bg-white/[0.08] hover:text-white active:bg-white/[0.06]'
+            ? 'bg-white/[0.08] text-white'
+            : 'text-gray-400 hover:bg-white/[0.06] hover:text-white active:bg-white/[0.06]'
         }
     `;
 
@@ -116,7 +115,8 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
     if (!showMobileIsland) return null;
 
     return (
-        <div
+        <nav
+            aria-label="Primary"
             className="md:hidden fixed bottom-[max(0.4rem,env(safe-area-inset-bottom))] inset-x-[0.45rem] z-[1001] mx-auto w-auto max-w-[350px] select-none"
             style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
         >
@@ -130,7 +130,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                         className={mobileTabClasses(location.pathname === '/')}
                     >
                         <Home className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
-                        <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Home</span>
+                        <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Home</span>
                     </Link>
                     <div className="relative min-w-0" ref={mobileAnimeRef}>
                         <button
@@ -139,7 +139,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                             className={`w-full ${mobileTabClasses(isPathActive('/browse') || isPathActive('/schedule'))}`}
                         >
                             <Clapperboard className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
-                            <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Anime</span>
+                            <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Anime</span>
                         </button>
                         {isMobileAnimeOpen && (
                             <div
@@ -179,7 +179,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                             )}
                             <Bell className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                         </span>
-                        <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Notifs</span>
+                        <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Notifs</span>
                     </Link>
                     <div className="relative min-w-0" ref={mobileAccountRef}>
                         {isAuthenticated ? (
@@ -202,7 +202,7 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                     ) : (
                                         <User className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
                                     )}
-                                    <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">Account</span>
+                                    <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Account</span>
                                 </button>
                                 {isMobileAccountOpen && (
                                     <div
@@ -248,12 +248,12 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                 className={mobileTabClasses(location.pathname === '/login' || location.pathname === '/register')}
                             >
                                 <User className="h-[0.95rem] w-[0.95rem] stroke-[1.9]" />
-                                <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.06em]">{mobileProfileLabel}</span>
+                                <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">{mobileProfileLabel}</span>
                             </Link>
                         )}
                     </div>
                 </div>
             </div>
-        </div>
+        </nav>
     );
 }

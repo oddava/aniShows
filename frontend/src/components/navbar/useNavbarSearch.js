@@ -85,10 +85,12 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
     // Enhanced keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e) => {
-            // "/" to focus search
-            if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-                // Don't trigger if user is typing in an input
-                if (isActiveElementEditable()) {
+            // "/" (outside text fields) or Ctrl/Cmd+K (anywhere) focuses search
+            const isSlash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey;
+            const isCommandK = (e.metaKey || e.ctrlKey) && !e.altKey && e.key?.toLowerCase() === 'k';
+            if (isSlash || isCommandK) {
+                // "/" is a character; let it through when typing in a field
+                if (isSlash && isActiveElementEditable()) {
                     return;
                 }
                 e.preventDefault();
