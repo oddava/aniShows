@@ -344,14 +344,8 @@ class TestSaveAndRefresh:
         assert anime.episode_count == 28
         assert anime.synopsis == stored_synopsis
 
-    @pytest.mark.parametrize(
-        "row",
-        [
-            {"provider_ids": {"myanimelist": 52991}},
-            {"provider_ids": {"anilist": 154587}},
-            {"mal_id": 52991},
-        ],
-    )
+    # The offline-catalog import copies its IDs onto these columns.
+    @pytest.mark.parametrize("row", [{"anilist_id": 154587}, {"mal_id": 52991}])
     def test_save_anime_to_db_matches_offline_catalog_ids(self, anilist, row):
         existing = make_anime(title="Provider Match", **row)
 
@@ -521,23 +515,73 @@ class TestResolveByTitle:
 
 
 class TestCastReplacement:
-    def test_refresh_replaces_links_written_from_other_ids(self, anilist):
+    """AniList payloads carry a 10-person preview; stored casts beyond it must survive."""
+
+    def test_links_outside_the_preview_are_kept(self, anilist):
         anime = make_anime(title="Frieren", anilist_id=154587)
-        legacy_character = Character.objects.create(name="Frieren", anilist_id=1_600_052_991)
-        legacy_staff = Staff.objects.create(name="Old Director", anilist_id=1_700_000_001)
-        AnimeCharacter.objects.create(
-            anime=anime, character=legacy_character, role=AnimeCharacter.Role.MAIN
-        )
-        AnimeStaff.objects.create(anime=anime, staff=legacy_staff, role="Director")
+        for index in range(1, 13):
+            character = Character.objects.create(name=f"Extra {index}", anilist_id=900_000 + index)
+            AnimeCharacter.objects.create(
+                anime=anime, character=character, role=AnimeCharacter.Role.BACKGROUND
+            )
+            staff = Staff.objects.create(name=f"Animator {index}", anilist_id=800_000 + index)
+            AnimeStaff.objects.create(anime=anime, staff=staff, role="Key Animation")
 
         assert resolve(anilist.update_anime_manual(anime, media_fixture())) is True
 
-        assert AnimeCharacter.objects.filter(anime=anime).count() == 3
-        assert not AnimeCharacter.objects.filter(character=legacy_character).exists()
-        assert AnimeStaff.objects.filter(anime=anime).count() == 2
-        assert not AnimeStaff.objects.filter(staff=legacy_staff).exists()
-        # The people rows themselves stay (they may be favourited).
-        assert Character.objects.filter(pk=legacy_character.pk).exists()
+        # 12 stored + 3 from the preview; nothing outside the preview is deleted.
+        assert AnimeCharacter.objects.filter(anime=anime).count() == 15
+        assert AnimeStaff.objects.filter(anime=anime).count() == 14
+
+    def test_jikan_era_people_are_retired_when_anilist_brings_them_back(self, anilist):
+        from django.contrib.auth import get_user_model
+
+        from apps.animes.models import UserFavoriteCharacter, UserFavoriteStaff
+
+        user_model = get_user_model()
+        alice = user_model.objects.create_user(
+            username="alice", email="a@example.com", password="x"
+        )
+        bob = user_model.objects.create_user(username="bob", email="b@example.com", password="x")
+        anime = make_anime(title="Frieren", anilist_id=154587)
+        # Written from Jikan: synthetic IDs (1.6e9/1.7e9 + MAL ID).
+        old_frieren = Character.objects.create(name="Frieren", anilist_id=1_600_000_001)
+        old_seiyuu = Staff.objects.create(name="Atsumi Tanezaki", anilist_id=1_700_000_001)
+        old_director = Staff.objects.create(name="Keiichirou Saitou", anilist_id=1_700_000_002)
+        old_only = Character.objects.create(name="Fern", anilist_id=1_600_000_002)
+        AnimeCharacter.objects.create(
+            anime=anime, character=old_frieren, voice_actor=old_seiyuu, role="MAIN"
+        )
+        AnimeCharacter.objects.create(anime=anime, character=old_only, role="MAIN")
+        AnimeStaff.objects.create(anime=anime, staff=old_director, role="Director")
+        # Bob already favourited the AniList row too: he must keep exactly one.
+        new_frieren = Character.objects.create(name="Frieren", anilist_id=176754)
+        UserFavoriteCharacter.objects.create(user=alice, character=old_frieren)
+        UserFavoriteCharacter.objects.create(user=bob, character=old_frieren)
+        UserFavoriteCharacter.objects.create(user=bob, character=new_frieren)
+        UserFavoriteStaff.objects.create(user=alice, staff=old_seiyuu)
+        UserFavoriteStaff.objects.create(user=alice, staff=old_director)
+
+        assert resolve(anilist.update_anime_manual(anime, media_fixture())) is True
+
+        names = list(
+            AnimeCharacter.objects.filter(anime=anime).values_list(
+                "character__name", "character__anilist_id"
+            )
+        )
+        assert ("Frieren", 1_600_000_001) not in names
+        assert ("Frieren", 176754) in names
+        # Not in the preview: kept.
+        assert ("Fern", 1_600_000_002) in names
+        assert not AnimeStaff.objects.filter(staff=old_director).exists()
+        assert set(
+            UserFavoriteCharacter.objects.values_list("user__username", "character__anilist_id")
+        ) == {("alice", 176754), ("bob", 176754)}
+        assert set(
+            UserFavoriteStaff.objects.values_list("user__username", "staff__anilist_id")
+        ) == {("alice", 119331), ("alice", 106297)}
+        # The old rows stay (nothing points at them now).
+        assert Character.objects.filter(pk=old_frieren.pk).exists()
 
     def test_payload_without_a_cast_keeps_the_stored_one(self, anilist):
         anime = make_anime(title="Frieren", anilist_id=154587)

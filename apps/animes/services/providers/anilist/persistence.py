@@ -37,6 +37,56 @@ def _upsert_person(model, fields: dict):
     return model.objects.update_or_create(name=name, defaults=defaults)[0]
 
 
+# Jikan (before D1) stored people under synthetic IDs: 1.6e9 + MAL ID for
+# characters, 1.7e9 + MAL ID for staff. Real AniList IDs are far below.
+LEGACY_CHARACTER_ID_MIN = 1_600_000_000
+LEGACY_STAFF_ID_MIN = 1_700_000_000
+
+
+def _name_key(name: str | None) -> str:
+    return " ".join((name or "").split()).casefold()
+
+
+def _move_favorites(model, field: str, old, new) -> None:
+    """Point ``old``'s favourites at ``new``; drop the ones a user already has on ``new``."""
+    favorites = model.objects.filter(**{field: old})
+    favorites.filter(user__in=model.objects.filter(**{field: new}).values("user")).delete()
+    favorites.update(**{field: new})
+
+
+def _retire_legacy_cast(anime, characters_by_name: dict, staff_by_name: dict) -> None:
+    """Remove ``anime``'s Jikan-era links to people the AniList payload brought back."""
+    from ....models import UserFavoriteCharacter, UserFavoriteStaff
+
+    legacy_staff_moved: set[int] = set()
+
+    def retire_staff(old_staff) -> None:
+        replacement = staff_by_name.get(_name_key(old_staff.name))
+        if replacement and old_staff.pk not in legacy_staff_moved:
+            _move_favorites(UserFavoriteStaff, "staff", old_staff, replacement)
+            legacy_staff_moved.add(old_staff.pk)
+
+    legacy_characters = AnimeCharacter.objects.filter(
+        anime=anime, character__anilist_id__gte=LEGACY_CHARACTER_ID_MIN
+    ).select_related("character", "voice_actor")
+    for link in legacy_characters:
+        replacement = characters_by_name.get(_name_key(link.character.name))
+        if replacement is None:
+            continue
+        _move_favorites(UserFavoriteCharacter, "character", link.character, replacement)
+        if link.voice_actor and (link.voice_actor.anilist_id or 0) >= LEGACY_STAFF_ID_MIN:
+            retire_staff(link.voice_actor)
+        link.delete()
+
+    legacy_staff = AnimeStaff.objects.filter(
+        anime=anime, staff__anilist_id__gte=LEGACY_STAFF_ID_MIN
+    ).select_related("staff")
+    for staff_link in legacy_staff:
+        if _name_key(staff_link.staff.name) in staff_by_name:
+            retire_staff(staff_link.staff)
+            staff_link.delete()
+
+
 if TYPE_CHECKING:
     from .client import AniListClient
 
@@ -234,18 +284,13 @@ class AniListPersistence(_ClientBase):
         slug: str | None = None,
         title: str | None = None,
     ) -> Anime | None:
-        """Find the local row for a payload: by real IDs, then the offline-catalog IDs.
+        """Find the local row for a payload by AniList, then MAL ID.
 
+        (The offline-catalog import copies its IDs onto these columns too.)
         Titles are not unique, so slug and title are only used for payloads
         with no IDs at all.
         """
-        for lookup, value in (
-            ("anilist_id", anilist_id),
-            ("mal_id", mal_id),
-            # Rows imported from the offline catalog carry their IDs here first.
-            ("provider_ids__anilist", anilist_id),
-            ("provider_ids__myanimelist", mal_id),
-        ):
+        for lookup, value in (("anilist_id", anilist_id), ("mal_id", mal_id)):
             if value:
                 anime = Anime.objects.filter(**{lookup: value}).first()
                 if anime:
@@ -311,51 +356,51 @@ class AniListPersistence(_ClientBase):
         sync_relations_from_media(anime, item)
 
     def _handle_extended_info(self, anime, item):
-        """Store the payload's cast and staff, replacing the anime's previous ones.
+        """Store the payload's cast and staff next to the anime's existing ones.
 
-        A payload without a cast leaves the stored one alone. Replacing (rather
-        than adding to) the links keeps one copy of each person: older rows
-        written from Jikan used other IDs for the same people.
+        AniList payloads carry a preview (the top 10 of each), so links to
+        people missing from it are kept: deleting them would cut a 40-person
+        cast down to 10. The exception is a person written before D1 from
+        Jikan, under a synthetic ID: when the same person (by name) arrives
+        from AniList, the old link is retired and their favourites move to the
+        AniList row, so the cast never shows them twice.
         """
-        character_edges = mapper.character_edges(item)
-        staff_edges = mapper.staff_edges(item)
+        characters_by_name: dict[str, Character] = {}
+        staff_by_name: dict[str, Staff] = {}
         with transaction.atomic():
-            kept_characters = []
-            for edge in character_edges:
+            for edge in mapper.character_edges(item):
                 node = edge["node"]
                 role = edge["role"]  # MAIN, SUPPORTING, etc.
                 character = _upsert_person(Character, mapper.character_fields(node))
+                characters_by_name[_name_key(character.name)] = character
 
                 # Japanese voice actor, if any.
                 voice_actors = edge.get("voiceActors") or []
                 voice_actor = None
                 if voice_actors:
                     voice_actor = _upsert_person(Staff, mapper.person_fields(voice_actors[0]))
+                    staff_by_name[_name_key(voice_actor.name)] = voice_actor
 
-                link, _ = AnimeCharacter.objects.update_or_create(
+                AnimeCharacter.objects.update_or_create(
                     anime=anime,
                     character=character,
                     voice_actor=voice_actor,
                     defaults={"role": ROLE_MAP.get(role, AnimeCharacter.Role.SUPPORTING)},
                 )
-                kept_characters.append(link.pk)
-            if character_edges:
-                AnimeCharacter.objects.filter(anime=anime).exclude(pk__in=kept_characters).delete()
 
-            kept_staff = []
-            for edge in staff_edges:
+            for edge in mapper.staff_edges(item):
                 node = edge["node"]
                 role = edge["role"]
                 staff_member = _upsert_person(Staff, mapper.person_fields(node))
+                staff_by_name[_name_key(staff_member.name)] = staff_member
 
-                staff_link, _ = AnimeStaff.objects.update_or_create(
+                AnimeStaff.objects.update_or_create(
                     anime=anime,
                     staff=staff_member,
                     role=role,  # Keep exact role string
                 )
-                kept_staff.append(staff_link.pk)
-            if staff_edges:
-                AnimeStaff.objects.filter(anime=anime).exclude(pk__in=kept_staff).delete()
+
+            _retire_legacy_cast(anime, characters_by_name, staff_by_name)
 
     def _download_and_save_images(self, anime, item):
         try:
