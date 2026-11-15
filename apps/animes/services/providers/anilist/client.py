@@ -6,6 +6,7 @@ circuit breaker, and bounded retries. Failures never raise; they return
 ``{}`` and leave the reason in ``last_error_code`` / ``last_error_message``.
 """
 
+import hashlib
 import json
 import re
 import time
@@ -182,15 +183,17 @@ class AniListClient(CatalogProviderBase):
         self.circuit_breaker.record_failure()
 
     @staticmethod
-    def _query_breaker(operation: str) -> CircuitBreaker:
-        """A breaker per operation, for AniList rejecting that query itself.
+    def _query_breaker(operation: str, query: str) -> CircuitBreaker:
+        """A breaker per query, for AniList rejecting that query itself.
 
         Separate from the transport breaker: one broken query (a schema
         change) must not stop the others, and their successes must not reset
-        its count.
+        its count. Keyed by the query text as well as the operation name, so
+        a release that fixes the query starts with a closed breaker.
         """
+        digest = hashlib.sha256(query.encode("utf-8")).hexdigest()[:8]
         return CircuitBreaker(
-            f"anilist_query:{operation}", failure_threshold=5, recovery_timeout=300
+            f"anilist_query:{operation}:{digest}", failure_threshold=5, recovery_timeout=300
         )
 
     def _query(
@@ -233,7 +236,7 @@ class AniListClient(CatalogProviderBase):
         if not self._check_circuit_breaker():
             self._set_last_error("transport_error", "circuit_breaker_open")
             return {}
-        if self._query_breaker(operation).is_open():
+        if self._query_breaker(operation, query).is_open():
             # This operation keeps being rejected (schema change): stop
             # sending it, while the other operations carry on.
             self._set_last_error("query_rejected", f"query_breaker_open:{operation}")
@@ -312,11 +315,11 @@ class AniListClient(CatalogProviderBase):
             data = raw_data if isinstance(raw_data, dict) else {}
             errors = body.get("errors") or []
             if response.status_code >= 400 or (errors and not any(data.values())):
-                status = self._after_query_error(response.status_code, errors, operation)
+                status = self._after_query_error(response.status_code, errors, operation, query)
                 return {}
 
             self._record_success()
-            self._query_breaker(operation).record_success()
+            self._query_breaker(operation, query).record_success()
             self._reset_last_error()
             return data
         except httpx.HTTPError as exc:
@@ -366,7 +369,7 @@ class AniListClient(CatalogProviderBase):
         logger.warning("AniList request failed after retries: %s", message)
         return {}
 
-    def _after_query_error(self, status_code: int, errors: list, operation: str) -> str:
+    def _after_query_error(self, status_code: int, errors: list, operation: str, query: str) -> str:
         """A GraphQL or 4xx error: record why (never retried) and return the metrics status."""
         messages = [str(error.get("message") or "") for error in errors if isinstance(error, dict)]
         statuses = {error.get("status") for error in errors if isinstance(error, dict)}
@@ -386,7 +389,7 @@ class AniListClient(CatalogProviderBase):
                 logger.warning("AniList rejected a variable in %s: %s", operation, message)
                 return "client_error"
             self._set_last_error("query_rejected", message)
-            self._query_breaker(operation).record_failure()
+            self._query_breaker(operation, query).record_failure()
             logger.error("AniList rejected the %s query: %s", operation, message)
             return "client_error"
         self._set_last_error(self._parse_graphql_error_code(message), message)
@@ -666,8 +669,10 @@ class AniListClient(CatalogProviderBase):
         """Episode data for one anime: totals, aired schedule and streaming links.
 
         Returns ``{"id", "idMal", "episodes", "status", "nextAiringEpisode",
-        "streamingEpisodes", "airingSchedule"}``, where ``airingSchedule`` lists
-        ``{"episode", "airingAt"}`` for episodes that have aired.
+        "streamingEpisodes", "airingSchedule", "partial"}``, where
+        ``airingSchedule`` lists ``{"episode", "airingAt"}`` for episodes that
+        have aired and ``partial`` says a page was due but not read (the
+        interactive deadline, or a failed request; not the page cap).
         """
         lookup = self._media_lookup(anilist_id=anilist_id, mal_id=mal_id)
         if lookup is None:
@@ -703,17 +708,22 @@ class AniListClient(CatalogProviderBase):
         )
         result: dict | None = None
         schedule: list[dict] = []
+        # A page was due but not read (deadline, or a failed request): the
+        # list is incomplete, so callers should not keep it like a full one.
+        partial = False
         for page in range(1, max_pages + 1):
             if deadline is not None:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    break  # a user is waiting: keep the pages already fetched
+                    partial = True  # a user is waiting: keep the pages already fetched
+                    break
                 options["request_timeout"] = min(options["request_timeout"], remaining)
             # Streaming links are per anime, not per page: only the first page asks.
             page_variables = {**variables, "page": page, "withStreaming": page == 1}
             data = self._query(query, page_variables, **options)
             media = data.get("Media")
             if not isinstance(media, dict):
+                partial = result is not None
                 break
             if result is None:
                 result = {
@@ -737,6 +747,7 @@ class AniListClient(CatalogProviderBase):
                 self._set_last_error("not_found", f"episodes:{next(iter(variables.values()))}")
             return None
         result["airingSchedule"] = schedule
+        result["partial"] = partial
         return result
 
     def get_recommendations_for_anime(

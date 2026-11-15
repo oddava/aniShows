@@ -105,7 +105,7 @@ class OfflineCatalogImportTask(BaseTask):
 class OfflineCatalogReconcileSyncTask(BaseTask):
     """Reconcile AniList enrichment for offline-imported anime.
 
-    This task repeatedly enqueues metadata, franchise, and theme sync chunks
+    This task repeatedly enqueues metadata and franchise sync chunks
     for anime imported from Anime Offline Database until all candidates are
     synced (or a hard round cap is hit).
     """

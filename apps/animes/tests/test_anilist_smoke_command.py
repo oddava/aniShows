@@ -61,3 +61,16 @@ def test_busy_anilist_is_reported_but_does_not_fail(monkeypatch, capsys):
 
     assert "skipped" in output
     assert "REJECTED" not in output
+
+
+def test_an_old_query_breaker_does_not_block_the_check(monkeypatch, capsys):
+    # The breaker of a query the previous release kept sending is open; the
+    # new release's query is different text, so it is sent and checked.
+    from apps.animes.services.anilist import AniListService
+
+    old = AniListService._query_breaker("GetAnimeById", "query GetAnimeById { old }")
+    for _ in range(5):
+        old.record_failure()
+    AniListGraphQL(ROUTES).install(monkeypatch)
+
+    assert run(capsys).count("ok ") == 9

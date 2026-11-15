@@ -36,7 +36,8 @@ class AniListRateLimiter:
     WINDOW_SECONDS = 60
     # Requests made while a user waits may use only this share of a minute's
     # budget, so web traffic (a crawler walking detail pages) cannot starve
-    # the background sync that keeps the catalog fresh.
+    # the background sync; background work in turn leaves a few slots
+    # (``web_reserve``) so a running sync cannot starve users.
     INTERACTIVE_SHARE = 0.5
     PAUSE_KEY = "anilist:paused_until"
     # How long to sleep before asking again when this minute's slots are gone.
@@ -89,10 +90,13 @@ class AniListRateLimiter:
     def _take_shared_slot(self, *, interactive: bool = False) -> bool:
         """Count one request against this minute's shared budget; False if it is used up.
 
-        An interactive caller only gets a slot while the minute's count is
-        under its share; a refused interactive try gives its count back.
+        Web requests (``interactive``) are also counted on their own key: they
+        may use at most ``INTERACTIVE_SHARE`` of the budget themselves, and
+        background work stops ``WEB_RESERVE`` slots short of the total so a
+        running sync never leaves users with nothing. A refused try gives its
+        counts back.
         """
-        current_key = self._get_current_window_key()
+        total_key = self._get_current_window_key()
         cache_client = getattr(cache, "client", None)
         if cache_client is None:
             # A cache backend without a raw Redis client (tests, local
@@ -100,23 +104,36 @@ class AniListRateLimiter:
             return True
         redis_client = cache_client.get_client()
         budget = self.rate_limit - self.safety_margin
-        if interactive:
-            budget = max(int(budget * self.INTERACTIVE_SHARE), 1)
+        keys = [total_key, f"{total_key}:web"] if interactive else [total_key]
         try:
             pipe = redis_client.pipeline()
-            pipe.incr(current_key)
-            pipe.expire(current_key, self.WINDOW_SECONDS + 10)
-            count = pipe.execute()[0]
-            if count <= budget:
-                return True
+            for key in keys:
+                pipe.incr(key)
+                pipe.expire(key, self.WINDOW_SECONDS + 10)
+            counts = pipe.execute()[::2]
             if interactive:
-                redis_client.decr(current_key)
-            return False
+                allowed = counts[0] <= budget and counts[1] <= self.web_share(budget)
+            else:
+                allowed = counts[0] <= budget - self.web_reserve(budget)
+            if not allowed:
+                for key in keys:
+                    redis_client.decr(key)
+            return allowed
         except CACHE_ERRORS:
             logger.warning(
                 "Redis rate limiter unavailable; using local spacing only", exc_info=True
             )
             return True
+
+    @classmethod
+    def web_share(cls, budget: int) -> int:
+        """Most of a minute's budget web requests may use."""
+        return max(int(budget * cls.INTERACTIVE_SHARE), 1)
+
+    @staticmethod
+    def web_reserve(budget: int) -> int:
+        """Slots background work leaves free each minute for web requests."""
+        return min(max(budget // 10, 1), budget - 1) if budget > 1 else 0
 
     def _paused_for(self) -> float:
         """Seconds left on a pause set after a 429 by any worker."""

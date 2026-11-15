@@ -402,11 +402,16 @@ class AnimeCharacter(Model):
 
     class Meta:
         ordering = ["role", "character__name"]
-        unique_together = (
-            "anime",
-            "character",
-            "voice_actor",
-        )
+        constraints = [
+            # NULLs not distinct: a character without a voice actor must not be
+            # stored twice by concurrent refreshes either (update_or_create
+            # would then fail on every later refresh).
+            UniqueConstraint(
+                fields=["anime", "character", "voice_actor"],
+                nulls_distinct=False,
+                name="anime_character_unique_voice",
+            ),
+        ]
 
 
 class AnimeStaff(Model):

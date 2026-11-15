@@ -126,6 +126,27 @@ class WatchEpisodesWhenAniListFailsTests(TestCase):
         self.assertEqual(cache_set.call_args.kwargs["timeout"], 60)
 
     @mock.patch(SCHEDULE)
+    def test_a_partial_episode_list_is_kept_for_a_minute_only(self, service_cls):
+        service = service_cls.return_value
+        service.last_error_code = ""
+        service.get_episode_schedule.return_value = {
+            "id": 7,
+            "episodes": 120,
+            "status": "FINISHED",
+            "nextAiringEpisode": None,
+            "streamingEpisodes": [],
+            "airingSchedule": [{"episode": 1, "airingAt": 1_700_000_000}],
+            "partial": True,  # the interactive deadline cut the schedule short
+        }
+        anime = self._anime(status=Anime.AnimeStatus.finished)
+
+        with mock.patch("apps.animes.services.watch_episodes.cache.set") as cache_set:
+            episodes = self.service.get_for_anime(anime)
+
+        self.assertEqual(len(episodes), 120)
+        self.assertEqual(cache_set.call_args.kwargs["timeout"], 60)
+
+    @mock.patch(SCHEDULE)
     def test_the_fallback_never_lists_unaired_episodes(self, service_cls):
         _rate_limited(service_cls, "get_episode_schedule")
         airing = self._anime(status=Anime.AnimeStatus.airing, next_airing_episode=5)

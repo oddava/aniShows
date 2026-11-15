@@ -158,7 +158,7 @@ class AniListPersistence(_ClientBase):
 
     def process_media_list(self, media_list: list[dict], progress_callback=None):
         """Process a list of media items and save/update them in the database.
-        Returns stats dict with created anime IDs for theme sync.
+        Returns a stats dict, with the IDs of the anime it created.
         """
         stats = {"created": 0, "updated": 0, "skipped": 0, "created_anime_ids": []}
 

@@ -83,7 +83,7 @@ class AnimeWatchEpisodeService:
         *,
         request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
     ) -> tuple[list[dict], bool]:
-        """``(episodes, degraded)``; degraded when AniList could not be asked."""
+        """``(episodes, degraded)``; degraded when AniList could not be asked, or answered in part."""
         if not (anime.anilist_id or anime.mal_id):
             return self._build_fallback_episodes(anime), False
 
@@ -94,7 +94,9 @@ class AnimeWatchEpisodeService:
                 mal_id=anime.mal_id,
                 request_budget=request_budget,
             )
-            degraded = media is None and service.last_error_code in TRANSIENT_ERROR_CODES
+            degraded = bool(media and media.get("partial")) or (
+                media is None and service.last_error_code in TRANSIENT_ERROR_CODES
+            )
         except Exception:
             logger.warning("Failed to fetch episode data for %s", anime.slug, exc_info=True)
             media, degraded = None, True
@@ -109,9 +111,9 @@ class AnimeWatchEpisodeService:
         episode_total = self._released_episode_count(media, aired_at, streaming_index)
         if episode_total <= 0:
             if self._nothing_aired_yet(media):
-                return [], False
+                return [], degraded
             # AniList knows the show but not its episodes: use the stored row.
-            return self._build_fallback_episodes(anime), False
+            return self._build_fallback_episodes(anime), degraded
 
         episodes = [
             self._merge_episode(
@@ -126,7 +128,7 @@ class AnimeWatchEpisodeService:
             )
             for number in range(1, episode_total + 1)
         ]
-        return episodes, False
+        return episodes, degraded
 
     @staticmethod
     def _released_episode_count(media: dict, aired_at: dict, streaming_index: dict) -> int:

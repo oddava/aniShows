@@ -373,6 +373,7 @@ class TestBatchAndDetailQueries:
                 {"episode": 2, "airingAt": 20},
                 {"episode": 3, "airingAt": 30},
             ],
+            "partial": False,
         }
 
     def test_interactive_episode_schedule_caps_pages_and_retries(self, monkeypatch, anilist):
@@ -589,6 +590,17 @@ class TestRejectedQuery:
         assert anilist._query(other, {"id": 1}) == MEDIA  # the rest carry on
         assert not cache.get("cb:anilist_api:failures")
 
+    def test_a_changed_query_starts_with_a_closed_breaker(self, monkeypatch, anilist):
+        # The release that fixes a rejected query must not inherit its breaker.
+        http = install(monkeypatch, {"GetThing": MEDIA})
+        broken = AniListService._query_breaker("GetThing", "query GetThing { old }")
+        for _ in range(5):
+            broken.record_failure()
+        assert broken.is_open()
+
+        assert query(anilist) == MEDIA
+        assert len(http.requests) == 1
+
     def test_a_bad_variable_does_not(self, monkeypatch, anilist):
         install(
             monkeypatch,
@@ -643,16 +655,35 @@ class TestSharedBudget:
         )
         return fake
 
+    # rate_limit=30: a budget of 27 after the safety margin; web may use 13 of
+    # it, and background work leaves 2 free.
+
     def test_web_requests_use_at_most_half_of_each_minute(self, redis):
-        limiter = AniListRateLimiter(rate_limit=30)  # 27 after the safety margin
+        limiter = AniListRateLimiter(rate_limit=30)
 
         granted = sum(limiter._take_shared_slot(interactive=True) for _ in range(20))
 
-        assert granted == 13  # half of 27
-        # Refused tries gave their count back: background work keeps the rest.
-        assert sum(redis.counts.values()) == 13
+        assert granted == 13
+        # Refused tries gave their counts back: background work keeps the rest
+        # of the budget, short of the web reserve.
         background = sum(limiter._take_shared_slot() for _ in range(20))
-        assert background == 27 - 13
+        assert background == 25 - 13
+
+    def test_a_running_sync_still_leaves_slots_for_users(self, redis):
+        limiter = AniListRateLimiter(rate_limit=30)
+
+        background = sum(limiter._take_shared_slot() for _ in range(40))
+        web = sum(limiter._take_shared_slot(interactive=True) for _ in range(5))
+
+        assert (background, web) == (25, 2)
+        minute = limiter._get_current_window_key()
+        assert redis.counts == {minute: 27, f"{minute}:web": 2}
+
+    def test_web_gets_the_rest_of_the_budget_after_a_partial_sync(self, redis):
+        limiter = AniListRateLimiter(rate_limit=30)
+
+        assert sum(limiter._take_shared_slot() for _ in range(20)) == 20
+        assert sum(limiter._take_shared_slot(interactive=True) for _ in range(20)) == 7
 
     def test_interactive_acquire_fails_fast_once_its_share_is_used(self, redis, monkeypatch):
         limiter = AniListRateLimiter(rate_limit=30)
@@ -680,8 +711,32 @@ class TestInteractiveEpisodeDeadline:
         )
         monkeypatch.setattr("apps.animes.services.providers.anilist.client.time", fake_time)
 
-        anilist.get_episode_schedule(anilist_id=1, request_budget="interactive")
+        result = anilist.get_episode_schedule(anilist_id=1, request_budget="interactive")
 
         assert len(http.requests) == 2
         timeouts = [request.extensions["timeout"]["read"] for request in http.requests]
         assert timeouts == [8.0, 3.0]  # the second page only gets what is left
+        assert result["partial"] is True
+
+    def test_a_failed_later_page_marks_the_result_partial(self, monkeypatch, anilist):
+        first = {
+            "Media": {
+                "id": 1,
+                "airingSchedule": {"pageInfo": {"hasNextPage": True}, "nodes": [{"episode": 1}]},
+            }
+        }
+        install(monkeypatch, {"GetAnimeEpisodes": sequence(ok(first), httpx.Response(503))})
+
+        result = anilist.get_episode_schedule(anilist_id=1)
+
+        assert result["partial"] is True
+        assert result["airingSchedule"] == [{"episode": 1}]
+
+    def test_the_page_cap_is_not_partial(self, monkeypatch, anilist):
+        endless = {
+            "Media": {"id": 1, "airingSchedule": {"pageInfo": {"hasNextPage": True}, "nodes": []}}
+        }
+        install(monkeypatch, {"GetAnimeEpisodes": endless})
+        monkeypatch.setattr(AniListService, "EPISODE_SCHEDULE_MAX_PAGES", 2)
+
+        assert anilist.get_episode_schedule(anilist_id=1)["partial"] is False
