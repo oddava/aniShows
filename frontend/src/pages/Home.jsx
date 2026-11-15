@@ -171,7 +171,7 @@ export default function Home() {
                 )}
 
                 {/* Main Content Area */}
-                <div className="relative space-y-12 md:space-y-16 py-10 md:py-14">
+                <div className="relative space-y-12 md:space-y-16 pt-6 pb-10 md:py-14">
                     {isAuthenticated && <CurrentlyWatchingSection />}
 
                     <AnimeShelf
