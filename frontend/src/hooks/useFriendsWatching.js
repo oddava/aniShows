@@ -20,7 +20,9 @@ export function useFriendsWatching(animeId) {
             try {
                 setLoading(true);
                 const response = await followApi.getFriendsWatching(animeId);
-                setFriends(response.data || []);
+                const payload = response.data;
+                // The endpoint returns a list; tolerate a paginated shape too.
+                setFriends(Array.isArray(payload) ? payload : (Array.isArray(payload?.results) ? payload.results : []));
                 setError(null);
             } catch (err) {
                 setError(err);

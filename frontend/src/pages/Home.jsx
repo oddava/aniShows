@@ -210,7 +210,7 @@ function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, e
     if (!isLoading && hideWhenEmpty && !(items?.length > 0)) return null;
 
     return (
-        <section ref={revealRef} aria-labelledby={headingId} className="px-4 md:px-6 reveal">
+        <section ref={revealRef} aria-labelledby={headingId} className={`px-4 md:px-6 ${revealRef ? 'reveal' : ''}`}>
             <div className="max-w-7xl mx-auto">
                 <SectionHeader id={headingId} title={title} subtitle={subtitle} viewAllTo={viewAllTo} />
                 <div className={SHELF_ROW_CLASSES}>
@@ -377,8 +377,8 @@ function MemberCarouselHero({
                             )}
                             {heroAnime.genres?.length > 0 && (
                                 <>
-                                    <span aria-hidden="true" className="text-gray-600">•</span>
-                                    <span className="text-gray-400 line-clamp-1">{heroAnime.genres.slice(0, 3).map(g => g.name).join(', ')}</span>
+                                    <span aria-hidden="true" className="hidden sm:inline text-gray-600">•</span>
+                                    <span className="w-full sm:w-auto text-gray-400 line-clamp-1">{heroAnime.genres.slice(0, 3).map(g => g.name).join(', ')}</span>
                                 </>
                             )}
                         </div>
