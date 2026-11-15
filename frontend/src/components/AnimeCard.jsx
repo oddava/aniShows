@@ -372,7 +372,16 @@ function AnimeCard({
                     {/* Status Button */}
                     {isAuthenticated && (
                         <div className={`absolute bottom-2 right-2 z-[200] transition-opacity duration-200 ${showStatusMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100'}`}>
-                            <div className="relative" ref={statusMenuRef}>
+                            <div
+                                className="relative"
+                                ref={statusMenuRef}
+                                onBlur={(event) => {
+                                    // Close when keyboard focus leaves the button and its options.
+                                    if (showStatusMenu && !statusMenuRef.current?.contains(event.relatedTarget)) {
+                                        setShowStatusMenu(false);
+                                    }
+                                }}
+                            >
                                 <button
                                     onClick={toggleStatusMenu}
                                     disabled={isLoading}
@@ -421,7 +430,7 @@ function AnimeCard({
 
 
                     {airingCountdown && (
-                        <div className={`absolute bottom-2 left-2 right-2 z-30 pointer-events-none transition-opacity duration-200 ${listStatus === 'Watching' && isAuthenticated ? 'group-hover:opacity-0 group-focus-within:opacity-0 [@media(hover:none)]:opacity-0' : ''}`}>
+                        <div className={`absolute bottom-2 left-2 z-30 pointer-events-none transition-opacity duration-200 ${isAuthenticated ? 'right-11 sm:right-12' : 'right-2'} ${listStatus === 'Watching' && isAuthenticated ? 'group-hover:opacity-0 group-focus-within:opacity-0 [@media(hover:none)]:opacity-100' : ''}`}>
                             <div className="h-7 px-2.5 rounded-md backdrop-blur-md flex items-center bg-black/65 text-gray-100">
                                 <span className="text-[11px] font-medium tracking-wide text-gray-100">
                                     {airingCountdown}
@@ -431,7 +440,7 @@ function AnimeCard({
                     )}
                     {/* Watching Progress Overlay */}
                     {isAuthenticated && listStatus === 'Watching' && (
-                        <div className="absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-200 flex">
+                        <div className={`absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-200 flex ${airingCountdown ? '[@media(hover:none)]:bottom-11' : ''}`}>
                             <div className="h-6 sm:h-7 px-2.5 rounded-md flex items-center justify-between gap-2.5 bg-black/50 text-white border border-white/20 shadow-none pointer-events-auto">
                                 <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide">
                                     {anime.episode_count 
@@ -442,8 +451,10 @@ function AnimeCard({
                                     <button
                                         onClick={handleQuickProgress}
                                         disabled={isLoading}
-                                        className="w-4 h-4 flex items-center justify-center rounded-sm hover:bg-white/20 transition-colors cursor-pointer touch-manipulation"
+                                        type="button"
+                                        className="relative w-5 h-5 -mr-1 flex items-center justify-center rounded hover:bg-white/20 transition-colors cursor-pointer touch-manipulation after:absolute after:-inset-1.5 after:content-['']"
                                         title={`Mark episode ${episodesWatched + 1} as watched`}
+                                        aria-label={`Mark episode ${episodesWatched + 1} of ${displayTitle} as watched`}
                                     >
                                         {isLoading ? (
                                             <Loader2 className="w-2.5 h-2.5 animate-spin" />

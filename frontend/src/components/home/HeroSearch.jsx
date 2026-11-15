@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 
 import { navbarSearchQueries } from '../../api/queries/anime';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 const SearchSuggestionList = lazy(() => import('../navbar/SearchSuggestionList'));
 
@@ -36,9 +37,34 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
         retry: false,
     });
     // Phones show fewer rows so the list fits above the tab bar and keyboard.
-    const maxRows = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 639px)').matches ? 5 : 8;
+    const isPhone = useMediaQuery('(max-width: 639px)');
+    const maxRows = isPhone ? 5 : 8;
     const suggestions = query.trim().length >= 2 && debounced.length >= 2 ? results.slice(0, maxRows) : [];
     const showList = open && suggestions.length > 0;
+
+    // Fit the list in the space actually visible below the field (the soft
+    // keyboard shrinks the visual viewport on phones).
+    const [listMaxHeight, setListMaxHeight] = useState(null);
+    useEffect(() => {
+        if (!showList) return undefined;
+        const viewport = window.visualViewport;
+        const measure = () => {
+            const field = wrapperRef.current?.querySelector('input');
+            if (!field) return;
+            const visibleBottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+            const space = visibleBottom - field.getBoundingClientRect().bottom - 16;
+            setListMaxHeight(Math.max(160, Math.min(space, window.innerHeight * 0.6)));
+        };
+        measure();
+        viewport?.addEventListener('resize', measure);
+        viewport?.addEventListener('scroll', measure);
+        window.addEventListener('scroll', measure, { passive: true });
+        return () => {
+            viewport?.removeEventListener('resize', measure);
+            viewport?.removeEventListener('scroll', measure);
+            window.removeEventListener('scroll', measure);
+        };
+    }, [showList]);
 
     useEffect(() => {
         const onPointerDown = (event) => {
@@ -114,7 +140,7 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
                     onFocus={(event) => {
                         setOpen(true);
                         // On phones, bring the field to the top so the list has room.
-                        if (window.matchMedia?.('(max-width: 639px)').matches) {
+                        if (isPhone) {
                             event.currentTarget.scrollIntoView({ block: 'start' });
                         }
                     }}
@@ -136,7 +162,7 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
             </form>
 
             {showList && (
-                <div tabIndex={-1} className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-white/10 bg-dark-100 shadow-2xl shadow-black/50 animate-fade-in">
+                <div tabIndex={-1} style={listMaxHeight ? { maxHeight: listMaxHeight } : undefined} className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-white/10 bg-dark-100 shadow-2xl shadow-black/50 animate-fade-in">
                     <Suspense fallback={null}>
                         <SearchSuggestionList
                             idPrefix={ID}

@@ -29,8 +29,10 @@ export default function UserMenu({
             setIsProfileOpen(false);
             profileButtonRef.current?.focus();
         };
-        document.addEventListener('keydown', onKeyDown);
-        return () => document.removeEventListener('keydown', onKeyDown);
+        // Capture phase: runs before other document listeners can close the
+        // menu (and unmount it) without restoring focus.
+        document.addEventListener('keydown', onKeyDown, true);
+        return () => document.removeEventListener('keydown', onKeyDown, true);
     }, [isProfileOpen, setIsProfileOpen]);
 
     // Close the dropdown when clicking outside it
@@ -53,7 +55,16 @@ export default function UserMenu({
                     <div className="w-9 h-9 bg-white/5 rounded-full animate-pulse" />
                 </div>
             ) : isAuthenticated ? (
-                <div className="relative" ref={profileRef}>
+                <div
+                    className="relative"
+                    ref={profileRef}
+                    onBlur={(event) => {
+                        // Close when keyboard focus leaves the button and its menu.
+                        if (isProfileOpen && !profileRef.current?.contains(event.relatedTarget)) {
+                            setIsProfileOpen(false);
+                        }
+                    }}
+                >
                     {/* Profile Button */}
                     <button
                         ref={profileButtonRef}
@@ -62,7 +73,7 @@ export default function UserMenu({
                         aria-expanded={isProfileOpen}
                         aria-controls={isProfileOpen ? profileMenuId : undefined}
                         aria-label={`Account menu for ${user?.username || 'you'}${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
-                        className="relative group flex items-center gap-3 rounded-full border border-white/5 bg-black/20 pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40 hover:shadow-[0_0_20px_rgba(117,105,141,0.12)]"
+                        className="relative group flex items-center gap-3 rounded-full border border-white/5 bg-black/20 pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40"
                     >
                         {/* Avatar or Placeholder */}
                         <div className="w-7 h-7 rounded-full overflow-hidden border border-transparent group-hover:border-white/20 transition-all duration-300">
@@ -85,11 +96,11 @@ export default function UserMenu({
 
                     {/* Enhanced Dropdown Menu */}
                     {isProfileOpen && (
-                        <div id={profileMenuId} className="absolute right-0 top-full mt-4 w-72 py-2 rounded-2xl border border-white/10 bg-dark/95 backdrop-blur-xl shadow-2xl origin-top-right animate-in fade-in zoom-in-95 duration-200 z-[1001]">
+                        <div id={profileMenuId} className="absolute right-0 top-full mt-3 w-64 py-1.5 rounded-xl border border-white/10 bg-dark-100 shadow-lg shadow-black/40 animate-fade-in z-[1001]">
                             {/* User Info Header */}
-                            <div className="px-4 py-3 border-b border-white/10 bg-white/5 mx-2 rounded-xl mb-2">
+                            <div className="px-4 py-3 border-b border-white/5 mb-1.5">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shadow-sm">
+                                    <div className="w-9 h-9 rounded-lg overflow-hidden">
                                         {user?.avatar ? (
                                             <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                         ) : (
@@ -99,34 +110,34 @@ export default function UserMenu({
                                         )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-white truncate drop-shadow-sm">{user?.username}</p>
-                                        <p className="text-xs text-gray-400/80 truncate">{user?.email}</p>
+                                        <p className="text-sm font-semibold text-white truncate">{user?.username}</p>
+                                        <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Menu Items */}
-                            <div className="py-1 px-2 space-y-0.5">
+                            <div className="px-1.5 space-y-0.5">
                                 <Link
                                     to={currentUserProfilePath}
                                     onClick={() => setIsProfileOpen(false)}
-                                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 transition-all duration-200 hover:bg-white/10 hover:text-white focus:outline-none group"
+                                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                                 >
-                                    <User className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                    <User aria-hidden="true" className="w-4 h-4" />
                                     <span className="text-sm font-medium">Profile</span>
                                 </Link>
                                 <Link
                                     to="/notifications"
                                     onClick={() => setIsProfileOpen(false)}
-                                    className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-gray-300 transition-all duration-200 hover:bg-white/10 hover:text-white focus:outline-none group"
+                                    className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                                 >
                                     <span className="flex items-center gap-3 min-w-0">
-                                        <Bell className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                        <Bell aria-hidden="true" className="w-4 h-4" />
                                         <span className="text-sm font-medium">Notifications</span>
                                     </span>
                                     {mobileUnreadCount > 0 && (
                                         <span
-                                            className="w-2.5 h-2.5 rounded-full bg-accent-dark shadow-[0_0_0_2px_rgba(17,24,39,1)]"
+                                            className="w-2 h-2 rounded-full bg-accent"
                                             aria-label="New notifications"
                                         />
                                     )}
@@ -134,17 +145,18 @@ export default function UserMenu({
                                 <Link
                                     to="/settings"
                                     onClick={() => setIsProfileOpen(false)}
-                                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 transition-all duration-200 hover:bg-white/10 hover:text-white focus:outline-none group"
+                                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                                 >
-                                    <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
+                                    <Settings aria-hidden="true" className="w-4 h-4" />
                                     <span className="text-sm font-medium">Settings</span>
                                 </Link>
-                                <div className="border-t border-white/10 my-2 mx-2" />
+                                <div className="border-t border-white/5 my-1.5 mx-2" />
                                 <button
+                                    type="button"
                                     onClick={() => { logout(); setIsProfileOpen(false); }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-300 transition-all duration-200 hover:bg-red-500/15 hover:text-red-400 focus:outline-none group"
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-red-500/10 hover:text-red-400"
                                 >
-                                    <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                                    <LogOut aria-hidden="true" className="w-4 h-4" />
                                     <span className="text-sm font-medium">Sign Out</span>
                                 </button>
                             </div>

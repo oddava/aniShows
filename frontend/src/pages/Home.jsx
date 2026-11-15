@@ -344,7 +344,7 @@ function MemberCarouselHero({
         <section
             aria-roledescription="carousel"
             aria-label="Trending now"
-            className="relative h-[50vh] min-h-[380px] sm:h-[62vh] sm:min-h-[460px] max-h-[680px] flex items-end pb-10 sm:pb-14 overflow-hidden"
+            className="relative h-[50vh] min-h-[380px] sm:h-[62vh] sm:min-h-[460px] max-h-[680px] flex items-end pb-6 sm:pb-14 overflow-hidden"
             onMouseEnter={() => onPauseChange(true)}
             onMouseLeave={() => onPauseChange(false)}
             onFocus={() => onPauseChange(true)}

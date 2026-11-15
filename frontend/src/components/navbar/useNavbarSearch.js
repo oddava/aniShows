@@ -129,8 +129,9 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                     requestIdRef.current += 1; // drop any in-flight results
                     setIsSearching(false);
                 } else {
+                    // (The profile menu handles its own Escape so it can
+                    // restore focus to its button.)
                     setShowSuggestions(false);
-                    setIsProfileOpen(false);
                     setIsSearchExpanded(false);
                     requestIdRef.current += 1; // drop any in-flight results
                     setIsSearching(false);
