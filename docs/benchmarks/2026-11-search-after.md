@@ -21,27 +21,34 @@ Raw plans: `2026-11-search-before.json`, `2026-11-search-after.json`.
   0.5 per connection; the default 0.6 misses `narto`/`one peice`), also
   index-served. Several words: each must appear or be a close match.
 - No `sort` (navbar search): results are ordered by exact title, then title
-  prefix, then word similarity, with the popular order breaking ties, among
-  the 500 most popular matches (`RELEVANCE_WINDOW`), so a common word is not
-  scored row by row. An explicit `sort` keeps its order.
+  prefix, then word similarity, with the popular order breaking ties; every
+  match stays in the result set. A query with at most 500 matches is ranked
+  whole. A common word (more matches) ranks only the candidates (the 500 most
+  popular matches plus every exact/prefix title, both read from an index),
+  then lists every other match in popular order (`RankedSearchResults`), so
+  it is not scored row by row. One or two letters keep the popular order. An
+  explicit `sort` keeps its order.
 
 ## Results
 
-| case | term | before ms | before plan | after ms | after plan (catalog indexes) |
+Catalog query time per request (sum of the endpoint's `anime_anime` queries,
+`EXPLAIN ANALYZE`, best of 3):
+
+| case | term | before ms | before plan | after ms | after plan |
 |---|---|---:|---|---:|---|
-| common word, no sort | `Season` | 328.5 | seq scan | 68.7 | popular index (window) |
-| common word, sort=popular | `Season` | 323.2 | seq scan | 3.4 | popular index |
-| rare word, no sort | `Bachime` | 315.9 | seq scan | 23.0 | title / title_jp / synopsis trigram |
-| rare word, sort=popular | `Bachime` | 313.9 | seq scan | 19.5 | title / title_jp / synopsis trigram |
-| typo, no sort | `Bcahime` | 328.3 (0 results) | seq scan | 2.6 (fuzzy hits) | title / title_jp / synopsis trigram |
-| two words, no sort | `Kibuyu Bachime` | 71.2 | seq scan | 6.2 | title / title_jp trigram |
-| no match | `zzqxjv` | 312.3 | seq scan | 0.5 | title / title_jp / synopsis trigram |
-| two letters, no sort | `se` | — | — | 16.8 | popular index (window) |
-| two letters, sort=popular | `se` | — | — | 0.4 | popular index |
+| common word, no sort | `Season` (5,864 matches) | 328.5 | seq scan | 93.2 | popular index + trigram (prefix) + pk |
+| common word, sort=popular | `Season` | 323.2 | seq scan | 4.2 | popular index |
+| rare word, no sort | `Bachime` | 315.9 | seq scan | 25.9 | title / title_jp / synopsis trigram |
+| rare word, sort=popular | `Bachime` | 313.9 | seq scan | 26.7 | title / title_jp / synopsis trigram |
+| typo, no sort | `Bcahime` | 328.3 (0 results) | seq scan | 3.3 (fuzzy hits) | trigram |
+| two words, no sort | `Kibuyu Bachime` | 71.2 | seq scan | 6.7 | title / title_jp trigram |
+| no match | `zzqxjv` | 312.3 | seq scan | 0.4 | trigram |
+| two letters | `se` | — | — | 1.5 | popular index |
+
 
 After the runs, `pg_stat_user_indexes`: `anime_title_trgm_gin` 128 scans,
-`anime_title_jp_trgm_gin` 128, `anime_synopsis_trgm_gin` 48. No search plan
-contains `Seq Scan on anime_anime`.
+`anime_title_jp_trgm_gin` 128, `anime_synopsis_trgm_gin` 48. No query of any
+search request contains `Seq Scan on anime_anime`.
 
 Dense terms are served by walking `anime_public_popular_list_idx` (the planner
 picks it when matches are frequent); selective terms by a `BitmapOr` over the

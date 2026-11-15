@@ -23,9 +23,9 @@ MIN_SYNOPSIS_SEARCH_LENGTH = 3
 MIN_FUZZY_SEARCH_LENGTH = 3
 # ``sort`` values that order a search by how well titles match.
 RELEVANCE_SORTS = {"", "relevance"}
-# Relevance ranks at most this many matches: the most popular ones. Ranking
-# every match of a common word ("season" matches a quarter of the catalog)
-# would read and score them all; picking the window reads them in index order.
+# A search with more matches than this (a common word: "season" is in a
+# quarter of the catalog) is not ranked as a whole, which would read and score
+# every match on each request: see ``RankedSearchResults``.
 RELEVANCE_WINDOW = 500
 SEASON_MONTH_RANGES = {
     "winter": ((1, 1), (3, 31)),
@@ -43,6 +43,46 @@ NON_TEMPORAL_FILTER_PARAMS = (
     "max_duration",
 )
 TEMPORAL_FILTER_PARAMS = ("season", "year", "min_year", "max_year")
+
+
+class RankedSearchResults:
+    """Results of a search with many matches: ranked candidates, then the rest.
+
+    ``ranked`` (at most ``limit`` rows: the most popular matches and the
+    exact/prefix title matches, ordered by relevance) comes first, then every
+    other match in ``rest``'s popular order, read straight from the index. So
+    no match is lost and pages stay stable, without scoring thousands of rows.
+    Supports the ``[start:stop]`` slicing ``NoCountPagination`` does.
+    """
+
+    def __init__(self, *, ranked, rest, limit: int | None = None):
+        self._ranked = ranked
+        self._rest = rest
+        # Candidates are the window plus exact/prefix titles; cap them anyway.
+        self._limit = limit or 2 * RELEVANCE_WINDOW
+        self._ranked_pks: list[int] | None = None
+
+    def ranked_pks(self) -> list[int]:
+        if self._ranked_pks is None:
+            self._ranked_pks = list(self._ranked.values_list("pk", flat=True)[: self._limit])
+        return self._ranked_pks
+
+    def __getitem__(self, item):
+        if not isinstance(item, slice) or item.step not in (None, 1) or item.stop is None:
+            raise TypeError("RankedSearchResults only supports [start:stop] slices")
+        start, stop = max(item.start or 0, 0), max(item.stop, 0)
+        ranked_pks = self.ranked_pks()
+
+        rows = []
+        head = ranked_pks[start:stop]
+        if head:
+            by_pk = self._rest.in_bulk(head)
+            rows = [by_pk[pk] for pk in head if pk in by_pk]
+        if stop > len(ranked_pks):
+            tail_start = max(start - len(ranked_pks), 0)
+            tail = self._rest.exclude(pk__in=ranked_pks)[tail_start : stop - len(ranked_pks)]
+            rows.extend(tail)
+        return rows
 
 
 def _title_match(word: str) -> Q:
@@ -188,14 +228,39 @@ class ListFilterMixin:
             curate_for_shelves=False,
         )
         if by_relevance:
-            # Best title match first; the popular ordering breaks ties.
-            window = queryset.order_by(*ordering).values("id")[:RELEVANCE_WINDOW]
-            queryset = queryset.filter(id__in=window).annotate(
-                **self._search_rank_annotations(search)
-            )
-            ordering = ["search_match", "-search_rank", *ordering]
-
+            return self._order_by_relevance(queryset, search, ordering)
         return queryset.order_by(*ordering)
+
+    def _order_by_relevance(self, queryset, search: str, popular_ordering: list):
+        """Best title matches first (exact, prefix, then similarity), every match kept.
+
+        The popular ordering breaks ties. One or two letters say nothing about
+        relevance, so those stay in popular order.
+        """
+        popular = queryset.order_by(*popular_ordering)
+        if len(search) < MIN_FUZZY_SEARCH_LENGTH:
+            return popular
+
+        # One read in index order gives both answers: whether the query has
+        # more matches than the window, and the most popular ones if it does.
+        window = list(popular.values_list("pk", flat=True)[: RELEVANCE_WINDOW + 1])
+        rank = self._search_rank_annotations(search)
+        ranking = ["search_match", "-search_rank", *popular_ordering]
+        if len(window) <= RELEVANCE_WINDOW:
+            # Every match is known: rank them all (a primary-key lookup).
+            return queryset.filter(pk__in=window).annotate(**rank).order_by(*ranking)
+
+        # A common word: rank the most popular matches plus every title that
+        # is the query or starts with it, wherever its popularity is.
+        prefixed = list(
+            queryset.filter(Q(title__ilike_prefix=search) | Q(title_jp__ilike_prefix=search))
+            .annotate(search_match=rank["search_match"])
+            .order_by("search_match", *popular_ordering)  # exact titles first
+            .values_list("pk", flat=True)[:RELEVANCE_WINDOW]
+        )
+        candidates = list(dict.fromkeys([*window[:RELEVANCE_WINDOW], *prefixed]))
+        ranked = queryset.filter(pk__in=candidates).annotate(**rank).order_by(*ranking)
+        return RankedSearchResults(ranked=ranked, rest=popular)
 
     @staticmethod
     def _apply_search(queryset, search: str):

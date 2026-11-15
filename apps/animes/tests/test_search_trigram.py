@@ -141,8 +141,51 @@ def test_search_conditions_are_served_by_the_trigram_indexes(catalog, query):
         assert "Bitmap Index Scan on anime_synopsis_trgm_gin" in plan, plan
 
 
-def test_relevance_ranks_only_the_most_popular_matches(catalog, monkeypatch):
-    # The window bounds the work for common words: the least popular matches
-    # fall outside it rather than every match being scored.
-    monkeypatch.setattr("apps.animes.services.public_query.filters.RELEVANCE_WINDOW", 2)
-    assert _titles("naruto") == ["Boruto: Naruto Next Generations", "Haruto"]
+@pytest.mark.django_db
+def test_ilike_rejects_expressions():
+    from django.db.models import F
+
+    with pytest.raises(TypeError):
+        list(Anime.objects.filter(title__ilike=F("slug")))
+
+
+def _all_pages(query: str, page_size: int) -> list[str]:
+    titles, page = [], 1
+    while True:
+        cache.clear()
+        response = APIClient().get(
+            "/api/v1/anime/", {"q": query, "page_size": page_size, "page": page}
+        )
+        assert response.status_code == 200
+        body = response.json()
+        titles += [row["title"] for row in body["results"]]
+        if not body["next"]:
+            return titles
+        page += 1
+
+
+def test_with_many_matches_exact_titles_still_lead_and_no_match_is_lost(catalog, monkeypatch):
+    # "naruto" has 4 matches; with a window of 1 the query counts as common.
+    # Ranked candidates: the most popular match (Haruto) and the best title
+    # match (the exact "Naruto", although it is the least popular). Every other
+    # match follows in popular order, on later pages: nothing is dropped.
+    monkeypatch.setattr("apps.animes.services.public_query.filters.RELEVANCE_WINDOW", 1)
+    expected = ["Naruto", "Haruto", "Boruto: Naruto Next Generations", "Naruto Shippuden"]
+    assert _titles("naruto") == expected
+    assert _all_pages("naruto", page_size=1) == expected
+    assert _all_pages("naruto", page_size=3) == expected
+    assert sorted(_titles("naruto", sort="popular")) == sorted(expected)
+
+
+def test_ranked_results_reject_unsupported_indexing():
+    from apps.animes.services.public_query.filters import RankedSearchResults
+
+    results = RankedSearchResults(ranked=Anime.objects.none(), rest=Anime.objects.none())
+    with pytest.raises(TypeError):
+        results[0]
+    with pytest.raises(TypeError):
+        results[0:4:2]
+
+
+def test_one_or_two_letters_keep_the_popular_order(catalog):
+    assert _titles("ru") == _titles("ru", sort="popular")

@@ -31,17 +31,19 @@ ENDPOINTS = {**PUBLIC_ENDPOINTS, **SIGNED_IN_ENDPOINTS}
 # The signed-in budgets and detail_authenticated were measured on 2026-11-16.
 # Signing in adds 3 queries to each of these endpoints (the per-viewer
 # enrichment applied after the shared cache), independent of row count.
+# search: +1 since the relevance ordering (2026-11-16), which first checks
+# whether a query has too many matches to rank them all.
 BUDGETS = {
     "list": 4,
     "list_authenticated": 7,
-    "search": 4,
+    "search": 5,
     "trending": 4,
     "browse_rows": 8,
     "schedule": 4,
     "detail": 8,
     "public_profile": 4,
     "detail_authenticated": 11,
-    "search_signed_in": 7,
+    "search_signed_in": 8,
     "trending_signed_in": 7,
     "browse_rows_signed_in": 11,
     "schedule_signed_in": 7,
