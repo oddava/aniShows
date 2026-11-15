@@ -5,7 +5,7 @@ from typing import Literal
 
 from ....models import Anime
 from . import mapper
-from .client import AniListClient
+from .client import TRANSIENT_ERROR_CODES, AniListClient
 from .persistence import AniListPersistence
 
 
@@ -35,19 +35,17 @@ class AniListService(AniListPersistence, AniListClient):
         year, since the winner's data overwrites the row (remakes and reboots
         share titles: "Hunter x Hunter" 1999 and 2011).
         """
+        # On a transient error, stop: the next lookup would fail the same way
+        # (and, for a background call, wait for another rate-limit slot first).
         if anime.anilist_id:
             item = self.get_anime_by_id(anime.anilist_id)
-            if item:
+            if item or self.last_error_code in TRANSIENT_ERROR_CODES:
                 return item
 
         if anime.mal_id:
             item = self.search_by_mal_id(anime.mal_id)
-            if item:
+            if item or self.last_error_code in TRANSIENT_ERROR_CODES:
                 return item
-
-        if self.last_error_code in {"rate_limited", "transport_error"}:
-            # Not "unknown to AniList": a title search would just fail the same way.
-            return None
 
         title = (anime.title or "").strip()
         if not title:
@@ -130,9 +128,7 @@ class AniListService(AniListPersistence, AniListClient):
 
         if anime.anilist_id or anime.mal_id:
             item = self.get_airing_anime(anilist_id=anime.anilist_id, mal_id=anime.mal_id)
-            if item:
+            if item or self.last_error_code in TRANSIENT_ERROR_CODES:
                 return item
-            if self.last_error_code in {"rate_limited", "transport_error"}:
-                return None
 
         return self.resolve_media_for_anime(anime)

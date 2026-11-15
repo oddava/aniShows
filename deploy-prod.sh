@@ -151,15 +151,17 @@ step "Core services"
 "${COMPOSE[@]}" up --no-deps --exit-code-from createbuckets createbuckets >/dev/null \
     || die "bucket setup failed"
 
+step "Configuration check"
+# Before any schema change. Warnings (e.g. core.W001: no Safe Browsing key)
+# are printed; only errors stop the deploy.
+"${COMPOSE[@]}" run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 \
+    web python manage.py check --deploy --fail-level ERROR \
+    || die "manage.py check --deploy reported errors"
+
 step "Migrations"
 "${COMPOSE[@]}" run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 \
     web python manage.py migrate --noinput
 ok "migrations applied"
-# Production configuration warnings (e.g. core.W001: no Safe Browsing key).
-# Warnings are printed; only errors stop the deploy.
-"${COMPOSE[@]}" run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 \
-    web python manage.py check --deploy --fail-level ERROR \
-    || die "manage.py check --deploy reported errors"
 
 step "Workers, backups, analytics"
 "${COMPOSE[@]}" up -d --no-deps celery beat backup

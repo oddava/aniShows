@@ -21,7 +21,7 @@ from ...shared.public_cache import (
 from ...users.models import UserAnimeList
 from ..adult_content import ADULT_GENRE_SLUGS, ADULT_TAGS
 from ..models import Anime, AnimeCharacter, AnimeStaff, UserFavorite
-from .anilist import AniListService
+from .anilist import TRANSIENT_ERROR_CODES, AniListService
 from .public_query.fields import QueryFieldsMixin
 from .public_query.filters import (
     MAX_RATING,
@@ -192,18 +192,30 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         Falls back to shared-genre recommendations when AniList has none (or
         none that are in the catalog).
         """
+        return self.recommendations(anime, can_view_adult_content=can_view_adult_content)[0]
+
+    def recommendations(self, anime, *, can_view_adult_content: bool = True):
+        """``(queryset, degraded)``: ``degraded`` when AniList could not be asked.
+
+        A degraded answer is the genre fallback served because AniList was
+        busy or down, so callers should not cache it like a real answer.
+        """
         if anime.anilist_id or anime.mal_id:
-            queryset = self._provider_recommendations_queryset(
+            queryset, degraded = self._provider_recommendations_queryset(
                 anime, can_view_adult_content=can_view_adult_content
             )
             if queryset is not None and queryset.exists():
-                return queryset
+                return queryset, False
+        else:
+            degraded = False
 
-        return self._fallback_recommendations_queryset(
+        fallback = self._fallback_recommendations_queryset(
             anime, can_view_adult_content=can_view_adult_content
         )
+        return fallback, degraded
 
     def _provider_recommendations_queryset(self, anime, *, can_view_adult_content: bool):
+        """``(queryset or None, degraded)`` for AniList's recommendations."""
         service = AniListService(enable_caching=True, enable_rate_limiting=True)
         try:
             recommendations = service.get_recommendations_for_anime(
@@ -212,11 +224,12 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
                 limit=12,
                 request_budget=service.REQUEST_BUDGET_INTERACTIVE,
             )
+            degraded = not recommendations and service.last_error_code in TRANSIENT_ERROR_CODES
         except Exception:
             logger.warning(
                 "Failed to fetch AniList recommendations for %s", anime.slug, exc_info=True
             )
-            recommendations = []
+            recommendations, degraded = [], True
         finally:
             service.close()
 
@@ -239,18 +252,19 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
                 ordering_cases.append(When(mal_id=rec_mal_id, then=Value(position)))
 
         if not ordering_cases:
-            return None
+            return None, degraded
 
         ordering = Case(
             *ordering_cases, default=Value(len(recommendations)), output_field=IntegerField()
         )
-        return (
+        queryset = (
             self.shelf_queryset_for(can_view_adult_content)
             .filter(Q(anilist_id__in=anilist_ids) | Q(mal_id__in=mal_ids))
             .exclude(id__in=[anime.id, *self._related_anime_ids(anime)])
             .annotate(recommendation_order=ordering)
             .order_by("recommendation_order", "-id")
         )
+        return queryset, False
 
     @classmethod
     def _current_and_next_seasons(cls) -> tuple[str, int, str, int]:

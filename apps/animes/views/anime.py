@@ -9,7 +9,7 @@ from ...core.api_errors import error_response
 from ...core.permissions import IsSuperUser
 from ...core.utils import get_client_ip
 from ...shared.pagination import LargePagination, NoCountPagination, StandardPagination
-from ...shared.public_cache import get_or_build_public_payload
+from ...shared.public_cache import Degraded, get_or_build_public_payload
 from ...users.permissions import VerifiedEmailForWrites
 from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
 from ..serializers import (
@@ -293,20 +293,21 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             f"anime_recommendations:{self.payload_service.PUBLIC_CACHE_VERSION}:{anime.slug}"
             f":adult:{int(can_view_adult_content)}"
         )
-        result = self.payload_service.cache_shelf_payload(
-            cache_key,
-            lambda: (
-                AnimeListSerializer(
-                    self.query_service.recommendations_queryset(
-                        anime, can_view_adult_content=can_view_adult_content
-                    ),
-                    many=True,
-                    context={"request": request},
-                ).data
-            ),
-        )
+
+        def build():
+            queryset, degraded = self.query_service.recommendations(
+                anime, can_view_adult_content=can_view_adult_content
+            )
+            data = AnimeListSerializer(queryset, many=True, context={"request": request}).data
+            # AniList was busy or down: serve the genre fallback, keep it briefly.
+            return Degraded(data) if degraded else data
+
+        result = self.payload_service.cache_shelf_payload(cache_key, build)
         data = self.payload_service.enrich_collection_payload_for_user(result.data, request.user)
         response = self._with_cache_status_header(Response(data), result.cache_status)
+        if result.cache_status == "degraded":
+            response["Cache-Control"] = "no-store"
+            return response
         return self._with_public_cache_control(response, request)
 
     @action(detail=True, methods=["get"])
@@ -489,8 +490,9 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         except FranchiseImportError as exc:
             return error_response(
                 exc.message,
-                code="franchise_import_failed",
+                code=exc.code,
                 status_code=exc.status_code,
+                headers={"Retry-After": str(exc.retry_after)} if exc.retry_after else None,
             )
 
 

@@ -26,6 +26,11 @@ DEFAULT_ANILIST_API_URL = "https://graphql.anilist.co"
 # Returned by one try of ``_query`` to mean "try the request again".
 _RETRY = object()
 
+# ``last_error_code`` values that say nothing about the anime itself: AniList
+# is busy, unreachable, or rejected the query (a schema change or the
+# complexity limit). Worth retrying later; never a reason to give up on a row.
+TRANSIENT_ERROR_CODES = frozenset({"rate_limited", "transport_error", "query_rejected"})
+
 
 class MediaSort(StrEnum):
     ID_DESC = "ID_DESC"
@@ -352,14 +357,17 @@ class AniListClient(CatalogProviderBase):
         if status_code in {400, 422} or statuses & {400, 422}:
             # A bad variable (an ID out of range) is final. Anything else here
             # means AniList rejected the query itself (a schema change, the
-            # complexity limit): our bug or theirs, so it stays retryable
-            # (transport_error) instead of blocking rows, and is logged loudly.
+            # complexity limit): every row would fail the same way, so it is
+            # "query_rejected" (retryable, never held against the row), logged
+            # loudly, and counted by the circuit breaker so it stops trying.
             code = self._parse_graphql_error_code(message)
-            self._set_last_error(code, message)
             if code == "invalid_variable":
+                self._set_last_error(code, message)
                 logger.warning("AniList rejected a variable in %s: %s", operation, message)
-            else:
-                logger.error("AniList rejected the %s query: %s", operation, message)
+                return "client_error"
+            self._set_last_error("query_rejected", message)
+            self._record_failure()
+            logger.error("AniList rejected the %s query: %s", operation, message)
             return "client_error"
         self._set_last_error(self._parse_graphql_error_code(message), message)
         return "client_error"

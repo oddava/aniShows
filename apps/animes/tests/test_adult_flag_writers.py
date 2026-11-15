@@ -128,15 +128,30 @@ class TestReconcile:
         }
         logger.warning.assert_called_once()
 
-    def test_fixed_rows_drop_their_cached_public_payloads(self):
+    def test_fixed_rows_drop_their_cached_public_payloads(self, django_capture_on_commit_callbacks):
         hidden = self._anime("cached-stale")
-        Anime.objects.filter(pk=hidden.pk).update(tags=["sex"])
+        other = self._anime("cached-other")
+        Anime.objects.filter(pk__in=[hidden.pk, other.pk]).update(tags=["sex"])
         with (
             mock.patch("apps.animes.adult_content.logger"),
             mock.patch("apps.animes.signals._invalidate_anime_public_caches") as invalidate,
+            mock.patch(
+                "apps.animes.services.public_anime_service.AnimePublicPayloadService"
+                ".bump_collection_cache_namespace"
+            ) as bump,
+            django_capture_on_commit_callbacks(execute=True) as callbacks,
         ):
             reconcile_adult_flags()
-        invalidate.assert_called_once_with("cached-stale")
+            # Nothing is dropped before the update commits.
+            invalidate.assert_not_called()
+
+        assert len(callbacks) == 1
+        bump.assert_called_once_with()  # once for every list, not per row
+        assert sorted(call.args[0] for call in invalidate.call_args_list) == [
+            "cached-other",
+            "cached-stale",
+        ]
+        assert all(call.kwargs == {"bump_namespace": False} for call in invalidate.call_args_list)
 
     def test_no_drift_is_silent(self):
         self._anime("clean", tags=["comedy"])

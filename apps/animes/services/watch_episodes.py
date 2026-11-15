@@ -9,7 +9,7 @@ from django.core.cache import cache
 from ...shared.logger import logger
 from ...shared.parsing import positive_int
 from ..models import Anime
-from .anilist import AniListService
+from .anilist import TRANSIENT_ERROR_CODES, AniListService
 from .providers.base import BROADCAST_TIMEZONE
 
 BROADCAST_TZ = ZoneInfo(BROADCAST_TIMEZONE)
@@ -26,6 +26,8 @@ class AnimeWatchEpisodeService:
     CACHE_VERSION = "v2"
     CACHE_TTL = 60 * 60 * 6
     EMPTY_CACHE_TTL = 60 * 30
+    # A list built from stored fields because AniList was busy or down.
+    DEGRADED_CACHE_TTL = 60
     REQUEST_BUDGET_DEFAULT: Literal["default"] = "default"
     REQUEST_BUDGET_INTERACTIVE: Literal["interactive"] = "interactive"
     _STREAMING_EPISODE_PATTERNS = (
@@ -49,8 +51,12 @@ class AnimeWatchEpisodeService:
         if cached is not None:
             return cached
 
-        episodes = self._build_for_anime(anime, request_budget=request_budget)
-        cache.set(cache_key, episodes, timeout=self.CACHE_TTL if episodes else self.EMPTY_CACHE_TTL)
+        episodes, degraded = self._build_for_anime(anime, request_budget=request_budget)
+        if degraded:
+            timeout = self.DEGRADED_CACHE_TTL
+        else:
+            timeout = self.CACHE_TTL if episodes else self.EMPTY_CACHE_TTL
+        cache.set(cache_key, episodes, timeout=timeout)
         return episodes
 
     def invalidate_for_anime(self, anime: Anime) -> None:
@@ -76,9 +82,10 @@ class AnimeWatchEpisodeService:
         anime: Anime,
         *,
         request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
-    ) -> list[dict]:
+    ) -> tuple[list[dict], bool]:
+        """``(episodes, degraded)``; degraded when AniList could not be asked."""
         if not (anime.anilist_id or anime.mal_id):
-            return self._build_fallback_episodes(anime)
+            return self._build_fallback_episodes(anime), False
 
         service = AniListService(enable_caching=True, enable_rate_limiting=True)
         try:
@@ -87,25 +94,26 @@ class AnimeWatchEpisodeService:
                 mal_id=anime.mal_id,
                 request_budget=request_budget,
             )
+            degraded = media is None and service.last_error_code in TRANSIENT_ERROR_CODES
         except Exception:
             logger.warning("Failed to fetch episode data for %s", anime.slug, exc_info=True)
-            media = None
+            media, degraded = None, True
         finally:
             service.close()
 
         if not media:
-            return self._build_fallback_episodes(anime)
+            return self._build_fallback_episodes(anime), degraded
 
         aired_at = self._aired_dates(media.get("airingSchedule") or [])
         streaming_index = self._index_streaming_episodes(media.get("streamingEpisodes") or [])
         episode_total = self._released_episode_count(media, aired_at, streaming_index)
         if episode_total <= 0:
             if self._nothing_aired_yet(media):
-                return []
-            # AniList knows the show but not its episodes: list the stored total.
-            return self._build_fallback_episodes(anime)
+                return [], False
+            # AniList knows the show but not its episodes: use the stored row.
+            return self._build_fallback_episodes(anime), False
 
-        return [
+        episodes = [
             self._merge_episode(
                 anime,
                 {
@@ -118,6 +126,7 @@ class AnimeWatchEpisodeService:
             )
             for number in range(1, episode_total + 1)
         ]
+        return episodes, False
 
     @staticmethod
     def _released_episode_count(media: dict, aired_at: dict, streaming_index: dict) -> int:
@@ -149,8 +158,19 @@ class AnimeWatchEpisodeService:
             dates[number] = datetime.fromtimestamp(airing_at, tz=BROADCAST_TZ).date().isoformat()
         return dates
 
+    @staticmethod
+    def _stored_released_count(anime: Anime) -> int:
+        """How many episodes the stored row says are out (no unaired ones)."""
+        if anime.status == Anime.AnimeStatus.upcoming:
+            return 0
+        if anime.status == Anime.AnimeStatus.airing:
+            if anime.next_airing_episode:
+                return max(anime.next_airing_episode - 1, 0)
+            return int(anime.last_aired_episode or 0)
+        return int(anime.episode_count or 0)
+
     def _build_fallback_episodes(self, anime: Anime) -> list[dict]:
-        episode_count = int(anime.episode_count or 0)
+        episode_count = self._stored_released_count(anime)
         if episode_count <= 0:
             return []
 

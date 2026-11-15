@@ -26,7 +26,7 @@ any drift over the whole table and logs a warning when it finds some.
 import json
 
 from django.apps import apps
-from django.db import connections
+from django.db import connections, transaction
 from django.db.models import Exists, OuterRef, Q
 
 from ..shared.logger import logger
@@ -162,12 +162,27 @@ def _sync_flags(rows, using: str) -> tuple[int, int]:
     flagged = rows.filter(adult, is_adult=False, pk__in=to_flag).update(is_adult=True)
     cleared = rows.exclude(adult).filter(is_adult=True, pk__in=to_clear).update(is_adult=False)
     if flagged or cleared:
-        _invalidate_public_caches([*to_flag.values(), *to_clear.values()])
+        _invalidate_public_caches([*to_flag.values(), *to_clear.values()], using)
     return flagged, cleared
 
 
-def _invalidate_public_caches(slugs: list[str]) -> None:
-    from .signals import _invalidate_anime_public_caches  # signals imports this module
+def _invalidate_public_caches(slugs: list[str], using: str) -> None:
+    """After the flag update commits: one list-cache bump, then each row's own keys.
 
-    for slug in slugs:
-        _invalidate_anime_public_caches(slug)
+    A cache failure is logged, not raised: the flags are already right, and a
+    retry of the task would find no drift left to invalidate for.
+    """
+
+    def invalidate():
+        from ..shared.errors import CACHE_ERRORS
+        from .services.public_anime_service import AnimePublicPayloadService
+        from .signals import _invalidate_anime_public_caches  # signals imports this module
+
+        try:
+            AnimePublicPayloadService.bump_collection_cache_namespace()
+            for slug in slugs:
+                _invalidate_anime_public_caches(slug, bump_namespace=False)
+        except CACHE_ERRORS:
+            logger.warning("Could not drop cached payloads for %s anime", len(slugs), exc_info=True)
+
+    transaction.on_commit(invalidate, using=using)

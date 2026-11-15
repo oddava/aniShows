@@ -189,7 +189,7 @@ class TestQuery:
             # not the row's fault, so it stays retryable later.
             (
                 httpx.Response(400, json={"errors": [{"message": "Syntax Error", "status": 400}]}),
-                ("transport_error", "Syntax Error"),
+                ("query_rejected", "Syntax Error"),
             ),
             (httpx.Response(403, json={}), ("transport_error", "http_403:GetThing")),
         ],
@@ -567,3 +567,26 @@ class TestPagination:
 
         assert ids == list(range(1, 41))
         assert [variables["perPage"] for _, variables in http.operations()] == [25, 25]
+
+
+class TestRejectedQuery:
+    def test_counts_toward_the_circuit_breaker(self, monkeypatch, anilist):
+        install(
+            monkeypatch,
+            {"GetThing": httpx.Response(400, json={"errors": [{"message": "Field x unknown"}]})},
+        )
+        query(anilist)
+        assert cache.get("cb:anilist_api:failures") == 1
+
+    def test_a_bad_variable_does_not(self, monkeypatch, anilist):
+        install(
+            monkeypatch,
+            {
+                "GetThing": httpx.Response(
+                    400, json={"errors": [{"message": 'Variable "$id" got invalid value'}]}
+                )
+            },
+        )
+        query(anilist)
+        assert anilist.last_error_code == "invalid_variable"
+        assert not cache.get("cb:anilist_api:failures")

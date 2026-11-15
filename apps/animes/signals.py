@@ -46,9 +46,11 @@ def _schedule_recommendations_debounced(user_id, countdown=300):
     schedule_recommendations_debounced(user_id, task=generate_recommendations, countdown=countdown)
 
 
-def _invalidate_anime_public_caches(slug: str) -> None:
+def _invalidate_anime_public_caches(slug: str, *, bump_namespace: bool = True) -> None:
+    """Drop ``slug``'s cached public payloads (and, unless told not to, every list's)."""
     current = AnimePublicPayloadService.PUBLIC_CACHE_VERSION
-    AnimePublicPayloadService.bump_collection_cache_namespace()
+    if bump_namespace:
+        AnimePublicPayloadService.bump_collection_cache_namespace()
     invalidate_public_cache_keys(
         f"anime_detail_base:{current}:{slug}",
         f"anime_detail_base:v6:{slug}",

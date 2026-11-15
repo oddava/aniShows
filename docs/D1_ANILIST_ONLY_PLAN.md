@@ -107,10 +107,16 @@ effort); fix and re-review until both approve.
 
 - Migration 0055 removes the theme fields from Django's state only; the
   columns stay (with database defaults) so the old replicas keep working
-  while `deploy-prod.sh` rolls the web containers. **Next release:** add a
-  migration that drops `anime_anime.themes_checked_at`,
-  `anime_offlineanimesyncstate.themes_status` and `.themes_attempt_count`,
-  and delete the retired `sync_theme_songs` task stub.
+  while `deploy-prod.sh` rolls the web containers. **Next release**, once no
+  pre-D1 process can be running, a hand-written migration (makemigrations
+  will not generate it: the fields are already gone from the model state):
+  1. `RunPython` re-running 0055's `release_theme_only_quarantines` (it is
+     idempotent): an old worker still running between `migrate` and the
+     worker restart could have quarantined a row by its themes stage again;
+  2. `RunSQL("ALTER TABLE anime_anime DROP COLUMN IF EXISTS themes_checked_at")`
+     and `RunSQL("ALTER TABLE anime_offlineanimesyncstate DROP COLUMN IF EXISTS
+     themes_status, DROP COLUMN IF EXISTS themes_attempt_count")`;
+  3. delete the retired `sync_theme_songs` task stub.
 - `deploy-prod.sh` removes the orphaned Jikan containers only after the new
   web and workers serve, runs `manage.py check --deploy` (shows `core.W001`
   when the Safe Browsing key is missing), and prints the
