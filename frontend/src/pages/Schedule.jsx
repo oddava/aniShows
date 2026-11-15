@@ -220,7 +220,7 @@ export default function Schedule() {
     return (
       <ErrorBoundary>
         <SEO page="schedule" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="page-container py-10">
           <ErrorState
             title="Failed to load schedule"
             message="This week’s airing times didn’t load. Try again in a moment."
@@ -237,7 +237,7 @@ export default function Schedule() {
       <LoadingBar isLoading={isLoading || isFetching} />
       <div className="min-h-screen pb-20">
         {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="page-container py-6 sm:py-8">
           <header className="mb-6">
             <h1 className="page-title">Airing Schedule</h1>
             <p className="text-sm text-gray-500 mt-1.5">

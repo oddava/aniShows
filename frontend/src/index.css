@@ -177,11 +177,19 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Same geometry as Home/Browse sections: an 80rem content column with the
+     gutter outside it, so every page's left edge lines up. */
   .page-container {
     width: 100%;
-    max-width: var(--page-max);
+    max-width: calc(var(--page-max) + 2rem);
     margin-inline: auto;
     @apply px-4 md:px-6;
+  }
+
+  @media (width >= 48rem) {
+    .page-container {
+      max-width: calc(var(--page-max) + 3rem);
+    }
   }
 
   .btn-primary {
