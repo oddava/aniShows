@@ -546,21 +546,27 @@ class TestCastReplacement:
         anime = make_anime(title="Frieren", anilist_id=154587)
         # Written from Jikan: synthetic IDs (1.6e9/1.7e9 + MAL ID).
         old_frieren = Character.objects.create(name="Frieren", anilist_id=1_600_000_001)
-        old_seiyuu = Staff.objects.create(name="Atsumi Tanezaki", anilist_id=1_700_000_001)
-        old_director = Staff.objects.create(name="Keiichirou Saitou", anilist_id=1_700_000_002)
+        # Jikan (MyAnimeList) spelled people "Family, Given".
+        old_seiyuu = Staff.objects.create(name="Tanezaki, Atsumi", anilist_id=1_700_000_001)
+        old_director = Staff.objects.create(name="Saitou, Keiichirou", anilist_id=1_700_000_002)
         old_only = Character.objects.create(name="Fern", anilist_id=1_600_000_002)
         AnimeCharacter.objects.create(
             anime=anime, character=old_frieren, voice_actor=old_seiyuu, role="MAIN"
         )
         AnimeCharacter.objects.create(anime=anime, character=old_only, role="MAIN")
-        AnimeStaff.objects.create(anime=anime, staff=old_director, role="Director")
-        # Bob already favourited the AniList row too: he must keep exactly one.
+        # The preview lists only "Director"; the other credits must survive.
+        for role in ("Director", "Storyboard", "Episode Director"):
+            AnimeStaff.objects.create(anime=anime, staff=old_director, role=role)
+        # Bob already favourited the AniList rows too: he must keep exactly one.
         new_frieren = Character.objects.create(name="Frieren", anilist_id=176754)
         UserFavoriteCharacter.objects.create(user=alice, character=old_frieren)
         UserFavoriteCharacter.objects.create(user=bob, character=old_frieren)
         UserFavoriteCharacter.objects.create(user=bob, character=new_frieren)
         UserFavoriteStaff.objects.create(user=alice, staff=old_seiyuu)
         UserFavoriteStaff.objects.create(user=alice, staff=old_director)
+        UserFavoriteStaff.objects.create(user=bob, staff=old_seiyuu)
+        new_seiyuu = Staff.objects.create(name="Atsumi Tanezaki", anilist_id=119331)
+        UserFavoriteStaff.objects.create(user=bob, staff=new_seiyuu)
 
         assert resolve(anilist.update_anime_manual(anime, media_fixture())) is True
 
@@ -575,13 +581,43 @@ class TestCastReplacement:
         assert ("Fern", 1_600_000_002) in names
         assert not AnimeStaff.objects.filter(staff=old_director).exists()
         assert set(
+            AnimeStaff.objects.filter(anime=anime, staff__anilist_id=106297).values_list(
+                "role", flat=True
+            )
+        ) == {"Director", "Storyboard", "Episode Director"}
+        assert set(
             UserFavoriteCharacter.objects.values_list("user__username", "character__anilist_id")
         ) == {("alice", 176754), ("bob", 176754)}
         assert set(
             UserFavoriteStaff.objects.values_list("user__username", "staff__anilist_id")
-        ) == {("alice", 119331), ("alice", 106297)}
+        ) == {("alice", 119331), ("alice", 106297), ("bob", 119331)}
         # The old rows stay (nothing points at them now).
         assert Character.objects.filter(pk=old_frieren.pk).exists()
+
+    def test_a_recast_character_keeps_one_link_with_the_new_voice_actor(self, anilist):
+        anime = make_anime(title="Frieren", anilist_id=154587)
+        frieren = Character.objects.create(name="Frieren", anilist_id=176754)
+        old_voice = Staff.objects.create(name="Someone Else", anilist_id=555)
+        AnimeCharacter.objects.create(
+            anime=anime, character=frieren, voice_actor=old_voice, role="MAIN"
+        )
+
+        anilist.update_anime_manual(anime, media_fixture())
+
+        links = AnimeCharacter.objects.filter(anime=anime, character=frieren)
+        assert list(links.values_list("voice_actor__anilist_id", flat=True)) == [119331]
+
+    def test_staff_roles_only_accumulate(self, anilist):
+        # The preview may show one of a person's several roles: keep the others.
+        anime = make_anime(title="Frieren", anilist_id=154587)
+        director = Staff.objects.create(name="Keiichirou Saitou", anilist_id=106297)
+        AnimeStaff.objects.create(anime=anime, staff=director, role="Storyboard")
+
+        anilist.update_anime_manual(anime, media_fixture())
+
+        assert set(
+            AnimeStaff.objects.filter(anime=anime, staff=director).values_list("role", flat=True)
+        ) == {"Director", "Storyboard"}
 
     def test_payload_without_a_cast_keeps_the_stored_one(self, anilist):
         anime = make_anime(title="Frieren", anilist_id=154587)

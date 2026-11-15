@@ -47,6 +47,25 @@ def _name_key(name: str | None) -> str:
     return " ".join((name or "").split()).casefold()
 
 
+def _legacy_name_keys(name: str | None) -> set[str]:
+    """Keys a Jikan-era name may match: as stored, and "Family, Given" turned around.
+
+    Jikan (MyAnimeList) wrote people as "Tanezaki, Atsumi"; AniList says
+    "Atsumi Tanezaki".
+    """
+    keys = {_name_key(name)}
+    family, comma, given = (name or "").partition(",")
+    if comma and family.strip() and given.strip():
+        keys.add(_name_key(f"{given} {family}"))
+    return keys
+
+
+def _replacement(name: str | None, people_by_name: dict):
+    return next(
+        (people_by_name[key] for key in _legacy_name_keys(name) if key in people_by_name), None
+    )
+
+
 def _move_favorites(model, field: str, old, new) -> None:
     """Point ``old``'s favourites at ``new``; drop the ones a user already has on ``new``."""
     favorites = model.objects.filter(**{field: old})
@@ -55,36 +74,49 @@ def _move_favorites(model, field: str, old, new) -> None:
 
 
 def _retire_legacy_cast(anime, characters_by_name: dict, staff_by_name: dict) -> None:
-    """Remove ``anime``'s Jikan-era links to people the AniList payload brought back."""
+    """Fold ``anime``'s Jikan-era links into the people the AniList payload brought.
+
+    A matched character's old link goes (the payload's link replaces it). A
+    matched staff member's old links are moved onto the AniList person, role
+    and all: the payload is a preview, so it may list one of several roles.
+    Favourites move with the person, one per user.
+    """
     from ....models import UserFavoriteCharacter, UserFavoriteStaff
 
-    legacy_staff_moved: set[int] = set()
+    moved_staff: set[int] = set()
 
-    def retire_staff(old_staff) -> None:
-        replacement = staff_by_name.get(_name_key(old_staff.name))
-        if replacement and old_staff.pk not in legacy_staff_moved:
+    def fold_staff(old_staff):
+        """The AniList row for a Jikan-era staff member, favourites moved; or None."""
+        replacement = _replacement(old_staff.name, staff_by_name)
+        if replacement is not None and old_staff.pk not in moved_staff:
             _move_favorites(UserFavoriteStaff, "staff", old_staff, replacement)
-            legacy_staff_moved.add(old_staff.pk)
+            moved_staff.add(old_staff.pk)
+        return replacement
 
     legacy_characters = AnimeCharacter.objects.filter(
         anime=anime, character__anilist_id__gte=LEGACY_CHARACTER_ID_MIN
     ).select_related("character", "voice_actor")
     for link in legacy_characters:
-        replacement = characters_by_name.get(_name_key(link.character.name))
+        replacement = _replacement(link.character.name, characters_by_name)
         if replacement is None:
             continue
         _move_favorites(UserFavoriteCharacter, "character", link.character, replacement)
         if link.voice_actor and (link.voice_actor.anilist_id or 0) >= LEGACY_STAFF_ID_MIN:
-            retire_staff(link.voice_actor)
+            fold_staff(link.voice_actor)
         link.delete()
 
     legacy_staff = AnimeStaff.objects.filter(
         anime=anime, staff__anilist_id__gte=LEGACY_STAFF_ID_MIN
     ).select_related("staff")
     for staff_link in legacy_staff:
-        if _name_key(staff_link.staff.name) in staff_by_name:
-            retire_staff(staff_link.staff)
+        replacement = fold_staff(staff_link.staff)
+        if replacement is None:
+            continue
+        if AnimeStaff.objects.filter(anime=anime, staff=replacement, role=staff_link.role).exists():
             staff_link.delete()
+        else:
+            staff_link.staff = replacement
+            staff_link.save(update_fields=["staff"])
 
 
 if TYPE_CHECKING:
@@ -360,10 +392,11 @@ class AniListPersistence(_ClientBase):
 
         AniList payloads carry a preview (the top 10 of each), so links to
         people missing from it are kept: deleting them would cut a 40-person
-        cast down to 10. The exception is a person written before D1 from
-        Jikan, under a synthetic ID: when the same person (by name) arrives
-        from AniList, the old link is retired and their favourites move to the
-        AniList row, so the cast never shows them twice.
+        cast down to 10. For a character in the payload, its link is the
+        current one (one per character). Staff roles only accumulate: the
+        preview may list one of a person's several roles. People written
+        before D1 from Jikan, under synthetic IDs, are folded into the AniList
+        rows that match them by name (``_retire_legacy_cast``).
         """
         characters_by_name: dict[str, Character] = {}
         staff_by_name: dict[str, Staff] = {}
@@ -381,12 +414,17 @@ class AniListPersistence(_ClientBase):
                     voice_actor = _upsert_person(Staff, mapper.person_fields(voice_actors[0]))
                     staff_by_name[_name_key(voice_actor.name)] = voice_actor
 
-                AnimeCharacter.objects.update_or_create(
+                link, _ = AnimeCharacter.objects.update_or_create(
                     anime=anime,
                     character=character,
                     voice_actor=voice_actor,
                     defaults={"role": ROLE_MAP.get(role, AnimeCharacter.Role.SUPPORTING)},
                 )
+                # The payload names this character's voice actor: an older link
+                # with another one (recast, credited later) is out of date.
+                AnimeCharacter.objects.filter(anime=anime, character=character).exclude(
+                    pk=link.pk
+                ).delete()
 
             for edge in mapper.staff_edges(item):
                 node = edge["node"]
