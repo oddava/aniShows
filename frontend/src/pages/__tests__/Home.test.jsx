@@ -17,6 +17,7 @@ vi.mock('../../context/AuthContext', () => ({
 vi.mock('../../api/client', () => ({
     animeApi: {
         getTrending: vi.fn(),
+        getTopRated: vi.fn(() => Promise.resolve({ data: [] })),
     },
     listApi: {
         add: vi.fn(),
@@ -109,7 +110,9 @@ describe('Home', () => {
         });
 
         expect(screen.getByText('Add to List')).toBeInTheDocument();
-        expect(screen.getAllByAltText('Demon Slayer banner image').length).toBeGreaterThan(0);
+        // The banner is decorative (the title is the heading), so it has empty alt text.
+        expect(screen.getAllByTestId('anime-media-image').length).toBeGreaterThan(0);
+        expect(screen.getByRole('heading', { level: 1, name: 'Demon Slayer' })).toBeInTheDocument();
     });
 
     it('shows guest intro hero while auth is loading', () => {

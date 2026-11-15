@@ -1,12 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { Play, Star, ChevronRight, Plus, Check, Loader2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Play, Star, ChevronRight, Plus, Check, Loader2, Search } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import logger from '../utils/logger';
 import SEO from '../components/SEO';
+import SectionHeader from '../components/common/SectionHeader';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
 import { animeKeys, animeQueries } from '../api/queries/anime';
 import { listKeys, recommendationQueries, userQueries } from '../api/queries/user';
@@ -17,6 +18,7 @@ export default function Home() {
     const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
     const [heroListLoading, setHeroListLoading] = useState(false);
     const [locallyAddedIds, setLocallyAddedIds] = useState(new Set());
+    const [heroPaused, setHeroPaused] = useState(false);
     const revealRefs = useRef([]);
     const observer = useRef(null);
 
@@ -41,14 +43,24 @@ export default function Home() {
     const trendingLoading = isAuthenticated ? !memberTrending : guestTrendingLoading;
     const heroCarousel = memberTrending?.slice(0, 5) || [];
 
+    const { data: topRated, isLoading: topRatedLoading } = useQuery({
+        ...animeQueries.topRated(),
+        staleTime: 1000 * 60 * 30,
+        gcTime: 1000 * 60 * 60,
+        retry: false,
+    });
+
     // Hero Carousel Logic - optimized with useCallback
+    // Auto-advance, paused while the hero is hovered/focused, and off entirely
+    // for people who ask for reduced motion.
     useEffect(() => {
-        if (!isAuthenticated || heroCarousel.length === 0) return;
+        if (!isAuthenticated || heroCarousel.length === 0 || heroPaused) return;
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
         const interval = setInterval(() => {
             setCurrentHeroIndex((prev) => (prev + 1) % heroCarousel.length);
         }, 8000);
         return () => clearInterval(interval);
-    }, [isAuthenticated, heroCarousel.length]);
+    }, [isAuthenticated, heroCarousel.length, heroPaused]);
 
     useEffect(() => {
         if (!isAuthenticated) return;
@@ -121,6 +133,7 @@ export default function Home() {
         }
     }, []);
 
+
     return (
         <>
             <SEO page="home" />
@@ -129,6 +142,8 @@ export default function Home() {
                     <MemberCarouselHero
                         heroCarousel={heroCarousel}
                         currentHeroIndex={currentHeroIndex}
+                        onSelectHero={setCurrentHeroIndex}
+                        onPauseChange={setHeroPaused}
                         heroAnime={heroAnime}
                         heroListLoading={heroListLoading}
                         isHeroInList={isHeroInList}
@@ -139,109 +154,144 @@ export default function Home() {
                 )}
 
                 {/* Main Content Area */}
-                <div className="relative">
-                    <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-dark/80 to-transparent pointer-events-none z-10" />
-                    <div className="absolute inset-0 pointer-events-none">
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.02)_0%,transparent_50%)]" />
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_100%,rgba(255,255,255,0.01)_0%,transparent_50%)]" />
-                    </div>
-                    <div className="relative space-y-8 md:space-y-16 py-8 md:py-12 mt-8 md:mt-12 z-20">
-                        {isAuthenticated && <CurrentlyWatchingSection />}
+                <div className="relative space-y-12 md:space-y-16 py-10 md:py-14">
+                    {isAuthenticated && <CurrentlyWatchingSection />}
 
-                        {/* Trending Section */}
-                        <section ref={setRevealRef} className="px-4 md:px-6 reveal pb-2">
-                            <div className="max-w-7xl mx-auto">
-                                <div className="flex items-center justify-between mb-6 md:mb-8">
-                                    <div>
-                                        <h2 className="text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em]">Trending Now</h2>
-                                    </div>
-                                    <Link to="/browse?sort=trending" className="btn-secondary py-1.5 px-4 text-xs flex items-center gap-2 hover:border-accent/40 group">
-                                        View All
-                                    </Link>
-                                </div>
+                    <AnimeShelf
+                        revealRef={setRevealRef}
+                        title="Trending Now"
+                        viewAllTo="/browse?sort=trending"
+                        items={trending?.slice(0, 6)}
+                        isLoading={trendingLoading}
+                        emptyText="No trending anime right now."
+                    />
 
-                                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
-                                    {trendingLoading ? (
-                                        Array(6).fill(0).map((_, i) => (
-                                            <div key={i} className="flex-shrink-0 w-[160px] md:w-auto h-full">
-                                                <AnimeCardSkeleton />
-                                            </div>
-                                        ))
-                                    ) : trending?.length > 0 ? (
-                                        trending.slice(0, 6).map((anime, index) => (
-                                            <div key={anime.id} className="flex-shrink-0 w-[160px] md:w-auto h-full">
-                                                <AnimeCard anime={anime} />
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="w-full text-center py-8 text-gray-500">No trending anime found</div>
-                                    )}
-                                </div>
-                            </div>
-                        </section>
+                    {/* Recommended For You Section */}
+                    <RecommendedForYouSection revealRef={setRevealRef} />
 
-                        {/* Recommended For You Section */}
-                        <RecommendedForYouSection revealRef={setRevealRef} />
-                    </div>
-
-                    {/* CTA Section */}
-                    {!isAuthenticated && (
-                        <section ref={setRevealRef} className="py-16 sm:py-24 px-4 bg-dark relative overflow-hidden border-t border-gray-800 reveal">
-                            <div className="max-w-4xl mx-auto text-center relative z-10 ui-surface py-10 sm:py-16 px-4 sm:px-8 rounded-2xl sm:rounded-3xl">
-                                <h2 className="text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em] mb-4">
-                                    Start Tracking Your Journey
-                                </h2>
-                                <p className="text-gray-400 mb-6 sm:mb-10 text-base sm:text-lg max-w-2xl mx-auto px-2">
-                                    Join over <span className="text-white font-semibold">???</span> anime fans listing, rating, and reviewing their favorite series.
-                                </p>
-                                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-                                    <Link to="/register" className="btn-primary flex items-center gap-2 text-base sm:text-lg px-6 sm:px-8 py-3 sm:py-4 w-full sm:w-auto justify-center">
-                                        Create Free Account
-                                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-                                    </Link>
-                                    <span className="text-gray-500 text-xs sm:text-sm">No credit card required</span>
-                                </div>
-                            </div>
-                        </section>
-                    )}
+                    <AnimeShelf
+                        revealRef={setRevealRef}
+                        title="Top Rated"
+                        viewAllTo="/browse?sort=rating"
+                        items={topRated?.slice(0, 6)}
+                        isLoading={topRatedLoading}
+                        hideWhenEmpty
+                    />
                 </div>
+
+                {/* CTA Section */}
+                {!isAuthenticated && (
+                    <section ref={setRevealRef} className="px-4 md:px-6 pb-16 sm:pb-24 reveal">
+                        <div className="max-w-3xl mx-auto text-center ui-surface py-10 sm:py-14 px-5 sm:px-10">
+                            <h2 className="section-title mb-4">
+                                Start Tracking Your Journey
+                            </h2>
+                            <p className="text-gray-400 mb-7 sm:mb-8 text-base sm:text-lg max-w-xl mx-auto">
+                                Keep a list of what you&rsquo;re watching, rate what you finish, and get picks based on what you actually like.
+                            </p>
+                            <Link to="/register" className="btn-primary px-6 sm:px-7 py-3 w-full sm:w-auto">
+                                Create Free Account
+                                <ChevronRight aria-hidden="true" className="w-4 h-4" />
+                            </Link>
+                        </div>
+                    </section>
+                )}
             </div>
         </>
     );
 }
 
-function GuestIntroHero() {
+// Six posters: a swipeable row on phones, a grid from md up.
+const SHELF_ROW_CLASSES = 'flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0 snap-x snap-mandatory md:snap-none scroll-px-4 overscroll-x-contain';
+const SHELF_ITEM_CLASSES = 'flex-shrink-0 w-[42vw] max-w-[180px] xs:w-[160px] md:w-auto md:max-w-none h-full snap-start';
+
+function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, emptyText, hideWhenEmpty = false, renderItem }) {
+    const headingId = `shelf-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    if (!isLoading && hideWhenEmpty && !(items?.length > 0)) return null;
+
     return (
-        <section className="relative h-[55vh] sm:h-[65vh] min-h-[450px] sm:min-h-[550px] flex items-center overflow-hidden border-b border-gray-900">
-            <div className="absolute inset-0 bg-dark">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(251,191,36,0.18)_0%,transparent_45%)]" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_80%,rgba(14,165,233,0.16)_0%,transparent_50%)]" />
-                <div className="absolute inset-0 bg-gradient-to-b from-dark-100/60 via-dark/80 to-dark" />
+        <section ref={revealRef} aria-labelledby={headingId} className="px-4 md:px-6 reveal">
+            <div className="max-w-7xl mx-auto">
+                <SectionHeader id={headingId} title={title} subtitle={subtitle} viewAllTo={viewAllTo} />
+                <div className={SHELF_ROW_CLASSES}>
+                    {isLoading ? (
+                        Array.from({ length: 6 }, (_, i) => (
+                            <div key={i} className={SHELF_ITEM_CLASSES} aria-hidden="true">
+                                <AnimeCardSkeleton />
+                            </div>
+                        ))
+                    ) : items?.length > 0 ? (
+                        items.map((item, index) => (
+                            <div key={item.id} className={SHELF_ITEM_CLASSES}>
+                                {renderItem ? renderItem(item, index) : <AnimeCard anime={item} index={index} showMeta />}
+                            </div>
+                        ))
+                    ) : (
+                        <p className="w-full text-center py-8 text-sm text-gray-500">{emptyText}</p>
+                    )}
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function GuestIntroHero() {
+    const navigate = useNavigate();
+    const [query, setQuery] = useState('');
+
+    const handleSubmit = (event) => {
+        event.preventDefault();
+        const trimmed = query.trim();
+        navigate(trimmed ? `/browse?q=${encodeURIComponent(trimmed)}` : '/browse');
+    };
+
+    return (
+        <section className="relative flex items-center overflow-hidden border-b border-gray-900 min-h-[480px] sm:min-h-[560px] h-[60vh]">
+            <div aria-hidden="true" className="absolute inset-0 bg-dark">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_15%_10%,color-mix(in_srgb,var(--color-accent)_13%,transparent)_0%,transparent_65%)]" />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-dark" />
             </div>
 
-            <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">
+            <div className="relative z-10 w-full px-4 md:px-6 mt-10 sm:mt-14">
+                <div className="max-w-7xl mx-auto">
                 <div className="max-w-2xl">
-                    <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight sm:leading-none mb-4 break-words">
+                    <h1 className="text-[2rem] leading-[1.08] sm:text-4xl lg:text-5xl sm:leading-[1.04] font-extrabold text-white/90 tracking-tight mb-4 sm:mb-5">
                         Discover, Track, and Share Your Anime Journey
                     </h1>
-                    <p className="text-base sm:text-lg text-gray-300 mb-8 max-w-xl leading-relaxed">
+                    <p className="text-base sm:text-lg text-gray-400 mb-7 sm:mb-8 max-w-xl leading-relaxed">
                         Build your watchlist, rate completed shows, and get personalized picks from what
                         you already love.
                     </p>
-                    <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-                        <Link
-                            to="/register"
-                            className="btn-primary min-w-[160px] rounded-lg px-6 py-2.5 text-sm sm:px-8 sm:py-3 sm:text-base justify-center"
-                        >
-                            Create Free Account
+
+                    <form role="search" onSubmit={handleSubmit} className="relative max-w-lg mb-5">
+                        <label htmlFor="home-search" className="sr-only">Search anime</label>
+                        <Search aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-500 pointer-events-none" />
+                        <input
+                            id="home-search"
+                            type="search"
+                            value={query}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder="Search anime by title"
+                            autoComplete="off"
+                            enterKeyHint="search"
+                            className="w-full h-12 sm:h-[52px] rounded-xl bg-dark-100 pl-11 pr-28 text-[15px] text-white placeholder:text-gray-500"
+                        />
+                        <button type="submit" className="btn-primary absolute right-1.5 top-1/2 -translate-y-1/2 h-9 sm:h-10 px-4 text-sm">
+                            Search
+                        </button>
+                    </form>
+
+                    <p className="text-sm text-gray-500">
+                        <Link to="/register" className="font-semibold text-gray-200 hover:text-white underline decoration-white/20 underline-offset-4 hover:decoration-white/50 transition-colors">
+                            Create a free account
                         </Link>
-                        <Link
-                            to="/login"
-                            className="btn-secondary min-w-[140px] rounded-lg px-6 py-2.5 text-sm sm:px-8 sm:py-3 sm:text-base justify-center"
-                        >
+                        <span aria-hidden="true" className="mx-2 text-gray-700">/</span>
+                        <Link to="/login" className="font-semibold text-gray-200 hover:text-white underline decoration-white/20 underline-offset-4 hover:decoration-white/50 transition-colors">
                             Sign In
                         </Link>
-                    </div>
+                        <span className="hidden sm:inline"> to keep your list in sync.</span>
+                    </p>
+                </div>
                 </div>
             </div>
         </section>
@@ -251,14 +301,30 @@ function GuestIntroHero() {
 function MemberCarouselHero({
     heroCarousel,
     currentHeroIndex,
+    onSelectHero,
+    onPauseChange,
     heroAnime,
     heroListLoading,
     isHeroInList,
     onAddToList,
 }) {
+    const year = heroAnime && (heroAnime.start_date || heroAnime.release_date)
+        ? new Date(heroAnime.start_date || heroAnime.release_date).getFullYear()
+        : null;
+
     return (
-        <section className="relative h-[55vh] sm:h-[65vh] min-h-[450px] sm:min-h-[550px] flex items-center overflow-hidden">
-            <div className="absolute inset-0 bg-dark">
+        <section
+            aria-roledescription="carousel"
+            aria-label="Trending now"
+            className="relative h-[60vh] min-h-[480px] sm:min-h-[560px] flex items-center overflow-hidden"
+            onMouseEnter={() => onPauseChange(true)}
+            onMouseLeave={() => onPauseChange(false)}
+            onFocus={() => onPauseChange(true)}
+            onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) onPauseChange(false);
+            }}
+        >
+            <div aria-hidden="true" className="absolute inset-0 bg-dark">
                 {heroCarousel.map((anime, index) => (
                     <div
                         key={anime.id}
@@ -268,80 +334,106 @@ function MemberCarouselHero({
                             anime={anime}
                             kind="banner"
                             size="large"
-                            alt={`${anime.title} banner image`}
+                            alt=""
                             responsive
                             sizes="100vw"
                             loading={index === 0 ? 'eager' : 'lazy'}
-                            className="w-full h-full object-cover "
+                            fetchPriority={index === 0 ? 'high' : 'auto'}
+                            className="w-full h-full object-cover"
                         />
                     </div>
                 ))}
-                <div className="absolute inset-0 bg-dark/80" />
-                <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/80 to-transparent h-full" />
+                <div className="absolute inset-0 bg-dark/75" />
+                <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/70 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-r from-dark/80 via-dark/20 to-transparent" />
             </div>
 
-            <div className="relative z-10 w-full max-w-7xl mx-auto px-4 md:px-6 mt-12 sm:mt-16">
+            <div className="relative z-10 w-full px-4 md:px-6 mt-12 sm:mt-16">
+                <div className="max-w-7xl mx-auto">
                 {heroAnime && (
-                    <div className="max-w-2xl">
-                        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight sm:leading-none mb-3 break-words">
+                    <div key={heroAnime.id} className="max-w-2xl page-enter" aria-live="polite">
+                        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-[1.05] mb-3 line-clamp-2">
                             {heroAnime.title}
                         </h1>
 
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm sm:text-base font-medium text-gray-300 mb-4 sm:mb-5">
+                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm font-medium text-gray-300 mb-4 sm:mb-5 tabular">
                             {heroAnime.rating && (
                                 <span className="flex items-center gap-1.5 text-yellow-400 font-bold">
-                                    <Star className="w-4 h-4 fill-current" />
-                                    {heroAnime.rating}
+                                    <Star aria-hidden="true" className="w-4 h-4 fill-current" />
+                                    <span className="sr-only">Rating </span>{heroAnime.rating}
                                 </span>
                             )}
-                            {heroAnime.rating && <span className="text-gray-600">•</span>}
-                            <span className="text-gray-100 uppercase tracking-widest text-[11px] sm:text-xs font-bold">{heroAnime.anime_type}</span>
-                            {(heroAnime.start_date || heroAnime.release_date) && (
+                            {heroAnime.anime_type && (
                                 <>
-                                    <span className="text-gray-600">•</span>
-                                    <span className="text-gray-200">{new Date(heroAnime.start_date || heroAnime.release_date).getFullYear()}</span>
+                                    {heroAnime.rating && <span aria-hidden="true" className="text-gray-600">•</span>}
+                                    <span className="text-gray-100 uppercase tracking-widest text-[11px] sm:text-xs font-bold">{heroAnime.anime_type}</span>
+                                </>
+                            )}
+                            {year && (
+                                <>
+                                    <span aria-hidden="true" className="text-gray-600">•</span>
+                                    <span className="text-gray-200">{year}</span>
                                 </>
                             )}
                             {heroAnime.genres?.length > 0 && (
                                 <>
-                                    <span className="text-gray-600">•</span>
+                                    <span aria-hidden="true" className="text-gray-600">•</span>
                                     <span className="text-gray-400 line-clamp-1">{heroAnime.genres.slice(0, 3).map(g => g.name).join(', ')}</span>
                                 </>
                             )}
                         </div>
 
-                        <p className="text-sm sm:text-base md:text-lg text-gray-300 mb-6 sm:mb-8 max-w-2xl line-clamp-2 md:line-clamp-3 font-normal leading-relaxed">
+                        <p className="text-sm sm:text-base md:text-lg text-gray-300 mb-6 sm:mb-8 max-w-2xl line-clamp-2 md:line-clamp-3 leading-relaxed">
                             {heroAnime.synopsis}
                         </p>
 
-                        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                        <div className="flex flex-wrap items-center gap-3">
                             <Link
                                 to={`/anime/${heroAnime.slug}`}
-                                className="btn-primary min-w-[140px] rounded-lg px-6 py-2.5 text-sm sm:px-8 sm:py-3 sm:text-base"
+                                className="btn-primary min-w-[140px] px-6 py-2.5 sm:px-7 sm:py-3"
                             >
-                                <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
+                                <Play aria-hidden="true" className="w-4 h-4 fill-current" />
                                 View Details
                             </Link>
                             <button
+                                type="button"
                                 onClick={onAddToList}
                                 disabled={heroListLoading || isHeroInList}
-                                className={`flex min-w-[140px] items-center justify-center gap-2 rounded-lg border px-6 py-2.5 text-sm font-bold sm:px-8 sm:py-3 sm:text-base ${isHeroInList
-                                    ? 'cursor-default border-gray-700 bg-dark-100 text-white'
-                                    : 'border-gray-700 bg-dark-100 text-white transition-colors hover:bg-dark-50'
-                                    }`}
+                                aria-busy={heroListLoading}
+                                className="btn-secondary min-w-[140px] px-6 py-2.5 sm:px-7 sm:py-3 disabled:opacity-100 disabled:cursor-default"
                             >
                                 {heroListLoading ? (
-                                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                                    <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />
                                 ) : isHeroInList ? (
-                                    <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    <Check aria-hidden="true" className="w-4 h-4 text-emerald-400" />
                                 ) : (
-                                    <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    <Plus aria-hidden="true" className="w-4 h-4" />
                                 )}
                                 {isHeroInList ? 'In List' : 'Add to List'}
                             </button>
                         </div>
                     </div>
                 )}
+
+                {heroCarousel.length > 1 && (
+                    <div className="mt-8 sm:mt-10 flex items-center gap-1.5" role="group" aria-label="Choose slide">
+                        {heroCarousel.map((anime, index) => (
+                            <button
+                                key={anime.id}
+                                type="button"
+                                onClick={() => onSelectHero(index)}
+                                aria-label={`Show ${anime.title}`}
+                                aria-current={index === currentHeroIndex}
+                                className="group py-2 px-0.5"
+                            >
+                                <span
+                                    className={`block h-1 rounded-full transition-[width,background-color] duration-300 ${index === currentHeroIndex ? 'w-6 bg-white/80' : 'w-3 bg-white/25 group-hover:bg-white/45'}`}
+                                />
+                            </button>
+                        ))}
+                    </div>
+                )}
+                </div>
             </div>
         </section>
     );
@@ -360,30 +452,14 @@ function CurrentlyWatchingSection() {
     if (isLoading || !watching || watching.length === 0) return null;
 
     return (
-        <section className="px-4 md:px-6">
-            <div className="max-w-7xl mx-auto">
-                <div className="flex items-center justify-between mb-4 md:mb-6">
-                    <div>
-                        <h2 className="text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em]">Currently Watching</h2>
-                    </div>
-                    <Link to="/profile/anime_list" className="flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors">
-                        View All <ChevronRight className="w-4 h-4" />
-                    </Link>
-                </div>
-
-                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
-                    {watching.map((entry) => (
-                        <div key={entry.id} className="flex-shrink-0 w-[160px] md:w-auto h-full">
-                            <AnimeCard
-                                anime={entry.anime}
-                                userListEntry={entry}
-                                showProgress={true}
-                            />
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </section>
+        <AnimeShelf
+            title="Currently Watching"
+            viewAllTo="/profile/anime_list"
+            items={watching}
+            renderItem={(entry) => (
+                <AnimeCard anime={entry.anime} userListEntry={entry} showProgress={true} />
+            )}
+        />
     );
 }
 
@@ -419,37 +495,19 @@ function RecommendedForYouSection({ revealRef }) {
         .map(([genre]) => genre);
 
     const subtitle = isLoading
-        ? 'Loading recommendations...'
+        ? 'Finding picks for you…'
         : (topGenres.length > 0
             ? `Based on your love for ${topGenres.join(', ')}`
             : 'Curated just for you');
 
     return (
-        <section ref={revealRef} className="px-4 md:px-6 reveal">
-            <div className="max-w-7xl mx-auto">
-                <div className="flex flex-col gap-1 mb-4 md:mb-6">
-                    <div>
-                        <h2 className="text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em]">Recommended for You</h2>
-                    </div>
-                    <p className="text-sm md:text-base text-gray-500 mt-0.5">{subtitle}</p>
-                </div>
-
-                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
-                    {isLoading ? (
-                        Array(6).fill(0).map((_, i) => (
-                            <div key={i} className="flex-shrink-0 w-[160px] md:w-auto h-full">
-                                <AnimeCardSkeleton />
-                            </div>
-                        ))
-                    ) : (
-                        recommendations?.map((rec) => (
-                            <div key={rec.id} className="flex-shrink-0 w-[160px] md:w-auto h-full">
-                                <AnimeCard anime={rec.anime} />
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
-        </section>
+        <AnimeShelf
+            revealRef={revealRef}
+            title="Recommended for You"
+            subtitle={subtitle}
+            items={recommendations}
+            isLoading={isLoading}
+            renderItem={(rec, index) => <AnimeCard anime={rec.anime} index={index} showMeta />}
+        />
     );
 }

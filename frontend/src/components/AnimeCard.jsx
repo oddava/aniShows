@@ -9,6 +9,7 @@ import {
     applyImageFallback,
     getImageFallbackUrl,
     getImageSrcSet,
+    getImageUrl,
     getOptimizedImageUrl,
     isSameOriginImageUrl,
 } from '../utils/imageUtils';
@@ -49,7 +50,9 @@ function AnimeCard({
     priority = false,
     index = 0,
     useBannerAccentTitleHover = true,
-    showAiringCountdown = false
+    showAiringCountdown = false,
+    showMeta = false,
+    metaText = null,
 }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
@@ -71,6 +74,12 @@ function AnimeCard({
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
     const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
     const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
+    // Blur-up: the small thumbnail (cheap, often already cached) sits blurred
+    // under the real poster until it arrives.
+    const placeholderUrl = useMemo(() => {
+        const small = anime.cover_image_small;
+        return small && small !== anime.cover_image_medium ? getImageUrl(small) : null;
+    }, [anime.cover_image_small, anime.cover_image_medium]);
     const bannerAccentImageUrl = useMemo(() => {
         if (!useBannerAccentTitleHover) return null;
 
@@ -109,6 +118,13 @@ function AnimeCard({
             ? `${episodeLabel} Aired`
             : `${episodeLabel} in ${timeRemaining}`;
     }, [showAiringCountdown, anime.next_airing_date, anime.next_airing_episode]);
+
+    const metaLine = useMemo(() => {
+        if (metaText) return metaText;
+        if (!showMeta) return null;
+        const year = anime.release_date ? new Date(anime.release_date).getFullYear() : null;
+        return [anime.anime_type, Number.isFinite(year) ? year : null].filter(Boolean).join(' · ') || null;
+    }, [metaText, showMeta, anime.anime_type, anime.release_date]);
 
     const invalidateAnimeViews = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: animeKeys.all });
@@ -152,11 +168,16 @@ function AnimeCard({
                 setShowStatusMenu(false);
             }
         }
+        function handleKeyDown(event) {
+            if (event.key === 'Escape') setShowStatusMenu(false);
+        }
         if (showStatusMenu) {
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('keydown', handleKeyDown);
         }
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
         };
     }, [showStatusMenu]);
     const currentStatusOption = useMemo(() =>
@@ -306,11 +327,24 @@ function AnimeCard({
         >
             <div className="flex flex-col h-full">
                 {/* Image Container */}
-                <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-dark-50 flex-shrink-0">
-                    <Link to={`/anime/${anime.slug}`} className="block w-full h-full">
-                        {!imageLoaded && (
-                            <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
-                        )}
+                <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-dark-100 flex-shrink-0 has-[a:focus-visible]:shadow-[0_0_0_2px_var(--color-focus-ring-strong)]">
+                    <Link
+                        to={`/anime/${anime.slug}`}
+                        className="block w-full h-full focus-visible:!outline-none focus-visible:!shadow-none"
+                        aria-label={displayTitle}
+                    >
+                        {!imageLoaded && (placeholderUrl ? (
+                            <img
+                                src={placeholderUrl}
+                                alt=""
+                                aria-hidden="true"
+                                draggable={false}
+                                decoding="async"
+                                className="absolute inset-0 w-full h-full object-cover scale-110 blur-md pointer-events-none"
+                            />
+                        ) : (
+                            <div className="absolute inset-0 skeleton-shimmer z-10 pointer-events-none" />
+                        ))}
                         <img
                             ref={imageRef}
                             src={imageUrl}
@@ -322,7 +356,7 @@ function AnimeCard({
                             decoding={loadingStrategy.decoding}
                             onLoad={() => setImageLoaded(true)}
                             onError={handleImageError}
-                            className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                            className={`relative w-full h-full object-cover transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.03] ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                         />
                     </Link>
 
@@ -330,7 +364,7 @@ function AnimeCard({
 
                     {/* Status Button */}
                     {isAuthenticated && (
-                        <div className={`absolute bottom-2 right-2 z-[200] transition-opacity duration-200 ${showStatusMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                        <div className={`absolute bottom-2 right-2 z-[200] transition-opacity duration-200 ${showStatusMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100'}`}>
                             <div className="relative" ref={statusMenuRef}>
                                 <button
                                     onClick={toggleStatusMenu}
@@ -339,17 +373,22 @@ function AnimeCard({
                                         bg-black/50 border-white/20 hover:bg-black/70 hover:border-white/30
                                         ${listStatus && currentStatusOption ? currentStatusOption.color : 'text-white'}`}
                                     title={listStatus && currentStatusOption ? currentStatusOption.label : 'Add to List'}
+                                    aria-label={listStatus && currentStatusOption ? `List status: ${currentStatusOption.label}. Change` : `Add ${displayTitle} to list`}
+                                    aria-haspopup="menu"
+                                    aria-expanded={showStatusMenu}
                                 >
                                     {isLoading ? <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" /> :
                                         listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />}
                                 </button>
 
                                 {showStatusMenu && (
-                                    <div className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-none z-[210] animate-fade-in overflow-hidden">
+                                    <div role="menu" className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-lg shadow-black/40 z-[210] animate-fade-in overflow-hidden">
                                         <div className="p-1">
                                             {STATUS_OPTIONS.map((option) => (
                                                 <button
                                                     key={option.value}
+                                                    role="menuitemradio"
+                                                    aria-checked={listStatus === option.value}
                                                     onClick={(e) => handleStatusChange(e, option.value)}
                                                     className={`w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-semibold rounded-md transition-colors touch-manipulation
                                                         ${listStatus === option.value ? 'bg-accent text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
@@ -361,7 +400,7 @@ function AnimeCard({
                                         </div>
                                         {listStatus && (
                                             <div className="p-1 border-t border-gray-800 bg-black/20">
-                                                <button onClick={handleRemoveFromList} className="w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
+                                                <button role="menuitem" onClick={handleRemoveFromList} className="w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
                                                     <X className="w-3 h-3" /> Remove
                                                 </button>
                                             </div>
@@ -412,7 +451,7 @@ function AnimeCard({
                 </div>
 
                 {/* Title/Info Footer */}
-                <Link to={`/anime/${anime.slug}`} className="mt-3 block"
+                <Link to={`/anime/${anime.slug}`} className="mt-3 block" tabIndex={-1} aria-hidden="true"
                 >
                     <div className="flex items-start gap-1.5">
                         {listStatus && currentStatusOption && (
@@ -426,6 +465,9 @@ function AnimeCard({
                             {displayTitle}
                         </h3>
                     </div>
+                    {metaLine && (
+                        <p className="mt-1 text-[11.5px] text-gray-500 tabular truncate">{metaLine}</p>
+                    )}
                 </Link>
             </div>
         </div>
@@ -441,6 +483,8 @@ const arePropsEqual = (prevProps, nextProps) => {
     if (prevProps.index !== nextProps.index) return false;
     if (prevProps.useBannerAccentTitleHover !== nextProps.useBannerAccentTitleHover) return false;
     if (prevProps.showAiringCountdown !== nextProps.showAiringCountdown) return false;
+    if (prevProps.showMeta !== nextProps.showMeta) return false;
+    if (prevProps.metaText !== nextProps.metaText) return false;
 
     const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;
     const nextEntry = nextProps.userListEntry || nextProps.anime.user_list_status;
@@ -457,7 +501,7 @@ export function AnimeCardSkeleton() {
     return (
         <div className="relative h-full flex flex-col">
             {/* Card image placeholder */}
-            <div className="aspect-[2/3] bg-dark-200 relative overflow-hidden rounded-lg">
+            <div className="aspect-[2/3] bg-dark-100 relative overflow-hidden rounded-lg">
                 <div className="absolute inset-0 skeleton-shimmer" />
             </div>
 
