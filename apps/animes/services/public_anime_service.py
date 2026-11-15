@@ -21,7 +21,7 @@ from ...shared.public_cache import (
 from ...users.models import UserAnimeList
 from ..adult_content import ADULT_GENRE_SLUGS, ADULT_TAGS
 from ..models import Anime, AnimeCharacter, AnimeStaff, UserFavorite
-from .jikan import JikanService
+from .anilist import AniListService
 from .public_query.fields import QueryFieldsMixin
 from .public_query.filters import (
     MAX_RATING,
@@ -179,7 +179,7 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
             local_tz = ZoneInfo(timezone_name)
         except (ZoneInfoNotFoundError, ValueError):
             local_tz = ZoneInfo("Asia/Tokyo")
-        # Jikan next-airing timestamps are tied to the broadcast timezone; UTC shifts late-night JST shows backward.
+        # Airing times are Japanese broadcast times; in UTC, late-night JST shows shift a day back.
         localized = timezone.localtime(next_airing_date, local_tz)
         return cls.SCHEDULE_DAY_NAMES[(localized.weekday() + 1) % 7]
 
@@ -187,60 +187,69 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         return Anime.public_queryset().only(*self.ACTION_ANIME_ONLY_FIELDS).get(slug=slug)
 
     def recommendations_queryset(self, anime, *, can_view_adult_content: bool = True):
-        relation_mal_ids = set(self._relation_mal_ids(anime))
-        if anime.mal_id:
-            service = JikanService(enable_caching=True, enable_rate_limiting=True)
-            try:
-                recommendations = service.get_recommendations_for_anime(
-                    anime.mal_id,
-                    limit=12,
-                    request_budget=service.REQUEST_BUDGET_INTERACTIVE,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Failed to fetch Jikan recommendations for %s (MAL %s): %s",
-                    anime.slug,
-                    anime.mal_id,
-                    exc,
-                    exc_info=True,
-                )
-                recommendations = []
-            finally:
-                service.close()
+        """AniList's recommendations that exist locally, in AniList's order.
 
-            ordered_mal_ids = []
-            for recommendation in recommendations:
-                recommendation_mal_id = recommendation.get("mal_id")
-                if (
-                    not recommendation_mal_id
-                    or recommendation_mal_id == anime.mal_id
-                    or recommendation_mal_id in relation_mal_ids
-                ):
-                    continue
-                ordered_mal_ids.append(recommendation_mal_id)
-
-            ordered_mal_ids = list(dict.fromkeys(ordered_mal_ids))
-            if ordered_mal_ids:
-                ordering = Case(
-                    *[
-                        When(mal_id=mal_id, then=Value(index))
-                        for index, mal_id in enumerate(ordered_mal_ids)
-                    ],
-                    default=Value(len(ordered_mal_ids)),
-                    output_field=IntegerField(),
-                )
-                queryset = (
-                    self.shelf_queryset_for(can_view_adult_content)
-                    .filter(mal_id__in=ordered_mal_ids)
-                    .exclude(id=anime.id)
-                    .annotate(recommendation_order=ordering)
-                    .order_by("recommendation_order", "-id")
-                )
-                if queryset.exists():
-                    return queryset
+        Falls back to shared-genre recommendations when AniList has none (or
+        none that are in the catalog).
+        """
+        if anime.anilist_id or anime.mal_id:
+            queryset = self._provider_recommendations_queryset(
+                anime, can_view_adult_content=can_view_adult_content
+            )
+            if queryset is not None and queryset.exists():
+                return queryset
 
         return self._fallback_recommendations_queryset(
             anime, can_view_adult_content=can_view_adult_content
+        )
+
+    def _provider_recommendations_queryset(self, anime, *, can_view_adult_content: bool):
+        service = AniListService(enable_caching=True, enable_rate_limiting=True)
+        try:
+            recommendations = service.get_recommendations_for_anime(
+                anime.anilist_id,
+                mal_id=anime.mal_id,
+                limit=12,
+                request_budget=service.REQUEST_BUDGET_INTERACTIVE,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to fetch AniList recommendations for %s", anime.slug, exc_info=True
+            )
+            recommendations = []
+        finally:
+            service.close()
+
+        relation_mal_ids = set(self._relation_mal_ids(anime))
+        ordering_cases = []
+        anilist_ids: list[int] = []
+        mal_ids: list[int] = []
+        for position, recommendation in enumerate(recommendations):
+            rec_anilist_id = recommendation.get("id")
+            rec_mal_id = recommendation.get("mal_id")
+            if (rec_anilist_id and rec_anilist_id == anime.anilist_id) or (
+                rec_mal_id and (rec_mal_id == anime.mal_id or rec_mal_id in relation_mal_ids)
+            ):
+                continue
+            if rec_anilist_id:
+                anilist_ids.append(rec_anilist_id)
+                ordering_cases.append(When(anilist_id=rec_anilist_id, then=Value(position)))
+            if rec_mal_id:
+                mal_ids.append(rec_mal_id)
+                ordering_cases.append(When(mal_id=rec_mal_id, then=Value(position)))
+
+        if not ordering_cases:
+            return None
+
+        ordering = Case(
+            *ordering_cases, default=Value(len(recommendations)), output_field=IntegerField()
+        )
+        return (
+            self.shelf_queryset_for(can_view_adult_content)
+            .filter(Q(anilist_id__in=anilist_ids) | Q(mal_id__in=mal_ids))
+            .exclude(id__in=[anime.id, *self._related_anime_ids(anime)])
+            .annotate(recommendation_order=ordering)
+            .order_by("recommendation_order", "-id")
         )
 
     @classmethod

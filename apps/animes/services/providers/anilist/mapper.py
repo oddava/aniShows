@@ -119,43 +119,6 @@ def media_titles(item: dict) -> tuple[str, str]:
     return title_english or title_romaji, title_native
 
 
-def parse_theme_song(text: str) -> dict:
-    """Parse AniList theme song format: 'Song Title' by Artist (eps X-Y)"""
-    result = {"title": text, "artist": "", "episodes": ""}
-
-    if not text:
-        return result
-
-    # Try to extract episode range (eps X-Y)
-    episode_match = re.search(r"\s*\(eps?\s*([\d\-\s,]+)\)\s*$", text, re.IGNORECASE)
-    if episode_match:
-        result["episodes"] = episode_match.group(1).strip()
-        text = text[: episode_match.start()].strip()
-
-    # Try to extract artist: look for ' by ' pattern
-    # Handle quoted titles: "Song Title" by Artist
-    if text.startswith('"') and '" by ' in text:
-        parts = text.split('" by ', 1)
-        if len(parts) == 2:
-            result["title"] = parts[0][1:].strip()  # Remove opening quote
-            result["artist"] = parts[1].strip()
-    elif text.startswith("'") and "' by " in text:
-        parts = text.split("' by ", 1)
-        if len(parts) == 2:
-            result["title"] = parts[0][1:].strip()  # Remove opening quote
-            result["artist"] = parts[1].strip()
-    elif " by " in text:
-        # Simple format: Song Title by Artist
-        parts = text.rsplit(" by ", 1)
-        if len(parts) == 2:
-            result["title"] = parts[0].strip()
-            result["artist"] = parts[1].strip()
-    else:
-        result["title"] = text.strip()
-
-    return result
-
-
 def trailer_url(trailer: dict | None) -> str | None:
     """Watch URL for a YouTube or Dailymotion trailer, else None."""
     if not trailer:

@@ -75,16 +75,9 @@ class OfflineAnimeSyncState(TimestampMixin, Model):
         default=StageStatus.PENDING,
         db_index=True,
     )
-    themes_status = CharField(
-        max_length=30,
-        choices=StageStatus.choices,
-        default=StageStatus.PENDING,
-        db_index=True,
-    )
 
     metadata_attempt_count = IntegerField(default=0)
     franchise_attempt_count = IntegerField(default=0)
-    themes_attempt_count = IntegerField(default=0)
     attempt_count = IntegerField(default=0)
 
     last_attempt_at = DateTimeField(null=True, blank=True, db_index=True)
@@ -102,7 +95,6 @@ class OfflineAnimeSyncState(TimestampMixin, Model):
             Index(fields=["quarantined", "next_attempt_at"], name="anime_sync_q_due_idx"),
             Index(fields=["metadata_status", "next_attempt_at"], name="anime_sync_meta_due_idx"),
             Index(fields=["franchise_status", "next_attempt_at"], name="anime_sync_fr_due_idx"),
-            Index(fields=["themes_status", "next_attempt_at"], name="anime_sync_th_due_idx"),
         ]
 
     def __str__(self):

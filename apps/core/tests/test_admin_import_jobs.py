@@ -13,7 +13,7 @@ from ..views.admin_import_jobs import (
 
 
 class AdminImportJobViewSetTests(SimpleTestCase):
-    def test_trending_catalog_sync_uses_jikan_source_label(self):
+    def test_trending_catalog_sync_uses_anilist_source_label(self):
         result = CeleryTaskResult(
             id=8111,
             task_id="task-trending-1",
@@ -27,12 +27,12 @@ class AdminImportJobViewSetTests(SimpleTestCase):
 
         payload = AdminImportJobViewSet()._format_task_result(result)
 
-        assert payload["source"] == "Jikan (self-hosted)"
+        assert payload["source"] == "AniList"
         assert payload["source_type"] == "Trending"
         assert payload["processed_items"] == 7
         assert payload["total_items"] == 10
 
-    def test_metadata_enrichment_uses_jikan_source_label(self):
+    def test_metadata_enrichment_uses_anilist_source_label(self):
         result = CeleryTaskResult(
             id=8123,
             task_id="task-meta-1",
@@ -46,7 +46,7 @@ class AdminImportJobViewSetTests(SimpleTestCase):
 
         payload = AdminImportJobViewSet()._format_task_result(result)
 
-        assert payload["source"] == "Jikan (self-hosted)"
+        assert payload["source"] == "AniList"
         assert payload["source_type"] == "Metadata Enrichment"
         assert payload["processed_items"] == 8
         assert payload["total_items"] == 8
@@ -111,6 +111,41 @@ class AdminImportJobViewSetTests(SimpleTestCase):
         assert response.status_code == 202
         assert response.data == {"job_id": "job-offline"}
         mock_trigger_offline_import.assert_called_once_with(request.data, request.user)
+
+    def _trigger(self, source):
+        request = SimpleNamespace(
+            data={"source": source}, user=SimpleNamespace(is_authenticated=True)
+        )
+        return AdminImportJobViewSet().trigger(request), request
+
+    @patch("apps.core.views.admin_import_jobs.trigger_trending_refresh")
+    def test_trigger_trending_source(self, mock_trigger):
+        mock_trigger.return_value = SimpleNamespace(payload={"job_id": "t"}, status_code=202)
+
+        response, request = self._trigger("trending")
+
+        assert response.status_code == 202
+        mock_trigger.assert_called_once_with(request.data, request.user)
+
+    @patch("apps.core.views.admin_import_jobs.trigger_metadata_enrichment")
+    def test_trigger_metadata_enrichment_source(self, mock_trigger):
+        mock_trigger.return_value = SimpleNamespace(payload={"job_id": "m"}, status_code=202)
+
+        response, request = self._trigger("metadata_enrichment")
+
+        assert response.status_code == 202
+        mock_trigger.assert_called_once_with(request.data, request.user)
+
+    @patch("apps.core.views.admin_import_jobs.trigger_metadata_enrichment")
+    @patch("apps.core.views.admin_import_jobs.trigger_trending_refresh")
+    def test_retired_jikan_sources_are_rejected(self, mock_trending, mock_metadata):
+        for source in ("jikan_trending", "jikan_enrichment"):
+            response, _ = self._trigger(source)
+
+            assert response.status_code == 400
+            assert "jikan" not in response.data["detail"]
+        mock_trending.assert_not_called()
+        mock_metadata.assert_not_called()
 
 
 class AdminImportJobFilterTests(TestCase):

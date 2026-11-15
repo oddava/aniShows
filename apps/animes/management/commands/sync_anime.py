@@ -19,7 +19,6 @@ class Command(BaseCommand):
                 "sync-airing",
                 "enrich-metadata",
                 "sync-watch-episodes",
-                "sync-themes",
                 "import-offline-catalog",
                 "reconcile-offline-sync",
                 "generate-recommendations",
@@ -85,12 +84,7 @@ class Command(BaseCommand):
             help="Invalidate cached watch-episode payloads before syncing",
         )
 
-        # Theme options
-        parser.add_argument(
-            "--force-resync",
-            action="store_true",
-            help="Force re-sync of themes even if already present",
-        )
+        # Offline catalog options
         parser.add_argument(
             "--release-tag",
             default="latest",
@@ -121,7 +115,7 @@ class Command(BaseCommand):
             action="store_true",
             dest="enqueue_enrichment",
             default=None,
-            help="Queue metadata, franchise, and theme enrichment after offline import",
+            help="Queue metadata and franchise enrichment after offline import",
         )
         parser.add_argument(
             "--skip-enrichment",
@@ -231,8 +225,6 @@ class Command(BaseCommand):
             self._handle_enrich_metadata(options, run_async, queue)
         elif workflow == "sync-watch-episodes":
             self._handle_sync_watch_episodes(options, run_async, queue)
-        elif workflow == "sync-themes":
-            self._handle_sync_themes(options, run_async, queue)
         elif workflow == "import-offline-catalog":
             self._handle_import_offline_catalog(options, run_async, queue)
         elif workflow == "reconcile-offline-sync":
@@ -327,23 +319,6 @@ class Command(BaseCommand):
 
         self._dispatch_task(task, run_async, queue)
 
-    def _handle_sync_themes(self, options, run_async, queue):
-        """Handle theme song sync."""
-        from ...tasks import sync_theme_songs
-
-        limit = options["limit"]
-        force_resync = options["force_resync"]
-        anime_id = options.get("anime_id")
-
-        if anime_id:
-            self.stdout.write(f"Syncing themes for anime ID: {anime_id}")
-            task = sync_theme_songs.s(anime_id=anime_id)
-        else:
-            self.stdout.write(f"Syncing themes (limit: {limit}, force: {force_resync})")
-            task = sync_theme_songs.s(limit=limit, force_resync=force_resync)
-
-        self._dispatch_task(task, run_async, queue)
-
     def _handle_import_offline_catalog(self, options, run_async, queue):
         """Handle Anime Offline Database import."""
         from ...tasks import import_offline_catalog
@@ -377,7 +352,7 @@ class Command(BaseCommand):
         self._dispatch_task(task, run_async, queue)
 
     def _handle_reconcile_offline_sync(self, options, run_async, queue):
-        """Reconcile metadata, franchise, and themes for offline-imported anime."""
+        """Reconcile metadata and franchise data for offline-imported anime."""
         from ...tasks import reconcile_offline_catalog_sync
 
         batch_size = options["batch_size"] or settings.OFFLINE_RECONCILE_BATCH_SIZE
@@ -399,7 +374,6 @@ class Command(BaseCommand):
             anime_ids=scoped_ids,
             batch_size=batch_size,
             chunk_size=chunk_size,
-            require_themes=True,
             strict=strict,
             reset_pipeline=reset_pipeline,
             max_rounds=max_rounds,
@@ -432,7 +406,6 @@ class Command(BaseCommand):
             generate_recommendations,
             sync_airing_workflow,
             sync_anime_catalog,
-            sync_theme_songs,
             sync_watch_episodes_batch,
         )
 
@@ -449,7 +422,6 @@ class Command(BaseCommand):
                 batch_size=100,
                 force=True,
             ),
-            sync_theme_songs.si(limit=50),
             generate_recommendations.si(),
         )
 

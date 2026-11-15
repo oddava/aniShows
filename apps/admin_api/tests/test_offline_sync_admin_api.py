@@ -46,7 +46,6 @@ class OfflineSyncAdminAPITests(TestCase):
             "anime": anime,
             "metadata_status": OfflineAnimeSyncState.StageStatus.QUARANTINED,
             "franchise_status": OfflineAnimeSyncState.StageStatus.PENDING,
-            "themes_status": OfflineAnimeSyncState.StageStatus.PENDING,
             "quarantined": True,
             "quarantine_reason": "identity_conflict",
             "next_attempt_at": timezone.now() + timedelta(days=1),

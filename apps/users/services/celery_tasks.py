@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from ...animes.services.jikan import JikanService
+from ...animes.services.anilist import AniListService
 from ...shared.logger import logger
 from ..models import UserImportJob
 from .import_service import ImportService
@@ -150,11 +150,11 @@ class UserTaskService:
         anilist_id: int | None = None,
         title: str | None = None,
     ) -> int | None:
-        service = JikanService(enable_caching=True, enable_rate_limiting=True)
+        service = AniListService(enable_caching=True, enable_rate_limiting=True)
 
         try:
             if anilist_id:
-                logger.info("Fetching anime by sync ID", extra={"anilist_id": anilist_id})
+                logger.info("Fetching anime by AniList ID", extra={"anilist_id": anilist_id})
                 anime_data = service.get_anime_by_id(anilist_id)
                 if anime_data:
                     anime = service.save_anime_to_db(anime_data)

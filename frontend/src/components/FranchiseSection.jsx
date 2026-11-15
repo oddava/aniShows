@@ -7,7 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import AnimeMediaImage from './common/AnimeMediaImage';
 import { animeKeys } from '../api/queries/anime';
 
-// Relations carry the AniList ID in `id` (null for Jikan-sourced entries) and the MAL ID in `mal_id`.
+// Relations carry the AniList ID in `id` (null on some older entries) and the MAL ID in `mal_id`.
 const relationKey = (rel) => (rel.id ? `anilist-${rel.id}` : `mal-${rel.mal_id}`);
 
 export default function FranchiseSection({ relations, accentColor, sourceSlug }) {

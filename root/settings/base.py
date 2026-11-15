@@ -65,7 +65,10 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 # django-cors-headers' own default; development.py and production.py set the real list.
 CORS_ALLOWED_ORIGINS: list[str] = []
-JIKAN_BASE_URL = os.getenv("JIKAN_BASE_URL", "https://api.jikan.moe/v4").strip().rstrip("/")
+# AniList GraphQL is the only catalog data source. AniList documents 90
+# requests/minute per IP but has run degraded at 30, so default to that.
+ANILIST_API_URL = os.getenv("ANILIST_API_URL", "https://graphql.anilist.co").strip()
+ANILIST_RATE_LIMIT_PER_MINUTE = max(_env_int("ANILIST_RATE_LIMIT_PER_MINUTE", 30), 1)
 
 # Application tuning defaults
 # Non-secret runtime tuning values are defined here in settings.py with Python

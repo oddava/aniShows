@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from ...shared.celery import observed_shared_task
 from ..models import Anime
-from ..services.jikan import JikanService
+from ..services.anilist import AniListService
 from ..services.rate_limiting import APICallCache
 from .base import BaseTask
 
@@ -39,7 +39,7 @@ class AiringWorkflowTask(BaseTask):
         sync_airing_workflow.delay(batch_size=200)
     """
 
-    service_class = JikanService
+    service_class = AniListService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
     def execute(
@@ -105,7 +105,7 @@ class AiringWorkflowTask(BaseTask):
 
     def _sync_airing(
         self,
-        service: JikanService,
+        service: AniListService,
         call_cache: APICallCache,
         batch_size: int | None,
     ) -> dict:
@@ -133,6 +133,7 @@ class AiringWorkflowTask(BaseTask):
             }
 
         logger.info(f"Found {total} airing anime to sync")
+        service.prefetch_airing(airing_anime)
 
         updated_count = 0
         skipped_count = 0
@@ -152,7 +153,7 @@ class AiringWorkflowTask(BaseTask):
                 result = service.resolve_airing_media_for_anime(anime)
 
                 if result:
-                    service.update_anime_manual(anime, result)
+                    service.update_airing_fields(anime, result)
 
                     # Check if we got airing date
                     next_airing = result.get("nextAiringEpisode")
@@ -165,7 +166,7 @@ class AiringWorkflowTask(BaseTask):
                     if service.last_error_code == "rate_limited":
                         rate_limited_count += 1
                     logger.warning(
-                        "No Jikan results for %s (anime_id=%s, reason=%s)",
+                        "No AniList results for %s (anime_id=%s, reason=%s)",
                         anime.title,
                         anime.id,
                         service.last_error_code or "unknown",
@@ -182,7 +183,7 @@ class AiringWorkflowTask(BaseTask):
                 logger.exception("Error updating airing data for %s", anime.title)
                 error_count += 1
 
-        self.metrics.record_api_call("jikan", updated_count)
+        self.metrics.record_api_call("anilist", updated_count)
         self.metrics.record_records(updated_count)
 
         return {
@@ -196,7 +197,7 @@ class AiringWorkflowTask(BaseTask):
 
     def _cleanup_finished(
         self,
-        service: JikanService,
+        service: AniListService,
         batch_size: int | None,
     ) -> dict:
         """Clear next_airing_date for finished anime.
@@ -211,6 +212,7 @@ class AiringWorkflowTask(BaseTask):
         if batch_size:
             past_airing_queryset = past_airing_queryset[:batch_size]
         past_airing = list(past_airing_queryset)
+        service.prefetch_airing(past_airing)
 
         cleared_count = 0
         status_changed_count = 0
@@ -272,7 +274,7 @@ class AiringWorkflowTask(BaseTask):
 
     def _backfill_missing(
         self,
-        service: JikanService,
+        service: AniListService,
         call_cache: APICallCache,
         batch_size: int | None,
     ) -> dict:
@@ -294,6 +296,7 @@ class AiringWorkflowTask(BaseTask):
             return {"total": 0, "populated": 0, "still_missing": 0, "rate_limited": 0, "errors": 0}
 
         logger.info(f"Found {total} airing anime missing next_airing_date")
+        service.prefetch_airing(missing_dates)
 
         updated_count = 0
         still_missing_count = 0
@@ -305,7 +308,7 @@ class AiringWorkflowTask(BaseTask):
                 result = service.resolve_airing_media_for_anime(anime)
 
                 if result:
-                    service.update_anime_manual(anime, result)
+                    service.update_airing_fields(anime, result)
 
                     next_airing = result.get("nextAiringEpisode")
                     if next_airing and next_airing.get("airingAt"):
@@ -317,7 +320,7 @@ class AiringWorkflowTask(BaseTask):
                     if service.last_error_code == "rate_limited":
                         rate_limited_count += 1
                     logger.warning(
-                        "No Jikan data for %s (anime_id=%s, reason=%s)",
+                        "No AniList data for %s (anime_id=%s, reason=%s)",
                         anime.title,
                         anime.id,
                         service.last_error_code or "unknown",

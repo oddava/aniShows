@@ -21,7 +21,7 @@ def _clear_cache():
 def _no_network(monkeypatch):
     """Fail real outbound HTTP and DNS immediately, as if offline.
 
-    Signals and eager Celery tasks call AniList/Jikan; without this, tests hang
+    Signals and eager Celery tasks call AniList; without this, tests hang
     on network timeouts or depend on live APIs. Tests that need HTTP should mock
     it (e.g. httpx.MockTransport, which is not affected).
     """

@@ -11,7 +11,7 @@ from ..models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
 AVAILABLE_TASKS = {
     "apps.animes.tasks.sync.sync_anime_catalog": {
         "name": "Refresh Anime Catalog Slice",
-        "description": "Refresh trending from Jikan and other catalog slices from local Anime fields",
+        "description": "Refresh trending from AniList and other catalog slices from local Anime fields",
         "args_schema": {
             "sync_type": {
                 "type": "string",
@@ -24,7 +24,7 @@ AVAILABLE_TASKS = {
     },
     "apps.animes.tasks.metadata.enrich_metadata": {
         "name": "Enrich Metadata",
-        "description": "Enrich anime metadata from Jikan (self-hosted)",
+        "description": "Enrich anime metadata from AniList",
         "args_schema": {
             "mode": {
                 "type": "string",
@@ -34,15 +34,6 @@ AVAILABLE_TASKS = {
             "batch_size": {"type": "integer", "default": 100, "min": 1, "max": 500},
         },
         "default_queue": "batch",
-    },
-    "apps.animes.tasks.themes.sync_theme_songs": {
-        "name": "Sync Theme Songs",
-        "description": "Synchronize anime theme songs",
-        "args_schema": {
-            "limit": {"type": "integer", "default": 500, "min": 1, "max": 1000},
-            "retry_failed": {"type": "boolean", "default": False},
-        },
-        "default_queue": "default",
     },
     "apps.animes.tasks.recommendations.generate_recommendations": {
         "name": "Generate Recommendations",

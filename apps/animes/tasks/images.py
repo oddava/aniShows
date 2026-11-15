@@ -1,5 +1,4 @@
 from ...shared.logger import logger
-from ...shared.retry import backoff
 
 """
 Image processing tasks for anime.
@@ -8,7 +7,6 @@ Includes thumbnail generation for anime images.
 """
 import hashlib
 
-import httpx
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Q
@@ -17,7 +15,7 @@ from ...core.services.celery_monitoring import get_queue_size
 from ...shared.celery import observed_shared_task
 from ...shared.errors import iter_exception_chain
 from ...shared.task_lock import cache_lock
-from ..services.jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
+from ..services.anilist import AniListService
 
 try:
     from botocore.exceptions import (
@@ -87,7 +85,6 @@ def _queue_image_fetch(
     anime_id: int,
     cover_url: str,
     banner_url: str,
-    mal_id: int | None,
     *,
     countdown: int = 0,
     storage_retry: int = 0,
@@ -95,8 +92,8 @@ def _queue_image_fetch(
     force_replace: bool = False,
 ) -> bool:
     """Queue image fetch task with per-anime dedupe to prevent retry storms."""
-    resolved_cover_url = JikanService.resolve_fetchable_image_url(cover_url)
-    resolved_banner_url = JikanService.resolve_fetchable_image_url(banner_url)
+    resolved_cover_url = AniListService.resolve_fetchable_image_url(cover_url)
+    resolved_banner_url = AniListService.resolve_fetchable_image_url(banner_url)
 
     if not resolved_cover_url and cover_url:
         logger.info(
@@ -108,7 +105,7 @@ def _queue_image_fetch(
             "Skipping non-fetchable banner image URL before enqueue",
             extra={"anime_id": anime_id, "banner_url": banner_url},
         )
-    if not resolved_cover_url and not resolved_banner_url and not mal_id:
+    if not resolved_cover_url and not resolved_banner_url:
         return False
 
     dedupe_ttl = max(_FETCH_DEDUP_TTL_SECONDS, countdown + 60)
@@ -121,7 +118,6 @@ def _queue_image_fetch(
         "anime_id": anime_id,
         "cover_url": resolved_cover_url,
         "banner_url": resolved_banner_url,
-        "mal_id": mal_id,
         "storage_retry": storage_retry,
     }
     if force_replace:
@@ -151,93 +147,6 @@ def _is_storage_available() -> bool:
         return False
 
 
-def _fetch_jikan_fallback_banner(mal_id: int) -> str:
-    """Fetch high-res promotional image from Jikan API to use as a banner fallback."""
-    if not mal_id:
-        return None
-
-    limiter = JikanRateLimiter(base_delay=0.35)
-
-    for attempt in range(3):
-        try:
-            limiter.acquire()
-            with httpx.Client(timeout=10.0) as client:
-                url = f"{JIKAN_BASE_URL}/anime/{mal_id}/pictures"
-                response = client.get(url)
-
-                if response.status_code == 429:
-                    limiter.record_429()
-                    backoff(2**attempt)
-                    continue
-
-                if response.status_code >= 500:
-                    limiter.record_error()
-                    logger.warning(
-                        "Jikan banner fallback returned server error for MAL %s (status=%s, attempt=%s)",
-                        mal_id,
-                        response.status_code,
-                        attempt + 1,
-                    )
-                    backoff(2**attempt)
-                    continue
-
-                if 400 <= response.status_code < 500:
-                    logger.info(
-                        "Jikan banner fallback returned non-retryable response for MAL %s (status=%s)",
-                        mal_id,
-                        response.status_code,
-                    )
-                    return None
-
-                response.raise_for_status()
-                try:
-                    data = response.json().get("data", [])
-                except ValueError:
-                    logger.warning(
-                        "Jikan banner fallback returned invalid JSON for MAL %s",
-                        mal_id,
-                        exc_info=True,
-                    )
-                    return None
-
-                # Find the largest picture
-                for pic in data:
-                    large_img = pic.get("webp", {}).get("large_image_url") or pic.get(
-                        "jpg", {}
-                    ).get("large_image_url")
-                    if large_img:
-                        return large_img
-        except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError):
-            limiter.record_error()
-            logger.warning(
-                "Jikan banner fallback network failure for MAL %s (attempt=%s)",
-                mal_id,
-                attempt + 1,
-                exc_info=True,
-            )
-            backoff(2**attempt)
-        except httpx.HTTPStatusError as exc:
-            limiter.record_error()
-            status_code = exc.response.status_code if exc.response is not None else "unknown"
-            logger.warning(
-                "Jikan banner fallback HTTP error for MAL %s (status=%s, attempt=%s)",
-                mal_id,
-                status_code,
-                attempt + 1,
-                exc_info=True,
-            )
-            if exc.response is not None and 400 <= exc.response.status_code < 500:
-                return None
-            backoff(2**attempt)
-        except (httpx.HTTPError, AttributeError, TypeError):
-            # Other transport errors, or a payload that is not the expected
-            # {"data": [{...}]} shape.
-            logger.warning("Jikan banner fallback failed for MAL %s", mal_id, exc_info=True)
-            return None
-
-    return None
-
-
 @observed_shared_task(retry_policy="standard", time_limit_preset="quick")
 def fetch_anime_images(
     self,
@@ -249,7 +158,9 @@ def fetch_anime_images(
     force_replace: bool = False,
 ):
     """Background task to download and save cover/banner images without blocking the main sync loop.
-    Implements a Jikan fallback for missing banner images.
+
+    ``mal_id`` is unused; it is still accepted so messages queued before the
+    Jikan banner fallback was removed keep running.
     """
     logger.info(f"Starting image fetch for Anime ID: {anime_id}")
 
@@ -259,12 +170,12 @@ def fetch_anime_images(
         anime = Anime.objects.get(id=anime_id)
 
         def _download_job():
-            service = JikanService(enable_caching=False, enable_rate_limiting=False)
+            service = AniListService(enable_caching=False, enable_rate_limiting=False)
             try:
                 nonlocal banner_url
 
-                cover_url_resolved = JikanService.resolve_fetchable_image_url(cover_url)
-                banner_url = JikanService.resolve_fetchable_image_url(banner_url)
+                cover_url_resolved = AniListService.resolve_fetchable_image_url(cover_url)
+                banner_url = AniListService.resolve_fetchable_image_url(banner_url)
 
                 # Persist external URLs so the API can always fall back even while
                 # local storage is degraded.
@@ -274,15 +185,6 @@ def fetch_anime_images(
                     )
                 if banner_url and banner_url != anime.banner_image_external_url:
                     service._save_external_url(anime, "banner_image_external_url", banner_url)
-
-                # Step 1: Jikan Fallback if no banner from AniList
-                if not banner_url and not anime.banner_image and mal_id:
-                    logger.info(f"No banner for {anime.title}, attempting Jikan fallback...")
-                    banner_url = _fetch_jikan_fallback_banner(mal_id)
-                    if banner_url:
-                        # Save external URL reference
-                        anime.banner_image_external_url = banner_url
-                        service._save_external_url(anime, "banner_image_external_url", banner_url)
 
                 def _clear_local_image(field_name: str):
                     image_field = getattr(anime, field_name, None)
@@ -300,7 +202,7 @@ def fetch_anime_images(
                     setattr(anime, field_name, "")
                     anime.save(update_fields=[field_name])
 
-                # Step 2: Download the Images natively
+                # Download the images
                 if cover_url_resolved and (force_replace or not anime.cover_image):
                     if force_replace and anime.cover_image:
                         _clear_local_image("cover_image")
@@ -347,7 +249,6 @@ def fetch_anime_images(
                 anime_id=anime_id,
                 cover_url=cover_url,
                 banner_url=banner_url,
-                mal_id=mal_id,
                 countdown=delay,
                 storage_retry=storage_retry + 1,
                 force_replace=force_replace,
@@ -414,13 +315,9 @@ def heal_missing_anime_media(self, batch_size: int | None = None):
             & Q(banner_image_external_url__isnull=False)
             & ~Q(banner_image_external_url="")
         )
-        missing_banner_with_mal = (Q(banner_image__isnull=True) | Q(banner_image="")) & Q(
-            mal_id__isnull=False
-        )
-
-        queryset = Anime.objects.filter(
-            missing_cover | missing_banner | missing_banner_with_mal
-        ).order_by("-member_count", "id")[:resolved_batch_size]
+        queryset = Anime.objects.filter(missing_cover | missing_banner).order_by(
+            "-member_count", "id"
+        )[:resolved_batch_size]
 
         inspected = 0
         queued = 0
@@ -429,14 +326,13 @@ def heal_missing_anime_media(self, batch_size: int | None = None):
             cover_url = "" if anime.cover_image else (anime.cover_image_external_url or "")
             banner_url = "" if anime.banner_image else (anime.banner_image_external_url or "")
 
-            if not cover_url and not banner_url and not anime.mal_id:
+            if not cover_url and not banner_url:
                 continue
 
             if _queue_image_fetch(
                 anime_id=anime.id,
                 cover_url=cover_url,
                 banner_url=banner_url,
-                mal_id=anime.mal_id,
                 force=False,
             ):
                 queued += 1

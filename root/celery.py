@@ -61,8 +61,6 @@ app.conf.task_routes = {
     "apps.animes.tasks.sync.sync_anime_catalog": {"queue": "high_priority"},
     # Airing Workflow - affects schedule display
     "apps.animes.tasks.airing.sync_airing_workflow": {"queue": "high_priority"},
-    # Theme Song Sync - time-sensitive but can queue
-    "apps.animes.tasks.themes.sync_theme_songs": {"queue": "high_priority"},
     # Franchise Sync - important for navigation
     "apps.animes.tasks.franchises.sync_franchises": {"queue": "high_priority"},
     # =========================================================================

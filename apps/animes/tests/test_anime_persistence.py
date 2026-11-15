@@ -8,7 +8,6 @@ from django.test import TestCase
 
 from ..models import Anime
 from ..services.anilist import AniListService
-from ..services.jikan import JikanService
 
 
 def _rich_anime() -> Anime:
@@ -58,7 +57,7 @@ SPARSE_ITEM = {
     "tags": [],
     "synonyms": [],
     "producers": [],
-    "providerIds": {"jikan": 52991},
+    "providerIds": {},
     "sourceUrls": [],
     "nextAiringEpisode": None,
     "broadcast": {},
@@ -74,6 +73,7 @@ class SparseUpdateDoesNotClobberTests(TestCase):
     def _update(self, service, anime, item):
         with (
             patch.object(service, "_handle_relationships", new=MagicMock()),
+            patch.object(service, "_handle_extended_info", new=MagicMock()),
             patch.object(service, "_download_and_save_images", new=MagicMock()),
         ):
             service._update_anime_from_media(
@@ -96,40 +96,33 @@ class SparseUpdateDoesNotClobberTests(TestCase):
         self.assertEqual(len(anime.external_links), 1)
         self.assertEqual(anime.status_distribution, {"CURRENT": 10})
 
-    def test_jikan_sparse_update_keeps_stored_values_and_merges_provider_ids(self):
-        anime = _rich_anime()
-        service = JikanService(enable_caching=False, enable_rate_limiting=False)
+    def _service(self):
+        service = AniListService(enable_caching=False, enable_rate_limiting=False)
         self.addCleanup(service.close)
+        return service
 
-        self._update(service, anime, SPARSE_ITEM)
+    def test_sparse_update_keeps_stored_values_and_provider_ids(self):
+        anime = _rich_anime()
+
+        self._update(self._service(), anime, SPARSE_ITEM)
 
         self._assert_preserved(anime)
-        self.assertEqual(
-            anime.provider_ids, {"anilist": 154587, "myanimelist": 52991, "jikan": 52991}
-        )
-
-    def test_jikan_update_without_ids_keeps_stored_provider_ids(self):
-        anime = _rich_anime()
-        service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(service.close)
-
-        self._update(service, anime, {**SPARSE_ITEM, "providerIds": {"myanimelist": None}})
-
         self.assertEqual(anime.provider_ids, {"anilist": 154587, "myanimelist": 52991})
 
-    def test_anilist_sparse_update_keeps_stored_values(self):
+    def test_provider_ids_are_merged_not_replaced(self):
         anime = _rich_anime()
-        service = AniListService()
-        self.addCleanup(service.close)
 
-        self._update(service, anime, SPARSE_ITEM)
+        self._update(
+            self._service(),
+            anime,
+            {**SPARSE_ITEM, "providerIds": {"kitsu": 7, "myanimelist": None}},
+        )
 
-        self._assert_preserved(anime)
+        self.assertEqual(anime.provider_ids, {"anilist": 154587, "myanimelist": 52991, "kitsu": 7})
 
     def test_real_new_values_still_update(self):
         anime = _rich_anime()
-        service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(service.close)
+        service = self._service()
         item = {
             **SPARSE_ITEM,
             "episodes": 29,
@@ -145,12 +138,11 @@ class SparseUpdateDoesNotClobberTests(TestCase):
         self.assertEqual(anime.status, Anime.AnimeStatus.finished)
         self.assertIn("adventure", anime.tags)
 
-    def test_jikan_update_refreshes_next_airing_episode(self):
+    def test_update_refreshes_next_airing_episode(self):
         anime = _rich_anime()
         anime.next_airing_episode = 5
         anime.save(update_fields=["next_airing_episode"])
-        service = JikanService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(service.close)
+        service = self._service()
         airing_at = int(datetime.datetime(2030, 1, 5, 15, tzinfo=datetime.UTC).timestamp())
         item = {**SPARSE_ITEM, "nextAiringEpisode": {"episode": 6, "airingAt": airing_at}}
 
@@ -158,6 +150,18 @@ class SparseUpdateDoesNotClobberTests(TestCase):
 
         self.assertEqual(anime.next_airing_episode, 6)
         self.assertEqual(anime.next_airing_date.timestamp(), airing_at)
+        # The weekly slot follows the next episode, in Japan time (00:00 on Sunday).
+        self.assertEqual(anime.broadcast_day, "Sunday")
+        self.assertEqual(anime.broadcast_timezone, "Asia/Tokyo")
+
+    def test_update_without_a_next_episode_clears_the_schedule(self):
+        anime = _rich_anime()
+        anime.next_airing_episode = 5
+        anime.save(update_fields=["next_airing_episode"])
+
+        self._update(self._service(), anime, {**SPARSE_ITEM, "status": "FINISHED"})
+
+        self.assertIsNone(anime.next_airing_episode)
 
 
 class AniListCreateDoesNotHijackSlugTests(TestCase):

@@ -6,7 +6,7 @@ from django.db import DatabaseError
 from ...shared.logger import logger
 from ...shared.public_cache import invalidate_public_cache_keys
 from ..models import Anime
-from .jikan import JikanService
+from .anilist import AniListService
 from .relation_links import link_relations_to
 
 
@@ -60,15 +60,13 @@ class FranchiseImportService:
                 imported=False,
             )
 
-        if not mal_id:
-            # Jikan can only fetch by MAL ID; an unknown AniList-only relation can't be imported.
-            raise FranchiseImportError("Not found", 404)
-
         self._enforce_rate_limit(rate_limit_key or client_ip)
 
-        service = JikanService(enable_caching=False, enable_rate_limiting=True)
+        service = AniListService(enable_caching=False, enable_rate_limiting=True)
         try:
-            item = service.search_by_mal_id(mal_id, anilist_id=anilist_id)
+            item = service.get_anime_by_id(anilist_id) if anilist_id else None
+            if not item and mal_id:
+                item = service.search_by_mal_id(mal_id)
             if not item:
                 raise FranchiseImportError("Not found", 404)
 
@@ -81,11 +79,6 @@ class FranchiseImportService:
                 f"anime_detail_base:v2:{anime.slug}",
                 f"anime_detail_base:{anime.slug}",
             )
-
-            if anime.mal_id:
-                from ..tasks.themes import sync_theme_songs
-
-                sync_theme_songs.delay(anime_id=anime.id)
 
             if source_slug:
                 self.update_relation_slug(source_slug, anime)
@@ -117,7 +110,7 @@ class FranchiseImportService:
 
     def _refresh_existing_anime(self, anime: Anime) -> None:
         """Fetch fresh sync data for an existing anime with missing media metadata."""
-        service = JikanService(enable_caching=False, enable_rate_limiting=True)
+        service = AniListService(enable_caching=False, enable_rate_limiting=True)
         try:
             item = service.resolve_media_for_anime(anime)
             if item:
@@ -125,7 +118,7 @@ class FranchiseImportService:
                 self._ensure_external_image_refs(refreshed, item)
             else:
                 logger.warning(
-                    "No Jikan payload returned while refreshing existing anime %s", anime.slug
+                    "No AniList payload returned while refreshing existing anime %s", anime.slug
                 )
         except Exception:
             # Best-effort refresh through the provider layer, which can fail in
@@ -150,10 +143,10 @@ class FranchiseImportService:
         if not isinstance(cover_image, dict):
             cover_image = {}
 
-        cover_url = JikanService.normalize_external_image_url(
+        cover_url = AniListService.normalize_external_image_url(
             cover_image.get("extraLarge") or cover_image.get("large")
         )
-        banner_url = JikanService.normalize_external_image_url(item.get("bannerImage"))
+        banner_url = AniListService.normalize_external_image_url(item.get("bannerImage"))
 
         update_fields: list[str] = []
         if not anime.cover_image and not anime.cover_image_external_url and cover_url:

@@ -87,12 +87,6 @@ export default function ImportJobDetails({ selectedJob, selectedOfflineEnrichmen
                 {selectedOfflineEnrichment.franchises.completed} / {selectedOfflineEnrichment.franchises.queued}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-white/60">Themes</span>
-              <span className="text-white">
-                {selectedOfflineEnrichment.themes.completed} / {selectedOfflineEnrichment.themes.queued}
-              </span>
-            </div>
           </div>
         </div>
       )}

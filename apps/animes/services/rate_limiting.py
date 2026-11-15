@@ -6,10 +6,12 @@ Optimized for small EC2 instances with minimal Redis overhead.
 """
 
 import contextlib
+import hashlib
 import time
 from datetime import datetime
 from typing import Any
 
+from django.conf import settings
 from django.core.cache import cache
 
 from ...shared.errors import CACHE_ERRORS
@@ -17,20 +19,20 @@ from ...shared.errors import CACHE_ERRORS
 
 class AniListRateLimiter:
     """Distributed rate limiter using Redis for multi-worker coordination.
-    AniList allows 90 requests per minute per IP.
 
-    Optimized for small EC2 instances:
-    - Minimal Redis operations
-    - Local caching to reduce Redis load
-    - Conservative rate limiting
+    AniList documents 90 requests per minute per IP but has run in a degraded
+    mode at 30; ``ANILIST_RATE_LIMIT_PER_MINUTE`` sets the limit (default 30).
+    Every worker counts against one per-minute Redis counter, and each process
+    also spaces its own requests, keeping a 10% margin under the limit.
     """
 
-    RATE_LIMIT = 85  # Stay well under the 90 limit
     WINDOW_SECONDS = 60
-    SAFETY_MARGIN = 5
 
-    def __init__(self):
-        self.min_delay = self.WINDOW_SECONDS / (self.RATE_LIMIT - self.SAFETY_MARGIN)
+    def __init__(self, rate_limit: int | None = None):
+        limit = rate_limit or settings.ANILIST_RATE_LIMIT_PER_MINUTE
+        self.rate_limit = max(int(limit), 1)
+        self.safety_margin = max(self.rate_limit // 10, 1) if self.rate_limit > 1 else 0
+        self.min_delay = self.WINDOW_SECONDS / (self.rate_limit - self.safety_margin)
         self._local_last_request = 0
         self._local_count = 0
 
@@ -65,12 +67,12 @@ class AniListRateLimiter:
                 results = pipe.execute()
                 count = results[0]
 
-                if count <= self.RATE_LIMIT - self.SAFETY_MARGIN:
+                if count <= self.rate_limit - self.safety_margin:
                     self._local_last_request = time.time()
                     return
 
                 # Rate limit hit, wait until next window
-                logger.warning(f"Rate limit approaching: {count}/{self.RATE_LIMIT} requests")
+                logger.warning(f"Rate limit approaching: {count}/{self.rate_limit} requests")
                 time.sleep(1)
 
             except (AttributeError, *CACHE_ERRORS):
@@ -208,10 +210,15 @@ class APICallCache:
         self.ttl = ttl
 
     def _get_cache_key(self, endpoint: str, params: str) -> str:
-        """Generate cache key from endpoint and params."""
-        return f"api:cache:{endpoint}:{hash(params) & 0xFFFFFFFF}"
+        """Cache key from endpoint and params.
 
-    def _get_recent_key(self, anilist_id: int) -> str:
+        A digest, not ``hash()``: string hashes are salted per process, so
+        workers would never share an entry.
+        """
+        digest = hashlib.sha256(params.encode("utf-8")).hexdigest()[:32]
+        return f"api:cache:{endpoint}:{digest}"
+
+    def _get_recent_key(self, anilist_id: int | str) -> str:
         return f"api:recent:{anilist_id}"
 
     def get(self, endpoint: str, params: str) -> Any | None:
@@ -228,19 +235,19 @@ class APICallCache:
         except CACHE_ERRORS:
             logger.warning("Failed to cache API response", exc_info=True)
 
-    def is_recently_updated(self, anilist_id: int, window: int = 1800) -> bool:
+    def is_recently_updated(self, anilist_id: int | str, window: int = 1800) -> bool:
         """Check if anime was updated within the window (seconds)."""
         try:
             return cache.get(self._get_recent_key(anilist_id)) is not None
         except CACHE_ERRORS:
             return False
 
-    def mark_updated(self, anilist_id: int, window: int = 1800) -> None:
+    def mark_updated(self, anilist_id: int | str, window: int = 1800) -> None:
         """Mark anime as recently updated."""
         with contextlib.suppress(*CACHE_ERRORS):
             cache.set(self._get_recent_key(anilist_id), True, window)
 
-    def invalidate(self, anilist_id: int) -> None:
+    def invalidate(self, anilist_id: int | str) -> None:
         """Invalidate cache for specific anime."""
         with contextlib.suppress(*CACHE_ERRORS):
             cache.delete(self._get_recent_key(anilist_id))

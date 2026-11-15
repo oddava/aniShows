@@ -114,7 +114,6 @@
         "batch_size": 25,
         "chunk_size": 100,
         "max_rounds": 4,
-        "require_themes": true,
         "round_interval_minutes": 15,
         "strict": false
       },
@@ -166,27 +165,6 @@
       },
       "schedule": "<crontab: 0 2 * * * (m/h/dM/MY/d)>",
       "task": "apps.animes.tasks.sync.sync_anime_catalog"
-    },
-    "sync-themes-daily": {
-      "kwargs": {
-        "limit": 500
-      },
-      "options": {
-        "queue": "high_priority"
-      },
-      "schedule": "<crontab: 0 6 * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.themes.sync_theme_songs"
-    },
-    "sync-themes-retry": {
-      "kwargs": {
-        "limit": 200,
-        "retry_failed": true
-      },
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: 0 18 * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.themes.sync_theme_songs"
     },
     "sync-trending-hourly": {
       "kwargs": {

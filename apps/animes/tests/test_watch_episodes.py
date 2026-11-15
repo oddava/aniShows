@@ -1,4 +1,5 @@
 import io
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
@@ -12,6 +13,12 @@ from rest_framework.test import APITestCase
 from ..models import Anime
 from ..services.watch_episodes import AnimeWatchEpisodeService
 from ..tasks.watch_episodes import WatchEpisodeBatchSyncTask, WatchEpisodeSyncTask
+
+SCHEDULE_PATH = "apps.animes.services.watch_episodes.AniListService.get_episode_schedule"
+
+
+def _ts(year, month, day, hour=0, minute=0):
+    return int(datetime(year, month, day, hour, minute, tzinfo=UTC).timestamp())
 
 
 class AnimeWatchEpisodeServiceTests(TestCase):
@@ -28,26 +35,23 @@ class AnimeWatchEpisodeServiceTests(TestCase):
         )
         self.service = AnimeWatchEpisodeService()
 
-    def _jikan_response(self, payload, status_code=200):
-        return httpx.Response(
-            status_code=status_code,
-            json=payload,
-            request=httpx.Request(
-                "GET", f"https://api.jikan.moe/v4/anime/{self.anime.mal_id}/episodes"
-            ),
-        )
-
-    @patch(
-        "apps.animes.services.watch_episodes.JikanService.get_streaming_episodes_for_anime",
-        new_callable=MagicMock,
-    )
-    @patch("apps.animes.services.watch_episodes.httpx.Client.get", new_callable=MagicMock)
-    def test_merges_jikan_episodes_with_anilist_crunchyroll_links(
-        self, mock_jikan_get, mock_streams
-    ):
-        mock_streams.return_value = {
+    def _schedule(self, **overrides):
+        payload = {
+            "id": self.anime.anilist_id,
             "idMal": self.anime.mal_id,
-            "streamingEpisodes": [
+            "episodes": 2,
+            "status": "FINISHED",
+            "nextAiringEpisode": None,
+            "streamingEpisodes": [],
+            "airingSchedule": [],
+        }
+        payload.update(overrides)
+        return payload
+
+    @patch(SCHEDULE_PATH, new_callable=MagicMock)
+    def test_builds_episodes_from_the_anilist_schedule_and_streams(self, mock_schedule):
+        mock_schedule.return_value = self._schedule(
+            streamingEpisodes=[
                 {
                     "title": "Episode 1 - The Journey Begins",
                     "thumbnail": "https://img.anilist.co/episode-1.jpg",
@@ -61,33 +65,22 @@ class AnimeWatchEpisodeServiceTests(TestCase):
                     "site": "Netflix",
                 },
             ],
-        }
-        mock_jikan_get.return_value = self._jikan_response(
-            {
-                "pagination": {"has_next_page": False},
-                "data": [
-                    {
-                        "mal_id": 1,
-                        "url": "https://myanimelist.net/anime/52991/frieren/episode/1",
-                        "title": "The Journey Begins",
-                        "aired": "2024-01-12T00:00:00+00:00",
-                    },
-                    {
-                        "mal_id": 2,
-                        "url": "https://myanimelist.net/anime/52991/frieren/episode/2",
-                        "title": "A Normal Day",
-                        "aired": "2024-01-19T00:00:00+00:00",
-                    },
-                ],
-            }
+            airingSchedule=[
+                # 15:00 UTC is midnight in Japan: the broadcast date is the next day.
+                {"episode": 1, "airingAt": _ts(2024, 1, 12, 15, 0)},
+                {"episode": 2, "airingAt": _ts(2024, 1, 19, 14, 0)},
+            ],
         )
 
         episodes = self.service.get_for_anime(self.anime)
 
+        mock_schedule.assert_called_once_with(
+            anilist_id=154587, mal_id=52991, request_budget="default"
+        )
         self.assertEqual(len(episodes), 2)
         self.assertEqual(episodes[0]["number"], 1)
         self.assertEqual(episodes[0]["title"], "The Journey Begins")
-        self.assertEqual(episodes[0]["aired"], "2024-01-12")
+        self.assertEqual(episodes[0]["aired"], "2024-01-13")
         self.assertEqual(episodes[0]["thumbnail"], "https://img.anilist.co/episode-1.jpg")
         self.assertEqual(
             episodes[0]["crunchyroll_url"],
@@ -96,40 +89,71 @@ class AnimeWatchEpisodeServiceTests(TestCase):
         self.assertTrue(episodes[0]["has_real_crunchyroll_url"])
 
         self.assertEqual(episodes[1]["number"], 2)
-        self.assertEqual(episodes[1]["title"], "A Normal Day")
+        self.assertEqual(episodes[1]["title"], "Episode 2")
+        self.assertEqual(episodes[1]["aired"], "2024-01-19")
         self.assertEqual(
             episodes[1]["crunchyroll_url"],
             "https://www.crunchyroll.com/search?q=Frieren+episode+2",
         )
         self.assertFalse(episodes[1]["has_real_crunchyroll_url"])
 
-    @patch(
-        "apps.animes.services.watch_episodes.JikanService.get_streaming_episodes_for_anime",
-        new_callable=MagicMock,
-    )
-    @patch("apps.animes.services.watch_episodes.httpx.Client.get", new_callable=MagicMock)
-    def test_caches_merged_episode_payload(self, mock_jikan_get, mock_streams):
-        mock_streams.return_value = {"idMal": self.anime.mal_id, "streamingEpisodes": []}
-        mock_jikan_get.return_value = self._jikan_response(
-            {
-                "pagination": {"has_next_page": False},
-                "data": [
-                    {
-                        "mal_id": 1,
-                        "url": "https://myanimelist.net/anime/52991/frieren/episode/1",
-                        "title": "The Journey Begins",
-                        "aired": "2024-01-12T00:00:00+00:00",
-                    }
-                ],
-            }
+    @patch(SCHEDULE_PATH, new_callable=MagicMock)
+    def test_airing_show_lists_only_released_episodes(self, mock_schedule):
+        mock_schedule.return_value = self._schedule(
+            status="RELEASING",
+            episodes=24,
+            nextAiringEpisode={"episode": 4, "airingAt": _ts(2030, 1, 1)},
+            airingSchedule=[{"episode": n, "airingAt": _ts(2024, 1, n)} for n in (1, 2, 3)],
         )
+
+        episodes = self.service.get_for_anime(self.anime)
+
+        self.assertEqual([episode["number"] for episode in episodes], [1, 2, 3])
+
+    @patch(SCHEDULE_PATH, new_callable=MagicMock)
+    def test_finished_show_uses_the_episode_total_when_the_schedule_is_partial(self, mock_schedule):
+        mock_schedule.return_value = self._schedule(
+            episodes=4, airingSchedule=[{"episode": 3, "airingAt": _ts(2020, 5, 1)}]
+        )
+
+        episodes = self.service.get_for_anime(self.anime)
+
+        self.assertEqual([episode["number"] for episode in episodes], [1, 2, 3, 4])
+        self.assertEqual(
+            [episode["aired"] for episode in episodes], [None, None, "2020-05-01", None]
+        )
+
+    @patch(SCHEDULE_PATH, new_callable=MagicMock)
+    def test_streaming_title_prefixes_are_stripped(self, mock_schedule):
+        def stream(title):
+            return {
+                "title": title,
+                "url": "https://www.crunchyroll.com/watch/x",
+                "site": "Crunchyroll",
+            }
+
+        mock_schedule.return_value = self._schedule(
+            episodes=3,
+            streamingEpisodes=[
+                stream("Episode 1 - Alpha"),
+                stream("Ep. 2: Beta"),
+                stream("Episode 3"),
+            ],
+        )
+
+        titles = [episode["title"] for episode in self.service.get_for_anime(self.anime)]
+
+        self.assertEqual(titles, ["Alpha", "Beta", "Episode 3"])
+
+    @patch(SCHEDULE_PATH, new_callable=MagicMock)
+    def test_caches_the_episode_payload(self, mock_schedule):
+        mock_schedule.return_value = self._schedule(episodes=1)
 
         first = self.service.get_for_anime(self.anime)
         second = self.service.get_for_anime(self.anime)
 
         self.assertEqual(first, second)
-        mock_streams.assert_called_once()
-        mock_jikan_get.assert_called_once()
+        mock_schedule.assert_called_once()
 
     def test_falls_back_to_generic_episode_list_when_external_episode_data_is_missing(self):
         anime = Anime.objects.create(
@@ -173,16 +197,25 @@ class AnimeWatchEpisodeServiceTests(TestCase):
             ],
         )
 
-    @patch(
-        "apps.animes.services.watch_episodes.JikanService.get_streaming_episodes_for_anime",
-        new_callable=MagicMock,
-    )
-    @patch("apps.animes.services.watch_episodes.httpx.Client.get", new_callable=MagicMock)
-    def test_interactive_budget_falls_back_quickly_when_jikan_times_out(
-        self,
-        mock_jikan_get,
-        mock_streams,
-    ):
+    @patch(SCHEDULE_PATH, new_callable=MagicMock)
+    def test_falls_back_when_anilist_has_nothing(self, mock_schedule):
+        anime = Anime.objects.create(
+            title="Unknown To AniList",
+            slug="unknown-to-anilist",
+            synopsis="x",
+            anime_type="TV",
+            status="Finished",
+            anilist_id=777777,
+            episode_count=2,
+        )
+        mock_schedule.return_value = None
+
+        episodes = self.service.get_for_anime(anime)
+
+        self.assertEqual([episode["number"] for episode in episodes], [1, 2])
+        self.assertFalse(any(episode["has_real_crunchyroll_url"] for episode in episodes))
+
+    def test_interactive_budget_falls_back_quickly_when_anilist_times_out(self):
         anime = Anime.objects.create(
             title="Fallback With Timeout",
             slug="fallback-with-timeout",
@@ -193,16 +226,24 @@ class AnimeWatchEpisodeServiceTests(TestCase):
             anilist_id=154600,
             episode_count=3,
         )
-        mock_streams.return_value = {"idMal": anime.mal_id, "streamingEpisodes": []}
-        mock_jikan_get.side_effect = httpx.TimeoutException(
-            "timed out",
-            request=httpx.Request("GET", f"https://api.jikan.moe/v4/anime/{anime.mal_id}/episodes"),
-        )
+        calls = []
 
-        episodes = self.service.get_for_anime(anime, request_budget="interactive")
+        def timeout(request):
+            calls.append(request)
+            raise httpx.ReadTimeout("timed out", request=request)
+
+        transport = httpx.MockTransport(timeout)
+        with patch.object(
+            httpx.HTTPTransport,
+            "handle_request",
+            lambda _self, request: transport.handle_request(request),
+        ):
+            episodes = self.service.get_for_anime(anime, request_budget="interactive")
 
         self.assertEqual([episode["number"] for episode in episodes], [1, 2, 3])
         self.assertTrue(all(not episode["has_real_crunchyroll_url"] for episode in episodes))
+        # The interactive budget makes one try, no retries.
+        self.assertEqual(len(calls), 1)
 
 
 class AnimeWatchEpisodesEndpointTests(APITestCase):

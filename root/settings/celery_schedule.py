@@ -66,18 +66,6 @@ def build_beat_schedule(
             "kwargs": {"limit": 10},
             "options": {"queue": "low_priority"},
         },
-        "sync-themes-daily": {
-            "task": "apps.animes.tasks.themes.sync_theme_songs",
-            "schedule": crontab(hour=6, minute=0),  # 6:00 AM
-            "kwargs": {"limit": 500},  # Increased from 100 to 500
-            "options": {"queue": "high_priority"},
-        },
-        "sync-themes-retry": {
-            "task": "apps.animes.tasks.themes.sync_theme_songs",
-            "schedule": crontab(hour=18, minute=0),  # 6:00 PM - retry failed
-            "kwargs": {"limit": 200, "retry_failed": True},
-            "options": {"queue": "low_priority"},
-        },
         "reconcile-offline-catalog-sync-hourly": {
             "task": "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync",
             "schedule": crontab(minute=45),  # Hourly at :45
@@ -85,7 +73,6 @@ def build_beat_schedule(
                 "anime_ids": [],
                 "batch_size": offline_reconcile_batch_size,
                 "chunk_size": offline_reconcile_chunk_size,
-                "require_themes": True,
                 "strict": False,
                 "max_rounds": offline_reconcile_max_rounds,
                 "round_interval_minutes": offline_reconcile_round_interval_minutes,

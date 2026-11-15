@@ -1,13 +1,14 @@
-"""Behaviour shared by the catalog providers (AniList, Jikan).
+"""Turning AniList media payloads into ``Anime`` field values.
 
-Both providers hand over AniList-shaped media payloads; this module turns them
-into ``Anime`` field values and writes them. The rule that matters most: a
-provider that does not know a value (no synopsis, no episode total yet, no
-cover) must not erase the value already stored.
+AniList is the only catalog provider (decision D1); the code here is kept
+apart from its client so the mapping rules stay in one place. The rule that
+matters most: a payload that does not know a value (no synopsis, no episode
+total yet, no cover) must not erase the value already stored.
 """
 
 import re
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 from django.db import IntegrityError
@@ -33,6 +34,10 @@ UNKNOWN_IF_ZERO = frozenset({"episode_count", "member_count", "duration_minutes"
 
 # Fields a provider may legitimately clear: the show stopped airing.
 CLEARABLE_FIELDS = frozenset({"next_airing_episode", "next_airing_date"})
+
+# AniList has no broadcast slot; airing times are Japanese broadcast times, so
+# the weekly slot is derived from the next episode's time in this zone.
+BROADCAST_TIMEZONE = "Asia/Tokyo"
 
 
 def _is_unknown(field: str, value) -> bool:
@@ -172,6 +177,19 @@ class CatalogProviderBase:
             return ""
         return cls._WEEKDAY_LABELS[weekday]
 
+    @classmethod
+    def _broadcast_from_airing(cls, next_airing: dict) -> dict:
+        """``{"day", "time", "timezone"}`` of the next episode's slot, or ``{}``."""
+        airing_at = next_airing.get("airingAt")
+        if not isinstance(airing_at, int | float) or airing_at <= 0:
+            return {}
+        local = datetime.fromtimestamp(airing_at, tz=ZoneInfo(BROADCAST_TIMEZONE))
+        return {
+            "day": cls._WEEKDAY_LABELS[local.weekday()],
+            "time": local.strftime("%H:%M"),
+            "timezone": BROADCAST_TIMEZONE,
+        }
+
     @staticmethod
     def _parse_broadcast_time(time_text: str | None):
         candidate = str(time_text or "").strip()
@@ -260,8 +278,10 @@ class CatalogProviderBase:
         cover_image = item.get("coverImage") or {}
         if not isinstance(cover_image, dict):
             cover_image = {}
-        broadcast = item.get("broadcast") or {}
         next_airing = item.get("nextAiringEpisode") or {}
+        if not isinstance(next_airing, dict):
+            next_airing = {}
+        broadcast = item.get("broadcast") or self._broadcast_from_airing(next_airing)
 
         avg_score = item.get("averageScore")
         description = re.sub(r"<[^>]+>", "", item.get("description") or "").strip()

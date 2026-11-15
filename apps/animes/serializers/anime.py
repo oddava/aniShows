@@ -13,7 +13,7 @@ from rest_framework.serializers import (
 
 from ..models import Anime
 from ..serializers_mixins import ImageUrlMixin, UserStatusMixin
-from ..services.jikan import JikanService
+from ..services.providers.anilist import mapper as anilist_mapper
 from .base import (
     AnimeCharacterSerializer,
     AnimeStaffSerializer,
@@ -468,7 +468,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         relations = []
         for relation in rows:
             linked = relation.to_anime
-            cover = JikanService.normalize_external_image_url(relation.cover)
+            cover = anilist_mapper.normalize_external_image_url(relation.cover)
             if not cover and linked is not None:
                 cover = self.get_image_url(linked, "cover_image", "cover_image_external_url")
             relations.append(

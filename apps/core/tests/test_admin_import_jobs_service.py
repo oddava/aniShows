@@ -37,7 +37,7 @@ class AdminImportJobsServiceTests(SimpleTestCase):
         )
 
     @patch("apps.core.services.admin_import_jobs_service.create_pending_job")
-    def test_trending_routes_to_jikan_backed_catalog_sync(self, mock_create_pending_job):
+    def test_trending_routes_to_anilist_backed_catalog_sync(self, mock_create_pending_job):
         mock_create_pending_job.return_value = SimpleNamespace(id="job-456")
         user = SimpleNamespace(is_authenticated=False)
 
@@ -73,16 +73,17 @@ class AdminImportJobsServiceTests(SimpleTestCase):
         )
 
     @patch("apps.core.services.admin_import_jobs_service.create_pending_job")
-    def test_metadata_enrichment_uses_jikan_task(self, mock_create_pending_job):
+    def test_metadata_enrichment_uses_the_enrichment_task(self, mock_create_pending_job):
         mock_create_pending_job.return_value = SimpleNamespace(id="job-321")
         user = SimpleNamespace(is_authenticated=True)
 
         result = trigger_metadata_enrichment(
-            {"source": "jikan_enrichment", "batch_size": 25},
+            {"source": "metadata_enrichment", "batch_size": 25},
             user,
         )
 
         self.assertEqual(result.status_code, 202)
+        self.assertIn("AniList", result.payload["message"])
         mock_create_pending_job.assert_called_once_with(
             user=user,
             task_path="apps.animes.tasks.metadata.enrich_metadata",

@@ -133,7 +133,7 @@ def summarize_task_group(*, queued_count: int, task_ids: list[str]):
 
 def describe_catalog_sync(sync_type: str) -> tuple[str, str]:
     mapping = {
-        "trending": ("Jikan (self-hosted)", "Trending"),
+        "trending": ("AniList", "Trending"),
         "seasonal": ("Anime Model Fields", "Seasonal"),
         "next_season": ("Anime Model Fields", "Next Season"),
         "airing": ("Anime Model Fields", "Airing"),
@@ -180,11 +180,9 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
 
         metadata_progress = stage_progress("metadata_status")
         franchise_progress = stage_progress("franchise_status")
-        theme_progress = stage_progress("themes_status")
         complete_states = state_queryset.filter(
             metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-            themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             quarantined=False,
         ).count()
         transient_backlog = (
@@ -192,7 +190,6 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
             .filter(
                 Q(metadata_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
                 | Q(franchise_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
-                | Q(themes_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
             )
             .count()
         )
@@ -209,15 +206,10 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
             return {
                 "metadata": metadata_progress,
                 "franchises": franchise_progress,
-                "themes": theme_progress,
                 "overall": {
                     "queued": total_states,
                     "completed": complete_states,
-                    "running": (
-                        metadata_progress["running"]
-                        + franchise_progress["running"]
-                        + theme_progress["running"]
-                    ),
+                    "running": metadata_progress["running"] + franchise_progress["running"],
                     "completion_percent": round((complete_states / total_states) * 100),
                     "transient_backlog": transient_backlog,
                     "quarantined_count": quarantined_count,
@@ -236,22 +228,10 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
         queued_count=summary.get("franchises_queued", 0),
         task_ids=summary.get("franchises_task_ids", []),
     )
-    theme_progress = summarize_task_group(
-        queued_count=summary.get("themes_queued", 0),
-        task_ids=summary.get("themes_task_ids", []),
-    )
 
-    overall_queued = (
-        metadata_progress["queued"] + franchise_progress["queued"] + theme_progress["queued"]
-    )
-    overall_completed = (
-        metadata_progress["completed"]
-        + franchise_progress["completed"]
-        + theme_progress["completed"]
-    )
-    overall_running = (
-        metadata_progress["running"] + franchise_progress["running"] + theme_progress["running"]
-    )
+    overall_queued = metadata_progress["queued"] + franchise_progress["queued"]
+    overall_completed = metadata_progress["completed"] + franchise_progress["completed"]
+    overall_running = metadata_progress["running"] + franchise_progress["running"]
     overall_percent = (
         round((overall_completed / overall_queued) * 100) if overall_queued > 0 else None
     )
@@ -259,7 +239,6 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
     return {
         "metadata": metadata_progress,
         "franchises": franchise_progress,
-        "themes": theme_progress,
         "overall": {
             "queued": overall_queued,
             "completed": overall_completed,
@@ -303,7 +282,7 @@ def format_task_result(result):
 
     elif result.task_name == METADATA_ENRICHMENT_TASK:
         mode = task_kwargs.get("mode", "backfill")
-        source = "Jikan (self-hosted)"
+        source = "AniList"
         source_type = describe_metadata_mode(mode)
         if isinstance(result.result_data, dict):
             if mode == "single":
@@ -445,7 +424,7 @@ def trigger_trending_refresh(payload, user) -> AdminImportJobActionResult:
     )
     return AdminImportJobActionResult(
         payload={
-            "message": "Jikan trending sync job triggered successfully.",
+            "message": "AniList trending sync job triggered successfully.",
             "job_id": job.id,
             "status": "pending",
         },
@@ -522,7 +501,7 @@ def trigger_metadata_enrichment(payload, user) -> AdminImportJobActionResult:
     )
     return AdminImportJobActionResult(
         payload={
-            "message": "Jikan metadata enrichment job triggered successfully.",
+            "message": "AniList metadata enrichment job triggered successfully.",
             "job_id": job.id,
             "status": "pending",
         },

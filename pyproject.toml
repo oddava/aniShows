@@ -156,7 +156,6 @@ known-first-party = ["apps", "root"]
 # BLE001: files that still need a broad `except Exception` that is neither
 # re-raised nor logged with logger.exception. This list may only get shorter.
 # - Provider layer, rewritten in Phase 4: leave as is until then.
-"apps/animes/services/jikan.py" = ["BLE001"]
 "apps/animes/services/offline_catalog.py" = ["BLE001"]
 "apps/animes/services/offline_sync.py" = ["BLE001"]
 # - Best effort through the provider layer (any failure means "no data"),

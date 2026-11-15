@@ -6,7 +6,6 @@ from django.test import TestCase
 
 from ..models import Anime, Staff
 from ..services.anilist import AniListService
-from ..services.jikan import JikanService
 from ..tasks.metadata import MetadataEnrichmentTask
 
 
@@ -16,9 +15,9 @@ class AniListIntegrityTests(TestCase):
         self.enrich_patcher.start()
         self.addCleanup(self.enrich_patcher.stop)
 
-    def _jikan_service_with_mocked_fetches(self, **fetch_mocks):
-        """Real JikanService (so its resolver logic runs) with network fetches mocked."""
-        service = JikanService(enable_caching=False, enable_rate_limiting=False)
+    def _service_with_mocked_fetches(self, **fetch_mocks):
+        """Real AniListService (so its resolver logic runs) with network fetches mocked."""
+        service = AniListService(enable_caching=False, enable_rate_limiting=False)
         self.addCleanup(service.close)
         for name, mock in fetch_mocks.items():
             setattr(service, name, mock)
@@ -89,7 +88,7 @@ class AniListIntegrityTests(TestCase):
         self.assertEqual(anime.title, "Taken Title")
         self.assertEqual(anime.synopsis, "updated synopsis")
 
-    def test_metadata_resolver_prefers_mal_id_lookup(self):
+    def test_metadata_resolver_prefers_the_anilist_id_lookup(self):
         anime = Anime.objects.create(
             title="Resolver Anime",
             slug="resolver-anime",
@@ -100,19 +99,40 @@ class AniListIntegrityTests(TestCase):
             mal_id=999,
         )
 
-        service = self._jikan_service_with_mocked_fetches(
-            get_anime_by_id=MagicMock(return_value={"id": 555, "title": {"english": "ok"}}),
-            search_by_mal_id=MagicMock(return_value={"id": 555, "idMal": 999}),
+        service = self._service_with_mocked_fetches(
+            get_anime_by_id=MagicMock(return_value={"id": 555, "idMal": 999}),
+            search_by_mal_id=MagicMock(return_value={"id": 1}),
             search_anime=MagicMock(return_value=[{"id": 1}]),
         )
 
         task = MetadataEnrichmentTask()
         result = task._resolve_media_for_anime(service, anime)
 
+        self.assertEqual((result["id"], result["idMal"]), (555, 999))
+        service.get_anime_by_id.assert_called_once_with(555)
+        service.search_by_mal_id.assert_not_called()
+        service.search_anime.assert_not_called()
+
+    def test_metadata_resolver_falls_back_to_the_mal_id(self):
+        anime = Anime.objects.create(
+            title="Resolver Anime",
+            slug="resolver-anime",
+            synopsis="resolver",
+            anime_type=Anime.AnimeType.tv,
+            status=Anime.AnimeStatus.airing,
+            mal_id=999,
+        )
+        service = self._service_with_mocked_fetches(
+            get_anime_by_id=MagicMock(return_value=None),
+            search_by_mal_id=MagicMock(return_value={"id": 555, "idMal": 999}),
+            search_anime=MagicMock(return_value=[]),
+        )
+
+        result = MetadataEnrichmentTask()._resolve_media_for_anime(service, anime)
+
         self.assertEqual(result["id"], 555)
-        self.assertEqual(result["idMal"], 999)
-        service.search_by_mal_id.assert_called_once_with(999, anilist_id=555)
         service.get_anime_by_id.assert_not_called()
+        service.search_by_mal_id.assert_called_once_with(999)
         service.search_anime.assert_not_called()
 
     def test_metadata_resolver_uses_exact_title_match_when_searching(self):
@@ -125,7 +145,7 @@ class AniListIntegrityTests(TestCase):
             title_jp="Exact Native",
         )
 
-        service = self._jikan_service_with_mocked_fetches(
+        service = self._service_with_mocked_fetches(
             get_anime_by_id=MagicMock(return_value=None),
             search_by_mal_id=MagicMock(return_value=None),
             search_anime=MagicMock(
@@ -143,11 +163,22 @@ class AniListIntegrityTests(TestCase):
         service.search_anime.assert_called_once_with("Exact Match")
 
     def _hunter_x_hunter_service(self):
-        return self._jikan_service_with_mocked_fetches(
+        return self._service_with_mocked_fetches(
+            get_anime_by_id=MagicMock(return_value=None),
             search_anime=MagicMock(
                 return_value=[
-                    {"idMal": 136, "seasonYear": 1999, "title": {"romaji": "Hunter x Hunter"}},
-                    {"idMal": 11061, "seasonYear": 2011, "title": {"romaji": "Hunter x Hunter"}},
+                    {
+                        "id": 136,
+                        "idMal": 136,
+                        "seasonYear": 1999,
+                        "title": {"romaji": "Hunter x Hunter"},
+                    },
+                    {
+                        "id": 11061,
+                        "idMal": 11061,
+                        "seasonYear": 2011,
+                        "title": {"romaji": "Hunter x Hunter"},
+                    },
                 ]
             ),
         )
@@ -158,7 +189,6 @@ class AniListIntegrityTests(TestCase):
             slug="hxh-2011",
             synopsis="x",
             season_year=2011,
-            anilist_id=11061,
         )
 
         result = self._hunter_x_hunter_service().resolve_media_for_anime(anime)
@@ -172,26 +202,6 @@ class AniListIntegrityTests(TestCase):
         result = self._hunter_x_hunter_service().resolve_media_for_anime(anime)
 
         self.assertIsNone(result)
-
-    def test_process_theme_songs_handles_none_theme_lists(self):
-        anime = Anime.objects.create(
-            title="Theme Null Guard",
-            slug="theme-null-guard",
-            synopsis="resolver",
-            anime_type=Anime.AnimeType.tv,
-            status=Anime.AnimeStatus.airing,
-            anilist_id=98765,
-        )
-        service = AniListService(enable_caching=False, enable_rate_limiting=False)
-        self.addCleanup(service.close)
-
-        service._process_theme_songs(
-            anime,
-            {
-                "openings": None,
-                "endings": None,
-            },
-        )
 
     def test_handle_extended_info_persists_staff_descriptions(self):
         anime = Anime.objects.create(
@@ -240,8 +250,6 @@ class AniListIntegrityTests(TestCase):
                     }
                 ]
             },
-            "openings": None,
-            "endings": None,
         }
 
         service._handle_extended_info(anime, item)

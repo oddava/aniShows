@@ -1,7 +1,7 @@
 """Helpers for ``AnimeRelation`` franchise edges.
 
-Providers name the related anime by real IDs: AniList (None for Jikan-sourced edges) and
-MyAnimeList. A relation's ``to_anime`` is filled once a local anime with one of those IDs
+AniList names the related anime by its own ID and the MyAnimeList ID (rows written
+before D1 may only have the MAL ID). A relation's ``to_anime`` is filled once a local anime with one of those IDs
 exists; until then the provider's title/cover snapshot is all there is.
 """
 
@@ -135,7 +135,7 @@ def link_pending_relations() -> int:
 def sync_relations_from_media(anime: Anime, media: dict[str, Any]) -> int | None:
     """Store a provider payload's relations and link incoming ones to ``anime``.
 
-    Payloads without relations (Jikan list/search endpoints) leave the stored relations
+    Payloads without relations (the light airing payloads) leave the stored relations
     alone. Returns how many outgoing relations are linked, or None when skipped.
     """
     link_relations_to(anime)

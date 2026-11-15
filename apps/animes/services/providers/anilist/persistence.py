@@ -1,4 +1,6 @@
-"""Writing AniList payloads: anime rows, relationships, people, themes, media."""
+"""Writing AniList payloads: anime rows, relationships, cast, media."""
+
+from typing import TYPE_CHECKING
 
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
@@ -13,7 +15,6 @@ from ....models import (
     Genre,
     Staff,
     Studio,
-    ThemeSong,
 )
 from ...relation_links import sync_relations_from_media
 from ..base import with_creation_defaults
@@ -36,8 +37,24 @@ def _upsert_person(model, fields: dict):
     return model.objects.update_or_create(name=name, defaults=defaults)[0]
 
 
-class AniListPersistence:
-    """Persistence half of ``AniListService``; mixed in with ``AniListClient``."""
+if TYPE_CHECKING:
+    from .client import AniListClient
+
+    _ClientBase = AniListClient
+else:
+    _ClientBase = object
+
+
+class AniListPersistence(_ClientBase):
+    """Persistence half of ``AniListService``; mixed in with ``AniListClient``.
+
+    At runtime this is a plain mixin; type checkers see the client as its base
+    so the client methods it calls are known.
+    """
+
+    if TYPE_CHECKING:
+
+        def resolve_media_for_anime(self, anime: Anime) -> dict | None: ...
 
     def process_media_list(self, media_list: list[dict], progress_callback=None):
         """Process a list of media items and save/update them in the database.
@@ -118,9 +135,43 @@ class AniListPersistence:
             self._download_and_save_images(anime, item)
 
             return True
-        except Exception as e:
-            logger.error(f"Error manual update anime {anime.id}: {e}")
-            raise e
+        except Exception:
+            logger.exception("Error in manual update of anime %s", anime.id)
+            raise
+
+    def refresh_anime_metadata(self, anime: Anime, item: dict | None = None) -> bool:
+        """Fetch (unless given) and apply a full payload: fields, cast, relations, media.
+
+        False when no matching media was found or the payload belongs to
+        another identity.
+        """
+        media = item or self.resolve_media_for_anime(anime)
+        if not media:
+            logger.info("Skipped metadata refresh for Anime ID %s: no matching media", anime.id)
+            return False
+        return self.update_anime_manual(anime, media)
+
+    def update_airing_fields(self, anime: Anime, item: dict) -> bool:
+        """Apply an airing payload's schedule and status, nothing heavier.
+
+        The hourly airing refresh only needs fresh schedule fields, not a cast,
+        relation or image refresh; unknown values keep what is stored.
+        """
+        if not item:
+            return False
+        if anime.anilist_id and item.get("id") and item["id"] != anime.anilist_id:
+            logger.info(
+                "Skipped airing update for Anime ID %s: payload is AniList ID %s, not %s",
+                anime.id,
+                item["id"],
+                anime.anilist_id,
+            )
+            return False
+        title, title_native = mapper.media_titles(item)
+        anime_data = self._prepare_anime_data(item, title or anime.title, title_native, anime.slug)
+        anime_data.pop("slug", None)
+        self._update_anime(anime, anime_data)
+        return True
 
     def _resolve_manual_update_item(self, anime: Anime, item: dict) -> dict | None:
         """Resolve identity mismatches before applying a manual update.
@@ -183,15 +234,22 @@ class AniListPersistence:
         slug: str | None = None,
         title: str | None = None,
     ) -> Anime | None:
-        if anilist_id:
-            anime = Anime.objects.filter(anilist_id=anilist_id).first()
-            if anime:
-                return anime
+        """Find the local row for a payload: by real IDs, then the offline-catalog IDs.
 
-        if mal_id:
-            anime = Anime.objects.filter(mal_id=mal_id).first()
-            if anime:
-                return anime
+        Titles are not unique, so slug and title are only used for payloads
+        with no IDs at all.
+        """
+        for lookup, value in (
+            ("anilist_id", anilist_id),
+            ("mal_id", mal_id),
+            # Rows imported from the offline catalog carry their IDs here first.
+            ("provider_ids__anilist", anilist_id),
+            ("provider_ids__myanimelist", mal_id),
+        ):
+            if value:
+                anime = Anime.objects.filter(**{lookup: value}).first()
+                if anime:
+                    return anime
 
         if anilist_id or mal_id:
             return None
@@ -253,8 +311,17 @@ class AniListPersistence:
         sync_relations_from_media(anime, item)
 
     def _handle_extended_info(self, anime, item):
+        """Store the payload's cast and staff, replacing the anime's previous ones.
+
+        A payload without a cast leaves the stored one alone. Replacing (rather
+        than adding to) the links keeps one copy of each person: older rows
+        written from Jikan used other IDs for the same people.
+        """
+        character_edges = mapper.character_edges(item)
+        staff_edges = mapper.staff_edges(item)
         with transaction.atomic():
-            for edge in mapper.character_edges(item):
+            kept_characters = []
+            for edge in character_edges:
                 node = edge["node"]
                 role = edge["role"]  # MAIN, SUPPORTING, etc.
                 character = _upsert_person(Character, mapper.character_fields(node))
@@ -265,59 +332,30 @@ class AniListPersistence:
                 if voice_actors:
                     voice_actor = _upsert_person(Staff, mapper.person_fields(voice_actors[0]))
 
-                AnimeCharacter.objects.update_or_create(
+                link, _ = AnimeCharacter.objects.update_or_create(
                     anime=anime,
                     character=character,
                     voice_actor=voice_actor,
                     defaults={"role": ROLE_MAP.get(role, AnimeCharacter.Role.SUPPORTING)},
                 )
+                kept_characters.append(link.pk)
+            if character_edges:
+                AnimeCharacter.objects.filter(anime=anime).exclude(pk__in=kept_characters).delete()
 
-            for edge in mapper.staff_edges(item):
+            kept_staff = []
+            for edge in staff_edges:
                 node = edge["node"]
                 role = edge["role"]
                 staff_member = _upsert_person(Staff, mapper.person_fields(node))
 
-                AnimeStaff.objects.update_or_create(
+                staff_link, _ = AnimeStaff.objects.update_or_create(
                     anime=anime,
                     staff=staff_member,
                     role=role,  # Keep exact role string
                 )
-
-        self._process_theme_songs(anime, item)
-
-    def _process_theme_songs(self, anime, item):
-        """Process openings and endings from AniList data"""
-        openings = item.get("openings") or []
-        endings = item.get("endings") or []
-
-        # AniList doesn't provide themes, so this will typically be empty;
-        # themes are fetched separately via the Jikan API.
-        if not openings and not endings:
-            return
-
-        # Clear existing theme songs to avoid duplicates (only if we have data)
-        ThemeSong.objects.filter(anime=anime).delete()
-
-        for song_type, entries in (
-            (ThemeSong.SongType.OPENING, openings),
-            (ThemeSong.SongType.ENDING, endings),
-        ):
-            for idx, text in enumerate(entries, 1):
-                if text:
-                    parsed = mapper.parse_theme_song(text)
-                    ThemeSong.objects.create(
-                        anime=anime,
-                        song_type=song_type,
-                        track_number=idx,
-                        title=parsed["title"],
-                        artist=parsed["artist"],
-                        episodes=parsed["episodes"],
-                        anilist_raw=text,
-                    )
-
-    def _parse_theme_song(self, text: str) -> dict:
-        """Parse AniList theme song format: 'Song Title' by Artist (eps X-Y)"""
-        return mapper.parse_theme_song(text)
+                kept_staff.append(staff_link.pk)
+            if staff_edges:
+                AnimeStaff.objects.filter(anime=anime).exclude(pk__in=kept_staff).delete()
 
     def _download_and_save_images(self, anime, item):
         try:
@@ -337,15 +375,7 @@ class AniListPersistence:
             has_cover = bool(anime.cover_image)
             has_banner = bool(anime.banner_image)
 
-            # Pass mal_id for Jikan fallback
-            mal_id = item.get("idMal")
-
-            if (
-                (cover_url and not has_cover)
-                or (banner_url and not has_banner)
-                or (not has_banner and mal_id)
-                or force_replace
-            ):
+            if (cover_url and not has_cover) or (banner_url and not has_banner) or force_replace:
                 from ....tasks.images import _queue_image_fetch
 
                 logger.info(f"Queueing background image fetch for {anime.title}")
@@ -353,7 +383,6 @@ class AniListPersistence:
                     anime_id=anime.id,
                     cover_url=cover_url,
                     banner_url=banner_url,
-                    mal_id=mal_id,
                     force_replace=force_replace,
                 )
 
@@ -398,27 +427,13 @@ class AniListPersistence:
 
         base_slug = slugify(title)
 
-        # Try to find existing anime by AniList ID, then MAL ID.
-        for field, label, value in (
-            ("anilist_id", "AniList", anilist_id),
-            ("mal_id", "MAL", mal_id),
-        ):
-            if not value:
-                continue
-            try:
-                anime = Anime.objects.get(**{field: value})
-            except Anime.DoesNotExist:
-                continue
-            logger.debug(f"Found anime by {label} ID {value}: {anime.title}")
-            self._update_anime_from_media(anime, item, title, title_native, anime.slug)
-            return anime
-
-        # Titles are not unique: only fall back to slug matching for payloads without IDs.
-        if not (anilist_id or mal_id):
-            existing = Anime.objects.filter(slug=base_slug).first()
-            if existing:
-                self._update_anime_from_media(existing, item, title, title_native, existing.slug)
-                return existing
+        # By AniList, then MAL ID; titles are not unique, so the slug is only
+        # tried for a payload without IDs.
+        existing = self._lookup_existing_anime(anilist_id=anilist_id, mal_id=mal_id, slug=base_slug)
+        if existing:
+            logger.debug("Found anime %s for AniList ID %s", existing.id, anilist_id)
+            self._update_anime_from_media(existing, item, title, title_native, existing.slug)
+            return existing
 
         final_slug = Anime.available_slug(base_slug, year=item.get("seasonYear"))
 
@@ -451,10 +466,8 @@ class AniListPersistence:
             logger.error(f"Failed to create anime '{title}' with slug '{final_slug}': {e}")
             raise
 
-        # Handle relationships
         self._handle_relationships(anime, item)
-
-        # Download images
+        self._handle_extended_info(anime, item)
         self._download_and_save_images(anime, item)
 
         return anime
@@ -462,11 +475,12 @@ class AniListPersistence:
     def _update_anime_from_media(
         self, anime: Anime, item: dict, title: str, title_native: str, slug: str
     ):
-        """Update an existing anime asynchronously"""
+        """Apply a full payload to an existing row: fields, relations, cast, media."""
         anime_data = self._prepare_anime_data(item, title, title_native, slug)
         anime_data["anilist_id"] = item.get("id") or anime.anilist_id
         anime_data["mal_id"] = item.get("idMal") or anime.mal_id
 
         self._update_anime(anime, anime_data)
         self._handle_relationships(anime, item)
+        self._handle_extended_info(anime, item)
         self._download_and_save_images(anime, item)

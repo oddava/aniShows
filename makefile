@@ -10,9 +10,9 @@ ENV_EXAMPLE = .env.example
 .PHONY: help up down restart build ps logs web-logs celery-logs beat-logs \
         front-logs db-logs mig migrate shell superuser test lint collectstatic \
         msg icomp import-anime sync-catalog sync-airing sync-metadata \
-        sync-themes sync-full sync-franchises sync-recs import-offline \
+        sync-full sync-franchises sync-recs import-offline \
         import-offline-async import-offline-resume import-offline-full import-offline-full-async \
-        offline-repair-run populate-themes \
+        offline-repair-run \
         backfill-urls backfill-youtube update-slugs thumbnails thumbnails-s3 \
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
         clean prune cleanup-media backup backups backup-export backup-import exports \
@@ -127,15 +127,11 @@ sync-metadata:                  ## Enrich anime metadata
 	$(EXEC) migrate
 	$(EXEC) sync_anime enrich-metadata --async
 
-sync-themes:                    ## Sync theme songs via Celery
-	$(EXEC) migrate
-	$(EXEC) sync_anime sync-themes --async
-
 sync-recs:                      ## Generate recommendations for all users
 	$(EXEC) migrate
 	$(EXEC) sync_anime generate-recommendations --async
 
-sync-full:                      ## Run full sync pipeline (catalog + airing + metadata + themes + recs)
+sync-full:                      ## Run full sync pipeline (catalog + airing + metadata + episodes + recs)
 	$(EXEC) migrate
 	$(EXEC) sync_anime full-sync --async
 
@@ -183,9 +179,6 @@ offline-repair-run:             ## Reset and re-run offline enrichment pipeline 
 ## ============================================================================
 ## Data Population & Backfill
 ## ============================================================================
-#
-#populate-themes:                ## Fetch themes directly from Jikan API (standalone, no Celery)
-#	$(EXEC) populate_themes
 #
 #sync-franchises:                ## Populate franchise/relation data from AniList
 #	$(EXEC) populate_franchises

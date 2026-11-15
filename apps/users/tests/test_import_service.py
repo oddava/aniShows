@@ -105,7 +105,7 @@ class AniListImporterTests(TestCase):
         missing_anilist_id = 9999999
         cache.delete(f"import:missing:anilist:{missing_anilist_id}")
 
-        class DummyJikanService:
+        class DummyAniListService:
             def __init__(self):
                 self.get_calls = 0
                 self.search_calls = 0
@@ -121,7 +121,7 @@ class AniListImporterTests(TestCase):
                 self.search_calls += 1
                 return []
 
-        service = DummyJikanService()
+        service = DummyAniListService()
 
         with patch.object(importer, "_get_sync_service", return_value=service):
             first = importer.get_or_fetch_anime_sync(
@@ -136,8 +136,9 @@ class AniListImporterTests(TestCase):
         importer._cleanup()
         self.assertIsNone(first)
         self.assertIsNone(second)
-        self.assertEqual(service.get_calls, 0)
-        self.assertEqual(service.search_calls, 1)
+        # Fetched by AniList ID once; the miss is cached, and no title guess is made.
+        self.assertEqual(service.get_calls, 1)
+        self.assertEqual(service.search_calls, 0)
 
 
 class MyAnimeListImporterTests(TestCase):

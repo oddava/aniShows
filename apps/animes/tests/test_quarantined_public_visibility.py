@@ -28,7 +28,6 @@ class QuarantinedAnimeVisibilityTests(APITestCase):
             anime=anime,
             metadata_status=OfflineAnimeSyncState.StageStatus.QUARANTINED,
             franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
-            themes_status=OfflineAnimeSyncState.StageStatus.PENDING,
             quarantined=True,
             quarantine_reason="test_quarantine",
         )
@@ -126,7 +125,6 @@ class QuarantinedRecommendationTests(APITestCase):
             anime=anime,
             metadata_status=OfflineAnimeSyncState.StageStatus.QUARANTINED,
             franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
-            themes_status=OfflineAnimeSyncState.StageStatus.PENDING,
             quarantined=True,
             quarantine_reason="test_quarantine",
         )

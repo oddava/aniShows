@@ -94,9 +94,9 @@ const AdminImportJobs = () => {
           sync_type: triggerSyncType,
           limit: Number(triggerLimit),
         };
-      } else if (triggerSource === 'jikan_enrichment') {
+      } else if (triggerSource === 'metadata_enrichment') {
         payload = {
-          source: 'jikan_enrichment',
+          source: 'metadata_enrichment',
           batch_size: Number(triggerBatchSize),
         };
       } else {
@@ -129,10 +129,6 @@ const AdminImportJobs = () => {
 
   const handleTriggerSourceChange = (nextSource) => {
     setTriggerSource(nextSource);
-    if (nextSource === 'jikan_trending') {
-      setTriggerSyncType('trending');
-      return;
-    }
     if (nextSource === 'anime_catalog' && triggerSyncType === 'trending') {
       setTriggerSyncType('seasonal');
     }

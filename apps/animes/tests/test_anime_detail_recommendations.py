@@ -11,6 +11,10 @@ from ..services.relation_links import set_relations
 
 User = get_user_model()
 
+RECOMMENDATIONS_PATH = (
+    "apps.animes.services.public_anime_service.AniListService.get_recommendations_for_anime"
+)
+
 
 class AnimeDetailRecommendationsTests(APITestCase):
     def setUp(self):
@@ -73,15 +77,12 @@ class AnimeDetailRecommendationsTests(APITestCase):
         )
         self.fallback_recommendation.genres.add(self.genre)
 
-    @patch(
-        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=MagicMock,
-    )
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
     def test_anilist_recommendations_exclude_franchise_entries(self, mock_get_recommendations):
         mock_get_recommendations.return_value = [
-            {"mal_id": 1200, "title": "Frieren Season 2"},
-            {"mal_id": 1300, "title": "Delicious in Dungeon"},
-            {"mal_id": 1100, "title": "Frieren"},
+            {"id": 200, "mal_id": 1200, "title": "Frieren Season 2"},
+            {"id": 300, "mal_id": 1300, "title": "Delicious in Dungeon"},
+            {"id": 100, "mal_id": 1100, "title": "Frieren"},
         ]
 
         response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
@@ -92,15 +93,60 @@ class AnimeDetailRecommendationsTests(APITestCase):
             [self.anilist_recommendation.slug],
         )
         mock_get_recommendations.assert_called_once_with(
-            self.anime.mal_id,
+            self.anime.anilist_id,
+            mal_id=self.anime.mal_id,
             limit=12,
             request_budget="interactive",
         )
 
-    @patch(
-        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=MagicMock,
-    )
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
+    def test_recommendations_keep_anilist_order_and_match_by_mal_id_too(
+        self, mock_get_recommendations
+    ):
+        mal_only = Anime.objects.create(
+            title="Legacy MAL Row",
+            slug="legacy-mal-row",
+            synopsis="Only a MAL ID",
+            anime_type="TV",
+            status="Finished",
+            mal_id=1500,
+        )
+        mock_get_recommendations.return_value = [
+            {"id": 999, "mal_id": 1500, "title": "Legacy MAL Row"},
+            {"id": 300, "mal_id": None, "title": "Delicious in Dungeon"},
+            {"id": 12345, "mal_id": None, "title": "Not in the catalog"},
+        ]
+
+        response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
+
+        self.assertEqual(
+            [item["slug"] for item in response.data],
+            [mal_only.slug, self.anilist_recommendation.slug],
+        )
+
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
+    def test_linked_relations_are_excluded_even_without_a_mal_id(self, mock_get_recommendations):
+        set_relations(self.anime, [{"id": 300, "type": "SIDE_STORY", "title": "Delicious"}])
+        mock_get_recommendations.return_value = [{"id": 300, "mal_id": None}]
+
+        response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
+
+        self.assertNotIn(self.anilist_recommendation.slug, [item["slug"] for item in response.data])
+
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
+    def test_anime_without_ids_skips_anilist(self, mock_get_recommendations):
+        loner = Anime.objects.create(
+            title="No IDs", slug="no-ids", synopsis="x", anime_type="TV", status="Finished"
+        )
+        loner.genres.add(self.genre)
+
+        response = self.client.get(reverse("anime-recommendations", args=[loner.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        mock_get_recommendations.assert_not_called()
+        self.assertIn(self.fallback_recommendation.slug, [item["slug"] for item in response.data])
+
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
     def test_fallback_recommendations_also_exclude_franchise_entries(
         self, mock_get_recommendations
     ):
@@ -115,10 +161,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
         self.assertNotIn(self.franchise_entry.slug, returned_slugs)
         self.assertNotIn(self.anime.slug, returned_slugs)
 
-    @patch(
-        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=MagicMock,
-    )
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
     def test_timeout_uses_fallback_recommendations(self, mock_get_recommendations):
         mock_get_recommendations.side_effect = TimeoutError("AniList timed out")
 
@@ -130,10 +173,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
         self.assertIn(self.fallback_recommendation.slug, returned_slugs)
         self.assertNotIn(self.franchise_entry.slug, returned_slugs)
 
-    @patch(
-        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=MagicMock,
-    )
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
     def test_public_recommendations_include_cache_control_header(self, mock_get_recommendations):
         mock_get_recommendations.return_value = [{"id": 300, "title": "Delicious in Dungeon"}]
 
@@ -142,10 +182,7 @@ class AnimeDetailRecommendationsTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("public, max-age=300", response["Cache-Control"])
 
-    @patch(
-        "apps.animes.services.public_anime_service.JikanService.get_recommendations_for_anime",
-        new_callable=MagicMock,
-    )
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
     def test_authenticated_recommendations_include_user_context(self, mock_get_recommendations):
         mock_get_recommendations.return_value = [{"id": 300, "title": "Delicious in Dungeon"}]
         UserFavorite.objects.create(user=self.user, anime=self.anilist_recommendation)

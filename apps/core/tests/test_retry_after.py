@@ -1,11 +1,11 @@
 from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 import httpx
 from django.test import SimpleTestCase
 
-from apps.animes.services.watch_episodes import AnimeWatchEpisodeService
+from apps.animes.services.anilist import AniListService
 from apps.shared.retry import retry_after_seconds
 
 
@@ -30,22 +30,33 @@ class RetryAfterSecondsTests(SimpleTestCase):
                 self.assertIsNone(retry_after_seconds(value))
 
 
-class JikanEpisodePageRetryAfterTests(SimpleTestCase):
+class AniListRetryAfterTests(SimpleTestCase):
+    def _service(self, responses):
+        service = AniListService(enable_caching=False, enable_rate_limiting=False)
+        replies = iter(responses)
+        service.client = httpx.Client(transport=httpx.MockTransport(lambda request: next(replies)))
+        self.addCleanup(service.close)
+        return service
+
     def test_http_date_retry_after_is_waited_on_not_raised(self):
-        request = httpx.Request("GET", "https://api.jikan.moe/v4/anime/1/episodes")
-        limited = httpx.Response(
-            429, headers={"Retry-After": "Wed, 21 Oct 2015 07:28:00 GMT"}, request=request
-        )
-        ok = httpx.Response(200, json={"data": []}, request=request)
-        client = Mock()
-        client.get = MagicMock(side_effect=[limited, ok])
-        limiter = Mock(acquire=MagicMock())
+        limited = httpx.Response(429, headers={"Retry-After": "Wed, 21 Oct 2015 07:28:00 GMT"})
+        ok = httpx.Response(200, json={"data": {"Media": {"id": 1}}})
+        service = self._service([limited, ok])
 
-        with patch("apps.animes.services.watch_episodes.time.sleep", new=MagicMock()) as sleep:
-            payload = AnimeWatchEpisodeService()._get_jikan_page(
-                client, str(request.url), 1, limiter
-            )
+        with patch("apps.animes.services.providers.anilist.client.backoff") as backoff:
+            data = service._query("query Q { Media { id } }", {}, use_cache=False)
 
-        self.assertEqual(payload, {"data": []})
-        sleep.assert_called_once_with(0.0)
-        limiter.record_429.assert_called_once_with(cooldown_hint=0.0)
+        self.assertEqual(data, {"Media": {"id": 1}})
+        backoff.assert_called_once_with(0.0)
+
+    def test_rate_limit_reset_header_is_used_without_retry_after(self):
+        reset_at = int(datetime.now(UTC).timestamp()) + 20
+        limited = httpx.Response(429, headers={"X-RateLimit-Reset": str(reset_at)})
+        ok = httpx.Response(200, json={"data": {"Media": {"id": 2}}})
+        service = self._service([limited, ok])
+
+        with patch("apps.animes.services.providers.anilist.client.backoff") as backoff:
+            service._query("query Q { Media { id } }", {}, use_cache=False)
+
+        waited = backoff.call_args.args[0]
+        self.assertTrue(15 <= waited <= 21, waited)

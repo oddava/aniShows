@@ -4,7 +4,7 @@ from django.core.cache import cache
 from django.db import IntegrityError, transaction
 
 from ....animes.models import Anime
-from ....animes.services.jikan import JikanService
+from ....animes.services.anilist import AniListService
 from ....shared.errors import ENQUEUE_ERRORS
 from ....shared.logger import logger
 from ...models import UserAnimeList, UserImportJob
@@ -61,13 +61,13 @@ class BaseImporter:
         self._sync_service = None  # Lazy-loaded, shared across calls
 
     def _get_sync_service(self):
-        """Get or create a shared JikanService instance."""
+        """Get or create a shared AniListService instance."""
         if self._sync_service is None:
-            self._sync_service = JikanService(enable_caching=True, enable_rate_limiting=True)
+            self._sync_service = AniListService(enable_caching=True, enable_rate_limiting=True)
         return self._sync_service
 
     def _cleanup(self):
-        """Close the shared Jikan service."""
+        """Close the shared AniList service."""
         if self._sync_service is not None:
             try:
                 self._sync_service.close()
@@ -123,6 +123,15 @@ class BaseImporter:
         service = self._get_sync_service()
 
         try:
+            if anilist_id:
+                logger.info(f"Fetching anime by AniList ID: {anilist_id}")
+                anime_data = service.get_anime_by_id(anilist_id)
+                if anime_data:
+                    anime = service.save_anime_to_db(anime_data)
+                    logger.info(f"Fetched and saved: {anime.title}")
+                    self.fetched_count += 1
+                    return anime
+
             if mal_id:
                 logger.info(f"Fetching anime by MAL ID: {mal_id}")
                 anime_data = service.search_by_mal_id(mal_id)
@@ -132,7 +141,7 @@ class BaseImporter:
                     self.fetched_count += 1
                     return anime
 
-            if title and (allow_title_search or (anilist_id and not mal_id)):
+            if title and allow_title_search:
                 logger.info(f"Searching anime by title: {title}")
                 results = service.search_anime(title)
                 if results:

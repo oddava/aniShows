@@ -101,13 +101,13 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
         sync_type = request.data.get("sync_type", "trending")
 
         try:
-            if source in {"jikan_trending", "trending", "internal_activity"}:
+            if source in {"trending", "internal_activity"}:
                 result = trigger_trending_refresh(request.data, request.user)
                 return Response(result.payload, status=result.status_code)
             if source in {"anime_catalog", "catalog_sync"}:
                 result = trigger_catalog_import(request.data, request.user)
                 return Response(result.payload, status=result.status_code)
-            if source in {"jikan_enrichment", "metadata_enrichment"}:
+            if source == "metadata_enrichment":
                 result = trigger_metadata_enrichment(request.data, request.user)
                 return Response(result.payload, status=result.status_code)
             if source in {"offline_catalog", "anime_offline_database"}:
@@ -123,8 +123,8 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
             return Response(
                 {
                     "detail": (
-                        "Invalid source. Allowed: jikan_trending, anime_catalog, "
-                        "jikan_enrichment, offline_catalog"
+                        "Invalid source. Allowed: trending, anime_catalog, "
+                        "metadata_enrichment, offline_catalog"
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,

@@ -15,19 +15,16 @@ from ..models import OfflineAnimeSyncState
 
 STAGE_METADATA = "metadata"
 STAGE_FRANCHISE = "franchise"
-STAGE_THEMES = "themes"
-STAGES = (STAGE_METADATA, STAGE_FRANCHISE, STAGE_THEMES)
+STAGES = (STAGE_METADATA, STAGE_FRANCHISE)
 
 STATUS_FIELD_BY_STAGE = {
     STAGE_METADATA: "metadata_status",
     STAGE_FRANCHISE: "franchise_status",
-    STAGE_THEMES: "themes_status",
 }
 
 ATTEMPT_FIELD_BY_STAGE = {
     STAGE_METADATA: "metadata_attempt_count",
     STAGE_FRANCHISE: "franchise_attempt_count",
-    STAGE_THEMES: "themes_attempt_count",
 }
 
 TRANSIENT_REASON_CODES = {"rate_limited", "transport_error"}
