@@ -139,6 +139,8 @@ DJANGO_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sites",
+    # Registers the trigram lookups (trigram_word_similar) used by search.
+    "django.contrib.postgres",
 ]
 
 THIRD_PARTY_APPS = [
@@ -290,6 +292,14 @@ DB_HOST = os.getenv("DB_HOST", "db")
 # Postgres' max_connections.
 DB_POOL_MAX_SIZE = _env_int("DB_POOL_MAX_SIZE", 0)
 
+# Fuzzy title search matches when pg_trgm's word similarity reaches this (the
+# extension's default, 0.6, misses short typos like "narto" for "Naruto"). Set
+# per connection at startup, so it costs no query.
+SEARCH_WORD_SIMILARITY_THRESHOLD = min(
+    max(_env_float("SEARCH_WORD_SIMILARITY_THRESHOLD", 0.5), 0.1), 1.0
+)
+DB_CONNECTION_OPTIONS = f"-c pg_trgm.word_similarity_threshold={SEARCH_WORD_SIMILARITY_THRESHOLD}"
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -299,14 +309,17 @@ DATABASES = {
         "HOST": DB_HOST,
         "PORT": DB_PORT,
         "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "600")),
+        "OPTIONS": {"options": DB_CONNECTION_OPTIONS},
     }
 }
 
 if DB_POOL_MAX_SIZE:
     # Django refuses persistent connections together with a pool.
     DATABASES["default"]["CONN_MAX_AGE"] = 0
-    DATABASES["default"]["OPTIONS"] = {
-        "pool": {"min_size": 1, "max_size": DB_POOL_MAX_SIZE, "timeout": 10},
+    DATABASES["default"]["OPTIONS"]["pool"] = {
+        "min_size": 1,
+        "max_size": DB_POOL_MAX_SIZE,
+        "timeout": 10,
     }
 
 # =============================================================================

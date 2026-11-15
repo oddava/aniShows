@@ -48,7 +48,11 @@ def _plan(sql: str) -> str:
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("url", ["/api/v1/anime/?page_size=24", "/api/v1/anime/?q=Guard"])
+# A search without ``sort`` is ordered by relevance (test_search_trigram.py);
+# with ``sort=popular`` it keeps the index order.
+@pytest.mark.parametrize(
+    "url", ["/api/v1/anime/?page_size=24", "/api/v1/anime/?q=Guard&sort=popular"]
+)
 def test_anonymous_default_list_reads_the_partial_index_in_order(url):
     build_catalog(3)
 

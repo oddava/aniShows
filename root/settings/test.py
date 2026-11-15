@@ -21,7 +21,7 @@ DATABASES = {
         "CONN_MAX_AGE": 0,
         # Fail a lock wait instead of hanging: pytest-timeout's signal can't
         # interrupt a blocked libpq call (e.g. two connections in one test).
-        "OPTIONS": {"options": "-c lock_timeout=30000"},
+        "OPTIONS": {"options": f"-c lock_timeout=30000 {DB_CONNECTION_OPTIONS}"},
     }
 }
 DATABASES["default"]["TEST"] = {

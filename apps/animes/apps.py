@@ -7,4 +7,4 @@ class AnimeConfig(AppConfig):
     label = "anime"
 
     def ready(self):
-        from . import signals  # noqa: F401 - registers the signal handlers
+        from . import lookups, signals  # noqa: F401 - register the lookup and signal handlers

@@ -3,8 +3,10 @@
 import json
 from datetime import date
 
+from django.contrib.postgres.search import TrigramWordSimilarity
 from django.db import connections
-from django.db.models import Count, Q
+from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.db.models.functions import Greatest
 
 from ....shared.parsing import positive_int
 from ....users.models import UserProfile
@@ -17,6 +19,14 @@ MAX_RATING = 10.0
 MIN_RATING = 0.0
 MIN_SEARCH_LENGTH = 2
 MIN_SYNOPSIS_SEARCH_LENGTH = 3
+# Fuzzy matching compares trigrams, so it needs at least one (3 characters).
+MIN_FUZZY_SEARCH_LENGTH = 3
+# ``sort`` values that order a search by how well titles match.
+RELEVANCE_SORTS = {"", "relevance"}
+# Relevance ranks at most this many matches: the most popular ones. Ranking
+# every match of a common word ("season" matches a quarter of the catalog)
+# would read and score them all; picking the window reads them in index order.
+RELEVANCE_WINDOW = 500
 SEASON_MONTH_RANGES = {
     "winter": ((1, 1), (3, 31)),
     "spring": ((4, 1), (6, 30)),
@@ -33,6 +43,14 @@ NON_TEMPORAL_FILTER_PARAMS = (
     "max_duration",
 )
 TEMPORAL_FILTER_PARAMS = ("season", "year", "min_year", "max_year")
+
+
+def _title_match(word: str) -> Q:
+    """``word`` is in the title or Japanese title, or (3+ characters) close to a word in one."""
+    match = Q(title__ilike=word) | Q(title_jp__ilike=word)
+    if len(word) >= MIN_FUZZY_SEARCH_LENGTH:
+        match |= Q(title__trigram_word_similar=word) | Q(title_jp__trigram_word_similar=word)
+    return match
 
 
 class ListFilterMixin:
@@ -157,7 +175,9 @@ class ListFilterMixin:
         )
         has_active_filters = has_non_temporal_filters or has_temporal_filters
 
-        sort_clean = (query_params.get("sort", "popular") or "popular").strip().lower()
+        requested_sort = (query_params.get("sort") or "").strip().lower()
+        by_relevance = search_is_active and requested_sort in RELEVANCE_SORTS
+        sort_clean = "popular" if requested_sort in RELEVANCE_SORTS else requested_sort
         queryset, ordering = self._apply_sort(
             queryset,
             sort_clean=sort_clean,
@@ -167,22 +187,55 @@ class ListFilterMixin:
             apply_temporal_popular_quality_filter=apply_temporal_popular_quality_filter,
             curate_for_shelves=False,
         )
+        if by_relevance:
+            # Best title match first; the popular ordering breaks ties.
+            window = queryset.order_by(*ordering).values("id")[:RELEVANCE_WINDOW]
+            queryset = queryset.filter(id__in=window).annotate(
+                **self._search_rank_annotations(search)
+            )
+            ordering = ["search_match", "-search_rank", *ordering]
 
         return queryset.order_by(*ordering)
 
     @staticmethod
     def _apply_search(queryset, search: str):
+        """Rows whose title contains the query, or is close to it.
+
+        Every condition is one the ``gin_trgm_ops`` indexes on ``title``,
+        ``title_jp`` and ``synopsis`` can serve: ``ILIKE`` substring matches
+        (``icontains`` would compile to ``UPPER(col) LIKE`` and bypass them)
+        and pg_trgm's word similarity (``word <% title``), which also finds
+        titles with a typo. A single word also matches the synopsis, by
+        substring only: fuzzy matches in long text are noise. With several
+        words, each must appear in the title or be a close match.
+        """
         search_words = search.split()
         if len(search_words) == 1:
-            search_filter = Q(title__icontains=search) | Q(title_jp__icontains=search)
+            match = _title_match(search)
             if len(search) >= MIN_SYNOPSIS_SEARCH_LENGTH:
-                search_filter |= Q(synopsis__icontains=search)
-            return queryset.filter(search_filter)
+                match |= Q(synopsis__ilike=search)
+            return queryset.filter(match)
 
-        for word in search_words:
-            if len(word) >= 2:
-                queryset = queryset.filter(Q(title__icontains=word) | Q(title_jp__icontains=word))
+        words = [word for word in search_words if len(word) >= MIN_SEARCH_LENGTH]
+        for word in words:
+            queryset = queryset.filter(_title_match(word))
         return queryset
+
+    @staticmethod
+    def _search_rank_annotations(search: str) -> dict:
+        """``search_match``: 0 exact title, 1 title prefix, 2 other; ``search_rank``: similarity."""
+        return {
+            "search_match": Case(
+                When(Q(title__iexact=search) | Q(title_jp__iexact=search), then=Value(0)),
+                When(Q(title__istartswith=search) | Q(title_jp__istartswith=search), then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            ),
+            "search_rank": Greatest(
+                TrigramWordSimilarity(search, "title"),
+                TrigramWordSimilarity(search, "title_jp"),
+            ),
+        }
 
     @staticmethod
     def can_view_adult_content(user) -> bool:
