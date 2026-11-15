@@ -28,7 +28,7 @@ class SocialLinksService:
 
     def __init__(self):
         self.validator = URLValidator(
-            google_safe_browsing_api_key=getattr(settings, "GOOGLE_SAFE_BROWSING_API_KEY", None),
+            google_safe_browsing_api_key=settings.GOOGLE_SAFE_BROWSING_API_KEY or None,
             safe_browsing_fail_open=settings.GOOGLE_SAFE_BROWSING_FAIL_OPEN,
         )
         self.metadata_service = MetadataService()
