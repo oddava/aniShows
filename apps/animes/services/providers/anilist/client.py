@@ -114,6 +114,8 @@ class AniListClient(CatalogProviderBase):
     # Pages of airing history fetched for one episode list (50 episodes each).
     EPISODE_SCHEDULE_MAX_PAGES = 30
     EPISODE_SCHEDULE_INTERACTIVE_PAGES = 4
+    # All pages of an interactive episode fetch share this deadline.
+    INTERACTIVE_DEADLINE_SECONDS = 10.0
     # Never sleep longer than this on one 429, whatever the headers say.
     MAX_RATE_LIMIT_WAIT_SECONDS = 120.0
     REQUEST_BUDGET_DEFAULT: Literal["default"] = "default"
@@ -179,6 +181,18 @@ class AniListClient(CatalogProviderBase):
         """Record failed API call."""
         self.circuit_breaker.record_failure()
 
+    @staticmethod
+    def _query_breaker(operation: str) -> CircuitBreaker:
+        """A breaker per operation, for AniList rejecting that query itself.
+
+        Separate from the transport breaker: one broken query (a schema
+        change) must not stop the others, and their successes must not reset
+        its count.
+        """
+        return CircuitBreaker(
+            f"anilist_query:{operation}", failure_threshold=5, recovery_timeout=300
+        )
+
     def _query(
         self,
         query: str,
@@ -218,6 +232,11 @@ class AniListClient(CatalogProviderBase):
 
         if not self._check_circuit_breaker():
             self._set_last_error("transport_error", "circuit_breaker_open")
+            return {}
+        if self._query_breaker(operation).is_open():
+            # This operation keeps being rejected (schema change): stop
+            # sending it, while the other operations carry on.
+            self._set_last_error("query_rejected", f"query_breaker_open:{operation}")
             return {}
 
         for attempt in range(max(retry_count, 1)):
@@ -297,6 +316,7 @@ class AniListClient(CatalogProviderBase):
                 return {}
 
             self._record_success()
+            self._query_breaker(operation).record_success()
             self._reset_last_error()
             return data
         except httpx.HTTPError as exc:
@@ -366,7 +386,7 @@ class AniListClient(CatalogProviderBase):
                 logger.warning("AniList rejected a variable in %s: %s", operation, message)
                 return "client_error"
             self._set_last_error("query_rejected", message)
-            self._record_failure()
+            self._query_breaker(operation).record_failure()
             logger.error("AniList rejected the %s query: %s", operation, message)
             return "client_error"
         self._set_last_error(self._parse_graphql_error_code(message), message)
@@ -676,9 +696,19 @@ class AniListClient(CatalogProviderBase):
             else self.EPISODE_SCHEDULE_MAX_PAGES
         )
 
+        deadline = (
+            time.monotonic() + self.INTERACTIVE_DEADLINE_SECONDS
+            if request_budget == self.REQUEST_BUDGET_INTERACTIVE
+            else None
+        )
         result: dict | None = None
         schedule: list[dict] = []
         for page in range(1, max_pages + 1):
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break  # a user is waiting: keep the pages already fetched
+                options["request_timeout"] = min(options["request_timeout"], remaining)
             # Streaming links are per anime, not per page: only the first page asks.
             page_variables = {**variables, "page": page, "withStreaming": page == 1}
             data = self._query(query, page_variables, **options)

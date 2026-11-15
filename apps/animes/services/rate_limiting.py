@@ -34,6 +34,10 @@ class AniListRateLimiter:
     """
 
     WINDOW_SECONDS = 60
+    # Requests made while a user waits may use only this share of a minute's
+    # budget, so web traffic (a crawler walking detail pages) cannot starve
+    # the background sync that keeps the catalog fresh.
+    INTERACTIVE_SHARE = 0.5
     PAUSE_KEY = "anilist:paused_until"
     # How long to sleep before asking again when this minute's slots are gone.
     FULL_WINDOW_RETRY_SECONDS = 1.0
@@ -73,7 +77,7 @@ class AniListRateLimiter:
                 time.sleep(wait)
                 continue
 
-            if self._take_shared_slot():
+            if self._take_shared_slot(interactive=max_wait is not None):
                 self._local_last_request = time.time()
                 return True
 
@@ -82,8 +86,12 @@ class AniListRateLimiter:
                 return False
             time.sleep(self.FULL_WINDOW_RETRY_SECONDS)
 
-    def _take_shared_slot(self) -> bool:
-        """Count one request against this minute's shared budget; False if it is used up."""
+    def _take_shared_slot(self, *, interactive: bool = False) -> bool:
+        """Count one request against this minute's shared budget; False if it is used up.
+
+        An interactive caller only gets a slot while the minute's count is
+        under its share; a refused interactive try gives its count back.
+        """
         current_key = self._get_current_window_key()
         cache_client = getattr(cache, "client", None)
         if cache_client is None:
@@ -91,17 +99,24 @@ class AniListRateLimiter:
             # development): only this process's spacing applies.
             return True
         redis_client = cache_client.get_client()
+        budget = self.rate_limit - self.safety_margin
+        if interactive:
+            budget = max(int(budget * self.INTERACTIVE_SHARE), 1)
         try:
             pipe = redis_client.pipeline()
             pipe.incr(current_key)
             pipe.expire(current_key, self.WINDOW_SECONDS + 10)
             count = pipe.execute()[0]
+            if count <= budget:
+                return True
+            if interactive:
+                redis_client.decr(current_key)
+            return False
         except CACHE_ERRORS:
             logger.warning(
                 "Redis rate limiter unavailable; using local spacing only", exc_info=True
             )
             return True
-        return count <= self.rate_limit - self.safety_margin
 
     def _paused_for(self) -> float:
         """Seconds left on a pause set after a 429 by any worker."""

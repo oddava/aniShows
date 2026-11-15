@@ -154,12 +154,16 @@ step "Core services"
 step "Configuration check"
 # Before any schema change. Warnings (e.g. core.W001: no Safe Browsing key)
 # are printed; only errors stop the deploy.
-"${COMPOSE[@]}" run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 \
+"${COMPOSE[@]}" run --rm --no-deps -e DB_HOST=db -e DB_PORT=5432 \
     web python manage.py check --deploy --fail-level ERROR \
     || die "manage.py check --deploy reported errors"
+# Every AniList query the new code sends, once: fails only if AniList rejects one.
+"${COMPOSE[@]}" run --rm --no-deps -e DB_HOST=db -e DB_PORT=5432 \
+    web python manage.py anilist_smoke \
+    || die "AniList rejected a catalog query (see above); the catalog sync would not work"
 
 step "Migrations"
-"${COMPOSE[@]}" run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 \
+"${COMPOSE[@]}" run --rm --no-deps -e DB_HOST=db -e DB_PORT=5432 \
     web python manage.py migrate --noinput
 ok "migrations applied"
 

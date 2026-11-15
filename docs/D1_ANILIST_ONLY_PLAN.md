@@ -42,10 +42,15 @@ Branch `fix/anilist-only-and-fixes`. Local only: no push, no PR, no deploy.
    call) keep the hourly airing refresh at a handful of requests instead of
    one per show.
 4. **Cast:** AniList payloads carry a 10-person preview, so stored cast links
-   are never deleted for being absent from it. Jikan wrote people under
-   synthetic IDs (1.6e9+/1.7e9+ offsets); when the same person (by name)
-   arrives from AniList, the old link is retired and the person's favourites
-   move to the AniList row. The old rows stay (unlinked, harmless).
+   are never deleted for being absent from it. A character in the payload
+   keeps one link (its current voice actor); staff roles only accumulate (the
+   preview may show one of a person's several roles). Jikan wrote people under
+   synthetic IDs (1.6e9+/1.7e9+ offsets) and as "Family, Given"; when the same
+   person arrives from AniList, a matched character's old link goes, a
+   matched voice actor's or staff member's links on that anime are moved onto
+   the AniList person (roles kept), and their favourites move too, one per
+   user. The old person rows stay (unlinked, harmless). `AnimeStaff` is unique
+   per (anime, staff, role) since migration 0056.
 5. **Schedule:** AniList has no broadcast day/time; it is derived from
    `nextAiringEpisode.airingAt` in Asia/Tokyo, which is what the schedule's
    fallback already assumes.

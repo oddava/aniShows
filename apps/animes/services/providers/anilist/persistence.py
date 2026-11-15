@@ -77,9 +77,10 @@ def _retire_legacy_cast(anime, characters_by_name: dict, staff_by_name: dict) ->
     """Fold ``anime``'s Jikan-era links into the people the AniList payload brought.
 
     A matched character's old link goes (the payload's link replaces it). A
-    matched staff member's old links are moved onto the AniList person, role
-    and all: the payload is a preview, so it may list one of several roles.
-    Favourites move with the person, one per user.
+    matched voice actor's or staff member's other links on this anime are
+    moved onto the AniList person, role and all: the payload is a preview, so
+    it may list one of several roles or characters. Favourites move with the
+    person, one per user.
     """
     from ....models import UserFavoriteCharacter, UserFavoriteStaff
 
@@ -104,6 +105,23 @@ def _retire_legacy_cast(anime, characters_by_name: dict, staff_by_name: dict) ->
         if link.voice_actor and (link.voice_actor.anilist_id or 0) >= LEGACY_STAFF_ID_MIN:
             fold_staff(link.voice_actor)
         link.delete()
+
+    # A matched voice actor may also voice characters outside the preview:
+    # point those links at the AniList person too.
+    legacy_voices = AnimeCharacter.objects.filter(
+        anime=anime, voice_actor__anilist_id__gte=LEGACY_STAFF_ID_MIN
+    ).select_related("voice_actor")
+    for link in legacy_voices:
+        replacement = fold_staff(link.voice_actor)
+        if replacement is None:
+            continue
+        if AnimeCharacter.objects.filter(
+            anime=anime, character_id=link.character_id, voice_actor=replacement
+        ).exists():
+            link.delete()
+        else:
+            link.voice_actor = replacement
+            link.save(update_fields=["voice_actor"])
 
     legacy_staff = AnimeStaff.objects.filter(
         anime=anime, staff__anilist_id__gte=LEGACY_STAFF_ID_MIN

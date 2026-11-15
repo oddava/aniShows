@@ -8,7 +8,9 @@ waits cost nothing.
 from __future__ import annotations
 
 import hashlib
+import time
 from datetime import datetime
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -502,7 +504,7 @@ class TestRequestsWhileAUserWaits:
 
     def test_full_window_fails_fast_without_a_request(self, monkeypatch, limited):
         http = install(monkeypatch, {"GetThing": MEDIA})
-        monkeypatch.setattr(limited.rate_limiter, "_take_shared_slot", lambda: False)
+        monkeypatch.setattr(limited.rate_limiter, "_take_shared_slot", lambda **_: False)
         self.no_sleeping(monkeypatch)
 
         assert query(limited, max_rate_limit_wait=0.0) == {}
@@ -514,14 +516,14 @@ class TestRequestsWhileAUserWaits:
         service = AniListService(
             enable_caching=False, enable_rate_limiting=True, request_budget="interactive"
         )
-        monkeypatch.setattr(service.rate_limiter, "_take_shared_slot", lambda: False)
+        monkeypatch.setattr(service.rate_limiter, "_take_shared_slot", lambda **_: False)
         self.no_sleeping(monkeypatch)
 
         assert query(service) == {}
         assert service.last_error_code == "rate_limited"
         assert http.requests == []
 
-        monkeypatch.setattr(service.rate_limiter, "_take_shared_slot", lambda: True)
+        monkeypatch.setattr(service.rate_limiter, "_take_shared_slot", lambda **_: True)
         assert query(service) == {}
         assert len(http.requests) == 1  # one try only
         assert http.requests[0].extensions["timeout"]["read"] == 8.0
@@ -570,13 +572,22 @@ class TestPagination:
 
 
 class TestRejectedQuery:
-    def test_counts_toward_the_circuit_breaker(self, monkeypatch, anilist):
-        install(
-            monkeypatch,
-            {"GetThing": httpx.Response(400, json={"errors": [{"message": "Field x unknown"}]})},
-        )
-        query(anilist)
-        assert cache.get("cb:anilist_api:failures") == 1
+    def test_a_rejected_operation_stops_alone(self, monkeypatch, anilist):
+        rejected = httpx.Response(400, json={"errors": [{"message": "Field x unknown"}]})
+        http = install(monkeypatch, {"GetThing": rejected, "GetOther": MEDIA})
+        other = "query GetOther($id: Int) { Media(id: $id) { id } }"
+
+        for _ in range(5):
+            assert query(anilist) == {}
+            # Another operation's success must not reset the broken one's count.
+            assert anilist._query(other, {"id": 1}) == MEDIA
+        sent = len(http.requests)
+
+        assert query(anilist) == {}
+        assert anilist.last_error_code == "query_rejected"
+        assert len(http.requests) == sent  # not sent again
+        assert anilist._query(other, {"id": 1}) == MEDIA  # the rest carry on
+        assert not cache.get("cb:anilist_api:failures")
 
     def test_a_bad_variable_does_not(self, monkeypatch, anilist):
         install(
@@ -590,3 +601,87 @@ class TestRejectedQuery:
         query(anilist)
         assert anilist.last_error_code == "invalid_variable"
         assert not cache.get("cb:anilist_api:failures")
+        assert not cache.get("cb:anilist_query:GetThing:failures")
+
+
+class FakeRedis:
+    """Just enough of a Redis client for the limiter's per-minute counter."""
+
+    def __init__(self):
+        self.counts: dict[str, int] = {}
+
+    def pipeline(self):
+        redis = self
+
+        class Pipeline:
+            def __init__(self):
+                self.result = []
+
+            def incr(self, key):
+                redis.counts[key] = redis.counts.get(key, 0) + 1
+                self.result.append(redis.counts[key])
+
+            def expire(self, key, seconds):
+                self.result.append(True)
+
+            def execute(self):
+                return self.result
+
+        return Pipeline()
+
+    def decr(self, key):
+        self.counts[key] -= 1
+
+
+class TestSharedBudget:
+    @pytest.fixture
+    def redis(self, monkeypatch):
+        fake = FakeRedis()
+        client = type("Client", (), {"get_client": staticmethod(lambda: fake)})()
+        monkeypatch.setattr(
+            "apps.animes.services.rate_limiting.cache.client", client, raising=False
+        )
+        return fake
+
+    def test_web_requests_use_at_most_half_of_each_minute(self, redis):
+        limiter = AniListRateLimiter(rate_limit=30)  # 27 after the safety margin
+
+        granted = sum(limiter._take_shared_slot(interactive=True) for _ in range(20))
+
+        assert granted == 13  # half of 27
+        # Refused tries gave their count back: background work keeps the rest.
+        assert sum(redis.counts.values()) == 13
+        background = sum(limiter._take_shared_slot() for _ in range(20))
+        assert background == 27 - 13
+
+    def test_interactive_acquire_fails_fast_once_its_share_is_used(self, redis, monkeypatch):
+        limiter = AniListRateLimiter(rate_limit=30)
+        monkeypatch.setattr(
+            "apps.animes.services.rate_limiting.time.sleep",
+            lambda seconds: pytest.fail(f"slept {seconds}s"),
+        )
+        results = [limiter.acquire(max_wait=0.0) for _ in range(14)]
+        assert results.count(True) == 13
+        assert results[-1] is False
+
+
+class TestInteractiveEpisodeDeadline:
+    def test_all_pages_share_one_deadline(self, monkeypatch, anilist):
+        endless = {
+            "Media": {"id": 1, "airingSchedule": {"pageInfo": {"hasNextPage": True}, "nodes": []}}
+        }
+        http = install(monkeypatch, {"GetAnimeEpisodes": endless})
+        # The client's own clock: start, page 1, page 2, then past the 10 s deadline.
+        readings = [0.0, 0.0, 7.0, 11.0]
+        fake_time = SimpleNamespace(
+            monotonic=lambda: readings.pop(0) if len(readings) > 1 else readings[0],
+            time=time.time,
+            sleep=time.sleep,
+        )
+        monkeypatch.setattr("apps.animes.services.providers.anilist.client.time", fake_time)
+
+        anilist.get_episode_schedule(anilist_id=1, request_budget="interactive")
+
+        assert len(http.requests) == 2
+        timeouts = [request.extensions["timeout"]["read"] for request in http.requests]
+        assert timeouts == [8.0, 3.0]  # the second page only gets what is left

@@ -114,7 +114,7 @@ class TestAniListPersistence:
     def test_process_media_list_creates_then_updates(self, anilist, queued_image_fetches):
         broken = {"id": 999, "title": {"english": "Broken Genres"}, "genres": 5}
         items = [*trending_fixture(), media_fixture(), broken]
-        progress = []
+        progress: list[int] = []
         callback = styled_like(AniListService.process_media_list, progress.append)
 
         stats = resolve(anilist.process_media_list(items, progress_callback=callback))
@@ -593,6 +593,23 @@ class TestCastReplacement:
         ) == {("alice", 119331), ("alice", 106297), ("bob", 119331)}
         # The old rows stay (nothing points at them now).
         assert Character.objects.filter(pk=old_frieren.pk).exists()
+
+    def test_a_folded_voice_actor_moves_on_characters_outside_the_preview(self, anilist):
+        anime = make_anime(title="Frieren", anilist_id=154587)
+        old_seiyuu = Staff.objects.create(name="Tanezaki, Atsumi", anilist_id=1_700_000_001)
+        old_frieren = Character.objects.create(name="Frieren", anilist_id=1_600_000_001)
+        eleventh = Character.objects.create(name="Young Frieren", anilist_id=900_011)
+        for character in (old_frieren, eleventh):
+            AnimeCharacter.objects.create(
+                anime=anime, character=character, voice_actor=old_seiyuu, role="SUPPORTING"
+            )
+
+        anilist.update_anime_manual(anime, media_fixture())
+
+        # Not in the preview, so kept, but voiced by the AniList person now.
+        link = AnimeCharacter.objects.get(anime=anime, character=eleventh)
+        assert link.voice_actor.anilist_id == 119331
+        assert not AnimeCharacter.objects.filter(voice_actor=old_seiyuu).exists()
 
     def test_a_recast_character_keeps_one_link_with_the_new_voice_actor(self, anilist):
         anime = make_anime(title="Frieren", anilist_id=154587)

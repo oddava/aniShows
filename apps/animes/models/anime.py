@@ -416,6 +416,11 @@ class AnimeStaff(Model):
 
     class Meta:
         ordering = ["id"]
+        constraints = [
+            # Concurrent refreshes of one anime could otherwise write the same
+            # credit twice, after which update_or_create fails on every refresh.
+            UniqueConstraint(fields=["anime", "staff", "role"], name="anime_staff_unique_credit"),
+        ]
 
 
 class ThemeSong(TimestampMixin, Model):
