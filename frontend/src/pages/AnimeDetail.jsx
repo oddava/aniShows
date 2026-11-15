@@ -261,7 +261,7 @@ export default function AnimeDetail() {
                             />
 
                             {/* Tab Navigation */}
-                            <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] sm:[mask-image:none] ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
+                            <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
                                 data-title="Navigation"
                             >
                                 {tabsWithCounts.map((tab) => (
