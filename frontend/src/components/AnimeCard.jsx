@@ -374,7 +374,6 @@ function AnimeCard({
                                         ${listStatus && currentStatusOption ? currentStatusOption.color : 'text-white'}`}
                                     title={listStatus && currentStatusOption ? currentStatusOption.label : 'Add to List'}
                                     aria-label={listStatus && currentStatusOption ? `List status: ${currentStatusOption.label}. Change` : `Add ${displayTitle} to list`}
-                                    aria-haspopup="menu"
                                     aria-expanded={showStatusMenu}
                                 >
                                     {isLoading ? <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" /> :
@@ -382,13 +381,13 @@ function AnimeCard({
                                 </button>
 
                                 {showStatusMenu && (
-                                    <div role="menu" className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-lg shadow-black/40 z-[210] animate-fade-in overflow-hidden">
+                                    <div role="group" aria-label="List status" className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-lg shadow-black/40 z-[210] animate-fade-in overflow-hidden">
                                         <div className="p-1">
                                             {STATUS_OPTIONS.map((option) => (
                                                 <button
                                                     key={option.value}
-                                                    role="menuitemradio"
-                                                    aria-checked={listStatus === option.value}
+                                                    type="button"
+                                                    aria-pressed={listStatus === option.value}
                                                     onClick={(e) => handleStatusChange(e, option.value)}
                                                     className={`w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-semibold rounded-md transition-colors touch-manipulation
                                                         ${listStatus === option.value ? 'bg-accent-dark text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
@@ -400,7 +399,7 @@ function AnimeCard({
                                         </div>
                                         {listStatus && (
                                             <div className="p-1 border-t border-gray-800 bg-black/20">
-                                                <button role="menuitem" onClick={handleRemoveFromList} className="w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
+                                                <button type="button" onClick={handleRemoveFromList} className="w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
                                                     <X className="w-3 h-3" /> Remove
                                                 </button>
                                             </div>

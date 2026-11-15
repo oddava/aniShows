@@ -4,7 +4,7 @@ import { MobileRelatedCard, RelatedAnimeCard } from './RelatedAnimeCards';
 /** Column 3: recommendations (a list on large screens, a carousel below). */
 export default function RecommendationsSidebar({ anime, recommendations, accentColor }) {
     return (
-        <div className="space-y-6 lg:space-y-8 lg:pt-40">
+        <div className="space-y-6 lg:space-y-8 lg:col-start-2 xl:col-start-auto xl:pt-40">
             {recommendations && recommendations.length > 0 && (
                 <div>
                     <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">

@@ -99,7 +99,7 @@ export default function Footer({ className = '' }) {
                     </div>
                 </div>
 
-                <div className="pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <p className="text-gray-400 text-sm">
                         © {new Date().getFullYear()} aniShows. All rights reserved.
                     </p>

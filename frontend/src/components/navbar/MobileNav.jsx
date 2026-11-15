@@ -140,7 +140,6 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                     ref={accountButtonRef}
                                     type="button"
                                     onClick={() => setIsMobileAccountOpen((open) => !open)}
-                                    aria-haspopup="menu"
                                     aria-expanded={isMobileAccountOpen}
                                     aria-controls="mobile-account-menu"
                                     className={`w-full ${mobileTabClasses(isProfileRoute || isPathActive('/settings'))}`}
@@ -159,9 +158,8 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                 {isMobileAccountOpen && (
                                     <div
                                         id="mobile-account-menu"
-                                        role="menu"
                                         aria-label="Account"
-                                        className="absolute bottom-full right-0 mb-2.5 w-36 overflow-hidden rounded-xl border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.6)] backdrop-blur-xl"
+                                        className="absolute bottom-full right-0 mb-2.5 w-40 overflow-hidden rounded-xl border border-white/12 p-1 shadow-[0_12px_28px_rgba(0,0,0,0.6)] backdrop-blur-xl"
                                         style={{ background: mobilePopoverBackground }}
                                     >
                                         <div
@@ -170,30 +168,27 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                                         />
                                         {!isOnCurrentUserProfile && (
                                             <Link
-                                                role="menuitem"
                                                 to={currentUserProfilePath}
-                                                className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
+                                                className="flex items-center gap-2 min-h-11 rounded-xl px-3 text-sm font-medium text-gray-200 hover:bg-white/10"
                                             >
                                                 Profile
                                             </Link>
                                         )}
                                         {!isPathActive('/settings') && (
                                             <Link
-                                                role="menuitem"
                                                 to="/settings"
-                                                className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-gray-200 hover:bg-white/10"
+                                                className="flex items-center gap-2 min-h-11 rounded-xl px-3 text-sm font-medium text-gray-200 hover:bg-white/10"
                                             >
                                                 Settings
                                             </Link>
                                         )}
                                         <button
-                                            role="menuitem"
                                             type="button"
                                             onClick={() => {
                                                 logout();
                                                 setIsMobileAccountOpen(false);
                                             }}
-                                            className="w-full rounded-xl px-3 py-2 text-left text-xs font-medium text-red-300 hover:bg-red-500/15"
+                                            className="w-full min-h-11 rounded-xl px-3 text-left text-sm font-medium text-red-300 hover:bg-red-500/15"
                                         >
                                             Sign Out
                                         </button>

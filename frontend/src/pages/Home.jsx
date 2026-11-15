@@ -369,8 +369,8 @@ function MemberCarouselHero({
                         />
                     </div>
                 ))}
-                <div className="absolute inset-0 bg-dark/75" />
-                <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/70 to-transparent" />
+                <div className="absolute inset-0 bg-dark/60" />
+                <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/75 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-dark/80 via-dark/20 to-transparent" />
             </div>
 

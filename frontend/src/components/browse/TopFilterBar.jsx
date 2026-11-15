@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import useScrollFade from '../../hooks/useScrollFade';
 import PropTypes from 'prop-types';
 import { Search, X, Filter, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -41,6 +42,7 @@ export default function TopFilterBar({
 }) {
     const [searchParams, setSearchParams] = useSearchParams();
     const localSearchInputRef = useRef(null);
+    const chipRowRef = useScrollFade();
     const isSearchFocusedRef = useRef(false);
     const inputRef = searchInputRef || localSearchInputRef;
     const currentQuery = searchParams.get('q') || '';
@@ -233,7 +235,7 @@ export default function TopFilterBar({
             </div>
 
             {/* Quick Filters Pill Row */}
-            <div className="w-full overflow-x-auto custom-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] sm:[mask-image:none]">
+            <div ref={chipRowRef} className="scroll-fade w-full overflow-x-auto custom-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
                 <div className="flex items-center gap-4 min-w-max">
                     {/* Format Group */}
                     <div className="flex items-center gap-1.5 pr-4 border-r border-gray-800/50">

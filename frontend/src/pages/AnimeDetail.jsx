@@ -27,6 +27,7 @@ import RecommendationsSidebar from '../components/animeDetail/RecommendationsSid
 import useAnimeDetailTabData from '../components/animeDetail/useAnimeDetailTabData';
 import useAnimeReviews from '../components/animeDetail/useAnimeReviews';
 import ErrorState from '../components/common/ErrorState';
+import useScrollFade from '../hooks/useScrollFade';
 import InformationBox from '../components/InformationBox';
 
 export default function AnimeDetail() {
@@ -48,6 +49,7 @@ export default function AnimeDetail() {
     const containerRef = useRef(null);
     const activeTabConfig = useMemo(() => getTabByPath(tabPath), [tabPath]);
     const activeTab = activeTabConfig?.id || DEFAULT_TAB_ID;
+    const tabStripRef = useScrollFade();
     const animeDetailQueryKey = useMemo(() => animeKeys.detail(slug, user?.id), [slug, user?.id]);
 
     // Queries
@@ -247,7 +249,9 @@ export default function AnimeDetail() {
             {/* Content Container */}
             <div className="relative -mt-32 pb-16">
                 <div className="page-container">
-                    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_300px] gap-8 min-w-0">
+                    {/* Sidebar column only from xl; at lg, recommendations sit under the main
+                        column so the tabs and title get a usable width. */}
+                    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_300px] gap-8 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
                         <PosterColumn {...trackingProps} />
 
@@ -261,7 +265,7 @@ export default function AnimeDetail() {
                             />
 
                             {/* Tab Navigation */}
-                            <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
+                            <div ref={tabStripRef} className={`scroll-fade flex items-center gap-1.5 sm:gap-2 lg:gap-1 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
                                 data-title="Navigation"
                             >
                                 {tabsWithCounts.map((tab) => (

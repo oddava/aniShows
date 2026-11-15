@@ -294,6 +294,23 @@
     transform: translateY(0);
   }
 
+  /* Horizontal scrollers fade only at an edge that hides content
+     (data attributes set by hooks/useScrollFade). */
+  .scroll-fade[data-fade-end] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+
+  .scroll-fade[data-fade-start] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28px);
+    mask-image: linear-gradient(to right, transparent, #000 28px);
+  }
+
+  .scroll-fade[data-fade-start][data-fade-end] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  }
+
   /* Guest home: the hero has its own search field, so the navbar's stays
      out of the way until that field scrolls off screen. */
   .nav-search-slot {
