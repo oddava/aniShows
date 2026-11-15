@@ -8,7 +8,7 @@ export default function SettingsTabs({ user, activeTab, setActiveTab }) {
                 ${activeTab === 'profile' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
             >
                 Profile
-                <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
+                <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent-dark transition-transform duration-300 origin-left
                 ${activeTab === 'profile' ? 'scale-x-100' : 'scale-x-0'}`} />
             </button>
             {user?.total_badges_count > 0 && (
@@ -18,7 +18,7 @@ export default function SettingsTabs({ user, activeTab, setActiveTab }) {
                     ${activeTab === 'badges' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
                 >
                     Badges
-                    <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
+                    <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent-dark transition-transform duration-300 origin-left
                     ${activeTab === 'badges' ? 'scale-x-100' : 'scale-x-0'}`} />
                 </button>
             )}
@@ -28,7 +28,7 @@ export default function SettingsTabs({ user, activeTab, setActiveTab }) {
                 ${activeTab === 'account' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
             >
                 Account
-                <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
+                <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent-dark transition-transform duration-300 origin-left
                 ${activeTab === 'account' ? 'scale-x-100' : 'scale-x-0'}`} />
             </button>
             <button
@@ -37,7 +37,7 @@ export default function SettingsTabs({ user, activeTab, setActiveTab }) {
                 ${activeTab === 'notifications' ? 'text-accent' : 'text-gray-400 hover:text-white'}`}
             >
                 Notifications
-                <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent transition-transform duration-300 origin-left
+                <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-accent-dark transition-transform duration-300 origin-left
                 ${activeTab === 'notifications' ? 'scale-x-100' : 'scale-x-0'}`} />
             </button>
         </div>

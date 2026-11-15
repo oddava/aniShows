@@ -33,7 +33,7 @@ const FILTER_OPTIONS = [
 const ACTIVITY_CONFIG = {
     completed: { icon: CheckCircle2, marker: 'bg-emerald-400', chip: 'bg-emerald-500/10 text-emerald-300' },
     added: { icon: ListPlus, marker: 'bg-blue-400', chip: 'bg-blue-500/10 text-blue-300' },
-    progress: { icon: PlayCircle, marker: 'bg-accent', chip: 'bg-accent/10 text-accent-light' },
+    progress: { icon: PlayCircle, marker: 'bg-accent-dark', chip: 'bg-accent/10 text-accent-light' },
     status_change: { icon: Workflow, marker: 'bg-yellow-400', chip: 'bg-yellow-500/10 text-yellow-300' },
     score: { icon: Star, marker: 'bg-amber-400', chip: 'bg-amber-500/10 text-amber-300' },
     removed: { icon: Trash2, marker: 'bg-rose-400', chip: 'bg-rose-500/10 text-rose-300' },

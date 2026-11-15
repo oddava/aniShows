@@ -163,7 +163,7 @@ const ExportPage = () => {
                         <button
                             onClick={handleExportJSON}
                             disabled={loading}
-                            className="w-full px-4 py-2 bg-accent text-dark font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                            className="w-full px-4 py-2 bg-accent-dark text-dark font-semibold rounded-lg hover:bg-accent-dark/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                         >
                             {loading ? (
                                 <>

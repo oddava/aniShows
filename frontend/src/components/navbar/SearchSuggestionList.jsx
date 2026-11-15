@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { Star } from 'lucide-react';
 import {
     applyImageFallback,
     getImageFallbackUrl,
@@ -5,9 +7,12 @@ import {
 } from '../../utils/imageUtils';
 
 // Highlight matching text
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Highlight matching text (the query is escaped: "a(" must not throw)
 const highlightMatch = (text, query) => {
     if (!query || !text) return text;
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    const parts = text.split(new RegExp(`(${escapeRegExp(query)})`, 'gi'));
     return parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
             <span key={i} className="text-accent font-semibold">{part}</span>
@@ -25,29 +30,40 @@ export default function SearchSuggestionList({
     searchSuggestions,
     searchQuery,
     selectedIndex,
-    setSelectedIndex,
     handleSuggestionClick,
     handleSearch,
+    idPrefix = 'navbar-search',
 }) {
+    // Keep the arrow-key selection visible inside the scrolling dropdown
+    // (focus stays in the input; only the list scrolls).
+    useEffect(() => {
+        if (selectedIndex < 0) return;
+        document.getElementById(`${idPrefix}-option-${selectedIndex}`)?.scrollIntoView?.({ block: 'nearest' });
+    }, [selectedIndex, idPrefix]);
+
     return (
         <>
+            <div role="listbox" id={`${idPrefix}-listbox`} aria-label="Search suggestions">
             {searchSuggestions.map((anime, index) => {
                 const imageUrl = getOptimizedImageUrl(anime, 'cover', 'small');
                 const fallbackImageUrl = getImageFallbackUrl(anime, 'cover');
 
                 return (
-                    <button
+                    <div
                         key={anime.id}
+                        id={`${idPrefix}-option-${index}`}
+                        role="option"
+                        aria-selected={selectedIndex === index}
                         onClick={() => handleSuggestionClick(anime.slug)}
-                        onMouseEnter={() => setSelectedIndex(index)}
-                        className={`w-full flex items-center gap-3 border-l-2 p-3 text-left transition-colors ${selectedIndex === index
+                        className={`w-full cursor-pointer flex items-center gap-3 border-l-2 p-3 text-left transition-colors ${selectedIndex === index
                             ? 'bg-accent/10 border-accent'
                             : 'border-transparent hover:bg-dark-50'
                             }`}
                     >
                         <img
                             src={imageUrl}
-                            alt={anime.title}
+                            alt=""
+                            loading="lazy"
                             onError={(event) => applyImageFallback(event, fallbackImageUrl)}
                             className="w-10 h-14 object-cover rounded-md flex-shrink-0 shadow-sm"
                         />
@@ -57,30 +73,33 @@ export default function SearchSuggestionList({
                             </h4>
                             <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
                                 <span className="text-gray-500">{anime.anime_type}</span>
-                                {anime.episode_count && (
+                                {anime.episode_count > 0 && (
                                     <>
                                         <span className="text-gray-600">•</span>
-                                        <span>{anime.episode_count} eps</span>
+                                        <span>{anime.episode_count} {anime.episode_count === 1 ? 'ep' : 'eps'}</span>
                                     </>
                                 )}
                             </div>
                         </div>
-                        {anime.rating && (
-                            <div className="flex items-center gap-1 px-2 py-1 bg-yellow-500/10 rounded-md flex-shrink-0">
-                                <span className="text-[10px] font-bold text-yellow-500 uppercase tracking-tighter">Rating</span>
-                                <span className="text-xs font-semibold text-yellow-500">{anime.rating}</span>
-                            </div>
+                        {Number(anime.rating) > 0 && (
+                            <span className="flex items-center gap-1 flex-shrink-0 text-xs font-semibold text-yellow-400 tabular">
+                                <Star aria-hidden="true" className="w-3 h-3 fill-current" />
+                                <span className="sr-only">Rating </span>{anime.rating}
+                            </span>
                         )}
                         {anime.isExactMatch && (
                             <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full flex-shrink-0">
                                 Exact
                             </span>
                         )}
-                    </button>
+                    </div>
                 );
             })}
+            </div>
 
             <button
+                type="button"
+                tabIndex={-1}
                 onClick={handleSearch}
                 className="w-full py-3 px-4 text-center text-sm font-medium text-accent hover:bg-dark-50 transition-colors border-t border-gray-700/50 flex items-center justify-center gap-2"
             >

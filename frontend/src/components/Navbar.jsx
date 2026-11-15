@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
@@ -7,6 +7,7 @@ import NavItem from './navbar/NavItem';
 import NavbarSearch from './navbar/NavbarSearch';
 import UserMenu from './navbar/UserMenu';
 import MobileNav from './navbar/MobileNav';
+import MobileTopBar from './navbar/MobileTopBar';
 import useNavbarSearch from './navbar/useNavbarSearch';
 import useNavbarAutoHide from './navbar/useNavbarAutoHide';
 import useNavbarNotifications from './navbar/useNavbarNotifications';
@@ -28,10 +29,17 @@ export default function Navbar() {
 
     const currentUserProfilePath = user?.username ? `/u/${user.username}` : '/profile';
 
+    // Browse has its own search box at the top of the page; one is enough.
+    const location = useLocation();
+    const showNavSearch = location.pathname.replace(/\/+$/, '') !== '/browse';
+
     return (
         <>
+            <MobileTopBar />
             <nav
-                className={`hidden md:block fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-[calc(100%-2rem)] max-w-6xl rounded-2xl border border-white/10 bg-dark/70 backdrop-blur-xl transition-all duration-300 ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-8 opacity-0 pointer-events-none'}`}
+                aria-label="Main"
+                data-autohide-nav
+                className={`hidden md:block fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-[calc(100%-2rem)] max-w-[calc(var(--page-max)+3rem)] rounded-2xl border border-white/10 bg-dark/70 backdrop-blur-xl transition-all duration-300 ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-8 opacity-0 pointer-events-none'}`}
                 style={{
                     background: 'var(--color-navbar-bg)',
                     borderColor: 'var(--color-navbar-border)',
@@ -40,7 +48,7 @@ export default function Navbar() {
                 <div className="px-4 sm:px-6">
                     <div className="flex items-center justify-between h-14">
                         {/* Logo */}
-                        <Link to="/" className="focus:outline-none">
+                        <Link to="/" className="rounded-md" aria-label="AniShows home">
                             <Logo />
                         </Link>
 
@@ -53,7 +61,7 @@ export default function Navbar() {
                             )}
 
                             {/* Search - Collapsible */}
-                            <NavbarSearch search={search} />
+                            {showNavSearch ? <NavbarSearch search={search} /> : <div className="flex-1" />}
                         </div>
 
                         {/* Right Section: Auth */}

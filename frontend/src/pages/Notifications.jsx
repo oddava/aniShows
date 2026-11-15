@@ -284,7 +284,7 @@ export default function Notifications() {
                                         type="button"
                                         onClick={() => setActiveFilter(filter.value)}
                                         className={`px-2.5 py-1.5 rounded-lg text-xs sm:text-sm transition-colors ${activeFilter === filter.value
-                                            ? 'bg-accent text-white'
+                                            ? 'bg-accent-dark text-white'
                                             : 'bg-dark-100 text-gray-300 hover:text-white'
                                             }`}
                                     >

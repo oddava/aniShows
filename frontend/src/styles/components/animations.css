@@ -1,3 +1,5 @@
+/* Skeletons keep the original soft pulse: quiet, and shaped like the real
+   content so nothing moves when data lands. */
 @keyframes pulse-soft {
   0%,
   100% {
@@ -17,6 +19,29 @@
 .shimmer-overlay {
   background: var(--color-overlay-base);
   animation: pulse-soft 1.4s ease-in-out infinite;
+}
+
+/* Route change: a short fade so pages arrive instead of snapping in.
+   Opacity only, with a backwards fill: an animated transform left in effect
+   would make this wrapper the containing block for position:fixed modals. */
+@keyframes page-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.page-enter {
+  animation: page-in 240ms var(--ease-out) backwards;
+}
+
+/* Loaders that only appear if waiting actually takes a while, so fast loads
+   never flash a spinner. */
+@keyframes delayed-show {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.delayed-show {
+  animation: delayed-show 200ms ease-out 300ms backwards;
 }
 
 .skeleton-bg {
@@ -114,4 +139,25 @@
 
 .animate-out.slide-out-to-bottom {
   animation: slide-out-to-bottom 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Respect reduced-motion everywhere: keep state changes, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton-shimmer,
+  .shimmer,
+  .shimmer-bg,
+  .skeleton-wave,
+  .shimmer-gradient,
+  .shimmer-overlay {
+    background-image: none;
+  }
 }

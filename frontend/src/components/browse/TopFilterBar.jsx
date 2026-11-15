@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import useScrollFade from '../../hooks/useScrollFade';
 import PropTypes from 'prop-types';
 import { Search, X, Filter, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -11,7 +12,7 @@ const Pill = ({ active, label, onClick }) => (
         onClick={onClick}
         className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
             active 
-            ? 'bg-accent text-white' 
+            ? 'bg-accent-dark text-white' 
             : 'bg-dark-200/50 text-gray-400 hover:bg-dark-200 hover:text-gray-300'
         }`}
     >
@@ -41,6 +42,7 @@ export default function TopFilterBar({
 }) {
     const [searchParams, setSearchParams] = useSearchParams();
     const localSearchInputRef = useRef(null);
+    const chipRowRef = useScrollFade();
     const isSearchFocusedRef = useRef(false);
     const inputRef = searchInputRef || localSearchInputRef;
     const currentQuery = searchParams.get('q') || '';
@@ -144,40 +146,47 @@ export default function TopFilterBar({
                 
                 {/* Search Input - Main Anchor */}
                 <div className="flex-1 relative group">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-400 group-focus-within:text-accent transition-colors" />
+                    <Search aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-400 group-focus-within:text-accent transition-colors" />
                     <input
                         ref={inputRef}
-                        type="text"
+                        type="search"
+                        aria-label="Search anime"
+                        enterKeyHint="search"
+                        autoComplete="off"
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
                         onFocus={() => { isSearchFocusedRef.current = true; }}
                         onBlur={() => { isSearchFocusedRef.current = false; }}
                         placeholder="Search anime..."
-                        className="w-full rounded-xl bg-dark-200 pl-11 pr-10 py-3 text-base text-white outline-none transition-all placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-accent/50 focus:bg-dark-100"
+                        className="w-full rounded-xl bg-dark-200 pl-11 pr-10 py-3 text-base text-white transition-colors placeholder:text-gray-500 focus:bg-dark-100 [&::-webkit-search-cancel-button]:appearance-none"
                     />
                     {searchInput && (
                         <button
+                            type="button"
                             onClick={clearSearch}
-                            className="flat-control absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-dark p-1 text-gray-400 hover:text-white"
+                            aria-label="Clear search"
+                            className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-dark p-1 text-gray-400 hover:text-white"
                         >
-                            <X className="w-3.5 h-3.5" />
+                            <X aria-hidden="true" className="w-3.5 h-3.5" />
                         </button>
                     )}
                 </div>
 
                 {/* Compact Year Stepper */}
                 <div className="hidden sm:flex items-center bg-dark-200 rounded-xl p-1 h-[48px]">
-                    <button 
+                    <button
+                        type="button"
                         onClick={() => handleYearStep(-1)}
                         className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-100 transition-colors"
                         aria-label="Previous year"
                     >
                         <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <span className="w-12 text-center text-sm font-bold text-gray-300">
-                        {currentYear || 'Year'}
+                    <span className="w-[4.5rem] text-center text-sm font-semibold text-gray-300 tabular" aria-live="polite">
+                        {currentYear || 'Any year'}
                     </span>
-                    <button 
+                    <button
+                        type="button"
                         onClick={() => handleYearStep(1)}
                         className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-100 transition-colors"
                         aria-label="Next year"
@@ -186,8 +195,10 @@ export default function TopFilterBar({
                     </button>
                 </div>
 
-                {/* Adult Content Toggle */}
+                {/* Adult Content Toggle (members only; guests would see a dead control) */}
+                {canToggleAdultContent && (
                 <button
+                    type="button"
                     onClick={onToggleAdultContent}
                     disabled={isUpdatingAdultContent || !canToggleAdultContent}
                     className={`flex flex-shrink-0 items-center justify-center w-[48px] h-[48px] rounded-xl transition-colors ${
@@ -206,8 +217,9 @@ export default function TopFilterBar({
                                 : 'Explicit hentai: hidden'
                     }
                 >
-                    {adultContentEnabled ? <Eye className="w-[18px] h-[18px]" /> : <EyeOff className="w-[18px] h-[18px]" />}
+                    {adultContentEnabled ? <Eye aria-hidden="true" className="w-[18px] h-[18px]" /> : <EyeOff aria-hidden="true" className="w-[18px] h-[18px]" />}
                 </button>
+                )}
 
                 {/* Advanced Filters Button */}
                 <button
@@ -217,13 +229,13 @@ export default function TopFilterBar({
                 >
                     <Filter className="w-[18px] h-[18px]" />
                     {hasActiveFilters && (
-                        <span className="absolute top-3 right-3 w-2 h-2 bg-accent rounded-full border-2 border-dark-200" />
+                        <span className="absolute top-3 right-3 w-2 h-2 bg-accent-dark rounded-full border-2 border-dark-200" />
                     )}
                 </button>
             </div>
 
             {/* Quick Filters Pill Row */}
-            <div className="w-full overflow-x-auto custom-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div ref={chipRowRef} className="scroll-fade w-full overflow-x-auto custom-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
                 <div className="flex items-center gap-4 min-w-max">
                     {/* Format Group */}
                     <div className="flex items-center gap-1.5 pr-4 border-r border-gray-800/50">

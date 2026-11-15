@@ -1,6 +1,7 @@
 import { createRef } from 'react';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NavbarSearch from '../NavbarSearch';
@@ -64,15 +65,16 @@ describe('NavbarSearch', () => {
         const state = searchState({ searchSuggestions: SUGGESTIONS, selectedIndex: 0 });
         render(<NavbarSearch search={state} />);
 
-        const first = await screen.findByRole('button', { name: /Beyond Journey/ }, { timeout: 5000 });
+        const first = await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 });
         expect(first).toHaveClass('bg-accent/10');
         expect(screen.getByText('Exact')).toBeInTheDocument();
         expect(screen.getByText('28 eps')).toBeInTheDocument();
         // The matching part of the title is highlighted.
         expect(screen.getAllByText('Fri', { selector: 'span.text-accent' })).toHaveLength(1);
 
-        fireEvent.mouseEnter(screen.getByRole('button', { name: /Fire Force/ }));
-        expect(state.setSelectedIndex).toHaveBeenCalledWith(1);
+        // Hover only highlights (CSS); the arrow-key selection is untouched.
+        fireEvent.mouseEnter(screen.getByRole('option', { name: /Fire Force/ }));
+        expect(state.setSelectedIndex).not.toHaveBeenCalled();
 
         fireEvent.click(first);
         expect(state.handleSuggestionClick).toHaveBeenCalledWith('frieren');
@@ -85,11 +87,25 @@ describe('NavbarSearch', () => {
         const state = searchState();
         render(<NavbarSearch search={state} />);
 
-        fireEvent.click(screen.getByRole('button', { name: 'CLEAR' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
 
         expect(state.setSearchQuery).toHaveBeenCalledWith('');
         expect(state.setShowSuggestions).toHaveBeenCalledWith(false);
         expect(state.setSelectedIndex).toHaveBeenCalledWith(-1);
+    });
+});
+
+describe('SearchSuggestionList keyboard selection', () => {
+    it('scrolls the arrow-key selection into view inside the dropdown', { timeout: 10000 }, async () => {
+        const scrollIntoView = vi.fn();
+        Element.prototype.scrollIntoView = scrollIntoView;
+        const state = searchState({ searchSuggestions: SUGGESTIONS, selectedIndex: 1 });
+        render(<NavbarSearch search={state} />);
+
+        const second = await screen.findByRole('option', { name: /Fire Force/ }, { timeout: 5000 });
+        await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' }));
+        expect(scrollIntoView.mock.contexts.at(-1)).toBe(second);
+        delete Element.prototype.scrollIntoView;
     });
 });
 
@@ -118,13 +134,71 @@ describe('NavbarSearch with useNavbarSearch', () => {
             </QueryClientProvider>
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Toggle Search' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
         fireEvent.change(screen.getByPlaceholderText('Search anime...'), { target: { value: 'frieren' } });
 
-        expect(await screen.findByRole('button', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
+        expect(await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
         await waitFor(() => {
             expect(mockGetAll).toHaveBeenCalledWith({ q: 'frieren', page_size: 10 });
         });
         expect(screen.getByRole('button', { name: 'View all results for "frieren"' })).toBeInTheDocument();
+    });
+
+    it('stops handling suggestion keys once focus leaves the search', { timeout: 10000 }, async () => {
+        const user = userEvent.setup();
+        const onNextLink = vi.fn((event) => event.preventDefault());
+        render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <MemoryRouter>
+                    <SearchHarness />
+                    <a href="/login" onClick={onNextLink}>Sign In</a>
+                </MemoryRouter>
+            </QueryClientProvider>
+        );
+
+        await user.click(screen.getByRole('button', { name: 'Search anime' }));
+        await user.type(screen.getByPlaceholderText('Search anime...'), 'frieren');
+        expect(await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
+        await user.keyboard('{ArrowDown}');
+
+        // Tab past the search (Clear button, then out) to the next link.
+        await user.tab();
+        await user.tab();
+        expect(screen.getByRole('link', { name: 'Sign In' })).toHaveFocus();
+        expect(screen.getByPlaceholderText('Search anime...')).toHaveAttribute('aria-expanded', 'false');
+
+        await user.keyboard('{ArrowDown}{Enter}');
+        expect(onNextLink).toHaveBeenCalled();
+    });
+
+    it('drops a late response when the search was cleared while it was in flight', { timeout: 10000 }, async () => {
+        let resolveSearch;
+        mockGetAll.mockImplementation((params) => {
+            if (params.q) {
+                return new Promise((resolve) => { resolveSearch = resolve; });
+            }
+            return Promise.resolve({ data: { results: [] } });
+        });
+
+        render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <MemoryRouter>
+                    <SearchHarness />
+                </MemoryRouter>
+            </QueryClientProvider>
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
+        const input = screen.getByPlaceholderText('Search anime...');
+        fireEvent.change(input, { target: { value: 'frieren' } });
+        await waitFor(() => expect(mockGetAll).toHaveBeenCalledWith({ q: 'frieren', page_size: 10 }));
+
+        // Clear while the request is still pending, then let it land.
+        fireEvent.change(input, { target: { value: '' } });
+        resolveSearch({ data: { results: [SUGGESTIONS[0]] } });
+
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        expect(screen.queryByRole('option', { name: /Beyond Journey/ })).not.toBeInTheDocument();
+        expect(input).toHaveAttribute('aria-expanded', 'false');
     });
 });

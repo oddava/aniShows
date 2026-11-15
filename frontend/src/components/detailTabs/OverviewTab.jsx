@@ -236,7 +236,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
 
             <div
                 className={`grid grid-cols-1 gap-8 items-start ${
-                    hasTrailer ? 'xl:grid-cols-[2fr_1fr]' : ''
+                    hasTrailer ? 'xl:grid-cols-[3fr_2fr]' : ''
                 }`}
             >
                 {hasTrailer && (

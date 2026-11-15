@@ -80,7 +80,7 @@ export default function ProfileTab({ user, profile }) {
                             ) : user?.avatar ? (
                                 <img src={user.avatar} alt="Current" className="w-full h-full object-cover" />
                             ) : (
-                                <div className="w-full h-full bg-accent flex items-center justify-center">
+                                <div className="w-full h-full bg-accent-dark flex items-center justify-center">
                                     <span className="text-xl text-white font-bold">{user?.username?.charAt(0)}</span>
                                 </div>
                             )}

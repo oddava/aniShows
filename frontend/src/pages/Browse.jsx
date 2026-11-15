@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { LoadingBar } from '../components/LoadingBar';
 import ActiveFilterChips from '../components/browse/ActiveFilterChips';
 import AdvancedFiltersPanel from '../components/browse/AdvancedFiltersPanel';
@@ -34,6 +35,14 @@ import { profileKeys } from '../api/queries/user';
 
 export default function Browse() {
   const searchInputRef = useRef(null);
+  const location = useLocation();
+
+  // Arriving from the mobile top bar's search button: put the cursor in the box.
+  useEffect(() => {
+    if (location.state?.focusSearch) {
+      searchInputRef.current?.focus();
+    }
+  }, [location.key, location.state]);
 
   // State
   const [showFilters, setShowFilters] = useState(false);
@@ -251,7 +260,7 @@ export default function Browse() {
       <LoadingBar isLoading={isLoading || isFetching || isTabSwitching} />
       {theme === 'retro-anime' && <SakuraAnimation />}
 
-      <div className="pt-4 pb-0 sm:py-8 px-3 sm:px-4 lg:px-6">
+      <div className="pt-4 pb-0 sm:py-8 px-4 md:px-6">
         <div className="max-w-[1600px] mx-auto">
 
 
@@ -293,8 +302,11 @@ export default function Browse() {
                       <button
                         onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
                         className="flex items-center justify-center px-3 h-9 bg-dark-100 border border-gray-700 rounded-lg text-[11px] font-bold text-gray-300 hover:border-accent transition-colors"
+                        type="button"
                         title="Toggle title language"
+                        aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}
                       >
+                        <span className="font-semibold text-gray-500 mr-1">Titles</span>
                         {titleLanguage === 'en' ? 'EN' : 'JP'}
                       </button>
                     </div>

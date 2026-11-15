@@ -55,7 +55,7 @@ export default function NotificationsTab({ notifications }) {
                     onClick={() => handleTogglePreference(key)}
                     disabled={isSavingPreferences}
                     className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border p-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-100
-                    ${isEnabled ? 'border-accent bg-accent' : 'border-gray-700 bg-dark-50'}
+                    ${isEnabled ? 'border-accent bg-accent-dark' : 'border-gray-700 bg-dark-50'}
                     ${isSavingPreferences ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                 >
                     <span

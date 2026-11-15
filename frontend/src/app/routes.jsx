@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import Layout from '../components/Layout';
+import PageLoader from '../components/common/PageLoader';
 import { ForumCategoryPageSkeleton } from '../components/forums/ForumSkeletons';
 
 const lazyWithRetry = (importer, retries = 1, retryDelayMs = 250) => lazy(async () => {
@@ -83,11 +84,6 @@ const AdminSettings = lazyWithRetry(() => import('../pages/admin/AdminSettings')
 const AdminLogs = lazyWithRetry(() => import('../pages/admin/AdminLogs'));
 const AdminReviewReports = lazyWithRetry(() => import('../pages/admin/AdminReviewReports'));
 
-const PageLoader = () => (
-    <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-    </div>
-);
 
 export const preloadForumChunks = () => {
     forumCategoryListImport();
@@ -140,6 +136,8 @@ export default function AppRoutes() {
                     <Route path="forums/category/:slug" element={<ForumThreadList />} />
                     <Route path="forums/category/:slug/create" element={<CreateThread />} />
                     <Route path="forums/thread/:id" element={<ForumThreadDetail />} />
+                    {/* Inside Layout, so a dead link still has the nav and footer. */}
+                    <Route path="*" element={<NotFound />} />
                 </Route>
 
                 <Route
@@ -169,7 +167,6 @@ export default function AppRoutes() {
                     <Route path="logs" element={<AdminLogs />} />
                     <Route path="review-reports" element={<AdminReviewReports />} />
                 </Route>
-                <Route path="*" element={<NotFound />} />
             </Routes>
         </Suspense>
     );

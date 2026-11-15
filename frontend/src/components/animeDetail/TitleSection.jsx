@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ChevronDown, Heart, Pencil, Plus } from 'lucide-react';
 import StatusSelector from '../StatusSelector';
-import InformationBox from '../InformationBox';
 import { applyImageFallback } from '../../utils/imageUtils';
 
 /**
@@ -12,7 +11,6 @@ import { applyImageFallback } from '../../utils/imageUtils';
 export default function TitleSection({
     anime,
     accentColor,
-    mappedAccent,
     isAuthenticated,
     coverUrl,
     coverSrcSet,
@@ -29,11 +27,11 @@ export default function TitleSection({
     setSynopsisExpanded,
 }) {
     return (
-        <div className="text-center lg:text-left mb-8">
+        <div className="text-left mb-8">
             <div className="lg:hidden mb-8">
-                <div className="mx-auto flex max-w-[330px] items-end gap-4">
-                    <div className="w-[118px] flex-shrink-0">
-                        <div className="relative aspect-[2/3] overflow-hidden rounded-xl border border-gray-800 bg-dark-200 shadow-xl">
+                <div className="flex max-w-[360px] md:max-w-[420px] items-end gap-4">
+                    <div className="w-[118px] md:w-40 flex-shrink-0">
+                        <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-dark-200 shadow-xl shadow-black/40 ring-1 ring-white/10">
                             {!isCoverLoaded && (
                                 <div
                                     aria-hidden="true"
@@ -43,7 +41,7 @@ export default function TitleSection({
                             <img
                                 src={coverUrl}
                                 srcSet={coverSrcSet}
-                                sizes="118px"
+                                sizes="(min-width: 768px) 160px, 118px"
                                 alt={anime.title}
                                 onLoad={() => setIsCoverLoaded(true)}
                                 onError={(event) => {
@@ -100,8 +98,8 @@ export default function TitleSection({
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-2 min-w-0">
-                <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-[rgb(209,213,219)] tracking-tight leading-tight sm:leading-none text-center lg:text-left w-full lg:w-auto break-words">
+            <div className="flex flex-wrap items-center justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-3 lg:mb-4 min-w-0">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight lg:leading-[1.05] text-left w-full lg:w-auto break-words">
                     {anime.title}
                 </h1>
             </div>
@@ -119,9 +117,10 @@ export default function TitleSection({
                     </div>
                     {anime.synopsis.length > 300 && (
                         <button
+                            type="button"
                             onClick={() => setSynopsisExpanded(!synopsisExpanded)}
-                            className={`mt-2 flex items-center gap-1.5 text-xs lg:text-sm font-bold transition-all active:scale-95 ${synopsisExpanded ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
-                            style={{ color: mappedAccent }}
+                            aria-expanded={synopsisExpanded}
+                            className="mt-2 -ml-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-xs lg:text-sm font-semibold text-gray-300 hover:text-white transition-colors"
                         >
                             {synopsisExpanded ? 'Show Less' : 'Read More'}
                             <ChevronDown className={`w-3.5 h-3.5 lg:w-4 lg:h-4 transition-transform ${synopsisExpanded ? 'rotate-180' : ''}`} />
@@ -130,13 +129,6 @@ export default function TitleSection({
                 </div>
             )}
 
-            <div className="lg:hidden mt-6 sm:mt-8 mb-8 sm:mb-12 space-y-4 sm:space-y-6">
-                <InformationBox
-                    anime={anime}
-                    accentColor={accentColor}
-                    className="max-h-[22rem] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
-                />
-            </div>
         </div>
     );
 }

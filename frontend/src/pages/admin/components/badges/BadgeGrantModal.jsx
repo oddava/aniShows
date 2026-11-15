@@ -119,7 +119,7 @@ export default function BadgeGrantModal({
                         <button
                             type="submit"
                             disabled={selectedUsers.length === 0 || grantMutation.isPending}
-                            className="px-6 py-2 bg-accent hover:bg-accent-dark text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                            className="px-6 py-2 bg-accent-dark hover:bg-violet-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
                         >
                             Grant to {selectedUsers.length} User(s)
                         </button>

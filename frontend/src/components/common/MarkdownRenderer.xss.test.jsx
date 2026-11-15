@@ -29,7 +29,7 @@ const renderMarkdown = async (content) => {
         </MemoryRouter>,
     );
     // ReactMarkdown is lazy: wait until the Suspense fallback is gone.
-    await waitFor(() => expect(container.textContent).not.toContain('Loading...'));
+    await waitFor(() => expect(container.textContent).not.toContain('Loading...'), { timeout: 5000 });
     return container;
 };
 

@@ -28,6 +28,9 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
     const queryClient = useQueryClient();
     const searchRef = useRef(null);
     const searchInputRef = useRef(null);
+    // Generation counter: results are applied only if no newer search started
+    // and the dropdown wasn't dismissed while the request was in flight.
+    const requestIdRef = useRef(0);
 
     // The first 100 titles, matched locally for instant suggestions. Loaded once
     // per mount; a failure only costs the local matches.
@@ -64,6 +67,8 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                 setShowSuggestions(false);
                 setSelectedIndex(-1);
                 setIsSearchExpanded(false);
+                requestIdRef.current += 1; // drop any in-flight results
+                setIsSearching(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -77,6 +82,8 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
         setShowSuggestions(false);
         setSelectedIndex(-1);
         setIsSearchExpanded(false);
+        requestIdRef.current += 1; // drop any in-flight results
+        setIsSearching(false);
         if (searchInputRef.current) {
             searchInputRef.current.blur();
         }
@@ -85,20 +92,32 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
     // Enhanced keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e) => {
-            // "/" to focus search
-            if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-                // Don't trigger if user is typing in an input
-                if (isActiveElementEditable()) {
+            // "/" (outside text fields) or Ctrl/Cmd+K (anywhere) focuses search
+            const isSlash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey;
+            const isCommandK = (e.metaKey || e.ctrlKey) && !e.altKey && e.key?.toLowerCase() === 'k';
+            // Pages with their own search box (Browse) don't mount the nav input.
+            if ((isSlash || isCommandK) && searchInputRef.current) {
+                // "/" is a character; let it through when typing in a field
+                if (isSlash && isActiveElementEditable()) {
+                    return;
+                }
+                // Guest home: the hero search is on screen and the nav pill is hidden.
+                const heroSearch = document.documentElement.dataset.heroSearch === 'visible'
+                    ? document.getElementById('home-search')
+                    : null;
+                if (heroSearch) {
+                    e.preventDefault();
+                    heroSearch.focus();
                     return;
                 }
                 e.preventDefault();
                 setIsSearchExpanded(true);
-                setTimeout(() => {
-                    if (searchInputRef.current) {
-                        searchInputRef.current.focus();
-                        setShowSuggestions(true);
-                    }
-                }, 50);
+                // The input is always mounted, so focus now: keys typed right
+                // after the shortcut land in the field instead of being lost.
+                searchInputRef.current.focus();
+                // A leftover query is selected, so typing replaces it.
+                searchInputRef.current.select();
+                if (searchInputRef.current.value.trim()) setShowSuggestions(true);
             }
 
             // ESC to blur search and close dropdowns
@@ -109,15 +128,21 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                     setShowSuggestions(false);
                     setSelectedIndex(-1);
                     setIsSearchExpanded(false);
+                    requestIdRef.current += 1; // drop any in-flight results
+                    setIsSearching(false);
                 } else {
+                    // (The profile menu handles its own Escape so it can
+                    // restore focus to its button.)
                     setShowSuggestions(false);
-                    setIsProfileOpen(false);
                     setIsSearchExpanded(false);
+                    requestIdRef.current += 1; // drop any in-flight results
+                    setIsSearching(false);
                 }
             }
 
-            // Arrow keys for navigation in suggestions
-            if (showSuggestions && searchSuggestions.length > 0) {
+            // Arrow keys for navigation in suggestions, only while typing in
+            // the search field (never steal keys from whatever has focus).
+            if (showSuggestions && searchSuggestions.length > 0 && document.activeElement === searchInputRef.current) {
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
                     setSelectedIndex(prev =>
@@ -155,6 +180,7 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
         }
 
         if (searchQuery.trim().length < 1) {
+            requestIdRef.current += 1; // cleared: drop any in-flight results
             setSearchSuggestions([]);
             setShowSuggestions(false);
             setSelectedIndex(-1);
@@ -166,12 +192,18 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
         loadingStartTimeRef.current = Date.now();
         setIsSearching(true);
 
+        const requestId = ++requestIdRef.current;
+        const isCurrent = () => requestIdRef.current === requestId;
+
         searchTimeoutRef.current = setTimeout(async () => {
             try {
-                // Get local fuzzy results for instant feedback
+                // Local fuzzy matches show straight away; API results merge in.
                 const fuzzyResults = fuzzySearchRef.current(searchQuery.trim());
+                if (fuzzyResults.length > 0 && isCurrent()) {
+                    setSearchSuggestions(fuzzyResults.slice(0, 8).map((item) => ({ ...item, isFuzzyMatch: true })));
+                    setShowSuggestions(true);
+                }
 
-                // Also call the API to search the full database
                 let apiResults = [];
                 try {
                     const results = await queryClient.fetchQuery({
@@ -187,19 +219,17 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                     // Fall back to cache-only results if API fails
                 }
 
-                // Combine results: prioritize API results, add unique fuzzy results
+                if (!isCurrent()) return;
+
+                // Combine results: API first (full database), then unique fuzzy matches
                 const seen = new Set();
                 const combined = [];
-
-                // Add API results first (they're from the full database)
                 apiResults.forEach(item => {
                     if (!seen.has(item.id)) {
                         seen.add(item.id);
                         combined.push(item);
                     }
                 });
-
-                // Add fuzzy results that weren't in API results (might have better match scoring)
                 fuzzyResults.forEach(item => {
                     if (!seen.has(item.id)) {
                         seen.add(item.id);
@@ -207,24 +237,20 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                     }
                 });
 
-                // Calculate remaining time to meet minimum loading duration
+                // An empty result waits out a short minimum so "No results"
+                // doesn't flash while the person is still typing.
                 const elapsed = Date.now() - loadingStartTimeRef.current;
-                const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsed);
+                const remainingTime = combined.length > 0 ? 0 : Math.max(0, MIN_LOADING_TIME - elapsed);
 
-                // Delay showing results to prevent flickering
                 setTimeout(() => {
-                    if (combined.length > 0) {
-                        setSearchSuggestions(combined.slice(0, 8));
-                        setShowSuggestions(true);
-                    } else {
-                        // No results - show empty state
-                        setSearchSuggestions([]);
-                        setShowSuggestions(true);
-                    }
+                    if (!isCurrent()) return;
+                    setSearchSuggestions(combined.slice(0, 8));
+                    setShowSuggestions(true);
                     setIsSearching(false);
                 }, remainingTime);
             } catch (error) {
                 logger.error('Search error:', error);
+                if (!isCurrent()) return;
                 setSearchSuggestions([]);
                 setIsSearching(false);
             }
@@ -245,13 +271,27 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
             setShowSuggestions(false);
             setSelectedIndex(-1);
             setIsSearchExpanded(false);
+            requestIdRef.current += 1; // drop any in-flight results
+            setIsSearching(false);
             if (searchInputRef.current) {
                 searchInputRef.current.blur();
             }
         }
     };
 
+    // Focus left the search widget (Tab, click elsewhere): close the list and
+    // drop any in-flight results so nothing reopens or captures keys later.
+    const handleSearchBlur = useCallback((event) => {
+        if (searchRef.current?.contains(event.relatedTarget)) return;
+        setShowSuggestions(false);
+        setSelectedIndex(-1);
+        requestIdRef.current += 1;
+        setIsSearching(false);
+        if (!searchInputRef.current?.value) setIsSearchExpanded(false);
+    }, []);
+
     return {
+        handleSearchBlur,
         searchRef,
         searchInputRef,
         isSearchExpanded, setIsSearchExpanded,

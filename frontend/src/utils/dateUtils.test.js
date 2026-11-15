@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
     AUTO_TIMEZONE_VALUE,
+    formatCalendarDate,
+    getZonedCalendarToday,
     getWeekdayIndex,
     groupScheduleDaysByTimezone,
     normalizeTimeZonePreference,
@@ -49,5 +51,20 @@ describe('dateUtils', () => {
         expect(losAngeles.sunday).toHaveLength(1);
         expect(losAngeles.monday).toHaveLength(0);
         expect(tokyo.monday).toHaveLength(1);
+    });
+});
+
+describe('getZonedCalendarToday', () => {
+    // 2026-11-16 16:00 UTC: already Monday the 16th in Tashkent (UTC+5),
+    // still Monday the 16th 08:00 in Los Angeles; 2026-11-16 03:00 UTC is
+    // Sunday the 15th in Los Angeles but Monday the 16th in Tashkent.
+    it('returns the calendar date in the preferred zone, not the browser zone', () => {
+        const late = new Date(Date.UTC(2026, 10, 16, 3, 0));
+        const la = getZonedCalendarToday('America/Los_Angeles', late);
+        const tashkent = getZonedCalendarToday('Asia/Tashkent', late);
+        expect(formatCalendarDate(la, { weekday: 'long', month: 'short', day: 'numeric' })).toBe('Sunday, Nov 15');
+        expect(formatCalendarDate(tashkent, { weekday: 'long', month: 'short', day: 'numeric' })).toBe('Monday, Nov 16');
+        expect(la.getUTCDay()).toBe(0);
+        expect(tashkent.getUTCDay()).toBe(1);
     });
 });

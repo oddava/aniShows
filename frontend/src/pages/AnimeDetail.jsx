@@ -26,6 +26,9 @@ import ReviewsSection from '../components/animeDetail/ReviewsSection';
 import RecommendationsSidebar from '../components/animeDetail/RecommendationsSidebar';
 import useAnimeDetailTabData from '../components/animeDetail/useAnimeDetailTabData';
 import useAnimeReviews from '../components/animeDetail/useAnimeReviews';
+import ErrorState from '../components/common/ErrorState';
+import useScrollFade from '../hooks/useScrollFade';
+import InformationBox from '../components/InformationBox';
 
 export default function AnimeDetail() {
     const { slug, '*': tabPath } = useParams();
@@ -46,10 +49,11 @@ export default function AnimeDetail() {
     const containerRef = useRef(null);
     const activeTabConfig = useMemo(() => getTabByPath(tabPath), [tabPath]);
     const activeTab = activeTabConfig?.id || DEFAULT_TAB_ID;
+    const tabStripRef = useScrollFade();
     const animeDetailQueryKey = useMemo(() => animeKeys.detail(slug, user?.id), [slug, user?.id]);
 
     // Queries
-    const { data: anime, isLoading, isError } = useQuery({
+    const { data: anime, isLoading, isError, error, refetch } = useQuery({
         ...animeQueries.detail(slug, user?.id),
         staleTime: 300000, // 5 minutes
         gcTime: 600000, // 10 minutes
@@ -142,11 +146,28 @@ export default function AnimeDetail() {
     // Loading & Error states
     if (isLoading) return <AnimeDetailSkeleton />;
 
+    const isNotFound = !isError || error?.response?.status === 404;
     if (isError || !anime) {
         return (
-            <div className="min-h-screen flex flex-col items-center justify-center">
-                <p className="text-gray-400 mb-4">Anime not found</p>
-                <Link to="/browse" className="btn-primary">Browse Anime</Link>
+            <div className="min-h-[70vh] flex items-center justify-center px-4 pt-24">
+                {isNotFound ? (
+                    <div className="ui-empty-state w-full max-w-lg">
+                        <h1 className="text-lg font-semibold text-white mb-2">Anime not found</h1>
+                        <p className="text-sm text-gray-400 mb-6">
+                            This page may have moved, or the title isn’t in the catalog yet.
+                        </p>
+                        <Link to="/browse" className="btn-primary text-sm">Browse Anime</Link>
+                    </div>
+                ) : (
+                    <ErrorState
+                        className="w-full max-w-lg"
+                        title="Couldn’t load this anime"
+                        message="The server didn’t respond. Try again in a moment."
+                        onRetry={() => refetch()}
+                    >
+                        <Link to="/browse" className="btn-secondary text-sm">Browse Anime</Link>
+                    </ErrorState>
+                )}
             </div>
         );
     }
@@ -173,7 +194,7 @@ export default function AnimeDetail() {
             tab.id === 'staff' ? staffTotal : 0
     }));
 
-    const mappedAccent = isRetro ? 'var(--color-accent)' : (accentColor || 'var(--color-accent)');
+    const mappedAccent = isRetro ? 'var(--color-accent-fill)' : (accentColor || 'var(--color-accent-fill)');
 
     // Shared by the large-screen poster column and the small-screen header
     const trackingProps = {
@@ -226,9 +247,11 @@ export default function AnimeDetail() {
             </div>
 
             {/* Content Container */}
-            <div className="relative -mt-32 px-4 sm:px-6 lg:px-8 pb-16">
-                <div className="max-w-[1440px] mx-auto">
-                    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_300px] gap-8 min-w-0">
+            <div className="relative -mt-32 pb-16">
+                <div className="page-container">
+                    {/* Sidebar column only from xl; at lg, recommendations sit under the main
+                        column so the tabs and title get a usable width. */}
+                    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_300px] gap-8 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
                         <PosterColumn {...trackingProps} />
 
@@ -242,7 +265,7 @@ export default function AnimeDetail() {
                             />
 
                             {/* Tab Navigation */}
-                            <div className={`flex items-center gap-1.5 sm:gap-2 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide -mx-2 px-2 sm:mx-0 sm:px-1.5 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
+                            <div ref={tabStripRef} className={`scroll-fade flex items-center gap-1.5 sm:gap-2 lg:gap-1 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
                                 data-title="Navigation"
                             >
                                 {tabsWithCounts.map((tab) => (
@@ -256,6 +279,14 @@ export default function AnimeDetail() {
                                     />
                                 ))}
                             </div>
+
+                            {/* Phones/tablets: key facts sit at the top of Overview, under
+                                the tabs, so the tabs stay near the title. */}
+                            {activeTab === DEFAULT_TAB_ID && (
+                                <div className="lg:hidden mb-8">
+                                    <InformationBox anime={anime} accentColor={accentColor} />
+                                </div>
+                            )}
 
                             {/* Tab Content */}
                             <AnimeDetailTabContent

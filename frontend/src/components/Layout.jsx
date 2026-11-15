@@ -3,12 +3,12 @@ import React, { Suspense } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import VerificationBanner from './VerificationBanner';
+import PageLoader from './common/PageLoader';
 
-const PageLoader = () => (
-  <div className="min-h-[60vh] flex items-center justify-center">
-    <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-  </div>
-);
+// Pages are keyed by their first two path segments, so a route change fades the
+// new page in, while sub-paths of one page (anime tabs, profile tabs) and query
+// string changes (browse filters) do not remount it.
+const getPageKey = (pathname) => pathname.split('/').filter(Boolean).slice(0, 2).join('/') || 'home';
 
 export default function Layout() {
     const location = useLocation();
@@ -18,13 +18,25 @@ export default function Layout() {
 
     return (
         <div className="min-h-screen bg-dark flex flex-col">
-            <Suspense fallback={<PageLoader />}>
+            <a href="#main-content" className="skip-link">Skip to content</a>
+            <Suspense fallback={null}>
                 <Navbar />
             </Suspense>
-            {!isFlushPage && <div className="hidden md:block h-16 shrink-0" />}
+            {!isFlushPage && <div aria-hidden="true" className="h-14 md:h-16 shrink-0" />}
             <VerificationBanner />
-            <main className={`${isBrowsePage ? '' : 'flex-grow'} md:pb-0`}>
-                <Outlet />
+            <main
+                id="main-content"
+                tabIndex={-1}
+                className={`${isBrowsePage ? '' : 'flex-grow'} md:pb-0 focus:outline-none`}
+            >
+                {/* The boundary sits outside the keyed wrapper so it persists:
+                    router navigations run as transitions, so the current page
+                    stays up until the next one's chunk has loaded. */}
+                <Suspense fallback={<PageLoader />}>
+                    <div key={getPageKey(normalizedPath)} className="page-enter">
+                        <Outlet />
+                    </div>
+                </Suspense>
             </main>
             <Footer className={isBrowsePage ? '' : 'mt-auto'} />
         </div>

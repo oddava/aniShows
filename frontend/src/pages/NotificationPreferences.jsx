@@ -9,7 +9,7 @@ const ToggleSwitch = ({ enabled, onToggle, loading }) => (
         onClick={onToggle}
         disabled={loading}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${
-            enabled ? 'bg-accent' : 'bg-gray-600'
+            enabled ? 'bg-accent-dark' : 'bg-gray-600'
         } ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
     >
         <span
@@ -227,7 +227,7 @@ const NotificationPreferences = () => {
             </div>
 
             {saving && (
-                <div className="fixed bottom-6 right-6 flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg shadow-lg">
+                <div className="fixed bottom-6 right-6 flex items-center gap-2 px-4 py-2 bg-accent-dark text-white rounded-lg shadow-lg">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="text-sm font-medium">Saving...</span>
                 </div>

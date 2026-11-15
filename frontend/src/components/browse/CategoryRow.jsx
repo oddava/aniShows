@@ -1,6 +1,5 @@
 import PropTypes from 'prop-types';
-import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import SectionHeader from '../common/SectionHeader';
 import AnimeCard, { AnimeCardSkeleton } from '../AnimeCard';
 
 export default function CategoryRow({
@@ -17,37 +16,29 @@ export default function CategoryRow({
     };
 
     return (
-        <section className="px-4 md:px-0 pb-2 mb-8 md:mb-12">
+        <section className="pb-2 mb-8 md:mb-12">
             <div className="max-w-7xl mx-auto">
-                <div className="flex items-center justify-between mb-4 md:mb-6">
-                    <div>
-                        <h2 className="text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em]">{title}</h2>
-                    </div>
-                    {viewAllLink && (
-                        <Link
-                            to={viewAllLink}
-                            onClick={handleViewAllClick}
-                            className="flex items-center gap-1 text-sm font-bold text-gray-400 hover:text-accent transition-colors group uppercase tracking-widest"
-                        >
-                            VIEW ALL <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        </Link>
-                    )}
-                </div>
+                <SectionHeader
+                    title={title}
+                    viewAllTo={viewAllLink}
+                    onViewAllClick={handleViewAllClick}
+                />
 
-                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 anime-card-row-gap overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 touch-pan-x touch-pan-y overscroll-x-contain">
+                <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 anime-card-row-gap overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 snap-x snap-mandatory md:snap-none scroll-px-4 overscroll-x-contain">
                     {isLoading ? (
                         Array(skeletonCount).fill(0).map((_, i) => (
-                            <div key={i} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full">
+                            <div key={i} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full snap-start">
                                 <AnimeCardSkeleton />
                             </div>
                         ))
                     ) : animeList?.length > 0 ? (
                         animeList.map((anime, index) => (
-                            <div key={anime.id} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full">
+                            <div key={anime.id} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full snap-start">
                                 <AnimeCard
                                     anime={anime}
                                     titleLanguage={titleLanguage}
                                     priority={index < eagerCount}
+                                    showMeta
                                 />
                             </div>
                         ))

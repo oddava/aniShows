@@ -156,6 +156,28 @@ export function getWeekdayIndex(value, preference) {
     return DAY_INDEX_BY_NAME[weekday] ?? 0;
 }
 
+/**
+ * Today's calendar date in the resolved time zone, as a Date at 12:00 UTC on
+ * that day. Pair it with formatCalendarDate / getUTCDay so the weekday and the
+ * day-of-month always come from the same zone (never browser-local midnight
+ * re-formatted in another zone).
+ */
+export function getZonedCalendarToday(preference, now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: resolveTimeZone(preference),
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(now);
+    const get = (type) => Number(parts.find((part) => part.type === type)?.value);
+    return new Date(Date.UTC(get('year'), get('month') - 1, get('day'), 12));
+}
+
+/** Formats a calendar date produced by getZonedCalendarToday (UTC-anchored). */
+export function formatCalendarDate(date, options = {}) {
+    return new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'UTC' }).format(date);
+}
+
 export function getCurrentWeekdayIndex(preference) {
     return getWeekdayIndex(new Date(), preference);
 }

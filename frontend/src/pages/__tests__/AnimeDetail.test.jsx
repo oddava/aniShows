@@ -359,8 +359,12 @@ describe('AnimeDetail list update invalidation', () => {
             page_size: 50,
         });
         expect(animeApi.getEpisodeRatings).toHaveBeenCalledWith('frieren');
-        const watchLink = screen.getByRole('link', { name: /watch/i });
-        expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch1');
+        // The count settles once the watch preview resolves (before that it
+        // falls back to the anime's episode_count).
+        await waitFor(() => {
+            const watchLink = screen.getByRole('link', { name: /watch/i });
+            expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch1');
+        });
         expect(animeApi.getCharacters).not.toHaveBeenCalled();
         expect(animeApi.getStaff).not.toHaveBeenCalled();
     });
