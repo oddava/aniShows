@@ -35,7 +35,9 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
         staleTime: 60_000,
         retry: false,
     });
-    const suggestions = debounced.length >= 2 ? results.slice(0, 8) : [];
+    // Phones show fewer rows so the list fits above the tab bar and keyboard.
+    const maxRows = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 639px)').matches ? 5 : 8;
+    const suggestions = query.trim().length >= 2 && debounced.length >= 2 ? results.slice(0, maxRows) : [];
     const showList = open && suggestions.length > 0;
 
     useEffect(() => {
@@ -87,7 +89,15 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
     };
 
     return (
-        <div ref={wrapperRef} className="relative max-w-lg mb-5">
+        <div
+            ref={wrapperRef}
+            className="relative max-w-lg mb-5"
+            onBlur={(event) => {
+                // Close when keyboard focus leaves the field and its list, so the
+                // list never covers whatever receives focus next.
+                if (!wrapperRef.current?.contains(event.relatedTarget)) setOpen(false);
+            }}
+        >
             <form ref={formRef} role="search" onSubmit={submit} className="relative">
                 <label htmlFor={ID} className="sr-only">Search anime</label>
                 <Search aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-500 pointer-events-none" />
@@ -101,7 +111,13 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
                         setKeyboardPicked(false);
                         setOpen(true);
                     }}
-                    onFocus={() => setOpen(true)}
+                    onFocus={(event) => {
+                        setOpen(true);
+                        // On phones, bring the field to the top so the list has room.
+                        if (window.matchMedia?.('(max-width: 639px)').matches) {
+                            event.currentTarget.scrollIntoView({ block: 'start' });
+                        }
+                    }}
                     onKeyDown={onKeyDown}
                     placeholder="Search anime by title"
                     autoComplete="off"
@@ -112,7 +128,7 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
                     aria-controls={showList ? `${ID}-listbox` : undefined}
                     aria-activedescendant={showList && selectedIndex >= 0 ? `${ID}-option-${selectedIndex}` : undefined}
                     aria-busy={isFetching}
-                    className="w-full h-12 sm:h-[52px] rounded-xl bg-dark-100 pl-11 pr-28 text-[15px] text-white placeholder:text-gray-500 [&::-webkit-search-cancel-button]:appearance-none"
+                    className="w-full h-12 sm:h-[52px] scroll-mt-20 rounded-xl bg-dark-100 pl-11 pr-28 text-[15px] text-white placeholder:text-gray-500 [&::-webkit-search-cancel-button]:appearance-none"
                 />
                 <button type="submit" className="btn-primary absolute right-1.5 top-1/2 -translate-y-1/2 h-9 sm:h-10 px-4 text-sm">
                     Search
@@ -120,17 +136,13 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
             </form>
 
             {showList && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-white/10 bg-dark-100 shadow-2xl shadow-black/50 animate-fade-in">
+                <div tabIndex={-1} className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-white/10 bg-dark-100 shadow-2xl shadow-black/50 animate-fade-in">
                     <Suspense fallback={null}>
                         <SearchSuggestionList
                             idPrefix={ID}
                             searchSuggestions={suggestions}
                             searchQuery={query.trim()}
                             selectedIndex={selectedIndex}
-                            setSelectedIndex={(index) => {
-                                setKeyboardPicked(false);
-                                setSelectedIndex(index);
-                            }}
                             handleSuggestionClick={goToAnime}
                             handleSearch={browseAll}
                         />

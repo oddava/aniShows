@@ -29,7 +29,6 @@ export default function SearchSuggestionList({
     searchSuggestions,
     searchQuery,
     selectedIndex,
-    setSelectedIndex,
     handleSuggestionClick,
     handleSearch,
     idPrefix = 'navbar-search',
@@ -48,7 +47,6 @@ export default function SearchSuggestionList({
                         role="option"
                         aria-selected={selectedIndex === index}
                         onClick={() => handleSuggestionClick(anime.slug)}
-                        onMouseEnter={() => setSelectedIndex(index)}
                         className={`w-full cursor-pointer flex items-center gap-3 border-l-2 p-3 text-left transition-colors ${selectedIndex === index
                             ? 'bg-accent/10 border-accent'
                             : 'border-transparent hover:bg-dark-50'

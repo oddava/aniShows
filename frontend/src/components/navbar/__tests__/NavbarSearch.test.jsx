@@ -71,8 +71,9 @@ describe('NavbarSearch', () => {
         // The matching part of the title is highlighted.
         expect(screen.getAllByText('Fri', { selector: 'span.text-accent' })).toHaveLength(1);
 
+        // Hover only highlights (CSS); the arrow-key selection is untouched.
         fireEvent.mouseEnter(screen.getByRole('option', { name: /Fire Force/ }));
-        expect(state.setSelectedIndex).toHaveBeenCalledWith(1);
+        expect(state.setSelectedIndex).not.toHaveBeenCalled();
 
         fireEvent.click(first);
         expect(state.handleSuggestionClick).toHaveBeenCalledWith('frieren');

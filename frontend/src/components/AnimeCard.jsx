@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Plus, Check, Eye, Clock, X, Loader2 } from 'lucide-react';
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef, useId } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { listApi } from '../api/client';
@@ -69,6 +69,8 @@ function AnimeCard({
     const [imageLoaded, setImageLoaded] = useState(false);
     const imageRef = useRef(null);
     const statusMenuRef = useRef(null);
+    const statusButtonRef = useRef(null);
+    const statusMenuId = useId();
 
     // Memoized computed values - use optimized images with srcset
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
@@ -169,7 +171,10 @@ function AnimeCard({
             }
         }
         function handleKeyDown(event) {
-            if (event.key === 'Escape') setShowStatusMenu(false);
+            if (event.key === 'Escape') {
+                setShowStatusMenu(false);
+                statusButtonRef.current?.focus();
+            }
         }
         if (showStatusMenu) {
             document.addEventListener('mousedown', handleClickOutside);
@@ -205,6 +210,7 @@ function AnimeCard({
 
         setListStatus(newStatus);
         setShowStatusMenu(false);
+        statusButtonRef.current?.focus();
 
         setIsLoading(true);
         try {
@@ -237,6 +243,7 @@ function AnimeCard({
         setListStatus(null);
         setListId(null);
         setShowStatusMenu(false);
+        statusButtonRef.current?.focus();
 
         setIsLoading(true);
         try {
@@ -375,13 +382,15 @@ function AnimeCard({
                                     title={listStatus && currentStatusOption ? currentStatusOption.label : 'Add to List'}
                                     aria-label={listStatus && currentStatusOption ? `List status: ${currentStatusOption.label}. Change` : `Add ${displayTitle} to list`}
                                     aria-expanded={showStatusMenu}
+                                    aria-controls={showStatusMenu ? statusMenuId : undefined}
+                                    ref={statusButtonRef}
                                 >
                                     {isLoading ? <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" /> :
                                         listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />}
                                 </button>
 
                                 {showStatusMenu && (
-                                    <div role="group" aria-label="List status" className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-lg shadow-black/40 z-[210] animate-fade-in overflow-hidden">
+                                    <div id={statusMenuId} role="group" aria-label="List status" className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-lg shadow-black/40 z-[210] animate-fade-in overflow-hidden">
                                         <div className="p-1">
                                             {STATUS_OPTIONS.map((option) => (
                                                 <button
@@ -389,7 +398,7 @@ function AnimeCard({
                                                     type="button"
                                                     aria-pressed={listStatus === option.value}
                                                     onClick={(e) => handleStatusChange(e, option.value)}
-                                                    className={`w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-semibold rounded-md transition-colors touch-manipulation
+                                                    className={`w-full px-2.5 py-2 flex items-center gap-2 text-xs font-semibold rounded-md transition-colors touch-manipulation
                                                         ${listStatus === option.value ? 'bg-accent-dark text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
                                                 >
                                                     <option.icon className="w-3 h-3" />
@@ -399,7 +408,7 @@ function AnimeCard({
                                         </div>
                                         {listStatus && (
                                             <div className="p-1 border-t border-gray-800 bg-black/20">
-                                                <button type="button" onClick={handleRemoveFromList} className="w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
+                                                <button type="button" onClick={handleRemoveFromList} className="w-full px-2.5 py-2 flex items-center gap-2 text-xs font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
                                                     <X className="w-3 h-3" /> Remove
                                                 </button>
                                             </div>
