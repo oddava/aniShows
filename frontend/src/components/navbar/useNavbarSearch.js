@@ -138,8 +138,9 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
                 }
             }
 
-            // Arrow keys for navigation in suggestions
-            if (showSuggestions && searchSuggestions.length > 0) {
+            // Arrow keys for navigation in suggestions, only while typing in
+            // the search field (never steal keys from whatever has focus).
+            if (showSuggestions && searchSuggestions.length > 0 && document.activeElement === searchInputRef.current) {
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
                     setSelectedIndex(prev =>
@@ -276,7 +277,19 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
         }
     };
 
+    // Focus left the search widget (Tab, click elsewhere): close the list and
+    // drop any in-flight results so nothing reopens or captures keys later.
+    const handleSearchBlur = useCallback((event) => {
+        if (searchRef.current?.contains(event.relatedTarget)) return;
+        setShowSuggestions(false);
+        setSelectedIndex(-1);
+        requestIdRef.current += 1;
+        setIsSearching(false);
+        if (!searchInputRef.current?.value) setIsSearchExpanded(false);
+    }, []);
+
     return {
+        handleSearchBlur,
         searchRef,
         searchInputRef,
         isSearchExpanded, setIsSearchExpanded,

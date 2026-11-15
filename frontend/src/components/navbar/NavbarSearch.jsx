@@ -40,6 +40,7 @@ export default function NavbarSearch({ search }) {
         selectedIndex, setSelectedIndex,
         handleSuggestionClick,
         handleSearch,
+        handleSearchBlur,
     } = search;
 
     useEffect(() => {
@@ -49,7 +50,7 @@ export default function NavbarSearch({ search }) {
     }, [isSearchExpanded, showSuggestions]);
 
     return (
-        <div className="nav-search-slot flex-1 flex justify-end mx-2 lg:mx-4" ref={searchRef}>
+        <div className="nav-search-slot flex-1 flex justify-end mx-2 lg:mx-4" ref={searchRef} onBlur={handleSearchBlur}>
             <div className={`relative transition-[width,max-width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${isSearchExpanded ? 'w-full max-w-[16rem] lg:max-w-[22rem]' : 'w-10 lg:w-52'}`}>
                 <form onSubmit={handleSearch} className="relative group/search flex items-center justify-end w-full h-full">
                     {/* Search Icon / Toggle Button */}
@@ -129,6 +130,7 @@ export default function NavbarSearch({ search }) {
                 {/* Enhanced Search Suggestions Dropdown - Always visible when active */}
                 <div
                     inert={!showSuggestions}
+                    tabIndex={-1}
                     className={`absolute left-0 right-0 top-full z-50 mt-3 max-h-[70vh] overflow-y-auto overflow-hidden rounded-2xl border border-white/10 bg-dark-100 shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] origin-top ${showSuggestions ? 'opacity-100 translate-y-0' : 'pointer-events-none opacity-0 -translate-y-1'
                         }`}
                 >

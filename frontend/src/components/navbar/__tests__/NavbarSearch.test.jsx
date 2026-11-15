@@ -1,6 +1,7 @@
 import { createRef } from 'react';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NavbarSearch from '../NavbarSearch';
@@ -141,6 +142,33 @@ describe('NavbarSearch with useNavbarSearch', () => {
             expect(mockGetAll).toHaveBeenCalledWith({ q: 'frieren', page_size: 10 });
         });
         expect(screen.getByRole('button', { name: 'View all results for "frieren"' })).toBeInTheDocument();
+    });
+
+    it('stops handling suggestion keys once focus leaves the search', { timeout: 10000 }, async () => {
+        const user = userEvent.setup();
+        const onNextLink = vi.fn((event) => event.preventDefault());
+        render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <MemoryRouter>
+                    <SearchHarness />
+                    <a href="/login" onClick={onNextLink}>Sign In</a>
+                </MemoryRouter>
+            </QueryClientProvider>
+        );
+
+        await user.click(screen.getByRole('button', { name: 'Toggle Search' }));
+        await user.type(screen.getByPlaceholderText('Search anime...'), 'frieren');
+        expect(await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
+        await user.keyboard('{ArrowDown}');
+
+        // Tab past the search (Clear button, then out) to the next link.
+        await user.tab();
+        await user.tab();
+        expect(screen.getByRole('link', { name: 'Sign In' })).toHaveFocus();
+        expect(screen.getByPlaceholderText('Search anime...')).toHaveAttribute('aria-expanded', 'false');
+
+        await user.keyboard('{ArrowDown}{Enter}');
+        expect(onNextLink).toHaveBeenCalled();
     });
 
     it('drops a late response when the search was cleared while it was in flight', { timeout: 10000 }, async () => {
