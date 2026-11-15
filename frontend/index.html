@@ -14,9 +14,12 @@
     content="AniShows - Discover your next anime adventure. Explore thousands of anime series, track your favorites, and join a community of passionate fans." />
   <meta name="theme-color" content="#0c0d10" />
 
-  <!-- Preload critical font -->
-  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'" />
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" /></noscript>
+  <!-- Font: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Plain stylesheet: the CSP (script-src 'self') blocks inline onload
+       handlers, so the async "preload + onload" trick never applies it. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" />
 
   <!-- Critical CSS - prevents white flash -->
   <style>

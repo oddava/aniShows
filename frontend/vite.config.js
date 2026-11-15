@@ -10,6 +10,10 @@ const allowedHosts = process.env.ALLOWED_HOSTS
 // Deployment timestamp for cache busting and debugging
 const deploymentTime = new Date().toISOString()
 const enablePWA = process.env.VITE_ENABLE_PWA === 'true'
+// Dev proxy targets. Default to the docker-compose service names; override to
+// point the dev server at a backend running elsewhere (e.g. a local mock).
+const devApiTarget = process.env.DEV_API_TARGET || 'http://web:8000'
+const devMediaTarget = process.env.DEV_MEDIA_TARGET || 'http://minio:9000'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -130,30 +134,30 @@ export default defineConfig(({ mode }) => ({
     },
     proxy: {
       '/api': {
-        target: 'http://web:8000',
+        target: devApiTarget,
         changeOrigin: true,
       },
       '/ws': {
-        target: 'http://web:8000',
+        target: devApiTarget,
         changeOrigin: true,
         ws: true,
       },
       '/media': {
         // Media lives in the MinIO bucket under the "media/" prefix.
-        target: 'http://minio:9000',
+        target: devMediaTarget,
         changeOrigin: true,
         rewrite: (path) => `/${process.env.MEDIA_BUCKET || 'anishows-media'}${path}`,
       },
       '/django-admin': {
-        target: 'http://web:8000',
+        target: devApiTarget,
         changeOrigin: true,
       },
       '/static': {
-        target: 'http://web:8000',
+        target: devApiTarget,
         changeOrigin: true,
       },
       '/accounts': {
-        target: 'http://web:8000',
+        target: devApiTarget,
         changeOrigin: true,
       },
     },
