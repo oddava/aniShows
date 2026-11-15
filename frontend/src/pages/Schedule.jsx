@@ -272,10 +272,9 @@ export default function Schedule() {
               {DAY_NAMES[selectedDay]}
               <span className="text-gray-500 font-normal ml-2">
                 {/* Convert JS day index (0=Sun) to Monday-start offset (Mon=0, Tue=1, ..., Sun=6) */}
-                {formatDate(
+                {formatCalendarDate(
                   addDays(startOfToday, (selectedDay - todayDayIndex + 7) % 7),
-                  { month: 'short', day: 'numeric' },
-                  preferredTimezone
+                  { month: 'short', day: 'numeric' }
                 )}
               </span>
             </h2>

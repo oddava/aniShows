@@ -284,8 +284,10 @@ function GuestIntroHero({ showAuthLinks = true }) {
 
 
     return (
-        <section className="relative overflow-hidden border-b border-gray-900 pt-24 pb-12 sm:pt-40 sm:pb-24">
-            <div aria-hidden="true" className="absolute inset-0 bg-dark">
+        <section className="relative z-20 border-b border-gray-900 pt-24 pb-12 sm:pt-40 sm:pb-24">
+            {/* Only the decoration is clipped, so the search dropdown can extend
+                past the hero over the shelves below. */}
+            <div aria-hidden="true" className="absolute inset-0 overflow-hidden bg-dark">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_15%_10%,color-mix(in_srgb,var(--color-accent)_13%,transparent)_0%,transparent_65%)]" />
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-dark" />
             </div>

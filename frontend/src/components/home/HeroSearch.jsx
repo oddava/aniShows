@@ -20,6 +20,7 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
     const [debounced, setDebounced] = useState('');
     const [open, setOpen] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
+    const [keyboardPicked, setKeyboardPicked] = useState(false);
     const wrapperRef = useRef(null);
 
     useEffect(() => {
@@ -50,25 +51,34 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
         navigate(`/anime/${slug}`);
     };
 
-    const submit = (event) => {
+    const browseAll = (event) => {
         event?.preventDefault();
-        if (showList && selectedIndex >= 0 && suggestions[selectedIndex]) {
-            goToAnime(suggestions[selectedIndex].slug);
-            return;
-        }
         const trimmed = query.trim();
         setOpen(false);
         navigate(trimmed ? `/browse?q=${encodeURIComponent(trimmed)}` : '/browse');
+    };
+
+    // Enter: open the suggestion picked with the arrow keys, else browse all.
+    // (Hover highlights a row but never redirects an explicit "search" action.)
+    const submit = (event) => {
+        event?.preventDefault();
+        if (showList && keyboardPicked && selectedIndex >= 0 && suggestions[selectedIndex]) {
+            goToAnime(suggestions[selectedIndex].slug);
+            return;
+        }
+        browseAll();
     };
 
     const onKeyDown = (event) => {
         if (event.key === 'ArrowDown' && suggestions.length > 0) {
             event.preventDefault();
             setOpen(true);
+            setKeyboardPicked(true);
             setSelectedIndex((i) => (i + 1) % suggestions.length);
         } else if (event.key === 'ArrowUp' && suggestions.length > 0) {
             event.preventDefault();
             setOpen(true);
+            setKeyboardPicked(true);
             setSelectedIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
         } else if (event.key === 'Escape') {
             setOpen(false);
@@ -88,6 +98,7 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
                     onChange={(event) => {
                         setQuery(event.target.value);
                         setSelectedIndex(-1);
+                        setKeyboardPicked(false);
                         setOpen(true);
                     }}
                     onFocus={() => setOpen(true)}
@@ -116,9 +127,12 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
                             searchSuggestions={suggestions}
                             searchQuery={query.trim()}
                             selectedIndex={selectedIndex}
-                            setSelectedIndex={setSelectedIndex}
+                            setSelectedIndex={(index) => {
+                                setKeyboardPicked(false);
+                                setSelectedIndex(index);
+                            }}
                             handleSuggestionClick={goToAnime}
-                            handleSearch={submit}
+                            handleSearch={browseAll}
                         />
                     </Suspense>
                 </div>

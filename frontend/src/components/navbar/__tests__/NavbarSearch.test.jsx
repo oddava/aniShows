@@ -127,4 +127,35 @@ describe('NavbarSearch with useNavbarSearch', () => {
         });
         expect(screen.getByRole('button', { name: 'View all results for "frieren"' })).toBeInTheDocument();
     });
+
+    it('drops a late response when the search was cleared while it was in flight', { timeout: 10000 }, async () => {
+        let resolveSearch;
+        mockGetAll.mockImplementation((params) => {
+            if (params.q) {
+                return new Promise((resolve) => { resolveSearch = resolve; });
+            }
+            return Promise.resolve({ data: { results: [] } });
+        });
+
+        render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <MemoryRouter>
+                    <SearchHarness />
+                </MemoryRouter>
+            </QueryClientProvider>
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Toggle Search' }));
+        const input = screen.getByPlaceholderText('Search anime...');
+        fireEvent.change(input, { target: { value: 'frieren' } });
+        await waitFor(() => expect(mockGetAll).toHaveBeenCalledWith({ q: 'frieren', page_size: 10 }));
+
+        // Clear while the request is still pending, then let it land.
+        fireEvent.change(input, { target: { value: '' } });
+        resolveSearch({ data: { results: [SUGGESTIONS[0]] } });
+
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        expect(screen.queryByRole('option', { name: /Beyond Journey/ })).not.toBeInTheDocument();
+        expect(input).toHaveAttribute('aria-expanded', 'false');
+    });
 });

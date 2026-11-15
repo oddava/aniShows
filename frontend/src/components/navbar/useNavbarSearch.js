@@ -176,6 +176,7 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
         }
 
         if (searchQuery.trim().length < 1) {
+            requestIdRef.current += 1; // cleared: drop any in-flight results
             setSearchSuggestions([]);
             setShowSuggestions(false);
             setSelectedIndex(-1);

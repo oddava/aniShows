@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -33,11 +33,12 @@ vi.mock('../../components/SEO', () => ({
   ),
 }));
 
-// Mock AuthContext
+// Mock AuthContext (the user is swappable per test, e.g. for a time zone)
+const mockAuth = vi.hoisted(() => ({ user: null }));
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => ({
     isAuthenticated: false,
-    user: null,
+    user: mockAuth.user,
     refreshProfile: vi.fn(),
   }),
 }));
@@ -451,5 +452,31 @@ describe('Schedule Component - Authenticated User', () => {
 
     // Re-render with authenticated mock
     rerender(<Schedule />);
+  });
+});
+
+describe('Schedule Component - preferred time zone far from the browser', () => {
+  afterEach(() => {
+    mockAuth.user = null;
+    vi.useRealTimers();
+  });
+
+  it('labels the strip and the day heading with the same calendar date (UTC+14)', async () => {
+    // 12:00 UTC on Mon Nov 16 is already 02:00 on Tue Nov 17 in Kiritimati.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(Date.UTC(2026, 10, 16, 12, 0)));
+    mockAuth.user = { preferred_timezone: 'Pacific/Kiritimati' };
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse());
+
+    render(<Schedule />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByText(/No episodes scheduled/i)).toBeInTheDocument();
+    });
+
+    const selected = screen.getByRole('button', { pressed: true });
+    expect(selected).toHaveAccessibleName(/^Tuesday 17,/);
+    const heading = screen.getByRole('heading', { level: 2, name: /Tuesday/ });
+    expect(heading).toHaveTextContent('Nov 17');
   });
 });
