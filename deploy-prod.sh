@@ -142,11 +142,10 @@ docker run --rm -v "${FRONTEND_VOLUME}:/srv/frontend" alpine:3 test -f /srv/fron
 ok "frontend files deployed"
 
 step "Pulling images"
-"${COMPOSE[@]}" pull web celery beat db redis minio createbuckets caddy umami_db umami \
-    jikan jikan_mongodb jikan_typesense
+"${COMPOSE[@]}" pull web celery beat db redis minio createbuckets caddy umami_db umami
 "${COMPOSE[@]}" build backup
 
-step "Core services (also removes old daphne / extra celery worker containers)"
+step "Core services (also removes orphaned containers: old daphne / celery workers, the Jikan stack)"
 "${COMPOSE[@]}" up -d --no-deps --remove-orphans db redis minio
 "${COMPOSE[@]}" up -d --wait db redis minio
 "${COMPOSE[@]}" up --no-deps --exit-code-from createbuckets createbuckets >/dev/null \
@@ -156,29 +155,6 @@ step "Migrations"
 "${COMPOSE[@]}" run --rm --no-deps -e DB_USE_PGBOUNCER=False -e DB_HOST=db -e DB_PORT=5432 \
     web python manage.py migrate --noinput
 ok "migrations applied"
-
-step "Self-hosted Jikan"
-"${COMPOSE[@]}" up -d --wait jikan_mongodb
-"${COMPOSE[@]}" up -d jikan_typesense jikan
-jikan_ready() {
-    "${COMPOSE[@]}" exec -T jikan sh -c '
-        n1=$(wget -qO- "http://127.0.0.1:8080/v4/seasons/now?page=1&limit=25" | grep -o "\"mal_id\":" | wc -l)
-        n2=$(wget -qO- "http://127.0.0.1:8080/v4/top/anime?filter=airing&page=1&limit=25" | grep -o "\"mal_id\":" | wc -l)
-        echo "    seasons/now=${n1} top/airing=${n2}"
-        [ "$n1" -ge 6 ] || [ "$n2" -ge 6 ]'
-}
-for _ in $(seq 1 30); do
-    "${COMPOSE[@]}" exec -T jikan true 2>/dev/null && break
-    sleep 2
-done
-if ! jikan_ready; then
-    warn "Jikan catalog under-populated, running indexers"
-    for indexer in indexer:genres indexer:common indexer:anime-current-season indexer:anime-schedule; do
-        "${COMPOSE[@]}" exec -T jikan php artisan "$indexer"
-    done
-    jikan_ready || { "${COMPOSE[@]}" logs --tail=50 jikan; die "Jikan not ready"; }
-fi
-ok "Jikan ready"
 
 step "Workers, backups, analytics"
 "${COMPOSE[@]}" up -d --no-deps celery beat backup

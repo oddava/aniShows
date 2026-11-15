@@ -19,7 +19,6 @@ x-backend: &backend
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
     AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
     AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
-    JIKAN_BASE_URL: http://jikan:8080/v4
     PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
     SENTRY_ENVIRONMENT: production
     # Only Caddy can reach the backend (it publishes no ports), and Caddy
@@ -207,75 +206,6 @@ services:
         limits:
           memory: 512M
 
-  # Self-hosted Jikan (scrapes MAL directly). Kept until catalog sync moves to AniList only.
-  jikan:
-    image: jikanme/jikan-rest:latest@sha256:505f06101617c337db5b301701258de63a55f6593b0181cf2d84c92ff49cee9d
-    restart: always
-    environment:
-      APP_ENV: production
-      APP_DEBUG: "false"
-      APP_URL: http://jikan:8080
-      DB_CACHING: "true"
-      DB_CONNECTION: mongodb
-      DB_HOST: jikan_mongodb
-      DB_PORT: "27017"
-      DB_DATABASE: jikan
-      DB_ADMIN: jikan
-      CACHING: "true"
-      CACHE_DRIVER: redis
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
-      QUEUE_CONNECTION: sync
-      SCOUT_DRIVER: typesense
-      SCOUT_QUEUE: "false"
-      TYPESENSE_HOST: jikan_typesense
-      TYPESENSE_PORT: "8108"
-      TYPESENSE_API_KEY: ${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}
-      SOURCE: local
-      MAX_RESULTS_PER_PAGE: "25"
-    expose:
-      - "8080"
-    depends_on:
-      jikan_mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      jikan_typesense:
-        condition: service_started
-    deploy:
-      resources:
-        limits:
-          memory: 768M
-
-  jikan_mongodb:
-    image: mongo:7
-    restart: always
-    command: ["--bind_ip_all"]
-    healthcheck:
-      test: ["CMD-SHELL", "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/27017'"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 40s
-    volumes:
-      - jikan_mongodb_data:/data/db
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-
-  jikan_typesense:
-    image: typesense/typesense:0.25.2
-    restart: always
-    command: ["--data-dir", "/data", "--api-key=${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}"]
-    volumes:
-      - jikan_typesense_data:/data
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-
   backup:
     build: ./backups
     container_name: anishows-backup
@@ -306,5 +236,3 @@ volumes:
   caddy_data:
   caddy_config:
   umami_db_data:
-  jikan_mongodb_data:
-  jikan_typesense_data:

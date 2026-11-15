@@ -8,9 +8,6 @@
 #   docker compose --profile analytics up -d   # Umami
 #   docker compose --profile proxy up -d       # Caddy on :80 (prod-like routing)
 #   docker compose --profile backup up -d      # scheduled backups
-#   docker compose --profile jikan up -d       # self-hosted Jikan (scrapes MAL directly);
-#                                              # use when api.jikan.moe is unreachable and
-#                                              # set JIKAN_BASE_URL=http://jikan:8080/v4 in .env
 
 x-backend: &backend
   image: anishows_web:dev
@@ -28,7 +25,6 @@ x-backend: &backend
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
     AWS_S3_ENDPOINT_URL: http://minio:9000
     MINIO_PUBLIC_DOMAIN: localhost:${FRONTEND_PORT:-5173}
-    JIKAN_BASE_URL: ${JIKAN_BASE_URL:-https://api.jikan.moe/v4}
   volumes:
     - .:/app
   user: "1000:1000"
@@ -246,62 +242,6 @@ services:
       umami_db:
         condition: service_healthy
 
-  jikan:
-    profiles: [jikan]
-    image: jikanme/jikan-rest:latest@sha256:505f06101617c337db5b301701258de63a55f6593b0181cf2d84c92ff49cee9d
-    environment:
-      APP_ENV: production
-      APP_DEBUG: "false"
-      APP_URL: http://jikan:8080
-      DB_CACHING: "true"
-      DB_CONNECTION: mongodb
-      DB_HOST: jikan_mongodb
-      DB_PORT: "27017"
-      DB_DATABASE: jikan
-      DB_ADMIN: jikan
-      CACHING: "true"
-      CACHE_DRIVER: redis
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
-      QUEUE_CONNECTION: sync
-      SCOUT_DRIVER: typesense
-      SCOUT_QUEUE: "false"
-      TYPESENSE_HOST: jikan_typesense
-      TYPESENSE_PORT: "8108"
-      TYPESENSE_API_KEY: ${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}
-      SOURCE: local
-      MAX_RESULTS_PER_PAGE: "25"
-    expose:
-      - "8080"
-    depends_on:
-      jikan_mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      jikan_typesense:
-        condition: service_started
-
-  jikan_mongodb:
-    profiles: [jikan]
-    image: mongo:7
-    command: ["--bind_ip_all"]
-    healthcheck:
-      test: ["CMD-SHELL", "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/27017'"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 40s
-    volumes:
-      - jikan_mongodb_data:/data/db
-
-  jikan_typesense:
-    profiles: [jikan]
-    image: typesense/typesense:0.25.2
-    command: ["--data-dir", "/data", "--api-key=${JIKAN_TYPESENSE_API_KEY:-jikan-typesense-key}"]
-    volumes:
-      - jikan_typesense_data:/data
-
   backup:
     profiles: [backup]
     build: ./backups
@@ -323,5 +263,3 @@ volumes:
   redis_data:
   minio_data:
   umami_db_data:
-  jikan_mongodb_data:
-  jikan_typesense_data:

@@ -32,7 +32,7 @@ Built with Django, React, PostgreSQL, Redis, and Celery, AniShows is designed to
 - Write spoiler-aware reviews with ratings, comments, reactions, and moderation tools.
 - Build social profiles with follows, badges, activity, avatars, banners, and privacy controls.
 - Discuss shows through forums with threads, nested posts, likes, and cached counters.
-- Sync and enrich catalog data through AniList, Jikan, offline catalog imports, and background jobs.
+- Sync and enrich catalog data from AniList (GraphQL), seeded by the Anime Offline Database, through background jobs.
 - Manage the platform with admin dashboards, reports, logs, import jobs, backups, metrics, and load-test tooling.
 
 ## Stack
@@ -85,13 +85,12 @@ Optional services (compose profiles):
 
 | Profile | Services | When |
 |---|---|---|
-| `jikan` | self-hosted Jikan + MongoDB + Typesense | `api.jikan.moe` is unreachable from your network. Set `JIKAN_BASE_URL=http://jikan:8080/v4`. |
 | `analytics` | Umami | Working on analytics |
 | `proxy` | Caddy on :80 | Testing prod-like routing |
 | `backup` | Backup scheduler | Testing backup scripts |
 
 ```bash
-docker compose --profile jikan up -d
+docker compose --profile analytics up -d
 ```
 
 Production uses the standalone `docker-compose.prod.yml` and is deployed by `deploy-prod.sh`.
