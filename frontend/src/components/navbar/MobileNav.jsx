@@ -133,7 +133,16 @@ export default function MobileNav({ user, isAuthenticated, logout, mobileUnreadC
                         <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]">Notifs</span>
                     </Link>
                     )}
-                    <div className="relative min-w-0" ref={mobileAccountRef}>
+                    <div
+                        className="relative min-w-0"
+                        ref={mobileAccountRef}
+                        onBlur={(event) => {
+                            // Close when keyboard focus leaves the button and its links.
+                            if (isMobileAccountOpen && !mobileAccountRef.current?.contains(event.relatedTarget)) {
+                                setIsMobileAccountOpen(false);
+                            }
+                        }}
+                    >
                         {isAuthenticated ? (
                             <>
                                 <button
