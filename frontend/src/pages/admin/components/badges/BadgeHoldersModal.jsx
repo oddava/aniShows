@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { ChevronLeft, ChevronRight, UserMinus, Users } from 'lucide-react';
+import Modal from '../Modal';
 
 /** The badge holders modal: paged list with per-holder revoke. */
 export default function BadgeHoldersModal({
@@ -12,28 +14,13 @@ export default function BadgeHoldersModal({
     revokingUserIds,
     setRevokingUserIds,
     revokeMutation,
+    canRevoke = true,
 }) {
+    // Revoke is two-step inside the row, so no second dialog opens over this one.
+    const [confirmingId, setConfirmingId] = useState(null);
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="w-full max-w-2xl bg-dark-200 border border-dark-300 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between p-6 border-b border-dark-300 shrink-0">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Users className="w-5 h-5 text-accent" />
-                        Holders: {selectedBadge.name}
-                    </h2>
-                    <button
-                        onClick={() => {
-                            setIsHoldersModalOpen(false);
-                            setSelectedBadge(null);
-                            setRevokingUserIds(new Set());
-                        }}
-                        className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors"
-                    >
-                        ✕
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6">
+        <Modal isOpen onClose={() => { setIsHoldersModalOpen(false); setSelectedBadge(null); setRevokingUserIds(new Set()); }} title={<span className="flex items-center gap-2"><Users className="w-5 h-5 text-accent" aria-hidden="true" />Holders: {selectedBadge.name}</span>} size="large">
+                <div>
                     {holdersLoading ? (
                         <div className="text-center text-gray-400 py-8">Loading holders...</div>
                     ) : !holdersData?.data?.results?.length ? (
@@ -43,7 +30,7 @@ export default function BadgeHoldersModal({
                             {holdersData.data.results.map((holder) => (
                                 <div
                                     key={holder.id}
-                                    className="flex items-center gap-3 p-3 bg-dark-100 border border-dark-300 rounded-lg group"
+                                    className="flex items-center gap-3 p-3 bg-dark-100 border border-dark-300 rounded-lg"
                                 >
                                     {holder.user.avatar ? (
                                         <img
@@ -76,22 +63,38 @@ export default function BadgeHoldersModal({
                                         </div>
                                     </div>
 
-                                    <button
-                                        onClick={() => {
-                                            if (window.confirm(`Revoke "${selectedBadge.name}" from ${holder.user.username}?`)) {
-                                                setRevokingUserIds(prev => new Set([...prev, holder.user.id]));
-                                                revokeMutation.mutate({
-                                                    badgeId: selectedBadge.id,
-                                                    userIds: [holder.user.id],
-                                                });
-                                            }
-                                        }}
-                                        disabled={revokingUserIds.has(holder.user.id) || revokeMutation.isPending}
-                                        className="p-2 text-red-400 hover:bg-red-400/10 rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-50 shrink-0"
-                                        title={`Revoke from ${holder.user.username}`}
-                                    >
-                                        <UserMinus className="w-4 h-4" />
-                                    </button>
+                                    {canRevoke && (confirmingId === holder.user.id ? (
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setConfirmingId(null);
+                                                    setRevokingUserIds(prev => new Set([...prev, holder.user.id]));
+                                                    revokeMutation.mutate({ badgeId: selectedBadge.id, userIds: [holder.user.id] });
+                                                }}
+                                                className="px-3 py-1.5 min-h-[44px] sm:min-h-0 text-sm bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30"
+                                            >
+                                                Revoke
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setConfirmingId(null)}
+                                                className="px-3 py-1.5 min-h-[44px] sm:min-h-0 text-sm bg-white/10 text-white rounded-lg hover:bg-white/20"
+                                            >
+                                                Keep
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmingId(holder.user.id)}
+                                            disabled={revokingUserIds.has(holder.user.id) || revokeMutation.isPending}
+                                            className="inline-flex items-center justify-center w-11 h-11 sm:w-9 sm:h-9 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors disabled:opacity-50 shrink-0"
+                                            aria-label={`Revoke ${selectedBadge.name} from ${holder.user.username}`}
+                                        >
+                                            <UserMinus className="w-4 h-4" aria-hidden="true" />
+                                        </button>
+                                    ))}
                                 </div>
                             ))}
                         </div>
@@ -100,7 +103,7 @@ export default function BadgeHoldersModal({
 
                 {/* Pagination */}
                 {holdersData?.data && (holdersData.data.next || holdersData.data.previous) && (
-                    <div className="flex items-center justify-between p-4 border-t border-dark-300 shrink-0">
+                    <div className="flex items-center justify-between pt-4 mt-4 border-t border-dark-300">
                         <button
                             onClick={() => setHoldersPage(p => Math.max(1, p - 1))}
                             disabled={!holdersData.data.previous}
@@ -124,13 +127,12 @@ export default function BadgeHoldersModal({
                 )}
 
                 {revokeMutation.isError && (
-                    <div className="px-6 pb-4">
-                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                    <div className="pt-4">
+                        <div role="alert" className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
                             Failed to revoke badge. Please try again.
                         </div>
                     </div>
                 )}
-            </div>
-        </div>
+        </Modal>
     );
 }
