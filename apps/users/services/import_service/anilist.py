@@ -67,8 +67,8 @@ class AniListImporter(BaseImporter):
         """The newest ``updatedAt`` applied, but never past an entry left for later.
 
         An incremental sync reads only what changed after the cursor, so an entry that
-        was skipped for a reason that may pass (catalog cap, AniList busy, a bad payload)
-        keeps the cursor just below it and is read again next time.
+        was skipped for a reason a later run can clear (catalog cap, AniList busy, the
+        entry cap) keeps the cursor just below it and is read again next time.
         """
         previous = self.link.cursor_updated_at if self.link else None
         stamps = [_stamp(e) for e in entries if e.remote_updated_at]

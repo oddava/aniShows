@@ -122,8 +122,8 @@ class BaseImporter:
         # ``updated_at`` of each row to update as the import read it; a row the user
         # changed since then is left alone at write time.
         self._seen_updated_at: dict[int, Any] = {}
-        # Entries left out for a reason that may pass (catalog cap, AniList busy, a bad
-        # payload, an entry error): an incremental sync must not move its cursor past them.
+        # Entries left out for a reason a later run can clear (the per-job catalog cap,
+        # AniList busy, the entry cap): an incremental sync must not move its cursor past them.
         self.retry_entries: list[ImportedEntry] = []
         self._last_flush = 0.0
         self._today = user_today(self.user)
@@ -301,7 +301,9 @@ class BaseImporter:
                         with transaction.atomic():
                             resolved[entry.key()] = save_media(self._get_persistence(), item)
                         self.fetched_count += 1
-                    except SoftTimeLimitExceeded:
+                    except (SoftTimeLimitExceeded, *RETRYABLE_DB_ERRORS):
+                        # The time limit, or the database dropping out (the task retries):
+                        # neither is the title's fault, so it must not be marked invalid.
                         raise
                     except Exception:
                         logger.warning(
@@ -390,7 +392,16 @@ class BaseImporter:
             self.skipped_count += 1
             return
 
-        attrs = normalize_entry(local, attrs, anime, self._today, strict=False)
+        attrs = normalize_entry(
+            local,
+            attrs,
+            anime,
+            self._today,
+            strict=False,
+            # A newer remote row is authoritative: its dates win over contradicting
+            # local ones. Without a remote timestamp the local dates are kept.
+            prefer_incoming_dates=entry.remote_updated_at is not None,
+        )
         changed = False
         for field in ENTRY_FIELDS:
             if field in attrs and getattr(local, field) != attrs[field]:
@@ -471,7 +482,10 @@ class BaseImporter:
                 # Oldest changes first, so the entries left over are the newest ones and
                 # a sync cursor held below them still moves forward on every run.
                 entries.sort(key=_updated_sort_key)
-            self.errors.append(f"Only the first {cap} entries were imported.")
+            self.errors.append(
+                f"Your list has more than {cap} entries: {cap} were imported this time. "
+                "Run it again to import the rest."
+            )
             self.retry_entries.extend(entries[cap:])
             entries = entries[:cap]
         self.total_count = len(entries)

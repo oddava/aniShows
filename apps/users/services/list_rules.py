@@ -125,6 +125,7 @@ def normalize_entry(
     today: date,
     *,
     strict: bool = True,
+    prefer_incoming_dates: bool = False,
 ) -> dict[str, Any]:
     """Return ``attrs`` completed by the transition rules (a new dict; ``attrs`` is not changed).
 
@@ -205,10 +206,17 @@ def normalize_entry(
         # Imports never move a date the entry already has: an incoming date that
         # contradicts a kept one is dropped. Two incoming dates that cross each other
         # (a bad source row) keep the start, and the finish moves to it.
+        # ``prefer_incoming_dates`` (a newer remote row) clears the kept date instead.
         if "started_at" in result and "finished_at" not in result:
-            del result["started_at"]
+            if prefer_incoming_dates:
+                result["finished_at"] = None
+            else:
+                del result["started_at"]
         elif "finished_at" in result and "started_at" not in result:
-            del result["finished_at"]
+            if prefer_incoming_dates:
+                result["started_at"] = None
+            else:
+                del result["finished_at"]
         else:
             result["finished_at"] = started
 

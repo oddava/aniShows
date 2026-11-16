@@ -471,6 +471,31 @@ class ImportPipelineTests(ImportTestMixin, TestCase):
         local.refresh_from_db()
         self.assertEqual((local.started_at, local.finished_at), (None, date(2020, 5, 1)))
 
+    def test_newer_remote_start_date_wins_over_a_contradicting_local_finish(self):
+        anime = make_anime(1, anilist_id=101)
+        local = UserAnimeList.objects.create(
+            user=self.user,
+            anime=anime,
+            status=Status.completed,
+            episodes_watched=12,
+            started_at=date(2020, 1, 1),
+            finished_at=date(2020, 5, 1),
+        )
+        UserAnimeList.objects.filter(pk=local.pk).update(
+            updated_at=timezone.now() - timedelta(days=2)
+        )
+        updated = int((timezone.now() - timedelta(days=1)).timestamp())
+        row = anilist_row(
+            101, progress=3, updated=updated, startedAt={"year": 2024, "month": 2, "day": 1}
+        )
+        self.run_anilist(FakeFetcher([row]))
+
+        local.refresh_from_db()
+        self.assertEqual(
+            (local.status, local.started_at, local.finished_at),
+            (Status.watching, date(2024, 2, 1), None),
+        )
+
     def test_title_is_used_only_without_stable_ids(self):
         make_anime(1, anilist_id=101, title="Shared Title")
         make_anime(2, anilist_id=102, title="shared title")  # duplicates must not crash
@@ -623,6 +648,17 @@ class ImportLifecycleTests(ImportTestMixin, TestCase):
         job.refresh_from_db()
         self.assertEqual(job.status, JobStatus.failed)
         self.assertTrue(job.failure_reason.startswith("Took too long; "))
+
+    def test_database_error_while_storing_a_title_is_not_marked_invalid(self):
+        fetcher = FakeFetcher([anilist_row(77)], media=[media_item(77)])
+        job = self.make_job()
+        with (
+            patch.object(base_module, "save_media", side_effect=OperationalError("db blip")),
+            self.assertRaises(OperationalError),
+        ):
+            AniListImporter(job, "remote-name", fetcher=fetcher).run()
+        job.refresh_from_db()
+        self.assertEqual((job.status, job.unmatched), (JobStatus.processing, []))
 
     def test_database_error_leaves_the_job_for_the_task_retry(self):
         fetcher = FakeFetcher()
