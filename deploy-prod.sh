@@ -48,17 +48,38 @@ LOG_FILE="$LOG_DIR/deploy-${DEPLOY_TS}.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "Deploy log: $LOG_FILE"
 
+# One deploy at a time (CI and an operator, or two operators): two rolling
+# restarts, prunes or state writes must never interleave.
+mkdir -p backups-data
+if command -v flock >/dev/null 2>&1; then
+    exec 8>>backups-data/.deploy.lock
+    flock -n 8 || die "another deploy-prod.sh is running on this host (backups-data/.deploy.lock)"
+else
+    warn "flock not found: concurrent deploys are not prevented"
+fi
+
 # .env parsing and everything CADDY_MODE decides (profiles, override files,
 # Caddy's site address / trusted peers / HSTS) live in scripts/deploy/env.sh,
 # shared with scripts/deploy/compose.sh so manual commands match the deploy.
-# The deploy itself takes its image tags from the shell/.env (not from the
-# deployed-state file, which it writes at the end).
+# Image tags: shell > the deployed release (backups-data/deployed.env) >
+# .env > latest. So a config-only re-run (secret rotation) keeps the live
+# release, even after a rollback; deploy another one with BACKEND_TAG/
+# FRONTEND_TAG in the shell (CI passes sha-<commit>).
 # shellcheck source=scripts/deploy/env.sh
 source scripts/deploy/env.sh
-# The release that is live now (for the rollback recipe and the image prune).
-PREV_BACKEND_TAG="$(grep -m1 '^BACKEND_TAG=' "$DEPLOYED_STATE_FILE" 2>/dev/null | cut -d= -f2- || true)"
-PREV_FRONTEND_TAG="$(grep -m1 '^FRONTEND_TAG=' "$DEPLOYED_STATE_FILE" 2>/dev/null | cut -d= -f2- || true)"
+tag_source="shell"
+[ -n "${BACKEND_TAG:-}" ] || tag_source=""
+# The release that is live now (the rollback target and what the prune keeps).
+STATE_BACKEND_TAG="$(state_value BACKEND_TAG)"
+STATE_FRONTEND_TAG="$(state_value FRONTEND_TAG)"
+STATE_BACKEND_ID="$(state_value BACKEND_IMAGE_ID)"
+STATE_FRONTEND_ID="$(state_value FRONTEND_IMAGE_ID)"
+STATE_PREVIOUS_BACKEND_ID="$(state_value PREVIOUS_BACKEND_IMAGE_ID)"
+STATE_PREVIOUS_FRONTEND_ID="$(state_value PREVIOUS_FRONTEND_IMAGE_ID)"
+load_deployed_state
+[ -n "$tag_source" ] || { [ -n "${BACKEND_TAG:-}" ] && tag_source="deployed.env"; }
 load_env_file .env
+[ -n "$tag_source" ] || tag_source=".env/default"
 BACKEND_TAG="${BACKEND_TAG:-latest}"
 FRONTEND_TAG="${FRONTEND_TAG:-latest}"
 export BACKEND_TAG FRONTEND_TAG
@@ -73,7 +94,7 @@ if [ "$TUNNEL_IN_STACK" = 1 ] && is_placeholder_value "${TUNNEL_TOKEN:-}"; then
     die "CADDY_MODE=tunnel needs a real TUNNEL_TOKEN (or TUNNEL_EXTERNAL=1 when cloudflared runs outside this stack)"
 fi
 if [ "$CADDY_MODE" = public ] && [ "$DOMAIN" != localhost ]; then
-    if is_placeholder_value "${CADDY_ACME_EMAIL:-}" || [[ "${CADDY_ACME_EMAIL}" == *.local ]]; then
+    if is_placeholder_value "${CADDY_ACME_EMAIL:-}" || [[ "${CADDY_ACME_EMAIL}" == *.local || "${CADDY_ACME_EMAIL}" == *@example.* ]]; then
         die "Public mode needs a real CADDY_ACME_EMAIL for certificate registration"
     fi
 fi
@@ -90,6 +111,7 @@ SCALE_WEB="${SCALE_WEB:-2}"
 [[ "$SCALE_WEB" =~ ^[1-9][0-9]*$ ]] || die "SCALE_WEB must be a positive integer"
 
 echo "Mode: ${CADDY_MODE}  domain: ${DOMAIN}  database: ${DB_HOST}  profiles: ${COMPOSE_PROFILES:-none}"
+echo "Release: backend=${BACKEND_TAG} frontend=${FRONTEND_TAG} (tags from ${tag_source}; live: ${STATE_BACKEND_TAG:-none}/${STATE_FRONTEND_TAG:-none})"
 echo "Compose: ${COMPOSE[*]}"
 
 # -----------------------------------------------------------------------------
@@ -238,6 +260,27 @@ else
 fi
 "${COMPOSE[@]}" build backup
 
+# The images this deploy runs, by id, and the release to fall back to: the
+# live one (what web runs now, else deployed.env), or, when this is a re-run
+# of the live release, the one recorded before it.
+image_id() { docker image inspect --format '{{.Id}}' "$1" 2>/dev/null || true; }
+NEW_BACKEND_ID="$(image_id "ghcr.io/oddava/anishows-backend:${BACKEND_TAG}")"
+NEW_FRONTEND_ID="$(image_id "$FRONTEND_IMAGE")"
+ROLLBACK_BACKEND_ID=""
+for candidate in "$PREVIOUS_WEB_IMAGE" "$STATE_BACKEND_ID" "$STATE_PREVIOUS_BACKEND_ID"; do
+    if [ -n "$candidate" ] && [ "$candidate" != "$NEW_BACKEND_ID" ]; then
+        ROLLBACK_BACKEND_ID="$candidate"
+        break
+    fi
+done
+ROLLBACK_FRONTEND_ID=""
+for candidate in "$STATE_FRONTEND_ID" "$STATE_PREVIOUS_FRONTEND_ID"; do
+    if [ -n "$candidate" ] && [ "$candidate" != "$NEW_FRONTEND_ID" ]; then
+        ROLLBACK_FRONTEND_ID="$candidate"
+        break
+    fi
+done
+
 step "Core services"
 core_services=(redis minio)
 [ "$DB_HOST" = db ] && core_services+=(db)
@@ -290,25 +333,36 @@ MIGRATE_STARTED=0
 print_rollback() {
     echo -e "\n${RED}==> Deploy failed at or after the migration step. Rollback recipe:${NC}"
     echo "    The old web replicas keep serving if the rolling restart failed."
-    local frontend_back="${PREV_FRONTEND_TAG:-$FRONTEND_TAG}"
+    echo "    This attempt: BACKEND_TAG=${BACKEND_TAG} FRONTEND_TAG=${FRONTEND_TAG}. ${DEPLOYED_STATE_FILE} still"
+    echo "    names the last successful release (${STATE_BACKEND_TAG:-none}/${STATE_FRONTEND_TAG:-none}), and"
+    echo "    scripts/deploy/compose.sh uses it: pass BACKEND_TAG=${BACKEND_TAG} to reach the new code."
+    local n=1
     if [ "$MIGRATE_STARTED" = 1 ]; then
         echo "    This deploy changed the schema (${PLAN_FILE}). If the old code cannot"
         echo "    run on it, do step 1 first, then step 2."
-        echo "    1. Undo this deploy's migrations with the NEW image (it has the files;"
+        echo "    ${n}. Undo this deploy's migrations with the NEW image (it has the files;"
         echo "       all are reversible), app by app, back to the migration before the plan:"
         echo "       BACKEND_TAG=${BACKEND_TAG} scripts/deploy/compose.sh run --rm --no-deps web python manage.py migrate <app> <previous_migration>"
+        n=$((n + 1))
     else
         echo "    No schema change in this deploy: re-deploying the previous release is enough."
     fi
-    if [ -n "$PREVIOUS_WEB_IMAGE" ]; then
-        echo "    2. Re-deploy the previous release from its local image (no pull):"
-        echo "       docker tag ${PREVIOUS_WEB_IMAGE} ghcr.io/oddava/anishows-backend:rollback"
-        echo "       BACKEND_TAG=rollback FRONTEND_TAG=${frontend_back} SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh"
+    if [ -n "$ROLLBACK_BACKEND_ID" ]; then
+        local frontend_tag="$FRONTEND_TAG"
+        echo "    ${n}. Re-deploy the previous release from its local images (no pull):"
+        echo "       docker tag ${ROLLBACK_BACKEND_ID} ghcr.io/oddava/anishows-backend:rollback"
+        if [ -n "$ROLLBACK_FRONTEND_ID" ]; then
+            echo "       docker tag ${ROLLBACK_FRONTEND_ID} ghcr.io/oddava/anishows-frontend:rollback"
+            frontend_tag=rollback
+        fi
+        echo "       BACKEND_TAG=rollback FRONTEND_TAG=${frontend_tag} SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh"
     else
-        echo "    2. Re-deploy the previous release: BACKEND_TAG=${PREV_BACKEND_TAG:-sha-<previous>} FRONTEND_TAG=${frontend_back} ./deploy-prod.sh"
+        echo "    ${n}. No previous release is recorded on this host: re-deploy it by tag,"
+        echo "       BACKEND_TAG=sha-<previous> FRONTEND_TAG=sha-<previous> ./deploy-prod.sh"
     fi
+    n=$((n + 1))
     if [ "$MIGRATE_STARTED" = 1 ]; then
-        echo "    3. Last resort (data damage), restore the pre-migrate dump:"
+        echo "    ${n}. Last resort (data damage), restore the pre-migrate dump:"
         echo "       scripts/deploy/compose.sh stop web celery beat && scripts/deploy/compose.sh exec backup /app/shell/restore.sh $(basename "${PRE_MIGRATE_BACKUP:-<name>}") --yes --skip-media"
     fi
     echo "    Runbook: docs/deploy/runbook.md (Rollback). Log: ${LOG_FILE}"
@@ -484,25 +538,32 @@ fi
 ROLLBACK_HINTS=0
 
 # The release now live: manual commands (scripts/deploy/compose.sh, verify,
-# the next rollback recipe) run exactly these images.
-mkdir -p "$(dirname "$DEPLOYED_STATE_FILE")"
+# a config-only re-run, the next rollback recipe) run exactly these images.
+# The previous release moves only when the images actually changed (a
+# same-tag re-run must not forget the real previous release).
+prev_backend_id="$STATE_PREVIOUS_BACKEND_ID"
+[ "$NEW_BACKEND_ID" != "$STATE_BACKEND_ID" ] && prev_backend_id="${ROLLBACK_BACKEND_ID}"
+prev_frontend_id="$STATE_PREVIOUS_FRONTEND_ID"
+[ "$NEW_FRONTEND_ID" != "$STATE_FRONTEND_ID" ] && prev_frontend_id="${ROLLBACK_FRONTEND_ID}"
+state_tmp="${DEPLOYED_STATE_FILE}.tmp.$$"
 {
     echo "# Written by deploy-prod.sh after a successful deploy; do not edit."
     echo "BACKEND_TAG=${BACKEND_TAG}"
     echo "FRONTEND_TAG=${FRONTEND_TAG}"
+    echo "BACKEND_IMAGE_ID=${NEW_BACKEND_ID}"
+    echo "FRONTEND_IMAGE_ID=${NEW_FRONTEND_ID}"
+    echo "PREVIOUS_BACKEND_IMAGE_ID=${prev_backend_id}"
+    echo "PREVIOUS_FRONTEND_IMAGE_ID=${prev_frontend_id}"
     echo "DEPLOYED_AT=${DEPLOY_TS}"
-    echo "PREVIOUS_BACKEND_TAG=${PREV_BACKEND_TAG}"
-    echo "PREVIOUS_FRONTEND_TAG=${PREV_FRONTEND_TAG}"
-} >"$DEPLOYED_STATE_FILE"
+} >"$state_tmp"
+mv -f "$state_tmp" "$DEPLOYED_STATE_FILE"
 ok "release recorded in ${DEPLOYED_STATE_FILE}"
 
 if [ "${PRUNE_IMAGES:-1}" = 1 ]; then
     step "Pruning old images (this project's only; current and previous kept)"
-    KEEP_REFS="ghcr.io/oddava/anishows-backend:${BACKEND_TAG} ${FRONTEND_IMAGE}"
-    [ -n "$PREV_BACKEND_TAG" ] && KEEP_REFS+=" ghcr.io/oddava/anishows-backend:${PREV_BACKEND_TAG}"
-    [ -n "$PREV_FRONTEND_TAG" ] && KEEP_REFS+=" ghcr.io/oddava/anishows-frontend:${PREV_FRONTEND_TAG}"
-    KEEP_REFS="$KEEP_REFS" KEEP_IDS="${PREVIOUS_WEB_IMAGE}" bash scripts/deploy/prune_images.sh \
-        || warn "image prune failed (continuing)"
+    KEEP_REFS="ghcr.io/oddava/anishows-backend:${BACKEND_TAG} ${FRONTEND_IMAGE}" \
+        KEEP_IDS="${NEW_BACKEND_ID} ${NEW_FRONTEND_ID} ${prev_backend_id} ${prev_frontend_id} ${PREVIOUS_WEB_IMAGE}" \
+        bash scripts/deploy/prune_images.sh || warn "image prune failed (continuing)"
 fi
 
 echo -e "\n${GREEN}Deployment complete.${NC}"

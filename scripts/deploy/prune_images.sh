@@ -2,7 +2,7 @@
 #
 # Remove this project's old images on a shared host. Candidates are only images
 # labelled app.anishows.component (backend, frontend, backup); kept are the
-# current and previous release (KEEP_REFS, KEEP_IDS), the local rollback tag,
+# current and previous release (KEEP_REFS, KEEP_IDS), the local rollback tags,
 # and every image any container on the host uses. Other projects' images are
 # never candidates. Called by deploy-prod.sh after a successful deploy.
 #
@@ -13,7 +13,7 @@ set -euo pipefail
 
 declare -A keep=()
 ref="" id=""
-for ref in ${KEEP_REFS:-} ghcr.io/oddava/anishows-backend:rollback; do
+for ref in ${KEEP_REFS:-} ghcr.io/oddava/anishows-backend:rollback ghcr.io/oddava/anishows-frontend:rollback; do
     if id="$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null)" && [ -n "$id" ]; then
         keep["$id"]=1
     fi
@@ -33,6 +33,8 @@ while IFS= read -r id; do
         echo "    removed ${id:7:12}"
         removed=$((removed + 1))
     fi
-done < <(docker images --no-trunc -q --filter label=app.anishows.component | sort -u)
-docker image prune -f --filter label=app.anishows.component >/dev/null 2>&1 || true
+done < <(docker images --no-trunc -q --filter label=app.anishows.component | sort -u)  # dangling included
+# No `docker image prune` here: it would also delete a kept image that has
+# become dangling (the previous release once its tag, e.g. :latest, moved on).
+# The loop above already covers dangling images, minus the kept ones.
 echo "    ${removed} old image(s) removed; kept ${#keep[@]} in use or current/previous"

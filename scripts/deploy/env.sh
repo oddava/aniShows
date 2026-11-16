@@ -40,15 +40,15 @@ load_env_file() {
         else
             if [[ "$val" =~ ^\"(.*)\"[[:space:]]*(#.*)?$ ]]; then
                 val="${BASH_REMATCH[1]}"
+                if [[ "$val" == *'\'* ]]; then
+                    die "$file: $key contains a backslash inside double quotes, which Compose unescapes; wrap the value in single quotes"
+                fi
             else
                 val="${val%%[[:space:]]#*}"
                 val="${val%"${val##*[![:space:]]}"}"
             fi
             if [[ "$val" == *'$'* ]]; then
                 die "$file: $key contains '\$', which Compose would interpolate; wrap the value in single quotes"
-            fi
-            if [[ "$val" == *'\'* ]]; then
-                die "$file: $key contains a backslash, which Compose unescapes in this form; wrap the value in single quotes"
             fi
         fi
         if [ -z "${!key+x}" ]; then
@@ -66,13 +66,38 @@ is_placeholder_value() {
     esac
 }
 
-# The image tags the last successful deploy-prod.sh run used (CI passes
+# The release the last successful deploy-prod.sh run left live (CI passes
 # sha-<commit> tags through the shell, so .env alone would name a stale
-# :latest). compose.sh and verify_backup.sh load this before .env, so manual
-# commands run the deployed code: shell > deployed state > .env.
+# :latest): its image tags and ids, and the previous release's ids.
+# deploy-prod.sh, compose.sh and verify_backup.sh take the tags from it before
+# .env: shell > deployed state > .env. Only these keys are read, each
+# validated, so nothing else in the file (it sits in the backups mount) can
+# change a setting.
 DEPLOYED_STATE_FILE="backups-data/deployed.env"
+
+# state_value KEY: the validated value from the deployed-state file, or "".
+state_value() {
+    local key="$1" value pattern
+    case "$key" in
+        BACKEND_TAG|FRONTEND_TAG) pattern='^[A-Za-z0-9_.-]{1,128}$' ;;
+        BACKEND_IMAGE_ID|FRONTEND_IMAGE_ID|PREVIOUS_BACKEND_IMAGE_ID|PREVIOUS_FRONTEND_IMAGE_ID)
+            pattern='^sha256:[0-9a-f]{64}$' ;;
+        *) return 0 ;;
+    esac
+    value="$(grep -m1 "^${key}=" "$DEPLOYED_STATE_FILE" 2>/dev/null | cut -d= -f2- || true)"
+    if [[ "$value" =~ $pattern ]]; then
+        printf '%s' "$value"
+    fi
+}
+
 load_deployed_state() {
-    load_env_file "$DEPLOYED_STATE_FILE"
+    local key value
+    for key in BACKEND_TAG FRONTEND_TAG; do
+        value="$(state_value "$key")"
+        if [ -n "$value" ] && [ -z "${!key:-}" ]; then
+            export "$key=$value"
+        fi
+    done
 }
 
 is_true() { case "${1,,}" in 1|true|yes|on) return 0 ;; *) return 1 ;; esac; }

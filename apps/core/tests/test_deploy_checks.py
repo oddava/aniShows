@@ -161,13 +161,17 @@ def _run_in_temp_repo(
     shell_env: dict[str, str] | None = None,
     args: tuple[str, ...] = (),
     state: str | None = None,
+    deploy_lock: Path | None = None,
 ):
     """Run a copy of a deploy script (with scripts/deploy) in a temp dir with a fake docker."""
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
-        if state is not None:
+        if state is not None or deploy_lock is not None:
             (work / "backups-data").mkdir()
+        if state is not None:
             (work / "backups-data" / "deployed.env").write_text(state, encoding="utf-8")
+        if deploy_lock is not None:
+            (work / "backups-data" / ".deploy.lock").symlink_to(deploy_lock)
         shutil.copy(DEPLOY_SCRIPT, work / "deploy-prod.sh")
         shutil.copytree(DEPLOY_LIB, work / "scripts" / "deploy")
         (work / "docker-compose.prod.yml").write_text("services: {}\n", encoding="utf-8")
@@ -347,11 +351,23 @@ class DeployScriptFailureRecipeTests(SimpleTestCase):
                 "BACKEND_TAG": "sha-new",
                 "FRONTEND_TAG": "sha-new",
             },
-            state="BACKEND_TAG=sha-old\nFRONTEND_TAG=sha-oldfe\n",
+            state=(
+                "BACKEND_TAG=sha-old\nFRONTEND_TAG=sha-old\n"
+                "BACKEND_IMAGE_ID=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nFRONTEND_IMAGE_ID=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+            ),
         )
         self.assertEqual(result.returncode, 1)
-        self.assertIn("BACKEND_TAG=sha-new scripts/deploy/compose.sh run", result.stdout)
-        self.assertIn("BACKEND_TAG=rollback FRONTEND_TAG=sha-oldfe SKIP_PULL=1", result.stdout)
+        out = result.stdout
+        self.assertIn("This attempt: BACKEND_TAG=sha-new FRONTEND_TAG=sha-new", out)
+        self.assertIn("last successful release (sha-old/sha-old)", out)
+        self.assertIn("BACKEND_TAG=sha-new scripts/deploy/compose.sh run", out)
+        # Backend: the image web runs now; frontend: the live release, by id.
+        self.assertIn("docker tag sha256:previous ghcr.io/oddava/anishows-backend:rollback", out)
+        self.assertIn(
+            "docker tag sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ghcr.io/oddava/anishows-frontend:rollback",
+            out,
+        )
+        self.assertIn("BACKEND_TAG=rollback FRONTEND_TAG=rollback SKIP_PULL=1", out)
 
     def test_no_schema_steps_without_migrations(self):
         result, _ = self._run(FAKE_EMPTY_PLAN="1")
@@ -447,6 +463,9 @@ class PruneImagesTests(SimpleTestCase):
         # sha256:previous is the image a container uses; the others are current.
         self.assertEqual(removed, {"sha256:old-one", "sha256:old-two"})
         self.assertIn("images --no-trunc -q --filter label=app.anishows.component", calls)
+        # A dangling-image prune would ignore the keep list (the previous
+        # release is dangling once its tag moves on).
+        self.assertNotIn("image prune", calls)
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash is required")
@@ -478,3 +497,134 @@ class DeployedStateTests(SimpleTestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("DB_PASSWORD contains a backslash", result.stderr)
+
+
+@unittest.skipUnless(shutil.which("bash"), "bash is required")
+class DeployTagPrecedenceTests(SimpleTestCase):
+    """shell > deployed.env > .env: a config-only re-run keeps the live release."""
+
+    def _release_line(self, env_lines, shell_env=None, state=None):
+        result, _ = _run_in_temp_repo(
+            "deploy-prod.sh",
+            env_lines,
+            {"FAKE_STOP_AT_PULL": "1", **(shell_env or {})},
+            state=state,
+        )
+        self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
+        (line,) = [entry for entry in result.stdout.splitlines() if entry.startswith("Release: ")]
+        return line
+
+    def test_deployed_release_beats_env(self):
+        line = self._release_line(
+            {**SAFE_ENV, "BACKEND_TAG": "latest", "FRONTEND_TAG": "latest"},
+            state="BACKEND_TAG=sha-live\nFRONTEND_TAG=sha-livefe\n",
+        )
+        self.assertIn("backend=sha-live frontend=sha-livefe (tags from deployed.env", line)
+
+    def test_shell_beats_deployed_release(self):
+        line = self._release_line(
+            SAFE_ENV,
+            {"BACKEND_TAG": "sha-ci", "FRONTEND_TAG": "sha-ci"},
+            state="BACKEND_TAG=sha-live\n",
+        )
+        self.assertIn("backend=sha-ci frontend=sha-ci (tags from shell", line)
+
+    def test_first_deploy_uses_env_or_latest(self):
+        line = self._release_line(SAFE_ENV)
+        self.assertIn("backend=latest frontend=latest (tags from .env/default", line)
+
+    def test_only_valid_tag_keys_are_read_from_the_state_file(self):
+        result, calls = _run_in_temp_repo(
+            "scripts/deploy/compose.sh",
+            {**SAFE_ENV, "BACKEND_TAG": "sha-env"},
+            args=("ps",),
+            state=(
+                "BACKEND_TAG=bad tag;rm\n"
+                "CADDY_TRUSTED_PROXIES=0.0.0.0/0\n"
+                "ADMIN_ALLOW_CIDRS=0.0.0.0/0\n"
+            ),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("tags: backend=sha-env", calls)
+        self.assertIn("trusted=10.250.250.240/29 127.0.0.1/8 ::1/128 ", calls)
+
+    def test_one_deploy_at_a_time(self):
+        import fcntl
+
+        with tempfile.TemporaryDirectory() as tmp:
+            lock = Path(tmp) / "held.lock"
+            with lock.open("w") as handle:
+                fcntl.flock(handle, fcntl.LOCK_EX)
+                # Point the copy's lock at the held file through a symlink.
+                result, calls = _run_in_temp_repo(
+                    "deploy-prod.sh", SAFE_ENV, {"FAKE_STOP_AT_PULL": "1"}, deploy_lock=lock
+                )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("another deploy-prod.sh is running", result.stdout)
+        self.assertEqual(calls, "")
+
+
+LOCK_SCRIPT = REPO_ROOT / "backups" / "shell" / "lock.sh"
+
+
+@unittest.skipUnless(shutil.which("bash") and shutil.which("flock"), "bash and flock are required")
+class BackupLockTests(SimpleTestCase):
+    """backups/shell/lock.sh: one holder at a time, released when the holder dies."""
+
+    def _bash(self, script: str, backup_dir: str, timeout: int = 60):
+        return subprocess.run(  # noqa: S603 - fixed interpreter, our own script
+            ["bash", "-c", script],  # noqa: S607
+            env={**os.environ, "BACKUP_DIR": backup_dir, "LOCK_SH": str(LOCK_SCRIPT)},
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+
+    def test_second_holder_fails_fast_then_waits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            holder = subprocess.Popen(
+                ["bash", "-c", 'source "$LOCK_SH"; acquire_backup_lock 0; echo held; sleep 6'],  # noqa: S607
+                env={**os.environ, "BACKUP_DIR": tmp, "LOCK_SH": str(LOCK_SCRIPT)},
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                self.assertEqual(holder.stdout.readline().strip(), "held")
+                busy = self._bash('source "$LOCK_SH"; acquire_backup_lock 0; echo got', tmp)
+                self.assertEqual(busy.returncode, 1)
+                self.assertIn("Another backup/restore operation is currently running", busy.stderr)
+                waited = self._bash('source "$LOCK_SH"; acquire_backup_lock 30; echo got', tmp)
+                self.assertEqual(waited.returncode, 0, waited.stderr)
+                self.assertEqual(waited.stdout.strip(), "got")
+            finally:
+                holder.kill()
+                holder.wait()
+
+    def test_a_killed_holder_leaves_no_stale_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            holder = subprocess.Popen(
+                ["bash", "-c", 'source "$LOCK_SH"; acquire_backup_lock 0; echo held; sleep 60'],  # noqa: S607
+                env={**os.environ, "BACKUP_DIR": tmp, "LOCK_SH": str(LOCK_SCRIPT)},
+                stdout=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(holder.stdout.readline().strip(), "held")
+            holder.kill()  # SIGKILL: no cleanup runs
+            holder.wait()
+            # bash's `sleep` child may briefly keep fd 9; give it a moment to exit.
+            result = self._bash('source "$LOCK_SH"; acquire_backup_lock 10; echo got', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), "got")
+
+    def test_a_child_cannot_reacquire_so_restore_passes_skip_lock(self):
+        # restore.sh holds the lock and runs backup.sh with BACKUP_SKIP_LOCK=1.
+        # Without that flag the child would open the file anew and be refused.
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._bash(
+                'source "$LOCK_SH"; acquire_backup_lock 0; '
+                """bash -c 'source "$LOCK_SH"; acquire_backup_lock 0' && echo child-got-it""",
+                tmp,
+            )
+        self.assertNotIn("child-got-it", result.stdout)
+        self.assertIn("Another backup/restore operation is currently running", result.stderr)

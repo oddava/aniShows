@@ -75,7 +75,8 @@
 
 # Access logs: rotated (10 MiB x 5) and without secrets: account-link tokens
 # (reset/verify/email-change) and OAuth/secret query values, in the URI and
-# in the Referer a page sends. Credentials headers are redacted by Caddy itself.
+# in the Referer a page sends and in redirects' Location. Credentials headers
+# are redacted by Caddy itself.
 (access_log) {
 	log {
 		output file /var/log/caddy/{args[0]} {
@@ -83,8 +84,9 @@
 			roll_keep 5
 		}
 		format filter {
-			request>uri regexp "(?i)(/(?:reset-password|password-reset-confirm|verify-email|confirm-email-change|email-change|activate)/)[^?#\s]*|([?&](?:code|token|uid|key|signature)=)[^&#\s]*" "${1}${2}<redacted>"
-			request>headers>Referer regexp "(?i)(/(?:reset-password|password-reset-confirm|verify-email|confirm-email-change|email-change|activate)/)[^?#\s]*|([?&](?:code|token|uid|key|signature)=)[^&#\s]*" "${1}${2}<redacted>"
+			request>uri regexp "(?i)(/(?:reset-password|password-reset-confirm|verify-email|confirm-email-change|email-change|activate)/)[^?#\s]*|([?&](?:code|token|uid|key|signature|password|secret|access|refresh)=)[^&#\s]*" "${1}${2}<redacted>"
+			request>headers>Referer regexp "(?i)(/(?:reset-password|password-reset-confirm|verify-email|confirm-email-change|email-change|activate)/)[^?#\s]*|([?&](?:code|token|uid|key|signature|password|secret|access|refresh)=)[^&#\s]*" "${1}${2}<redacted>"
+			resp_headers>Location regexp "(?i)(/(?:reset-password|password-reset-confirm|verify-email|confirm-email-change|email-change|activate)/)[^?#\s]*|([?&](?:code|token|uid|key|signature|password|secret|access|refresh)=)[^&#\s]*" "${1}${2}<redacted>"
 		}
 	}
 }

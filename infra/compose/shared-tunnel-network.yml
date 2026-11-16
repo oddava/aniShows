@@ -2,8 +2,10 @@
 # on this host: Caddy joins that container's Docker network as
 # "anishows-caddy". Point the tunnel's public hostnames at
 # http://anishows-caddy:80. Add it with COMPOSE_EXTRA_FILES (deploy-prod.sh)
-# and do not enable the `tunnel` profile. Set CADDY_TRUSTED_PROXIES to that
-# network's subnet (or keep private_ranges).
+# and do not enable the `tunnel` profile (TUNNEL_EXTERNAL=1). Set
+# CADDY_TRUSTED_PROXIES to that cloudflared's fixed address (ipv4_address in
+# its own compose) plus 127.0.0.1/8 ::1/128; deploy-prod.sh refuses
+# TUNNEL_EXTERNAL=1 without it.
 services:
   caddy:
     networks:

@@ -25,10 +25,18 @@ client IP for everyone. Prefer `--no-deps` for single services.
    is planned, a database-only `pre-migrate` backup first (`BACKUP_KEEP_PRE_MIGRATE`, default 3).
 5. `migrate`, then workers, then web replicas replaced one at a time (a new replica must be healthy
    before an old one gets SIGTERM).
-6. Frontend files copied over the old build (old chunks stay a week), cache clear, Caddy reload,
-   cloudflared.
-7. Smoke tests: liveness and the SPA through Caddy, readiness from a web replica, then
-   `PUBLIC_BASE_URL` through Cloudflare (a 301/308 on `/api/v1/health/` fails it: a redirect loop).
+6. Frontend files copied over the old build (old chunks stay a week), cache clear, Caddy reload
+   (Caddy is recreated, 1–2 s of 502s, when `Caddyfile.prod` changed: it is a single-file bind
+   mount and `git pull` replaces the file), cloudflared.
+7. Smoke tests: liveness, the SPA and a non-exempt Django route through Caddy (from the edge
+   network in tunnel mode), readiness from a web replica, then `PUBLIC_BASE_URL` through
+   Cloudflare (a 301/308 on `/api/v1/genres/` fails it: a redirect loop).
+8. On success, `backups-data/deployed.env` records the live release (tags and image ids) and the
+   previous one. One deploy runs at a time (`backups-data/.deploy.lock`).
+
+**Which images a deploy runs:** `BACKEND_TAG`/`FRONTEND_TAG` from the shell (CI passes
+`sha-<commit>`), else the live release from `deployed.env`, else `.env`/`latest`. So a config-only
+re-run (`./deploy-prod.sh` after editing `.env`) keeps the live release, even after a rollback.
 
 The whole run is logged to `backups-data/deploy-logs/deploy-<ts>.log`.
 
@@ -80,8 +88,10 @@ A failure after the migration step prints a recipe with the concrete names. In g
 
 1. **Web roll failed:** nothing to do. The old replicas keep serving (the new one is removed).
 2. **New code is bad, schema is fine:** re-deploy the previous image. The deploy prints its id:
-   `docker tag <id> ghcr.io/oddava/anishows-backend:rollback && BACKEND_TAG=rollback SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh`
-   (`SKIP_PULL=1`: the `rollback` tag exists only on this host.)
+   `docker tag <backend id> ghcr.io/oddava/anishows-backend:rollback && docker tag <frontend id> ghcr.io/oddava/anishows-frontend:rollback && BACKEND_TAG=rollback FRONTEND_TAG=rollback SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh`
+   (the ids are `PREVIOUS_*_IMAGE_ID` in `backups-data/deployed.env`, or printed by the failed
+   deploy; `SKIP_PULL=1`: the `rollback` tags exist only on this host). From the registry instead:
+   `BACKEND_TAG=sha-<previous> FRONTEND_TAG=sha-<previous> ./deploy-prod.sh`.
    (or `BACKEND_TAG=sha-<previous>`).
 3. **The old code cannot run on the new schema:** undo this deploy's migrations with the *new*
    image (it has the migration files; every fan-out migration is reversible by policy), then do step 2:

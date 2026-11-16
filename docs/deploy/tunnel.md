@@ -59,9 +59,10 @@ skipped. One hop, one entry, set by Caddy, has no such case.
 | `Host: localhost` | not routed: Cloudflare routes by hostname; public-mode Caddy serves only its domain |
 
 With the in-stack cloudflared, only the edge subnet is trusted. With a shared or host cloudflared
-(`TUNNEL_EXTERNAL=1`) the default is `private_ranges`; narrow `CADDY_TRUSTED_PROXIES` to the
-cloudflared container's fixed address (give it one with `ipv4_address` in its own compose) or, for
-a host service, the Docker gateway (`docker network inspect <project>_default`). Any trusted peer can
+(`TUNNEL_EXTERNAL=1`) `deploy-prod.sh` requires `CADDY_TRUSTED_PROXIES` explicitly: the cloudflared
+container's fixed address (give it one with `ipv4_address` in its own compose), or, for a host
+service, the Docker gateway of the network Caddy's published port uses
+(`docker network inspect <project>_default`, as a `/32`), each plus `127.0.0.1/8 ::1/128`. Any trusted peer can
 choose the client IP (throttles, D-9). The D-9 gate's loopback exemption is matched on the TCP peer
 (`remote_ip`), so no header can claim it.
 
@@ -71,7 +72,7 @@ choose the client IP (throttles, D-9). The D-9 gate's loopback exemption is matc
 |---|---|---|
 | In this stack (default) | `TUNNEL_TOKEN=…` | `http://caddy:80` |
 | A cloudflared container shared with other projects | `TUNNEL_EXTERNAL=1`, `COMPOSE_EXTRA_FILES="infra/compose/shared-tunnel-network.yml"`, `TUNNEL_NETWORK=<its network>` | `http://anishows-caddy:80` |
-| cloudflared on the host (systemd) | `TUNNEL_EXTERNAL=1`, `COMPOSE_EXTRA_FILES="infra/compose/loopback-port.yml"`, `CADDY_LOOPBACK_PORT=8080` | `http://127.0.0.1:8080` (traffic reaches Caddy from the Docker gateway, which the tunnel default `private_ranges` covers) |
+| cloudflared on the host (systemd) | `TUNNEL_EXTERNAL=1`, `COMPOSE_EXTRA_FILES="infra/compose/loopback-port.yml"`, `CADDY_LOOPBACK_PORT=8080` | `http://127.0.0.1:8080`; traffic reaches Caddy from the Docker gateway: set `CADDY_TRUSTED_PROXIES="<gateway>/32 127.0.0.1/8 ::1/128"` |
 
 For a remotely managed tunnel, the hostnames live in the Cloudflare dashboard: `anishows.com` (and
 `www.anishows.com` if used) → the service URL above. `infra/cloudflared/config.example.yml` is the
