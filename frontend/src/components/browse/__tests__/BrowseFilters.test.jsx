@@ -29,7 +29,6 @@ const resultsProps = (overrides = {}) => ({
     hasActiveFilters: true,
     clearAllFilters: vi.fn(),
     isLoading: false,
-    isTabSwitching: false,
     isError: false,
     isFetchingNextPage: false,
     refetch: vi.fn(),

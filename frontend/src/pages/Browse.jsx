@@ -34,6 +34,24 @@ import { filterBrowseGenres } from '../utils/realGenres';
 import { animeKeys, genreQueries, studioQueries } from '../api/queries/anime';
 import { profileKeys } from '../api/queries/user';
 
+// localStorage can throw (private mode, blocked storage); these preferences
+// are conveniences, so a failure only means the default is used.
+const readStored = (key, fallback) => {
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeStored = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Not persisted; the choice still applies for this visit.
+  }
+};
+
 export default function Browse() {
   const searchInputRef = useRef(null);
   const location = useLocation();
@@ -47,13 +65,12 @@ export default function Browse() {
 
   // State
   const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState(() => localStorage.getItem('browse_view_mode') || 'grid');
-  const [titleLanguage, setTitleLanguage] = useState(() => localStorage.getItem('title_language') || 'en');
-  const [activeTab, setActiveTab] = useState('popular');
+  const [viewMode, setViewMode] = useState(() => readStored('browse_view_mode', 'grid'));
+  const [titleLanguage, setTitleLanguage] = useState(() => readStored('title_language', 'en'));
 
   const [collapsedSections, setCollapsedSections] = useState(() => {
     try {
-      const saved = localStorage.getItem('browse_collapsed_sections');
+      const saved = readStored('browse_collapsed_sections', null);
       return saved ? JSON.parse(saved) : { genres: false };
     } catch {
       return { genres: false };
@@ -63,7 +80,6 @@ export default function Browse() {
   // Filters live in the URL
   const filters = useBrowseUrlFilters();
   const {
-    searchParams,
     currentGenres,
     currentSort,
     currentSearch,
@@ -121,10 +137,10 @@ export default function Browse() {
     }
   });
 
-  // Track analytics
+  // Track analytics (the sort is what the old "tab" event described)
   useEffect(() => {
-    if (activeTab) trackTabChange(activeTab);
-  }, [activeTab, trackTabChange]);
+    trackTabChange(currentSort);
+  }, [currentSort, trackTabChange]);
 
   useEffect(() => {
     trackViewModeChange(viewMode);
@@ -162,32 +178,6 @@ export default function Browse() {
     refreshProfile,
   ]);
 
-  // Update active tab based on params
-  useEffect(() => {
-    if (currentSort === 'trending') setActiveTab('trending');
-    else if (currentSeason && currentYear) {
-      const d = new Date();
-      const m = d.getMonth();
-      const y = d.getFullYear();
-      let thisSeason = 'winter';
-      if (m >= 3 && m <= 5) thisSeason = 'spring';
-      else if (m >= 6 && m <= 8) thisSeason = 'summer';
-      else if (m >= 9 && m <= 11) thisSeason = 'fall';
-
-      if (currentSeason === thisSeason && parseInt(currentYear, 10) === y) {
-        setActiveTab('current');
-      } else {
-        setActiveTab('upcoming');
-      }
-    }
-    else if (currentSort === 'rating') setActiveTab('top');
-    else if (currentSort === 'newest') setActiveTab('newest');
-    else if (currentSort === 'title') setActiveTab('title');
-    else if (currentSearch && !searchParams.get('sort') && !currentSeason) setActiveTab('search');
-    else if (currentSort === 'popular') setActiveTab('popular');
-    else setActiveTab(null);
-  }, [currentSort, currentSeason, currentYear, currentSearch, searchParams]);
-
   const shouldLoadStudios = showFilters || Boolean(currentStudio);
 
   // Fetch genres
@@ -213,16 +203,15 @@ export default function Browse() {
     isFetching,
     isError,
     refetch,
-    isTabSwitching,
   } = useBrowseAnimeList({ filters, adultContentEnabled });
 
   // Persist view mode
   useEffect(() => {
-    localStorage.setItem('browse_view_mode', viewMode);
+    writeStored('browse_view_mode', viewMode);
   }, [viewMode]);
 
   useEffect(() => {
-    localStorage.setItem('title_language', titleLanguage);
+    writeStored('title_language', titleLanguage);
   }, [titleLanguage]);
 
   useEffect(() => {
@@ -232,7 +221,7 @@ export default function Browse() {
   const toggleSection = useCallback((section) => {
     const newCollapsed = { ...collapsedSections, [section]: !collapsedSections[section] };
     setCollapsedSections(newCollapsed);
-    localStorage.setItem('browse_collapsed_sections', JSON.stringify(newCollapsed));
+    writeStored('browse_collapsed_sections', JSON.stringify(newCollapsed));
   }, [collapsedSections]);
 
   // Filter sidebar props
@@ -260,7 +249,7 @@ export default function Browse() {
   return (
     <>
       <SEO page="browse" />
-      <LoadingBar isLoading={isLoading || isFetching || isTabSwitching} />
+      <LoadingBar isLoading={isLoading || isFetching} />
       {theme === 'retro-anime' && <SakuraAnimation />}
 
       <div className="pt-4 pb-0 sm:py-8 px-4 md:px-6">
@@ -372,7 +361,6 @@ export default function Browse() {
                     clearAllFilters={clearAllFilters}
                     searchWithoutFilters={searchWithoutFilters}
                     isLoading={isLoading}
-                    isTabSwitching={isTabSwitching}
                     isError={isError}
                     isFetchingNextPage={isFetchingNextPage}
                     refetch={refetch}

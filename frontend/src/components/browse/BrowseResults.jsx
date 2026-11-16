@@ -21,7 +21,6 @@ export default function BrowseResults({
   clearAllFilters,
   searchWithoutFilters,
   isLoading,
-  isTabSwitching,
   isError,
   isFetchingNextPage,
   refetch,
@@ -44,7 +43,7 @@ export default function BrowseResults({
       <div>
         {isError ? (
           errorState
-        ) : isLoading || isTabSwitching ? (
+        ) : isLoading ? (
           <div className="skeleton-fade-in">
             <GridSkeleton count={skeletonCount} />
             <div ref={loadMoreRef} className="h-0 overflow-hidden" />
@@ -93,7 +92,7 @@ export default function BrowseResults({
       <div className="space-y-3">
         {isError ? (
           errorState
-        ) : isLoading || isTabSwitching ? (
+        ) : isLoading ? (
           <div className="skeleton-fade-in">
             <ListSkeleton count={skeletonCount} />
             <div ref={loadMoreRef} className="h-0 overflow-hidden" />
@@ -142,7 +141,7 @@ export default function BrowseResults({
     <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 xl:grid-cols-10 gap-2">
       {isError ? (
         <div className="col-span-full">{errorState}</div>
-      ) : isLoading || isTabSwitching ? (
+      ) : isLoading ? (
         <div className="col-span-full grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 xl:grid-cols-10 gap-2 skeleton-fade-in">
           <MinimalSkeleton count={skeletonCount} />
           <div ref={loadMoreRef} className="col-span-full h-0 overflow-hidden" />
