@@ -141,6 +141,27 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_flag("SECURE_HSTS_INCLUDE_SUBDOMAINS", Tru
 SECURE_HSTS_PRELOAD = _env_flag("SECURE_HSTS_PRELOAD", True)
 
 # =============================================================================
+# ALLOWED HOSTS
+# =============================================================================
+
+# ALLOWED_HOSTS (base.py) holds the public names. Probes inside the compose
+# network address the app by loopback or service name: the Docker healthcheck
+# (localhost:8000), Caddy's upstream health checks (web:8000) and the deploy
+# smoke test. Without these names each probe gets DisallowedHost (400), every
+# replica turns unhealthy and Caddy ejects them all. They are not reachable
+# from outside: Caddy proxies only the public site (public mode) or what
+# Cloudflare routes (tunnel mode). ALLOWED_HOSTS_INTERNAL="" turns this off.
+ALLOWED_HOSTS_INTERNAL = [
+    host.strip()
+    for host in os.getenv("ALLOWED_HOSTS_INTERNAL", "localhost,127.0.0.1,web").split(",")
+    if host.strip()
+]
+ALLOWED_HOSTS = [
+    *ALLOWED_HOSTS,
+    *(host for host in ALLOWED_HOSTS_INTERNAL if host not in ALLOWED_HOSTS),
+]
+
+# =============================================================================
 # CORS SETTINGS
 # =============================================================================
 

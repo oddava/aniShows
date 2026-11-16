@@ -19,6 +19,7 @@ PRODUCTION_ENV = {
 # Variables these tests vary; dropped from the inherited environment first.
 _VARIED = (
     "SENTRY_DSN",
+    "ALLOWED_HOSTS_INTERNAL",
     "LOG_FORMAT",
     "DB_SSLMODE",
     "DB_SSLROOTCERT",
@@ -75,6 +76,19 @@ class ProductionLoggingTests(SimpleTestCase):
             '__import__("logging").getLogger("anishows.celery").getEffectiveLevel()'
         )
         self.assertEqual(level, 20)
+
+
+class ProductionAllowedHostsTests(SimpleTestCase):
+    def test_probe_names_follow_the_public_hosts(self):
+        hosts = _production_setting("settings.ALLOWED_HOSTS", {"ALLOWED_HOSTS": "anishows.com"})
+        self.assertEqual(hosts, ["anishows.com", "localhost", "127.0.0.1", "web"])
+
+    def test_probe_names_can_be_turned_off(self):
+        hosts = _production_setting(
+            "settings.ALLOWED_HOSTS",
+            {"ALLOWED_HOSTS": "anishows.com", "ALLOWED_HOSTS_INTERNAL": ""},
+        )
+        self.assertEqual(hosts, ["anishows.com"])
 
 
 class ProductionHstsTests(SimpleTestCase):
