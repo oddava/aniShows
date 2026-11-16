@@ -5,6 +5,7 @@ import { LoadingBar } from '../components/LoadingBar';
 import ActiveFilterChips from '../components/browse/ActiveFilterChips';
 import AdvancedFiltersPanel from '../components/browse/AdvancedFiltersPanel';
 import ViewModeToggle from '../components/browse/ViewModeToggle';
+import SortSelect from '../components/browse/SortSelect';
 import BrowseResults from '../components/browse/BrowseResults';
 import useBrowseUrlFilters from '../components/browse/useBrowseUrlFilters';
 import useBrowseAnimeList from '../components/browse/useBrowseAnimeList';
@@ -86,6 +87,7 @@ export default function Browse() {
     localFilters,
     clearAllFilters,
     updateParam,
+    setSort,
     clearSeasonAndYear,
     clearYearRange,
     toggleArrayParam,
@@ -295,7 +297,8 @@ export default function Browse() {
                 {/* Controls Bar - only show view controls in grid mode */}
                 {isGridMode && (
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto sm:ml-auto">
+                      <SortSelect value={currentSort} hasSearch={Boolean(currentSearch)} onChange={setSort} />
                       <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
 
                       {/* Title Language Toggle */}

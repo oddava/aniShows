@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { DEBOUNCED_FILTER_KEYS, FILTER_UPDATE_DEBOUNCE_MS } from './browseFilterOptions';
+import { DEBOUNCED_FILTER_KEYS, FILTER_UPDATE_DEBOUNCE_MS, RELEVANCE_SORT } from './browseFilterOptions';
+
+/**
+ * The sort Browse sends (B1, P0-1). A search ranks by relevance unless the user
+ * picked a sort; without a search "relevance" ranks nothing, so it falls back
+ * to popular like an unset sort does.
+ */
+export function resolveBrowseSort(sortParam, search) {
+  if (sortParam && !(sortParam === RELEVANCE_SORT && !search)) return sortParam;
+  return search ? RELEVANCE_SORT : 'popular';
+}
 
 /**
  * The Browse filters, read from and written to the URL. Also keeps a local
@@ -18,8 +28,8 @@ export default function useBrowseUrlFilters() {
     searchParams.get('genre')?.split(',').filter(Boolean) || [],
     [searchParams]
   );
-  const currentSort = searchParams.get('sort') || 'popular';
   const currentSearch = searchParams.get('q') || '';
+  const currentSort = resolveBrowseSort(searchParams.get('sort'), currentSearch);
   const currentTypes = searchParams.get('type') || '';
   const currentStatuses = searchParams.get('status') || '';
   const currentStudio = searchParams.get('studio') || '';
@@ -173,6 +183,18 @@ export default function useBrowseUrlFilters() {
       newParams.set(key, value);
     } else {
       newParams.delete(key);
+    }
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
+  // "Best match" is what a search sorts by anyway, so choosing it drops `sort`.
+  const setSort = useCallback((value) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
+    if (!value || value === RELEVANCE_SORT) {
+      newParams.delete('sort');
+    } else {
+      newParams.set('sort', value);
     }
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
@@ -352,6 +374,7 @@ export default function useBrowseUrlFilters() {
     localFilters,
     clearAllFilters,
     updateParam,
+    setSort,
     clearSeasonAndYear,
     clearYearRange,
     toggleArrayParam,

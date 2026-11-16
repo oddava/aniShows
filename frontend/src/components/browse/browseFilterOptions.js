@@ -1,11 +1,20 @@
 // Option lists and limits for the Browse filters.
 
+export const RELEVANCE_SORT = 'relevance';
+
 export const SORT_OPTIONS = [
+  { value: RELEVANCE_SORT, label: 'Best match' },
   { value: 'popular', label: 'Most Popular' },
+  { value: 'trending', label: 'Trending' },
   { value: 'rating', label: 'Highest Rated' },
   { value: 'newest', label: 'Newest First' },
   { value: 'title', label: 'Title A-Z' },
 ];
+
+/** The sorts to offer: "Best match" only ranks something while there is a search. */
+export const getSortOptions = (hasSearch) => (
+  hasSearch ? SORT_OPTIONS : SORT_OPTIONS.filter((option) => option.value !== RELEVANCE_SORT)
+);
 
 export const TYPE_OPTIONS = [
   { value: 'TV', label: 'TV Series' },
