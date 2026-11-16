@@ -1,9 +1,30 @@
 # Production stack. Standalone: run with `docker compose -f docker-compose.prod.yml ...`
-# (deploy-prod.sh does this). Service and volume names match the previous
-# layout so existing data volumes and the compose network are reused.
+# (deploy-prod.sh does this and picks the profiles and override files below).
+# Service and volume names match the previous layout so existing data volumes
+# and the compose network are reused.
+#
+# Profiles (COMPOSE_PROFILES, set by deploy-prod.sh):
+#   bundled-db  the local Postgres `db` (when DB_HOST=db, the default)
+#   analytics   Umami + its database
+#   tunnel      cloudflared (Cloudflare Tunnel), when CADDY_MODE=tunnel
+# Override files (infra/compose/, added by deploy-prod.sh):
+#   public-ports.yml           Caddy publishes 80/443 (CADDY_MODE=public, the default)
+#   loopback-port.yml          Caddy on 127.0.0.1:CADDY_LOOPBACK_PORT (host-run cloudflared)
+#   shared-tunnel-network.yml  Caddy joins an existing cloudflared network
+# With none of them, nothing publishes a host port.
 #
 # Gunicorn runs uvicorn workers, which serve both HTTP and WebSockets.
 # BACKEND_TAG pins the backend image (defaults to latest, CI also pushes sha-<commit>).
+# Memory limits default to the previous values; see docs/deploy/runbook.md for
+# the totals and a smaller profile for a shared host.
+
+x-logging: &logging
+  # Docker's default json-file driver never rotates; on a shared host that
+  # fills the disk. 5 x 10 MB per container.
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: ${LOG_MAX_FILE:-5}
 
 x-backend: &backend
   image: ghcr.io/oddava/anishows-backend:${BACKEND_TAG:-latest}
@@ -11,8 +32,11 @@ x-backend: &backend
   env_file: .env
   environment:
     DJANGO_ENV: production
-    DB_HOST: db
-    DB_PORT: "5432"
+    # External/shared Postgres: set DB_HOST (and DB_SSLMODE) in .env and drop
+    # the bundled-db profile. Default: the bundled `db` service.
+    DB_HOST: ${DB_HOST:-db}
+    DB_PORT: ${DB_PORT:-5432}
+    DB_SSLMODE: ${DB_SSLMODE:-}
     DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE:-5}
     REDIS_HOST: redis
     REDIS_PORT: "6379"
@@ -22,14 +46,17 @@ x-backend: &backend
     PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
     SENTRY_ENVIRONMENT: production
     # Only Caddy can reach the backend (it publishes no ports), and Caddy
-    # replaces X-Forwarded-For with the real client address. Without this,
-    # every request looks like it came from Caddy's container IP (logs,
-    # anonymous forum view counting, audit trails).
+    # sends exactly one X-Forwarded-For entry: the real client (behind the
+    # tunnel, CF-Connecting-IP). Without this, every request looks like it
+    # came from Caddy's container IP (throttles, logs, view counts, audit).
     TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
   user: "1000:1000"
+  logging: *logging
   depends_on: &backend-deps
     db:
       condition: service_healthy
+      # Not started with an external DB_HOST (bundled-db profile off).
+      required: false
     redis:
       condition: service_healthy
     createbuckets:
@@ -52,7 +79,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M
+          memory: ${WEB_MEMORY_LIMIT:-768M}
 
   celery:
     <<: *backend
@@ -61,12 +88,14 @@ services:
       --concurrency=${CELERY_CONCURRENCY:-2}
       --max-tasks-per-child=200 --max-memory-per-child=384000
       -Q critical,high_priority,default,notifications,batch,images,analytics,low_priority
+    # No healthcheck: `celery inspect ping` boots a second Django process
+    # (~150 MB) inside the worker's memory limit every interval.
     healthcheck:
       disable: true
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: ${CELERY_MEMORY_LIMIT:-1G}
 
   beat:
     <<: *backend
@@ -76,11 +105,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: ${BEAT_MEMORY_LIMIT:-256M}
 
   db:
+    profiles: [bundled-db]
     image: postgres:18-alpine
     restart: always
+    logging: *logging
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-1}
@@ -96,12 +127,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-
+          memory: ${DB_MEMORY_LIMIT:-1G}
 
   redis:
     image: redis:7-alpine
     restart: always
+    logging: *logging
     command: >
       redis-server --requirepass ${REDIS_PASSWORD:-redispassword123}
       --maxmemory ${REDIS_MAXMEMORY:-256mb} --maxmemory-policy allkeys-lru
@@ -113,10 +144,16 @@ services:
       retries: 3
     volumes:
       - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          # maxmemory plus room for the AOF-rewrite fork and client buffers.
+          memory: ${REDIS_MEMORY_LIMIT:-512M}
 
   minio:
     image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     restart: always
+    logging: *logging
     command: server /data --console-address ":9001"
     expose:
       - "9000"
@@ -133,10 +170,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: ${MINIO_MEMORY_LIMIT:-256M}
 
   createbuckets:
     image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    logging: *logging
     depends_on:
       minio:
         condition: service_healthy
@@ -153,26 +191,86 @@ services:
   caddy:
     image: caddy:alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
     restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    env_file: .env
+    logging: *logging
+    # No host ports here: infra/compose/public-ports.yml adds 80/443 for
+    # public mode; tunnel mode reaches Caddy over the edge network only.
+    # No env_file: the edge container gets only what the Caddyfile reads.
+    # Use scripts/deploy/compose.sh (or deploy-prod.sh): it derives the
+    # CADDY_* values from CADDY_MODE. The defaults below are public mode.
+    environment:
+      CADDY_MODE: ${CADDY_MODE:-public}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-admin@anishows.local}
+      UMAMI_PUBLIC_ORIGIN: ${UMAMI_PUBLIC_ORIGIN:-}
+      WEB_UPSTREAMS: ${WEB_UPSTREAMS:-web:8000}
+      # Public: the domain (ACME). Tunnel: ":80" (plain HTTP, no ACME).
+      CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:-${DOMAIN_NAME:-localhost}}
+      CADDY_UMAMI_SITE_ADDRESS: ${CADDY_UMAMI_SITE_ADDRESS:-${UMAMI_DOMAIN:-http://umami.invalid}}
+      # Peers allowed to set the client IP (CF-Connecting-IP). Tunnel mode
+      # with the in-stack cloudflared: the edge subnet (only cloudflared and
+      # Caddy are on it) + loopback. Public mode: loopback only.
+      CADDY_TRUSTED_PROXIES: ${CADDY_TRUSTED_PROXIES:-127.0.0.1/8 ::1/128}
+      CADDY_HSTS_HEADER: ${CADDY_HSTS_HEADER:-max-age=31536000; includeSubDomains; preload}
+      # D-9 gate for /metrics, readiness, /django-admin (space-separated CIDRs).
+      ADMIN_ALLOW_CIDRS: ${ADMIN_ALLOW_CIDRS:-0.0.0.0/0 ::/0}
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - ./infra/caddy/sites-public.d:/etc/caddy/sites-public.d:ro
+      - ./infra/caddy/sites-tunnel.d:/etc/caddy/sites-tunnel.d:ro
       - frontend_dist:/srv/frontend
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      default: {}
+      edge: {}
+    healthcheck:
+      # The admin API answers once the config is loaded.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       web:
         condition: service_healthy
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: ${CADDY_MEMORY_LIMIT:-256M}
+
+  cloudflared:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:2026.10.0@sha256:9b49eed8f62806d5d45ddf59ecefb5710429598ea6d3fcccd2af938f621b2b07
+    restart: always
+    logging: *logging
+    # Remotely managed tunnel: the public hostnames and their service
+    # (http://caddy:80) live in the Cloudflare dashboard; the token is the
+    # only secret. See infra/cloudflared/ for a locally managed config.
+    command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:20241", "run"]
+    # Only on the edge network: it reaches caddy:80 and nothing else of ours,
+    # and its address is the only non-loopback peer Caddy trusts.
+    networks:
+      - edge
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:20241", "ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      caddy:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: ${CLOUDFLARED_MEMORY_LIMIT:-128M}
 
   umami_db:
+    profiles: [analytics]
     image: postgres:${UMAMI_POSTGRES_VERSION:-17}-alpine
     restart: always
+    logging: *logging
     environment:
       POSTGRES_USER: ${UMAMI_DB_USER:-umami}
       POSTGRES_PASSWORD: ${UMAMI_DB_PASSWORD:-umami}
@@ -189,11 +287,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: ${UMAMI_DB_MEMORY_LIMIT:-256M}
 
   umami:
+    profiles: [analytics]
     image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e3f80c0625aad7179b49da27d475357cabb1068b8cacd9a792cfd6966888b123
     restart: always
+    logging: *logging
     environment:
       DATABASE_URL: postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami_db:5432/${UMAMI_DB_NAME:-umami}
       DATABASE_TYPE: postgresql
@@ -204,28 +304,54 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: ${UMAMI_MEMORY_LIMIT:-512M}
 
   backup:
     build: ./backups
+    image: anishows-backup:local
     container_name: anishows-backup
     restart: always
+    logging: *logging
     env_file: .env
     environment:
-      POSTGRES_HOST: db
+      # Dumps whichever Postgres the app uses (bundled or external).
+      POSTGRES_HOST: ${DB_HOST:-db}
+      POSTGRES_PORT: ${DB_PORT:-5432}
       POSTGRES_DB: ${DB_NAME:-anishows_db}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-1}
+      PGSSLMODE: ${DB_SSLMODE:-prefer}
+      # verify-full: the CA path inside the container (infra/compose/db-ca.yml).
+      PGSSLROOTCERT: ${DB_SSLROOTCERT:-}
     depends_on:
-      - db
-      - minio
+      db:
+        condition: service_started
+        required: false
+      minio:
+        condition: service_started
     volumes:
       - ./backups-data:/backups
       - minio_data:/minio_data
+    healthcheck:
+      # Unhealthy when no scheduled/manual backup succeeded in 26 h (after a
+      # first day of grace), so a failing nightly shows in `compose ps`.
+      test: ["CMD", "bash", "/app/shell/healthcheck.sh"]
+      interval: 5m
+      timeout: 10s
+      retries: 1
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: ${BACKUP_MEMORY_LIMIT:-256M}
+
+networks:
+  default: {}
+  # Caddy <-> cloudflared only. A fixed subnet, so Caddy can trust exactly it;
+  # change EDGE_SUBNET if it overlaps a network on the host.
+  edge:
+    ipam:
+      config:
+        - subnet: ${EDGE_SUBNET:-10.250.250.240/29}
 
 volumes:
   db_data:

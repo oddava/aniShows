@@ -1,0 +1,22 @@
+# The owner's other site, served by this Caddy in public mode only (moved
+# unchanged out of Caddyfile.prod). Behind Cloudflare Tunnel, cloudflared
+# routes that hostname itself, so sites-tunnel.d/ carries no copy.
+
+www.oddava.me {
+	redir https://oddava.me{uri} permanent
+}
+
+oddava.me {
+	encode zstd gzip
+
+	reverse_proxy oddava-app:4321 {
+		# oddava-app relies on explicit forwarded host/proto/client metadata
+		# for canonical URL generation and origin-aware behavior.
+		# Keep these header_up directives even though Caddy may warn that
+		# some overlap with defaults.
+		header_up Host {host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-For {remote_host}
+	}
+}

@@ -1,4 +1,8 @@
-FROM python:3.12-slim AS builder
+# One base for every stage, pinned by digest (bump deliberately: docker pull
+# python:3.12-slim && docker image inspect --format '{{json .RepoDigests}}').
+ARG PYTHON_IMAGE=python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+
+FROM ${PYTHON_IMAGE} AS builder
 
 WORKDIR /app
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
@@ -16,7 +20,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 
-FROM python:3.12-slim AS dev-builder
+FROM ${PYTHON_IMAGE} AS dev-builder
 
 WORKDIR /app
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
@@ -34,7 +38,12 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --extra dev
 
 
-FROM python:3.12-slim AS runtime
+FROM ${PYTHON_IMAGE} AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+# deploy-prod.sh prunes only images carrying this label (shared host).
+LABEL app.anishows.component="backend"
 
 RUN useradd -m -u 1000 aniuser
 
@@ -53,12 +62,16 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 RUN python -c "import PIL"
 
-COPY . .
+COPY --chown=aniuser:aniuser . .
 
 RUN find /app -type f -name "*.sh" -exec sed -i 's/\r$//' {} +
 
-RUN DJANGO_SETTINGS_MODULE=root.settings.production \
-    DJANGO_SECRET_KEY=collectstatic-placeholder \
+# collectstatic, then the production system checks with a throwaway random key
+# (deploy-time values are checked again by deploy-prod.sh). Errors fail the
+# build; warnings (no Safe Browsing key, ...) are printed.
+RUN export DJANGO_SETTINGS_MODULE=root.settings.production \
+    DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')" \
+    ALLOWED_HOSTS=build.invalid \
     CORS_ALLOWED_ORIGINS=https://placeholder.com \
     CSRF_TRUSTED_ORIGINS=https://placeholder.com \
     DB_NAME=placeholder \
@@ -66,9 +79,10 @@ RUN DJANGO_SETTINGS_MODULE=root.settings.production \
     DB_PASSWORD=placeholder \
     DB_HOST=localhost \
     DB_PORT=5432 \
-    python manage.py collectstatic --noinput
-
-RUN chown -R aniuser:aniuser /app
+    && python manage.py collectstatic --noinput \
+    && python manage.py check --deploy --fail-level ERROR \
+    && chown aniuser:aniuser /app \
+    && chown -R aniuser:aniuser /app/static
 
 USER aniuser
 
@@ -76,6 +90,13 @@ EXPOSE 8000 8001
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health/ || exit 1
+
+# The commit this image was built from (CI: --build-arg GIT_SHA=...): Sentry's
+# release and the readiness cache key. Last, so a new commit reuses every
+# cached layer above.
+ARG GIT_SHA=""
+ENV GIT_SHA=${GIT_SHA}
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
 
 CMD ["bash", "/app/scripts/run_with_migration_check.sh", "gunicorn", "root.asgi:application", "-c", "gunicorn.conf.py"]
 

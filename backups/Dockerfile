@@ -6,7 +6,10 @@ RUN apk add --no-cache \
     gzip \
     rsync \
     dcron \
-    curl
+    curl \
+    rclone
+
+LABEL app.anishows.component="backup"
 
 WORKDIR /app
 

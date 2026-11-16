@@ -47,7 +47,7 @@ static
 *~
 
 # Celery
- celerybeat-schedule
+celerybeat-schedule
 celerybeat-schedule.db
 
 # Docker files (not needed in image)
@@ -81,3 +81,13 @@ CACHE
 .idea
 changes.patch
 patch.js
+
+# Not needed at runtime (nothing imports test helpers outside tests; the dev
+# and test containers bind-mount the source instead).
+apps/**/tests
+conftest.py
+infra
+Caddyfile*
+deploy-prod.sh
+makefile
+TODO

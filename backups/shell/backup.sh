@@ -3,10 +3,12 @@ set -Eeuo pipefail
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
-TYPE="${1:-manual}" # manual, daily, weekly, pre-restore
-LOCK_DIR="$BACKUP_DIR/.backup.lock"
-# Backups of each group (regular, pre-restore) to keep, the new one included.
+TYPE="${1:-manual}" # manual, daily, weekly, pre-restore, pre-migrate
+# Backups of each group (regular, pre-restore, pre-migrate) to keep, the new
+# one included. Pre-migrate dumps (deploy-prod.sh, before a schema change) are
+# rotated on their own, so daily backups never push them out.
 KEEP="${BACKUP_KEEP:-1}"
+KEEP_PRE_MIGRATE="${BACKUP_KEEP_PRE_MIGRATE:-3}"
 
 DB_HOST="${POSTGRES_HOST:-db}"
 DB_PORT="${POSTGRES_PORT:-5432}"
@@ -21,9 +23,20 @@ OUTPUT_PATH_FILE="${BACKUP_OUTPUT_PATH_FILE:-}"
 MEDIA_COMPRESS_LEVEL="${BACKUP_MEDIA_COMPRESS_LEVEL:-1}"
 MEDIA_RSYNC_PASSES="${BACKUP_MEDIA_RSYNC_PASSES:-2}"
 
+# Optional off-site copy (rclone remote path, e.g. "offsite:anishows-backups").
+# The remote is configured by RCLONE_CONFIG_<NAME>_* variables in .env (see
+# docs/backups.md); unset = local only. Copies older than
+# BACKUP_REMOTE_KEEP_DAYS are deleted from the remote.
+REMOTE="${BACKUP_REMOTE:-}"
+LOCK_WAIT_SECONDS="${BACKUP_LOCK_WAIT_SECONDS:-0}"
+# Written after every successful scheduled/manual backup; healthcheck.sh reads it.
+SUCCESS_MARKER="$BACKUP_DIR/.last-success"
+# libpq treats an empty PGSSLROOTCERT as a path; unset means its default.
+[ -n "${PGSSLROOTCERT:-}" ] || unset PGSSLROOTCERT
+REMOTE_KEEP_DAYS="${BACKUP_REMOTE_KEEP_DAYS:-30}"
+
 CURRENT_BACKUP_DIR=""
 WORK_DIR=""
-LOCK_ACQUIRED=0
 
 log() {
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"
@@ -32,9 +45,6 @@ log() {
 cleanup() {
     if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
         rm -rf "$WORK_DIR"
-    fi
-    if [ "$LOCK_ACQUIRED" = "1" ] && [ -d "$LOCK_DIR" ]; then
-        rm -rf "$LOCK_DIR"
     fi
 }
 trap cleanup EXIT
@@ -46,32 +56,17 @@ require_command() {
     fi
 }
 
+# The lock lives in lock.sh (an flock shared with restore.sh across containers).
+# shellcheck source=backups/shell/lock.sh
+source "$(dirname "$0")/lock.sh"
+
 acquire_lock() {
     if [ "$SKIP_LOCK" = "1" ]; then
         return
     fi
-
-    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-        if ! reclaim_stale_lock; then
-            echo "Error: Another backup/restore operation is currently running (lock: $LOCK_DIR)." >&2
-            exit 1
-        fi
-    fi
-    LOCK_ACQUIRED=1
-    printf '%s %s\n' "$$" "$(hostname 2>/dev/null || echo unknown)" >"$LOCK_DIR/owner"
-}
-
-# A killed run (OOM, SIGKILL on redeploy) never removes its lock. Take it over
-# when its owner is gone: another container, or a process no longer running.
-reclaim_stale_lock() {
-    local owner_pid owner_host
-    read -r owner_pid owner_host <"$LOCK_DIR/owner" 2>/dev/null || return 1
-    if [ "$owner_host" = "$(hostname 2>/dev/null || echo unknown)" ] && kill -0 "$owner_pid" 2>/dev/null; then
-        return 1
-    fi
-    echo "Warning: removing stale lock left by PID $owner_pid on $owner_host." >&2
-    rm -rf "$LOCK_DIR"
-    mkdir "$LOCK_DIR" 2>/dev/null
+    # BACKUP_LOCK_WAIT_SECONDS > 0 waits for a running backup to finish
+    # (deploy-prod.sh's pre-migrate dump vs the nightly) instead of failing.
+    acquire_backup_lock "$LOCK_WAIT_SECONDS"
 }
 
 assert_numeric_positive() {
@@ -95,6 +90,11 @@ backup_db() {
         --no-owner \
         --no-privileges \
         --file "$out_file"
+    # A truncated or corrupt archive fails here, not on the day of a restore.
+    if ! pg_restore --list "$out_file" >/dev/null; then
+        echo "Error: pg_restore cannot read the new dump ($out_file)." >&2
+        exit 1
+    fi
 }
 
 backup_media() {
@@ -181,13 +181,17 @@ EOF
 # imported backups (named *-imported) are never rotated.
 prune_previous_backups() {
     local group_pattern
+    local keep="$KEEP"
     if [ "$TYPE" = "pre-restore" ]; then
         group_pattern='^[0-9]{8}_[0-9]{6}-pre-restore$'
+    elif [ "$TYPE" = "pre-migrate" ]; then
+        group_pattern='^[0-9]{8}_[0-9]{6}-pre-migrate$'
+        keep="$KEEP_PRE_MIGRATE"
     else
         group_pattern='^[0-9]{8}_[0-9]{6}-(manual|daily|weekly)$'
     fi
 
-    log "Keeping the newest $KEEP backup(s) of this kind..."
+    log "Keeping the newest $keep backup(s) of this kind..."
     local path name
     local -a group=()
     for path in "$BACKUP_DIR"/*/; do
@@ -196,13 +200,48 @@ prune_previous_backups() {
             group+=("$name")
         fi
     done
-    if [ "${#group[@]}" -le "$KEEP" ]; then
+    if [ "${#group[@]}" -le "$keep" ]; then
         return
     fi
     # Names start with the timestamp, so a reverse sort is newest first.
-    printf '%s\n' "${group[@]}" | sort -r | tail -n +"$((KEEP + 1))" | while IFS= read -r name; do
+    printf '%s\n' "${group[@]}" | sort -r | tail -n +"$((keep + 1))" | while IFS= read -r name; do
         log "Removing old backup $name"
         rm -rf "${BACKUP_DIR:?}/$name"
+    done
+}
+
+# Copy the finished backup off this host. A failure leaves the local backup in
+# place and makes the run fail, so cron mail / the deploy log shows it.
+upload_offsite() {
+    if [ -z "$REMOTE" ]; then
+        return 0
+    fi
+    require_command rclone
+    local name
+    name="$(basename "$CURRENT_BACKUP_DIR")"
+    log "Uploading $name to off-site remote $REMOTE..."
+    if ! rclone copy --checksum --no-traverse "$CURRENT_BACKUP_DIR" "$REMOTE/$name"; then
+        echo "Error: off-site upload to $REMOTE failed; the local backup is kept." >&2
+        return 1
+    fi
+    if ! rclone check --one-way "$CURRENT_BACKUP_DIR" "$REMOTE/$name"; then
+        echo "Error: off-site copy of $name does not match the local files." >&2
+        return 1
+    fi
+    log "Off-site copy verified. Removing remote copies older than ${REMOTE_KEEP_DAYS} days..."
+    # Only our own timestamped backup directories, never other data that
+    # shares the bucket or path.
+    # By the date in the name, and only directories this script created: other
+    # data that shares the bucket or path is never touched.
+    local cutoff dir old
+    cutoff="$(date -u -d "@$(( $(date +%s) - REMOTE_KEEP_DAYS * 86400 ))" +%Y%m%d)"
+    rclone lsf --dirs-only --max-depth 1 "$REMOTE" 2>/dev/null | while IFS= read -r dir; do
+        old="${dir%/}"
+        [[ "$old" =~ ^([0-9]{8})_[0-9]{6}-[a-z-]+$ ]] || continue
+        if [[ "${BASH_REMATCH[1]}" < "$cutoff" ]]; then
+            rclone purge "$REMOTE/$old" && log "Removed off-site copy $old" \
+                || log "Warning: could not remove off-site copy $old"
+        fi
     done
 }
 
@@ -225,6 +264,9 @@ main() {
     fi
     assert_numeric_positive "$MEDIA_RSYNC_PASSES" "BACKUP_MEDIA_RSYNC_PASSES"
     assert_numeric_positive "$KEEP" "BACKUP_KEEP"
+    assert_numeric_positive "$KEEP_PRE_MIGRATE" "BACKUP_KEEP_PRE_MIGRATE"
+    assert_numeric_positive "$REMOTE_KEEP_DAYS" "BACKUP_REMOTE_KEEP_DAYS"
+    [[ "$LOCK_WAIT_SECONDS" =~ ^[0-9]+$ ]] || { echo "Error: BACKUP_LOCK_WAIT_SECONDS must be a number." >&2; exit 1; }
 
     mkdir -p "$BACKUP_DIR"
     acquire_lock
@@ -251,6 +293,10 @@ main() {
         printf '%s\n' "$CURRENT_BACKUP_DIR" >"$OUTPUT_PATH_FILE"
     fi
     prune_previous_backups
+    upload_offsite
+    case "$TYPE" in
+        manual|daily|weekly) date -u +%s >"$SUCCESS_MARKER" ;;
+    esac
 }
 
 main "$@"
