@@ -168,6 +168,32 @@ describe('NotificationsTab (preferences matrix)', () => {
         expect(screen.getByText('Saved.').closest('[role="status"]')).toBeInTheDocument();
     });
 
+    it('keeps both toggles when two saves answer out of order', async () => {
+        const resolvers = {};
+        api.updatePreferences.mockImplementation((body) => new Promise((resolve) => {
+            resolvers[Object.keys(body)[0]] = resolve;
+        }));
+        renderTab();
+
+        const replies = await screen.findByRole('switch', { name: 'Push for Replies' });
+        const likes = screen.getByRole('switch', { name: 'Push for Likes' });
+        await waitFor(() => expect(replies).toBeEnabled());
+        fireEvent.click(replies); // replies.push -> false
+        fireEvent.click(likes); // likes.push -> true
+
+        // The likes save answers first with a matrix that already has both changes,
+        // then the replies save answers with an older snapshot (likes.push still false).
+        await act(async () => {
+            resolvers.likes({ data: { preferences: { ...PREFERENCES, replies: { in_app: true, push: false }, likes: { in_app: true, push: true } }, schema: SCHEMA } });
+        });
+        await act(async () => {
+            resolvers.replies({ data: { preferences: { ...PREFERENCES, replies: { in_app: true, push: false } }, schema: SCHEMA } });
+        });
+
+        expect(replies).toHaveAttribute('aria-checked', 'false');
+        expect(likes).toHaveAttribute('aria-checked', 'true');
+    });
+
     it('rolls back a failed toggle and says so in the live region', async () => {
         api.updatePreferences.mockRejectedValue(new Error('500'));
         renderTab();

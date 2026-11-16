@@ -74,12 +74,15 @@ export default function useNotificationPreferences({ user, queryClient }) {
         setPending((prev) => ({ ...prev, [id]: nextValue }));
         try {
             const response = await notificationApi.updatePreferences({ [categoryKey]: { [channelKey]: nextValue } });
+            // Merge only the key this response acknowledges: saves of other keys can
+            // answer out of order, and a whole-matrix snapshot would undo them.
+            const acked = response?.data?.preferences?.[categoryKey]?.[channelKey];
+            const savedValue = typeof acked === 'boolean' ? acked : nextValue;
             queryClient.setQueryData(preferencesKey, (old) => {
-                if (response?.data?.preferences && response?.data?.schema) return response.data;
-                if (!old) return old;
+                if (!old) return response?.data?.preferences && response?.data?.schema ? response.data : old;
                 const nextPreferences = {
                     ...old.preferences,
-                    [categoryKey]: { ...(old.preferences?.[categoryKey] || {}), [channelKey]: nextValue },
+                    [categoryKey]: { ...(old.preferences?.[categoryKey] || {}), [channelKey]: savedValue },
                 };
                 return { ...old, preferences: nextPreferences };
             });
