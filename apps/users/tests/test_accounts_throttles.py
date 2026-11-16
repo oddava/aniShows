@@ -210,3 +210,48 @@ class ScopedThrottleTests(APITestCase):
         self.assertEqual(rates["change_email"], "5/hour")
         self.assertEqual(settings.LOGIN_IDENTIFIER_MAX_FAILURES, 10)
         self.assertEqual(settings.LOGIN_IDENTIFIER_WINDOW_SECONDS, 900)
+
+
+class LoginLockPerAccountTests(APITestCase):
+    def setUp(self):
+        User.objects.create_user(username="Twin", email="twin@example.com", password="right-pass-1")
+
+    def test_username_and_email_share_one_counter(self):
+        for attempt in range(10):
+            field, value = ("username", "twin") if attempt % 2 else ("email", "TWIN@example.com")
+            self.client.post(
+                reverse("token_obtain_pair"),
+                {field: value, "password": "wrong"},
+                format="json",
+                REMOTE_ADDR=f"10.9.0.{attempt}",
+                **XHR,
+            )
+        response = self.client.post(
+            reverse("token_obtain_pair"),
+            {"username": "Twin", "password": "wrong"},
+            format="json",
+            **XHR,
+        )
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+class SocialLinksOrderTests(APITestCase):
+    def test_reordering_links_is_saved(self):
+        user = User.objects.create_user(username="orderly", email="ord@example.com", password="x")
+        UserProfile.objects.filter(user=user).update(social_links=STORED_LINKS)
+        self.client.force_authenticate(user)
+        reordered = [
+            {"platform": link["platform"], "value": link["url"]} for link in reversed(STORED_LINKS)
+        ]
+        with patch(
+            "apps.users.services.profile_update_service.SocialLinksService.validate_and_process",
+            side_effect=lambda links: [
+                {**link, "url": link["value"], "normalized_url": link["value"]} for link in links
+            ],
+        ):
+            response = self.client.patch(
+                reverse("user_profile"), {"social_links": json.dumps(reordered)}, format="multipart"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stored = UserProfile.objects.get(user=user).social_links
+        self.assertEqual([link["platform"] for link in stored], ["youtube", "github", "twitter"])

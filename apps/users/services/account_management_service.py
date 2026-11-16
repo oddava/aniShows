@@ -113,6 +113,9 @@ def request_email_change(user, new_email, password, email_service: EmailService)
     # link itself carries only uid and token (A14).
     profile, _ = UserProfile.objects.get_or_create(user=user)
     _set_pending_email(profile, new_email)
+    # The token covers pending_email_requested_at; mint it from this profile,
+    # not a copy cached on request.user before the request.
+    user.userprofile = profile
     email_service.send_email_change_confirmation(user, new_email)
     email_service.send_email_change_requested_notice(user, new_email)
     return _pending_email_result(
@@ -128,6 +131,7 @@ def resend_email_change(user, email_service: EmailService) -> AccountManagementR
             payload={"error": "There is no email change waiting for confirmation."},
             status_code=400,
         )
+    user.userprofile = profile  # fresh pending_email_requested_at for the token
     email_service.send_email_change_confirmation(user, profile.pending_email)
     return _pending_email_result("Confirmation email sent again.", profile)
 

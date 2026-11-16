@@ -47,6 +47,13 @@ urlpatterns = [
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/google/", GoogleLogin.as_view(), name="google_login"),
     # Auth Workflow Routes (Verify Email, Resend, Reset Password)
+    # Body form {uid, token}: keeps the token out of access logs (A14). The
+    # path form stays for links and clients that still use it.
+    path(
+        "verify-email/",
+        AuthViewSet.as_view({"post": "verify_email"}),
+        name="verify_email_body",
+    ),
     path(
         "verify-email/<str:uid>/<str:token>/",
         AuthViewSet.as_view({"post": "verify_email"}),

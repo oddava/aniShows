@@ -87,12 +87,25 @@ def live_refresh_tokens(user):
     )
 
 
+def lock_user_sessions(user_id) -> None:
+    """Row-lock the user so session revocation and refresh rotation run one at a time.
+
+    Without it, a refresh rotating concurrently with a revocation could create
+    its new refresh token after the revocation listed the live ones, and that
+    token would survive. Callers hold a transaction. Lock order is always the
+    user row, then token rows.
+    """
+    User.objects.select_for_update().filter(pk=user_id).exists()
+
+
 def revoke_other_sessions(user, keep_jti: str) -> int:
     """Blacklist every live refresh token of ``user`` except ``keep_jti``; return how many."""
-    others = list(live_refresh_tokens(user).exclude(jti=keep_jti))
-    BlacklistedToken.objects.bulk_create(
-        [BlacklistedToken(token=token) for token in others], ignore_conflicts=True
-    )
+    with transaction.atomic():
+        lock_user_sessions(user.pk)
+        others = list(live_refresh_tokens(user).exclude(jti=keep_jti))
+        BlacklistedToken.objects.bulk_create(
+            [BlacklistedToken(token=token) for token in others], ignore_conflicts=True
+        )
     return len(others)
 
 
@@ -114,13 +127,17 @@ def flush_expired_tokens(batch_size: int = 5000) -> int:
 
 def revoke_all_sessions(user) -> None:
     """Blacklist every refresh token issued to ``user`` (all devices log out)."""
-    BlacklistedToken.objects.bulk_create(
-        [
-            BlacklistedToken(token=token)
-            for token in OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True)
-        ],
-        ignore_conflicts=True,
-    )
+    with transaction.atomic():
+        lock_user_sessions(user.pk)
+        BlacklistedToken.objects.bulk_create(
+            [
+                BlacklistedToken(token=token)
+                for token in OutstandingToken.objects.filter(
+                    user=user, blacklistedtoken__isnull=True
+                )
+            ],
+            ignore_conflicts=True,
+        )
 
 
 class AuthService:

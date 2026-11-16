@@ -135,3 +135,30 @@ class FlushExpiredTokensTests(APITestCase):
         self._token(expired=True)
         result = flush_expired_auth_tokens.apply(kwargs={"batch_size": 5000}).get()
         self.assertEqual(result, {"deleted": 1})
+
+
+class SessionLockOrderTests(APITestCase):
+    """Rotation and revocation take the user row lock first (no surviving token)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="locker", email="lk@example.com", password="x"
+        )
+
+    def test_refresh_and_revocations_lock_the_user_row(self):
+        from unittest.mock import patch
+
+        from ..services import auth_service
+
+        client = APIClient()
+        client.cookies[REFRESH_COOKIE_NAME] = str(issue_refresh_token(self.user))
+        real_lock = auth_service.lock_user_sessions
+        with (
+            patch.object(auth_service, "lock_user_sessions", wraps=real_lock) as lock,
+            patch("apps.users.views.auth.lock_user_sessions", wraps=real_lock) as view_lock,
+        ):
+            self.assertEqual(client.post(reverse("token_refresh"), **XHR).status_code, 200)
+            auth_service.revoke_other_sessions(self.user, keep_jti="none")
+            auth_service.revoke_all_sessions(self.user)
+        view_lock.assert_called_once_with(self.user.pk)
+        self.assertEqual(lock.call_count, 2)

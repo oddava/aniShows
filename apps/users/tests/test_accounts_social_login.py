@@ -99,7 +99,9 @@ class SessionAuthFlagTests(SimpleTestCase):
 
     def test_default_is_on(self):
         self.assertTrue(settings.API_SESSION_AUTH_ENABLED)
-        self.assertIn(SESSION, cast(list[str], settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]))
+        self.assertIn(
+            SESSION, cast("list[str]", settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"])
+        )
 
 
 class SessionAuthFlagBehaviourTests(APITestCase):
@@ -118,7 +120,7 @@ class SessionAuthFlagBehaviourTests(APITestCase):
         classes = [
             import_string(name)
             for name in _authentication_classes(
-                cast(list[str], settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]),
+                cast("list[str]", settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]),
                 session_enabled=False,
             )
         ]
@@ -223,3 +225,10 @@ class LoginCsrfTests(APITestCase):
             **XHR,
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class GoogleBadBodyTests(APITestCase):
+    def test_a_json_array_body_is_400_not_500(self):
+        response = self.client.post(GOOGLE_URL, ["code"], format="json", **XHR)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "code_required")

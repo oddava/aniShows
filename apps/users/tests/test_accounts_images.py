@@ -183,3 +183,44 @@ def image_processing_timeout() -> float:
     from .. import adapters
 
     return adapters.OAUTH_AVATAR_TIMEOUT_SECONDS
+
+
+class ImageEdgeCaseTests(SimpleTestCase):
+    def test_tall_banner_is_capped_so_webp_can_encode_it(self):
+        buffer = io.BytesIO()
+        Image.new("RGB", (400, 20000), (1, 2, 3)).save(buffer, format="PNG")
+        result = normalize_profile_image(
+            ContentFile(buffer.getvalue(), name="tall.png"), "banner", max_size=5 * 1024 * 1024
+        )
+        width, height = opened(result).size
+        self.assertLessEqual(height, 2560)
+        self.assertEqual(width, round(400 * 2560 / 20000))
+
+    def test_processing_failures_are_profile_image_errors(self):
+        with (
+            patch.object(image_processing, "_reencode", side_effect=OSError("encoder")),
+            self.assertRaisesMessage(ProfileImageError, "could not be processed"),
+        ):
+            normalize_profile_image(
+                ContentFile(jpeg_with_exif((50, 50)), name="x.jpg"), "avatar", max_size=10**6
+            )
+
+    def test_sixteen_bit_png_is_handled(self):
+        buffer = io.BytesIO()
+        Image.new("I;16", (64, 64)).save(buffer, format="PNG")
+        result = normalize_profile_image(
+            ContentFile(buffer.getvalue(), name="deep.png"), "avatar", max_size=10**6
+        )
+        self.assertEqual(opened(result).format, "WEBP")
+
+
+class UploadAndRemoveTogetherTests(APITestCase):
+    def test_avatar_upload_with_remove_avatar_is_400(self):
+        user = User.objects.create_user(username="both", email="both@example.com", password="x")
+        self.client.force_authenticate(user)
+        upload = SimpleUploadedFile("a.jpg", jpeg_with_exif((50, 50)), content_type="image/jpeg")
+        response = self.client.patch(
+            reverse("user_profile"), {"avatar": upload, "remove_avatar": "true"}, format="multipart"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("remove_avatar", response.data["errors"])

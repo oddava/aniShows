@@ -13,6 +13,7 @@ Provides comprehensive validation including:
 
 import hashlib
 import ipaddress
+import math
 import re
 import socket
 from concurrent.futures import ThreadPoolExecutor
@@ -457,9 +458,10 @@ class URLValidator:
             registered_domain = host
 
         try:
-            domain_info = _WHOIS_POOL.submit(whois.whois, registered_domain).result(
-                timeout=self.WHOIS_TIMEOUT_SECONDS
-            )
+            # The socket timeout frees the worker; the future timeout bounds the caller.
+            domain_info = _WHOIS_POOL.submit(
+                whois.whois, registered_domain, timeout=math.ceil(self.WHOIS_TIMEOUT_SECONDS)
+            ).result(timeout=self.WHOIS_TIMEOUT_SECONDS)
 
             creation_date = domain_info.creation_date
             if isinstance(creation_date, list):

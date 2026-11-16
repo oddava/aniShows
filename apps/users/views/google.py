@@ -81,7 +81,7 @@ class GoogleLogin(SocialLoginView):
         if rejected is not None:
             return rejected
 
-        code = request.data.get("code")
+        code = request.data.get("code") if hasattr(request.data, "get") else None
         if not isinstance(code, str) or not code.strip():
             # Code flow only (A07): a raw access_token/id_token is not accepted.
             return error_response(str(CODE_REQUIRED_MESSAGE), code="code_required", status_code=400)

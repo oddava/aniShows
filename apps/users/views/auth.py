@@ -43,6 +43,7 @@ from ..services.auth_service import (
     AuthService,
     add_session_claims,
     live_refresh_tokens,
+    lock_user_sessions,
     revoke_other_sessions,
     token_auth_time,
 )
@@ -122,7 +123,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             return rejected
 
         identifier = _login_identifier(request.data)
-        identifier_throttle = throttling.LoginIdentifierThrottle(identifier) if identifier else None
+        # One counter per account, however it is named (username, email, case):
+        # resolve to the canonical username when the account exists.
+        identifier_throttle = (
+            throttling.LoginIdentifierThrottle(_throttle_key(identifier)) if identifier else None
+        )
         if identifier_throttle is not None:
             wait = identifier_throttle.wait()
             if wait is not None:
@@ -139,13 +144,19 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         return move_refresh_to_cookie(response)
 
 
-def _login_identifier(data) -> str | None:
-    """The username or email a login attempt names, if it is a usable string."""
+def _login_identifier(data) -> tuple[str, str] | None:
+    """``(field, value)`` for the username or email a login attempt names, if usable."""
     for field in ("username", "email"):
         value = data.get(field) if hasattr(data, "get") else None
         if isinstance(value, str) and value.strip():
-            return value
+            return field, value
     return None
+
+
+def _throttle_key(identifier: tuple[str, str]) -> str:
+    field, value = identifier
+    resolved = AuthService().normalize_login_identifier(**{field: value})
+    return resolved or value
 
 
 class RegisterView(generics.CreateAPIView):
@@ -312,8 +323,13 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
                 # retried request) would both pass the blacklist check before
                 # either blacklists it, and both get a new token. Lock the
                 # token's row so the second waits and then sees it blacklisted.
-                jti = self.token_class(attrs["refresh"])[jwt_settings.JTI_CLAIM]
-                OutstandingToken.objects.select_for_update().filter(jti=jti).first()
+                token = self.token_class(attrs["refresh"])
+                # User row first (as revocation does), so a concurrent "sign
+                # out everywhere" cannot miss the token this rotation creates.
+                lock_user_sessions(token.get(jwt_settings.USER_ID_CLAIM))
+                OutstandingToken.objects.select_for_update().filter(
+                    jti=token[jwt_settings.JTI_CLAIM]
+                ).first()
                 return super().validate(attrs)
         except User.DoesNotExist:
             logger.warning(

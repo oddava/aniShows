@@ -49,7 +49,13 @@ class _PreVerificationTokenGenerator(EmailVerificationTokenGenerator):
 
 
 class EmailChangeTokenGenerator(PasswordResetTokenGenerator):
-    """Token that confirms a change from the user's current email to ``new_email``."""
+    """Token that confirms a change from the user's current email to ``new_email``.
+
+    The hash also covers when that change was requested
+    (``UserProfile.pending_email_requested_at``): cancelling clears it and a
+    new request moves it, so a link from an earlier or cancelled request for
+    the same address never comes back to life.
+    """
 
     key_salt = "apps.users.tokens.EmailChangeTokenGenerator"
 
@@ -57,8 +63,16 @@ class EmailChangeTokenGenerator(PasswordResetTokenGenerator):
         super().__init__()
         self.new_email = normalize_email(new_email)
 
+    def _requested_at(self, user) -> str:
+        profile = getattr(user, "userprofile", None)
+        requested_at = getattr(profile, "pending_email_requested_at", None)
+        return requested_at.isoformat() if requested_at else ""
+
     def _make_hash_value(self, user, timestamp):
-        return f"{user.pk}{user.password}{user.email}{self.new_email}{timestamp}"
+        return (
+            f"{user.pk}{user.password}{user.email}{self.new_email}"
+            f"{self._requested_at(user)}{timestamp}"
+        )
 
 
 email_verification_token_generator = EmailVerificationTokenGenerator()

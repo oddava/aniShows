@@ -97,3 +97,32 @@ class AuthFlowBodyTests(APITestCase):
     def test_verify_email_with_a_garbage_link_is_400(self):
         response = self.client.post("/api/v1/verify-email/x/y/", {}, format="json", **XHR)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class VerifyEmailBodyRouteTests(APITestCase):
+    """POST verify-email/ with {uid, token} keeps the token out of access logs (A14)."""
+
+    def test_body_route_verifies(self):
+        from django.utils.encoding import force_bytes
+        from django.utils.http import urlsafe_base64_encode
+
+        from ..tokens import email_verification_token_generator
+
+        user = User.objects.create_user(username="bodyv", email="bv@example.com", password="x")
+        response = self.client.post(
+            reverse("verify_email_body"),
+            {
+                "uid": urlsafe_base64_encode(force_bytes(user.pk)),
+                "token": email_verification_token_generator.make_token(user),
+            },
+            format="json",
+            **XHR,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+
+    def test_body_route_with_bad_values_is_400(self):
+        response = self.client.post(
+            reverse("verify_email_body"), {"uid": 5, "token": ["x"]}, format="json", **XHR
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

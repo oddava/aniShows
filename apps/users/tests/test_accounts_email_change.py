@@ -156,3 +156,15 @@ class PendingEmailTests(APITestCase):
             reverse("confirm_email_change"), {"uid": {"a": 1}, "token": 5}, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cancelled_link_stays_dead_when_the_same_address_is_requested_again(self):
+        self._request()
+        uid, old_token = self._link_parts()
+        self.client.post(reverse("cancel_email_change"), format="json")
+        self.client.force_authenticate(self.user)
+        mail.outbox.clear()
+        self._request()  # same address, new request
+        _uid, new_token = self._link_parts()
+
+        self.assertEqual(self._confirm(uid, old_token).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._confirm(uid, new_token).status_code, status.HTTP_200_OK)

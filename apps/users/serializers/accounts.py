@@ -341,6 +341,14 @@ class UserProfileUpdateSerializer(Serializer):
     def validate_bio(self, value):
         return sanitize_bio(value)
 
+    def validate(self, attrs):
+        for field in ("avatar", "banner"):
+            if attrs.get(field) is not None and attrs.get(f"remove_{field}"):
+                raise ValidationError(
+                    {f"remove_{field}": f"Upload a new {field} or remove it, not both."}
+                )
+        return attrs
+
     def validate_profile_primary_color(self, value):
         normalized = (value or "").strip().lower()
         if not HEX_COLOR_PATTERN.match(normalized):

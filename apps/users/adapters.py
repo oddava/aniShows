@@ -72,12 +72,23 @@ def _random_suffix() -> str:
     return uuid.uuid4().hex[:4]
 
 
-def unique_oauth_username(candidate: str) -> str:
-    """A valid username, free ignoring case, derived from a provider's ``candidate``."""
+def unique_oauth_username(*candidates: str | None) -> str:
+    """A valid username, free ignoring case, from the first candidate that passes the rules.
+
+    Candidates go through ``validate_username`` (length limits, characters,
+    reserved names); when none passes, the base is ``user<hex>``.
+    """
     _min_length, max_length = username_length_limits()
-    try:
-        base = validate_username(candidate)
-    except DjangoValidationError:
+    base = None
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            base = validate_username(candidate)
+            break
+        except DjangoValidationError:
+            continue
+    if base is None:
         base = f"user{_random_suffix()}"
 
     username = base
@@ -97,8 +108,16 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
         is made unique ignoring case (A13).
         """
         user = super().populate_user(request, sociallogin, data)
-        if user.username:
-            user.username = unique_oauth_username(user.username)
+        # Always set it here: Google sends no username, and allauth's own
+        # generator (populate_username in save_user) would skip G1's rules. It
+        # keeps a username that is already set.
+        email = data.get("email") or user.email or ""
+        user.username = unique_oauth_username(
+            user.username,
+            data.get("username"),
+            data.get("first_name"),
+            email.split("@", 1)[0] if "@" in email else None,
+        )
         return user
 
     def save_user(self, request, sociallogin, form=None):

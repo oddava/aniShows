@@ -135,3 +135,28 @@ class DuplicateUsernameMigrationTests(TransactionTestCase):
 
         old_user.objects.filter(username="ALICE").update(username="alice2")
         MigrationExecutor(connection).migrate(self.after)
+
+
+class OAuthPopulateUserTests(TestCase):
+    """Google sends no username; populate_user must still apply G1's rules."""
+
+    def _populate(self, data):
+        from allauth.socialaccount.models import SocialAccount, SocialLogin
+
+        from ..adapters import MySocialAccountAdapter
+
+        sociallogin = SocialLogin(user=User(), account=SocialAccount(provider="google"))
+        return MySocialAccountAdapter().populate_user(None, sociallogin, data)
+
+    def test_name_comes_from_first_name_or_email_through_the_rules(self):
+        user = self._populate({"email": "mary.jane@example.com", "first_name": "Mary Jane"})
+        self.assertEqual(user.username, "mary.jane")  # "Mary Jane" has a space: skipped
+
+    def test_taken_name_ignoring_case_gets_a_suffix(self):
+        User.objects.create_user(username="Mary", email="m@example.com", password="x")
+        user = self._populate({"email": "x@example.com", "first_name": "mary"})
+        self.assertTrue(user.username.startswith("mary_"))
+
+    @patch("apps.users.adapters._random_suffix", return_value="beef")
+    def test_nothing_usable_falls_back(self, _suffix):
+        self.assertEqual(self._populate({"email": "me@example.com"}).username, "userbeef")

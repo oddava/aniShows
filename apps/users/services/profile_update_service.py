@@ -210,10 +210,11 @@ def _apply_social_links(profile, user, new_links, ip_address: str | None) -> boo
 
 
 def _hash_links(links) -> str:
+    """``platform:url`` pairs in order: a reordered list is a change worth saving."""
     if not links:
         return ""
     link_strs = []
-    for link in sorted(links, key=lambda x: x.get("url", "") + x.get("value", "")):
+    for link in links:
         url = link.get("url") or link.get("value", "")
         platform = link.get("platform", "")
         link_strs.append(f"{platform}:{url}")

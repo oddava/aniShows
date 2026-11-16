@@ -28,6 +28,8 @@ ImageKind = Literal["avatar", "banner"]
 
 AVATAR_MAX_SIDE = 512
 BANNER_MAX_WIDTH = 2560
+# Banners are wide; this only stops a tall one exceeding WebP's 16383 px limit.
+BANNER_MAX_HEIGHT = 2560
 WEBP_QUALITY = 85
 GIF_MAX_FRAMES = 120
 # Far below Pillow's bomb limit (~179 MP): no phone photo needs more.
@@ -69,7 +71,7 @@ def _target_size(image: Image.Image, kind: ImageKind) -> tuple[int, int]:
     if kind == "avatar":
         scale = min(1.0, AVATAR_MAX_SIDE / max(width, height))
     else:
-        scale = min(1.0, BANNER_MAX_WIDTH / width)
+        scale = min(1.0, BANNER_MAX_WIDTH / width, BANNER_MAX_HEIGHT / height)
     return max(1, round(width * scale)), max(1, round(height * scale))
 
 
@@ -106,6 +108,16 @@ def normalize_profile_image(file: File, kind: ImageKind, *, max_size: int) -> Fi
         file.seek(0)
         return file
 
+    try:
+        return _reencode(image, kind)
+    except Exception as exc:
+        # Unusual sources (16-bit modes, broken frames) fail deep inside Pillow
+        # with assorted types; the user gets a 400, never a 500.
+        logger.warning("Could not re-encode a %s upload", kind, exc_info=True)
+        raise ProfileImageError(f"{label} could not be processed. Try another image.") from exc
+
+
+def _reencode(image: Image.Image, kind: ImageKind) -> File:
     image = ImageOps.exif_transpose(image) or image
     has_alpha = image.mode in ("RGBA", "LA", "PA") or (
         image.mode == "P" and "transparency" in image.info
