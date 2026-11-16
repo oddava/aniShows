@@ -240,14 +240,10 @@ class UserTaskService:
 
     @staticmethod
     def update_user_stats(user_id: int | None = None) -> dict:
-        from django.db.models import Avg, Count, ExpressionWrapper, F, IntegerField, Q, Sum, Value
-        from django.db.models.functions import Coalesce
-
-        from ...animes.models import Review, ReviewVote, UserFavorite
-        from ..models import UserAnimeList, UserFollow, UserStats
+        """Refresh ``UserStats`` for one user, or for everyone seen in the last 30 days."""
+        from .stats_service import save_user_stats
 
         start_time = timezone.now()
-
         if user_id:
             user_ids = list(User.objects.filter(id=user_id).values_list("id", flat=True))
         else:
@@ -255,129 +251,17 @@ class UserTaskService:
             user_ids = list(
                 User.objects.filter(last_login__gte=thirty_days_ago).values_list("id", flat=True)
             )
-
-        total_users = len(user_ids)
         logger.info(
-            "Preparing user stats update", extra={"user_count": total_users, "user_id": user_id}
+            "Preparing user stats update", extra={"user_count": len(user_ids), "user_id": user_id}
         )
-
-        if total_users == 0:
-            return {
-                "updated_count": 0,
-                "total_users": 0,
-                "duration_seconds": (timezone.now() - start_time).total_seconds(),
-            }
-
-        followers_counts = {
-            row["following_id"]: row["total"]
-            for row in UserFollow.objects.filter(following_id__in=user_ids)
-            .values("following_id")
-            .annotate(total=Count("id"))
-        }
-        following_counts = {
-            row["follower_id"]: row["total"]
-            for row in UserFollow.objects.filter(follower_id__in=user_ids)
-            .values("follower_id")
-            .annotate(total=Count("id"))
-        }
-        minutes_expr = ExpressionWrapper(
-            F("episodes_watched") * Coalesce(F("anime__duration_minutes"), Value(0)),
-            output_field=IntegerField(),
-        )
-        anime_stats_map = {
-            row["user_id"]: row
-            for row in UserAnimeList.objects.filter(user_id__in=user_ids)
-            .values("user_id")
-            .annotate(
-                anime_count=Count("id", distinct=True),
-                episodes_watched_total=Coalesce(Sum("episodes_watched"), 0),
-                mean_score=Avg("score", filter=Q(score__gt=0)),
-                total_minutes=Coalesce(Sum(minutes_expr), 0),
-            )
-        }
-        favorites_counts = {
-            row["user_id"]: row["total"]
-            for row in UserFavorite.objects.filter(user_id__in=user_ids)
-            .values("user_id")
-            .annotate(total=Count("id"))
-        }
-        reviews_counts = {
-            row["user_id"]: row["total"]
-            for row in Review.objects.filter(user_id__in=user_ids)
-            .values("user_id")
-            .annotate(total=Count("id"))
-        }
-        resonance_counts = {
-            row["review__user_id"]: row["total"]
-            for row in ReviewVote.objects.filter(
-                review__user_id__in=user_ids,
-                vote_type=ReviewVote.VoteType.HELPFUL,
-            )
-            .values("review__user_id")
-            .annotate(total=Count("id"))
-        }
-
-        existing_stats_map = {
-            stats.user_id: stats for stats in UserStats.objects.filter(user_id__in=user_ids)
-        }
-        now = timezone.now()
-        to_create = []
-        to_update = []
-
-        for uid in user_ids:
-            anime_data = anime_stats_map.get(uid, {})
-            total_minutes = int(anime_data.get("total_minutes") or 0)
-            data = {
-                "followers_count": int(followers_counts.get(uid, 0)),
-                "following_count": int(following_counts.get(uid, 0)),
-                "anime_count": int(anime_data.get("anime_count") or 0),
-                "episodes_watched": int(anime_data.get("episodes_watched_total") or 0),
-                "total_minutes": total_minutes,
-                "days_watched": round(total_minutes / 1440.0, 1),
-                "mean_score": anime_data.get("mean_score"),
-                "favorites_count": int(favorites_counts.get(uid, 0)),
-                "reviews_count": int(reviews_counts.get(uid, 0)),
-                "resonance_count": int(resonance_counts.get(uid, 0)),
-                "last_updated": now,
-            }
-
-            stats = existing_stats_map.get(uid)
-            if stats is None:
-                to_create.append(UserStats(user_id=uid, is_active=True, **data))
-            else:
-                for field, value in data.items():
-                    setattr(stats, field, value)
-                to_update.append(stats)
-
-        if to_create:
-            UserStats.objects.bulk_create(to_create, batch_size=500)
-        if to_update:
-            UserStats.objects.bulk_update(
-                to_update,
-                [
-                    "followers_count",
-                    "following_count",
-                    "anime_count",
-                    "episodes_watched",
-                    "total_minutes",
-                    "days_watched",
-                    "mean_score",
-                    "favorites_count",
-                    "reviews_count",
-                    "resonance_count",
-                    "last_updated",
-                ],
-                batch_size=500,
-            )
-
+        updated = save_user_stats(user_ids)
         duration = (timezone.now() - start_time).total_seconds()
         logger.info(
-            "Updated user stats",
-            extra={"updated_count": len(user_ids), "duration_seconds": duration},
+            "Updated user stats", extra={"updated_count": updated, "duration_seconds": duration}
         )
         return {
-            "updated_count": len(user_ids),
-            "total_users": total_users,
+            "updated_count": updated,
+            "total_users": len(user_ids),
             "duration_seconds": duration,
         }
 
