@@ -14,6 +14,8 @@ User = get_user_model()
 
 class EmailVerificationFlowTests(APITestCase):
     def setUp(self):
+        # The SPA's header; verify-email requires it (login CSRF).
+        self.client.credentials(HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.user = User.objects.create_user(
             username="testuser", email="test@example.com", password="testpassword123"
         )

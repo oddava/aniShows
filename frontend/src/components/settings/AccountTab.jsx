@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { AlertCircle, Check, Eye, EyeOff, Shield } from 'lucide-react';
 import { PASSWORD_HINT } from '../../utils/password';
+import SessionsCard from './SessionsCard';
 
 /**
  * The Account tab: email and password, privacy, import/export, sign out and
@@ -24,6 +25,11 @@ export default function AccountTab({ user, account, isPrivate, handlePrivacyTogg
         deleteAccountPassword, setDeleteAccountPassword,
         isDeleting,
         showDeleteConfirm, setShowDeleteConfirm,
+        reauthRequired,
+        handleReauth,
+        isUpdatingPendingEmail,
+        handleResendEmailChange,
+        handleCancelEmailChange,
         handleChangePassword,
         handleResendVerification,
         handleChangeEmail,
@@ -39,6 +45,19 @@ export default function AccountTab({ user, account, isPrivate, handlePrivacyTogg
                     <Shield className="w-5 h-5 text-accent" />
                     Email & Security
                 </h2>
+
+                {reauthRequired && (
+                    <div role="alert" className="mb-6 p-4 rounded-xl border border-yellow-400/20 bg-yellow-400/10">
+                        <p className="text-sm font-medium text-yellow-300 mb-1">Confirm it's you</p>
+                        <p className="text-sm text-gray-300 mb-3">
+                            For your security, sign in with Google again before changing your password,
+                            email or account. You'll come back here afterwards.
+                        </p>
+                        <button type="button" onClick={handleReauth} className="btn-primary text-sm">
+                            Continue with Google
+                        </button>
+                    </div>
+                )}
 
                 {/* Email Verification Status */}
                 <div className="mb-8 p-4 bg-dark-50 rounded-xl border border-gray-700">
@@ -70,6 +89,35 @@ export default function AccountTab({ user, account, isPrivate, handlePrivacyTogg
                 {/* Change Email */}
                 <div className="mb-8">
                     <h3 className="text-lg font-medium text-white mb-4">Change Email</h3>
+                    {user.pending_email && (
+                        <div className="mb-4 p-4 bg-dark-50 rounded-xl border border-gray-700 max-w-md">
+                            <p className="text-sm text-gray-300">
+                                Waiting for confirmation at{' '}
+                                <span className="text-white font-medium break-all">{user.pending_email}</span>
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Your current address stays in use until you click the link we sent there.
+                            </p>
+                            <div className="flex gap-4 mt-3">
+                                <button
+                                    type="button"
+                                    onClick={handleResendEmailChange}
+                                    disabled={isUpdatingPendingEmail}
+                                    className="text-accent hover:text-accent-hover text-sm font-medium disabled:opacity-50"
+                                >
+                                    Resend link
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleCancelEmailChange}
+                                    disabled={isUpdatingPendingEmail}
+                                    className="text-gray-400 hover:text-white text-sm font-medium disabled:opacity-50"
+                                >
+                                    Cancel change
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="space-y-4 max-w-md">
                         <input
                             type="email"
@@ -187,14 +235,22 @@ export default function AccountTab({ user, account, isPrivate, handlePrivacyTogg
                     Privacy
                 </h2>
 
-                <div className="flex items-center justify-between max-w-md">
+                <div className="flex items-center justify-between gap-4 max-w-md">
                     <div>
-                        <p className="text-white font-medium">Private Profile</p>
-                        <p className="text-gray-400 text-sm">Hide your profile from other users</p>
+                        <p id="private-profile-label" className="text-white font-medium">Private Profile</p>
+                        <p id="private-profile-help" className="text-gray-400 text-sm">
+                            Hide your profile, lists and activity from other users. Your reviews and
+                            forum posts stay visible on their own pages.
+                        </p>
                     </div>
                     <button
+                        type="button"
+                        role="switch"
+                        aria-checked={isPrivate}
+                        aria-labelledby="private-profile-label"
+                        aria-describedby="private-profile-help"
                         onClick={handlePrivacyToggle}
-                        className={`relative w-14 h-7 rounded-full transition-colors duration-200 
+                        className={`relative shrink-0 w-14 h-7 rounded-full transition-colors duration-200
                                 ${isPrivate ? 'bg-accent-dark' : 'bg-dark-50 border border-gray-700'}`}
                     >
                         <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
@@ -236,9 +292,9 @@ export default function AccountTab({ user, account, isPrivate, handlePrivacyTogg
             {/* Sign Out */}
             <div className="bg-dark-100 p-6 rounded-2xl border border-gray-800">
                 <h2 className="text-xl font-semibold text-white mb-2">Session</h2>
-                <p className="text-gray-400 text-sm mb-6">
-                    Sign out from this device.
-                </p>
+                <div className="mb-6">
+                    <SessionsCard />
+                </div>
                 <button
                     onClick={handleSignOut}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg transition-colors font-medium text-sm"

@@ -86,6 +86,31 @@ function hslToHex({ hue, saturation, lightness }) {
     return `#${toHex(red)}${toHex(green)}${toHex(blue)}`;
 }
 
+// --color-dark in index.css; the accent is drawn on it site-wide.
+export const PROFILE_ACCENT_BACKGROUND = '#0a0a0a';
+export const MIN_ACCENT_CONTRAST = 4.5;
+
+function channelLuminance(channel) {
+    return channel <= 0.03928
+        ? channel / 12.92
+        : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+export function relativeLuminance(hex) {
+    const { red, green, blue } = hexToRgb(hex);
+    return 0.2126 * channelLuminance(red)
+        + 0.7152 * channelLuminance(green)
+        + 0.0722 * channelLuminance(blue);
+}
+
+export function contrastRatio(hexA, hexB) {
+    const a = relativeLuminance(hexA);
+    const b = relativeLuminance(hexB);
+    const lighter = Math.max(a, b);
+    const darker = Math.min(a, b);
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
 export function toneProfileAccentColor(value) {
     const normalized = normalizeProfilePrimaryColor(value);
     const hsl = rgbToHsl(hexToRgb(normalized));
@@ -96,7 +121,19 @@ export function toneProfileAccentColor(value) {
         lightness: Math.min(hsl.lightness, 0.64),
     };
 
-    return hslToHex(toned);
+    // Raise lightness (same hue and saturation) until the accent is
+    // readable on the dark page background. White always passes, so
+    // the loop ends.
+    let hex = hslToHex(toned);
+    while (
+        contrastRatio(hex, PROFILE_ACCENT_BACKGROUND) < MIN_ACCENT_CONTRAST
+        && toned.lightness < 1
+    ) {
+        toned.lightness = Math.min(1, toned.lightness + 0.01);
+        hex = hslToHex(toned);
+    }
+
+    return hex;
 }
 
 export function getProfileAccentTheme(value) {

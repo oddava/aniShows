@@ -116,14 +116,13 @@ def _catalog_entries(
 
 
 def _account_entries() -> dict:
-    """G1 Accounts & auth."""
-    return {
-        "warm-profile-cache-hourly": {
-            "task": "apps.users.tasks.warm_profile_cache",
-            "schedule": crontab(minute=0),  # Every hour
-            "options": {"queue": "low_priority"},
-        },
-    }
+    """G1 Accounts & auth.
+
+    Empty: the hourly ``warm-profile-cache-hourly`` entry was retired (D-7, A21). Its
+    payload differed from the live path and cost a 3-way join over all users each hour.
+    Expired JWT rows are flushed from G3's ``user-maintenance-daily`` workflow instead.
+    """
+    return {}
 
 
 def _recommendation_entries() -> dict:

@@ -6,8 +6,10 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
 
+from ...core.api_errors import error_response
 from ...shared.logger import logger
-from ..auth_cookies import set_refresh_cookie
+from ..auth_cookies import cookie_auth_rejected, end_django_session, set_refresh_cookie
+from ..serializers.social_auth import CODE_REQUIRED_MESSAGE
 from .social_auth import SocialLoginView
 
 
@@ -74,6 +76,16 @@ class GoogleLogin(SocialLoginView):
         return url
 
     def post(self, request, *args, **kwargs):
+        # Login CSRF (A08): a cross-site form must not sign the victim in.
+        rejected = cookie_auth_rejected(request)
+        if rejected is not None:
+            return rejected
+
+        code = request.data.get("code") if hasattr(request.data, "get") else None
+        if not isinstance(code, str) or not code.strip():
+            # Code flow only (A07): a raw access_token/id_token is not accepted.
+            return error_response(str(CODE_REQUIRED_MESSAGE), code="code_required", status_code=400)
+
         try:
             self.callback_url = self._resolve_callback_url(request)
         except ValueError:
@@ -88,6 +100,10 @@ class GoogleLogin(SocialLoginView):
             # Log error securely without exposing sensitive data
             logger.exception("GoogleLogin failed")
             raise
+        finally:
+            # allauth's complete_social_login performs a Django session login;
+            # end it so only the JWT pair stands for this sign-in (A05).
+            end_django_session(request)
 
         # The refresh token goes out only as the httpOnly cookie.
         response.data.pop("refresh", None)

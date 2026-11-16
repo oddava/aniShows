@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { getApiErrorMessage } from '../api/errors';
 import { Link } from 'react-router-dom';
 import { authApi } from '../api/client';
+import AuthField from '../components/auth/AuthField';
 import { Mail, ArrowRight, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function PasswordReset() {
@@ -27,7 +28,7 @@ export default function PasswordReset() {
     if (status === 'success') {
         return (
             <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
-                <div className="w-full max-w-md bg-dark-100 rounded-2xl p-8 border border-gray-800 shadow-xl text-center">
+                <div className="w-full max-w-md bg-dark-100 rounded-2xl p-6 sm:p-8 border border-gray-800 shadow-xl text-center">
                     <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CheckCircle className="w-8 h-8 text-green-500" />
                     </div>
@@ -49,31 +50,26 @@ export default function PasswordReset() {
                     <p className="text-gray-400">Enter your email to receive a reset link</p>
                 </div>
 
-                <div className="bg-dark-100 rounded-2xl p-8 border border-gray-800 shadow-xl">
+                <div className="bg-dark-100 rounded-2xl p-6 sm:p-8 border border-gray-800 shadow-xl">
                     {status === 'error' && (
-                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
+                        <div role="alert" className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
                             <AlertCircle className="w-5 h-5 shrink-0" />
                             <p className="text-sm">{message}</p>
                         </div>
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Email Address
-                            </label>
-                            <div className="relative group">
-                                <Mail className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-                                <input
-                                    type="email"
-                                    required
-                                    className="input !pl-12 w-full"
-                                    placeholder="Enter your email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                />
-                            </div>
-                        </div>
+                        <AuthField
+                            id="reset-email"
+                            label="Email Address"
+                            icon={Mail}
+                            type="email"
+                            autoComplete="email"
+                            required
+                            placeholder="Enter your email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                        />
 
                         <button
                             type="submit"

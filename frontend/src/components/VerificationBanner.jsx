@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertCircle, RefreshCw, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/client';
@@ -31,10 +32,17 @@ export default function VerificationBanner() {
         <div className="bg-yellow-500/10 border-b border-yellow-500/20 backdrop-blur-sm relative z-[60]">
             <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-4 text-sm">
                 <div className="flex items-center gap-2 text-yellow-500">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
                     <span>
                         Please verify your email address to access all features.
                         <span className="hidden sm:inline"> Check your inbox for the verification link.</span>
+                        {' '}
+                        <Link
+                            to="/settings?tab=account"
+                            className="font-medium underline underline-offset-2 hover:text-yellow-400 transition-colors"
+                        >
+                            Change email
+                        </Link>
                     </span>
                 </div>
                 {resendSuccess ? (
@@ -44,6 +52,7 @@ export default function VerificationBanner() {
                     </div>
                 ) : (
                     <button
+                        type="button"
                         onClick={handleResendVerification}
                         disabled={isResending}
                         className="flex items-center gap-2 text-yellow-500 hover:text-yellow-400 font-medium whitespace-nowrap disabled:opacity-50 transition-colors"

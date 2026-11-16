@@ -20,7 +20,8 @@ def invalidate_profile_cache(username):
     """Invalidate all cached versions of a user's public profile."""
     from django.conf import settings
 
-    version_key = settings.PROFILE_CACHE_VERSION_KEY_TEMPLATE.format(username=username)
+    # Lowercased like services/cache.py's keys (usernames are case-insensitive).
+    version_key = settings.PROFILE_CACHE_VERSION_KEY_TEMPLATE.format(username=username.lower())
     try:
         cache.incr(version_key)
         logger.debug(f"Invalidated profile cache for user: {username}")
@@ -113,6 +114,18 @@ def handle_unfollow(sender, instance, **kwargs):
         f"Cache invalidated due to unfollow: {instance.follower.username} "
         f"unfollowed {instance.following.username}"
     )
+
+
+@receiver(post_delete, sender=UserProfile)
+def delete_profile_media(sender, instance, **kwargs):
+    """Remove the avatar and banner from storage once the profile is gone (A10).
+
+    Covers account deletion, the unverified-account purge and admin deletes,
+    which all cascade from the user to the profile.
+    """
+    from .services.profile_update_service import PROFILE_MEDIA_FIELDS, delete_files_on_commit
+
+    delete_files_on_commit(getattr(instance, field) for field in PROFILE_MEDIA_FIELDS)
 
 
 @receiver(post_save, sender=UserProfile)

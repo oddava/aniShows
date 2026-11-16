@@ -13,20 +13,24 @@ import { useAuth } from '../context/AuthContext';
  * AuthContext, drops every cached anime query (plus any `alsoRemove` keys, e.g.
  * Schedule's `scheduleKeys.all`) and invalidates the profile keys.
  *
- * Prep-commit stub: the same steps as the handlers in Browse.jsx and Schedule.jsx today.
- * Nothing uses it yet; G2 switches those pages to it. G1 owns it.
+ * The same steps as the handlers in Browse.jsx and Schedule.jsx today. The Settings
+ * "Content" card uses it; G2 switches those pages to it. G1 owns it. A failed PATCH
+ * rejects, so callers can show an error.
  */
 export default function useAdultContentPreference({ alsoRemove = [] } = {}) {
     const queryClient = useQueryClient();
     const { isAuthenticated, user, refreshProfile } = useAuth();
     const enabled = Boolean(user?.show_adult_content);
     const [isUpdating, setIsUpdating] = useState(false);
+    // Guards double taps that land before the isUpdating re-render.
+    const inFlightRef = useRef(false);
     const alsoRemoveRef = useRef(alsoRemove);
     alsoRemoveRef.current = alsoRemove;
 
     const toggle = useCallback(async () => {
-        if (!isAuthenticated || isUpdating) return;
+        if (!isAuthenticated || inFlightRef.current) return;
 
+        inFlightRef.current = true;
         setIsUpdating(true);
         try {
             const response = await authApi.updateProfile({ show_adult_content: !enabled });
@@ -42,9 +46,10 @@ export default function useAdultContentPreference({ alsoRemove = [] } = {}) {
             queryClient.invalidateQueries({ queryKey: profileKeys.own });
             queryClient.invalidateQueries({ queryKey: profileKeys.all });
         } finally {
+            inFlightRef.current = false;
             setIsUpdating(false);
         }
-    }, [enabled, isAuthenticated, isUpdating, queryClient, refreshProfile]);
+    }, [enabled, isAuthenticated, queryClient, refreshProfile]);
 
     return { enabled, toggle, isUpdating };
 }

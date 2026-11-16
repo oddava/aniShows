@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { User, Link as LinkIcon } from 'lucide-react';
+import { User, Link as LinkIcon, AlertTriangle } from 'lucide-react';
 
 const TwitterIcon = () => (
     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -68,16 +68,20 @@ export default function SocialLinks({ links = [] }) {
                 const url = link.url || link.value || '';
                 const displayUrl = url.startsWith('http') ? url : `https://${url}`;
                 const metadata = link.metadata || {};
-                const favicon = metadata.favicon;
+                // Flagged after saving by the domain-age / Safe Browsing checks.
+                const isSuspicious = link.trust_level === 'suspicious';
+                const favicon = isSuspicious ? null : metadata.favicon;
+                const warning = 'This link was flagged as possibly unsafe. Open it with care.';
 
                 return (
                     <a
                         key={index}
                         href={displayUrl}
                         target="_blank"
-                        rel="noopener noreferrer"
+                        rel={isSuspicious ? 'noopener noreferrer nofollow ugc' : 'noopener noreferrer'}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-all border border-white/5 text-xs"
-                        title={metadata.title || link.platform}
+                        title={isSuspicious ? warning : (metadata.title || link.platform)}
+                        aria-label={isSuspicious ? `${link.platform} (${warning})` : undefined}
                     >
                         {favicon ? (
                             <img
@@ -94,6 +98,9 @@ export default function SocialLinks({ links = [] }) {
                             <PlatformIcon platform={link.platform} />
                         </span>
                         <span className="hidden sm:inline">{link.platform}</span>
+                        {isSuspicious && (
+                            <AlertTriangle className="w-3 h-3 text-yellow-400" aria-hidden="true" />
+                        )}
                     </a>
                 );
             })}

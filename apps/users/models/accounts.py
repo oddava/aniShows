@@ -18,6 +18,7 @@ from django.db.models import (
 from django.db.models.fields import (
     CharField,
     DateTimeField,
+    EmailField,
     IntegerField,
     TextField,
 )
@@ -45,6 +46,9 @@ class CustomUser(AbstractUser):
                 condition=~Q(email=""),
                 name="users_customuser_email_ci_unique",
             ),
+            # "Bob" and "bob" are the same name (A13); lookups go through
+            # user_queryset.filter_username_ci, which this index serves.
+            UniqueConstraint(Lower("username"), name="users_customuser_username_ci_unique"),
         ]
 
 
@@ -71,6 +75,9 @@ class UserProfile(Model):
         help_text="IANA timezone name for localizing timestamps (blank uses auto-detected browser timezone).",
     )
     last_activity = DateTimeField(null=True, blank=True)
+    # An email change waiting for its owner to confirm (A14); blank when none.
+    pending_email = EmailField(blank=True, default="")
+    pending_email_requested_at = DateTimeField(null=True, blank=True)
     email_new_episodes = BooleanField(default=True)
     push_new_episodes = BooleanField(default=True)
     push_review_replies = BooleanField(default=True)

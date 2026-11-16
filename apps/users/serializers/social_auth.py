@@ -13,13 +13,22 @@ from rest_framework.serializers import Serializer
 from ...shared.logger import logger
 from ..services.auth_service import AuthService
 
+CODE_REQUIRED_MESSAGE = _("An authorization code is required.")
+
 
 class SocialLoginSerializer(Serializer):
-    """Serializer for social auth flows (OAuth code or access token)."""
+    """Serializer for the OAuth authorization-code flow.
 
-    access_token = CharField(required=False, allow_blank=True)
-    code = CharField(required=False, allow_blank=True)
-    id_token = CharField(required=False, allow_blank=True)
+    Only ``code`` is accepted. A raw ``access_token``/``id_token`` from the
+    client would let a token minted for another app sign in here, since no
+    audience is checked (A07); the SPA only uses the code flow.
+    """
+
+    code = CharField(
+        required=True,
+        allow_blank=False,
+        error_messages={"required": CODE_REQUIRED_MESSAGE, "blank": CODE_REQUIRED_MESSAGE},
+    )
     auth_service = AuthService()
 
     def _get_request(self):
@@ -71,65 +80,47 @@ class SocialLoginSerializer(Serializer):
             )
             raise ValidationError(_("Social login is temporarily unavailable.")) from exc
 
-        access_token = attrs.get("access_token")
-        code = attrs.get("code")
+        code = attrs["code"]
+        self.set_callback_url(view=view, adapter_class=adapter_class)
+        self.client_class = getattr(view, "client_class", None)
 
-        if access_token:
-            tokens_to_parse = {"access_token": access_token}
-            token = access_token
-            id_token = attrs.get("id_token")
-            if id_token:
-                tokens_to_parse["id_token"] = id_token
-        elif code:
-            self.set_callback_url(view=view, adapter_class=adapter_class)
-            self.client_class = getattr(view, "client_class", None)
+        if not self.client_class:
+            raise ValidationError(_("Define client_class in view"))
 
-            if not self.client_class:
-                raise ValidationError(_("Define client_class in view"))
-
-            client = self.client_class(
-                request,
-                app.client_id,
-                app.secret,
-                adapter.access_token_method,
-                adapter.access_token_url,
-                self.callback_url,
-                scope_delimiter=adapter.scope_delimiter,
-                headers=adapter.headers,
-                basic_auth=adapter.basic_auth,
+        client = self.client_class(
+            request,
+            app.client_id,
+            app.secret,
+            adapter.access_token_method,
+            adapter.access_token_url,
+            self.callback_url,
+            scope_delimiter=adapter.scope_delimiter,
+            headers=adapter.headers,
+            basic_auth=adapter.basic_auth,
+        )
+        try:
+            token = client.get_access_token(code)
+        except (OAuth2Error, RequestException, ValueError) as exc:
+            logger.warning(
+                "Google token exchange failed",
+                extra={
+                    "provider": getattr(adapter, "provider_id", "unknown"),
+                    "callback_url": self.callback_url,
+                },
+                exc_info=True,
             )
-            try:
-                token = client.get_access_token(code)
-            except (OAuth2Error, RequestException, ValueError) as exc:
-                logger.warning(
-                    "Google token exchange failed",
-                    extra={
-                        "provider": getattr(adapter, "provider_id", "unknown"),
-                        "callback_url": self.callback_url,
-                    },
-                    exc_info=True,
-                )
-                raise ValidationError(_("Failed to exchange code for access token")) from exc
+            raise ValidationError(_("Failed to exchange code for access token")) from exc
 
-            access_token = token["access_token"]
-            tokens_to_parse = {"access_token": access_token}
-
-            for key in ["refresh_token", "id_token", adapter.expires_in_key]:
-                if key in token:
-                    tokens_to_parse[key] = token[key]
-        else:
-            raise ValidationError(_("Incorrect input. access_token or code is required."))
+        tokens_to_parse = {"access_token": token["access_token"]}
+        for key in ["refresh_token", "id_token", adapter.expires_in_key]:
+            if key in token:
+                tokens_to_parse[key] = token[key]
 
         social_token = adapter.parse_token(tokens_to_parse)
         social_token.app = app
 
         try:
-            if adapter.provider_id == "google" and not code:
-                login = self.get_social_login(
-                    adapter, app, social_token, response={"id_token": id_token}
-                )
-            else:
-                login = self.get_social_login(adapter, app, social_token, token)
+            login = self.get_social_login(adapter, app, social_token, token)
             ret = complete_social_login(request, login)
         except (OAuth2Error, HTTPError) as exc:
             raise ValidationError(_("Incorrect value")) from exc

@@ -231,13 +231,6 @@
       },
       "schedule": "<crontab: 0 7 * * * (m/h/dM/MY/d)>",
       "task": "apps.users.tasks.run_user_maintenance_workflow"
-    },
-    "warm-profile-cache-hourly": {
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: 0 * * * * (m/h/dM/MY/d)>",
-      "task": "apps.users.tasks.warm_profile_cache"
     }
   },
   "JAZZMIN_SETTINGS": {

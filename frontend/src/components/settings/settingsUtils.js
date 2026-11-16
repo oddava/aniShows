@@ -84,3 +84,25 @@ export const DEFAULT_NOTIFICATION_PREFERENCES = {
     push_review_replies: true,
     push_new_follower: true,
 };
+
+/**
+ * Comparable form of a links list: trimmed `(platform, value || url)` pairs.
+ * The API stores `{platform, url, normalized_url, ...}` while the form holds
+ * `{platform, value}`, so compare this shape rather than the raw objects.
+ */
+export function toComparableSocialLinks(links = []) {
+    return (links || [])
+        .map((link) => ({
+            platform: (link?.platform || '').trim(),
+            value: (link?.value || link?.url || '').trim(),
+        }))
+        .filter((link) => link.platform || link.value);
+}
+
+/** True when the form's links differ from the stored ones. */
+export function socialLinksChanged(formLinks, storedLinks) {
+    return (
+        JSON.stringify(toComparableSocialLinks(formLinks)) !==
+        JSON.stringify(toComparableSocialLinks(storedLinks))
+    );
+}

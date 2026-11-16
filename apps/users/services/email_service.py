@@ -9,6 +9,37 @@ from ...shared.celery import observed_shared_task
 from ...shared.logger import logger
 from ..tokens import EmailChangeTokenGenerator, email_verification_token_generator
 
+SECURITY_NOTICE_FOOTER = (
+    "If this was you, you can ignore this email. If it wasn't, reset your password "
+    f"at {settings.FRONTEND_URL}/forgot-password and contact us."
+)
+
+
+IGNORE_IF_NOT_YOU = "If this wasn't you, you can safely ignore this email."
+
+
+def mask_email(address: str) -> str:
+    """``alice@example.com`` -> ``a***@example.com`` (for notices and logs)."""
+    local, sep, domain = (address or "").partition("@")
+    if not sep:
+        return "***"
+    return f"{local[:1]}***@{domain}"
+
+
+def _masked(recipient_list) -> list[str]:
+    """Recipients as they may appear in logs (A19): never the full address."""
+    return [mask_email(str(address)) for address in recipient_list or []]
+
+
+def link_validity() -> str:
+    """How long emailed links last, e.g. "3 days" (PASSWORD_RESET_TIMEOUT)."""
+    seconds = int(settings.PASSWORD_RESET_TIMEOUT)
+    days, remainder = divmod(seconds, 86400)
+    if days and not remainder:
+        return f"{days} day{'s' if days != 1 else ''}"
+    hours = max(1, round(seconds / 3600))
+    return f"{hours} hour{'s' if hours != 1 else ''}"
+
 
 class EmailService:
     """Handle email operations asynchronously."""
@@ -31,29 +62,37 @@ class EmailService:
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}/"
 
+        message = f"""Someone asked to reset the password of your aniShows account ({user.username}).
+
+Choose a new password here (the link is valid for {link_validity()} and works once):
+
+{reset_link}
+
+{IGNORE_IF_NOT_YOU} Your password stays the same.
+"""
         send_email_task.delay(
             subject="Reset your password - aniShows",
-            message=f"Click to reset: {reset_link}",
+            message=message,
             recipient_list=[user.email],
         )
 
     def send_email_change_confirmation(self, user, new_email):
-        """Queue email change confirmation email."""
+        """Queue email change confirmation email.
+
+        The link carries only uid and token: the address waits on the profile
+        (``pending_email``), so it never lands in URLs, logs or analytics (A14).
+        """
         token = EmailChangeTokenGenerator(new_email).make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
-        new_email_encoded = urlsafe_base64_encode(force_bytes(new_email))
-
-        confirm_link = (
-            f"{settings.FRONTEND_URL}/confirm-email-change/{uid}/{token}/{new_email_encoded}/"
-        )
+        confirm_link = f"{settings.FRONTEND_URL}/confirm-email-change/{uid}/{token}/"
 
         message = f"""You requested to change your email address on aniShows.
 
-Click the link below to confirm your new email address:
+Click the link below to confirm your new email address (valid for {link_validity()}):
 
 {confirm_link}
 
-If you didn't request this change, please ignore this email.
+{IGNORE_IF_NOT_YOU} Nothing changes unless the link is used.
 """
 
         send_email_task.delay(
@@ -62,12 +101,53 @@ If you didn't request this change, please ignore this email.
             recipient_list=[new_email],
         )
 
+    def _send_notice(self, address: str, subject: str, body: str) -> None:
+        """A security notice; nothing is sent when there is no address."""
+        if not address:
+            return
+        send_email_task.delay(
+            subject=subject,
+            message=f"{body}\n\n{SECURITY_NOTICE_FOOTER}",
+            recipient_list=[address],
+        )
+
+    def send_password_changed_notice(self, user) -> None:
+        """Tell the account's address that its password was changed or reset."""
+        self._send_notice(
+            user.email,
+            "Your aniShows password was changed",
+            f"The password for your aniShows account ({user.username}) was just changed, "
+            "and every device was signed out.",
+        )
+
+    def send_email_change_requested_notice(self, user, new_email: str) -> None:
+        """Tell the *current* address that a change to ``new_email`` was requested."""
+        self._send_notice(
+            user.email,
+            "Email change requested - aniShows",
+            f"Someone asked to change the email of your aniShows account ({user.username}) "
+            f"to {mask_email(new_email)}. Nothing changes unless that address confirms it.",
+        )
+
+    def send_email_changed_notice(self, user, old_email: str, new_email: str) -> None:
+        """Tell the *previous* address that the account now uses ``new_email``."""
+        self._send_notice(
+            old_email,
+            "Your aniShows email was changed",
+            f"The email of your aniShows account ({user.username}) was changed to "
+            f"{mask_email(new_email)}, and every device was signed out.",
+        )
+
     def _get_verification_message(self, link: str) -> str:
         return f"""Welcome to aniShows!
 
-Please verify your email: {link}
+Please verify your email (the link is valid for {link_validity()}):
+
+{link}
 
 Note: Unverified accounts are automatically deleted after 7 days.
+
+{IGNORE_IF_NOT_YOU}
 """
 
 
@@ -120,10 +200,14 @@ def send_email_task(self, subject, message, recipient_list, html_message=None, h
             logger.info(
                 "Email sent via Django backend %s to %s (count=%s)",
                 email_backend,
-                recipient_list,
+                _masked(recipient_list),
                 sent_count,
             )
-            return {"backend": email_backend, "sent_count": sent_count, "to": recipient_list}
+            return {
+                "backend": email_backend,
+                "sent_count": sent_count,
+                "to": _masked(recipient_list),
+            }
 
         if not resend_api_key:
             raise ValueError("RESEND_API_KEY is not configured")
@@ -156,7 +240,7 @@ def send_email_task(self, subject, message, recipient_list, html_message=None, h
             except ValueError as exc:
                 logger.warning(
                     "Email provider returned invalid JSON; retrying",
-                    extra={"recipient_list": recipient_list},
+                    extra={"recipient_list": _masked(recipient_list)},
                     exc_info=True,
                 )
                 raise self.retry(exc=exc, countdown=60)
@@ -164,14 +248,14 @@ def send_email_task(self, subject, message, recipient_list, html_message=None, h
         message_id = data.get("id")
         logger.info(
             "Email sent successfully via Resend to %s (id=%s)",
-            recipient_list,
+            _masked(recipient_list),
             message_id,
         )
-        return {"id": message_id, "to": recipient_list}
+        return {"id": message_id, "to": _masked(recipient_list)}
     except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
         logger.warning(
             "Transient email delivery failure; retrying",
-            extra={"recipient_list": recipient_list},
+            extra={"recipient_list": _masked(recipient_list)},
             exc_info=True,
         )
         raise self.retry(exc=exc, countdown=60)
@@ -181,7 +265,7 @@ def send_email_task(self, subject, message, recipient_list, html_message=None, h
             logger.warning(
                 "Email provider returned retryable response; retrying",
                 extra={
-                    "recipient_list": recipient_list,
+                    "recipient_list": _masked(recipient_list),
                     "status_code": status_code,
                     "response_excerpt": _response_excerpt(exc.response),
                 },
@@ -191,7 +275,7 @@ def send_email_task(self, subject, message, recipient_list, html_message=None, h
         logger.error(
             "Email provider rejected message without retry",
             extra={
-                "recipient_list": recipient_list,
+                "recipient_list": _masked(recipient_list),
                 "status_code": status_code,
                 "response_excerpt": _response_excerpt(exc.response),
             },
@@ -200,9 +284,11 @@ def send_email_task(self, subject, message, recipient_list, html_message=None, h
         raise
     except ValueError:
         logger.error(
-            "Email delivery misconfigured", extra={"recipient_list": recipient_list}, exc_info=True
+            "Email delivery misconfigured",
+            extra={"recipient_list": _masked(recipient_list)},
+            exc_info=True,
         )
         raise
     except Exception as exc:
-        logger.exception("Failed to send email", extra={"recipient_list": recipient_list})
+        logger.exception("Failed to send email", extra={"recipient_list": _masked(recipient_list)})
         raise self.retry(exc=exc, countdown=60)

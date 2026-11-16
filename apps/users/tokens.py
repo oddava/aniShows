@@ -7,8 +7,8 @@ changes, so a token stops working once it has been used:
 
 - password reset: Django's ``default_token_generator`` (covers the password).
 - email verification: covers ``email_verified``.
-- email change: covers the current email *and* the requested one, so the
-  address in the link cannot be swapped for one the user does not own.
+- email change: covers the current email *and* the pending one
+  (``UserProfile.pending_email``), so it dies once used, cancelled or replaced.
 """
 
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -33,7 +33,10 @@ class EmailVerificationTokenGenerator(PasswordResetTokenGenerator):
         return bool(profile and profile.email_verified)
 
     def _make_hash_value(self, user, timestamp):
-        return f"{super()._make_hash_value(user, timestamp)}{self._email_verified(user)}"
+        # Unlike a reset token, this one leaves ``last_login`` out: logins bump
+        # it (SIMPLE_JWT UPDATE_LAST_LOGIN) and unverified users may sign in, so
+        # signing in before clicking the link must not break the link.
+        return f"{user.pk}{user.password}{user.email}{timestamp}{self._email_verified(user)}"
 
     def was_valid_before_verification(self, user, token) -> bool:
         """True if ``token`` was a genuine, unexpired link for ``user`` before they verified."""
@@ -46,7 +49,13 @@ class _PreVerificationTokenGenerator(EmailVerificationTokenGenerator):
 
 
 class EmailChangeTokenGenerator(PasswordResetTokenGenerator):
-    """Token that confirms a change from the user's current email to ``new_email``."""
+    """Token that confirms a change from the user's current email to ``new_email``.
+
+    The hash also covers when that change was requested
+    (``UserProfile.pending_email_requested_at``): cancelling clears it and a
+    new request moves it, so a link from an earlier or cancelled request for
+    the same address never comes back to life.
+    """
 
     key_salt = "apps.users.tokens.EmailChangeTokenGenerator"
 
@@ -54,8 +63,16 @@ class EmailChangeTokenGenerator(PasswordResetTokenGenerator):
         super().__init__()
         self.new_email = normalize_email(new_email)
 
+    def _requested_at(self, user) -> str:
+        profile = getattr(user, "userprofile", None)
+        requested_at = getattr(profile, "pending_email_requested_at", None)
+        return requested_at.isoformat() if requested_at else ""
+
     def _make_hash_value(self, user, timestamp):
-        return f"{user.pk}{user.password}{user.email}{self.new_email}{timestamp}"
+        return (
+            f"{user.pk}{user.password}{user.email}{self.new_email}"
+            f"{self._requested_at(user)}{timestamp}"
+        )
 
 
 email_verification_token_generator = EmailVerificationTokenGenerator()

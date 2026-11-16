@@ -112,6 +112,8 @@ class EmailVerificationTests(APITestCase):
     """Tests for email verification functionality."""
 
     def setUp(self):
+        # The SPA's header; login-style endpoints require it (login CSRF).
+        self.client.credentials(HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         from django.utils.encoding import force_bytes
         from django.utils.http import urlsafe_base64_encode
 
@@ -229,6 +231,8 @@ class LoginTests(APITestCase):
     """Tests for login endpoint."""
 
     def setUp(self):
+        # The SPA's header; login-style endpoints require it (login CSRF).
+        self.client.credentials(HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.login_url = reverse("token_obtain_pair")
         self.user = User.objects.create_user(
             username="testuser", email="test@example.com", password="securepass123"

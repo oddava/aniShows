@@ -1,12 +1,36 @@
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
-from django.db.models import Avg, Count, Exists, F, OuterRef, Prefetch, Q, Subquery, Sum
-from django.db.models.functions import Coalesce
+from django.db.models import (
+    Avg,
+    CharField,
+    Count,
+    Exists,
+    F,
+    OuterRef,
+    Prefetch,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
+from django.db.models.functions import Coalesce, Lower
 
 from ...animes.models import ReviewVote
 from ..models import UserAnimeList, UserBadge, UserFollow
 
 User = get_user_model()
+
+
+def filter_username_ci(queryset, username: str):
+    """``queryset`` narrowed to ``username``, ignoring case.
+
+    Compares ``lower()`` on both sides in SQL, so the lookup uses the
+    ``users_customuser_username_ci_unique`` index (``__iexact`` uses UPPER and
+    would not).
+    """
+    return queryset.alias(_username_ci=Lower("username")).filter(
+        _username_ci=Lower(Value(username, output_field=CharField()))
+    )
 
 
 def user_exists(user) -> bool:

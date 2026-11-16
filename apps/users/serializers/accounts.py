@@ -11,6 +11,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import (
     BooleanField,
     CharField,
+    EmailField,
     FloatField,
     ImageField,
     IntegerField,
@@ -20,17 +21,16 @@ from rest_framework.serializers import (
     SerializerMethodField,
 )
 
-from ...animes.serializers.base import (
-    validate_image_content,
-)
 from ...animes.serializers_mixins import BadgesMixin, UserProfileMixin
 from ...shared.logger import logger
 from ...shared.text import HEX_COLOR_PATTERN, decode_escaped_html_entities
 from ..services.auth_service import AuthService
 from ..services.username_sanitizer import validate_username
+from ..utils.image_processing import ProfileImageError, normalize_profile_image
 
 __all__ = [
     "ALLOWED_BIO_ATTRIBUTES",
+    "ALLOWED_BIO_CLASSES",
     "ALLOWED_BIO_TAGS",
     "MAX_AVATAR_SIZE",
     "MAX_BANNER_SIZE",
@@ -41,6 +41,7 @@ __all__ = [
     "UserLightweightSerializer",
     "UserProfileUpdateSerializer",
     "UserSerializer",
+    "sanitize_bio",
 ]
 
 
@@ -75,13 +76,45 @@ ALLOWED_BIO_TAGS = [
     "youtube",
     "mention",
 ]
+# ``class`` used to be allowed on every tag, and MarkdownRenderer spreads props
+# after its own className, so a bio could apply any Tailwind class
+# (``fixed inset-0 z-50``) and overlay the page (A11). The editor writes
+# Markdown only; the one class the renderer reads, ``is-spoiler``, is the only
+# value kept. Anything else drops the whole attribute.
+ALLOWED_BIO_CLASSES = frozenset({"is-spoiler"})
+
+
+def _allow_global_bio_attribute(tag: str, name: str, value: str) -> bool:
+    if name == "align":
+        return True
+    if name == "class":
+        classes = value.split()
+        return bool(classes) and all(item in ALLOWED_BIO_CLASSES for item in classes)
+    return False
+
+
 ALLOWED_BIO_ATTRIBUTES = {
-    "*": ["class", "align"],
+    "*": _allow_global_bio_attribute,
     "a": ["href", "title", "target", "rel"],
     "img": ["src", "alt", "width", "height", "data-align", "data-width"],
     "youtube": ["src"],
     "mention": ["username"],
 }
+
+
+def sanitize_bio(value: str | None) -> str:
+    """The stored form of a bio: Markdown and allowed HTML kept, unsafe tags/attributes removed.
+
+    Also used by ``manage.py resanitize_bios`` for bios saved under older rules.
+    """
+    # Normalize legacy escaped content (&lt;p&gt;...) back to raw HTML before sanitizing.
+    normalized_value = decode_escaped_html_entities(value or "")
+    return bleach.clean(
+        normalized_value,
+        tags=ALLOWED_BIO_TAGS,
+        attributes=ALLOWED_BIO_ATTRIBUTES,
+        strip=True,
+    )
 
 
 class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
@@ -297,6 +330,7 @@ class UserProfileUpdateSerializer(Serializer):
     avatar = ImageField(required=False, allow_null=True)
     banner = ImageField(required=False, allow_null=True)
     remove_banner = BooleanField(required=False)
+    remove_avatar = BooleanField(required=False)
     bio = CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
     # No defaults: an omitted field must leave the stored value alone.
     is_private = BooleanField(required=False)
@@ -305,16 +339,15 @@ class UserProfileUpdateSerializer(Serializer):
     preferred_timezone = CharField(required=False, allow_blank=True, max_length=64)
 
     def validate_bio(self, value):
-        # Normalize legacy escaped content (&lt;p&gt;...) back to raw HTML before sanitizing.
-        normalized_value = decode_escaped_html_entities(value or "")
+        return sanitize_bio(value)
 
-        # Keep markdown/allowed HTML intact while stripping unsafe tags/attributes.
-        return bleach.clean(
-            normalized_value,
-            tags=ALLOWED_BIO_TAGS,
-            attributes=ALLOWED_BIO_ATTRIBUTES,
-            strip=True,
-        )
+    def validate(self, attrs):
+        for field in ("avatar", "banner"):
+            if attrs.get(field) is not None and attrs.get(f"remove_{field}"):
+                raise ValidationError(
+                    {f"remove_{field}": f"Upload a new {field} or remove it, not both."}
+                )
+        return attrs
 
     def validate_profile_primary_color(self, value):
         normalized = (value or "").strip().lower()
@@ -350,19 +383,28 @@ class UserProfileUpdateSerializer(Serializer):
             raise ValidationError(str(e))
 
     def validate_avatar(self, value):
-        """Validate avatar file size, type, and content."""
+        """Validate the avatar and re-encode it (WebP, no metadata, <= 512 px)."""
         if value is None:
             return value
-        return validate_image_content(value, MAX_AVATAR_SIZE, "Avatar")
+        try:
+            return normalize_profile_image(value, "avatar", max_size=MAX_AVATAR_SIZE)
+        except ProfileImageError as exc:
+            raise ValidationError(str(exc)) from exc
 
     def validate_banner(self, value):
-        """Validate banner file size, type, and content."""
+        """Validate the banner and re-encode it (WebP, no metadata, <= 2560 px wide)."""
         if value is None:
             return value
-        return validate_image_content(value, MAX_BANNER_SIZE, "Banner")
+        try:
+            return normalize_profile_image(value, "banner", max_size=MAX_BANNER_SIZE)
+        except ProfileImageError as exc:
+            raise ValidationError(str(exc)) from exc
 
 
 class RegisterSerializer(ModelSerializer):
+    # Declared explicitly: the model field is ``blank=True``, which would make
+    # the address optional and leave an account that can never verify.
+    email = EmailField(required=True, allow_blank=False)
     password = CharField(write_only=True, min_length=8)
     auth_service = AuthService()
 

@@ -74,13 +74,42 @@ describe('SettingsTabs', () => {
         const { rerender } = render(
             <SettingsTabs user={{ total_badges_count: 0 }} activeTab="profile" setActiveTab={setActiveTab} />
         );
-        expect(screen.queryByRole('button', { name: 'Badges' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: 'Badges' })).not.toBeInTheDocument();
 
         rerender(
             <SettingsTabs user={{ total_badges_count: 2 }} activeTab="profile" setActiveTab={setActiveTab} />
         );
-        fireEvent.click(screen.getByRole('button', { name: 'Badges' }));
+        fireEvent.click(screen.getByRole('tab', { name: 'Badges' }));
         expect(setActiveTab).toHaveBeenCalledWith('badges');
+    });
+
+    it('is a tablist with a roving tabIndex', () => {
+        render(<SettingsTabs user={{}} activeTab="account" setActiveTab={vi.fn()} />);
+
+        expect(screen.getByRole('tablist')).toBeInTheDocument();
+        const account = screen.getByRole('tab', { name: 'Account' });
+        expect(account).toHaveAttribute('aria-selected', 'true');
+        expect(account).toHaveAttribute('tabindex', '0');
+        expect(account).toHaveAttribute('aria-controls', 'settings-panel-account');
+        const profile = screen.getByRole('tab', { name: 'Profile' });
+        expect(profile).toHaveAttribute('aria-selected', 'false');
+        expect(profile).toHaveAttribute('tabindex', '-1');
+    });
+
+    it.each([
+        ['ArrowRight', 'account', 'notifications'],
+        ['ArrowRight', 'notifications', 'profile'],
+        ['ArrowLeft', 'profile', 'notifications'],
+        ['ArrowLeft', 'account', 'profile'],
+        ['Home', 'notifications', 'profile'],
+        ['End', 'profile', 'notifications'],
+    ])('%s from %s selects %s', (key, from, to) => {
+        const setActiveTab = vi.fn();
+        render(<SettingsTabs user={{}} activeTab={from} setActiveTab={setActiveTab} />);
+
+        fireEvent.keyDown(screen.getByRole('tab', { selected: true }), { key });
+
+        expect(setActiveTab).toHaveBeenCalledWith(to);
     });
 });
 

@@ -14,6 +14,7 @@ from ..views import (
     UserStatsView,
     WebSocketTicketView,
 )
+from ..views.auth import RevokeOtherSessionsView, SessionsView
 from ..views.google import GoogleLogin
 
 router_routes = [
@@ -36,10 +37,23 @@ urlpatterns = [
     path("auth/refresh/", LoggingTokenRefreshView.as_view(), name="token_refresh"),
     # Under the refresh cookie path so the browser sends the cookie to it.
     path("auth/refresh/logout/", LogoutView.as_view(), name="token_logout"),
+    path("auth/refresh/sessions/", SessionsView.as_view(), name="auth_sessions"),
+    path(
+        "auth/refresh/sessions/revoke-others/",
+        RevokeOtherSessionsView.as_view(),
+        name="auth_sessions_revoke_others",
+    ),
     path("auth/ws-ticket/", WebSocketTicketView.as_view(), name="ws_ticket"),
     path("auth/register/", RegisterView.as_view(), name="register"),
     path("auth/google/", GoogleLogin.as_view(), name="google_login"),
     # Auth Workflow Routes (Verify Email, Resend, Reset Password)
+    # Body form {uid, token}: keeps the token out of access logs (A14). The
+    # path form stays for links and clients that still use it.
+    path(
+        "verify-email/",
+        AuthViewSet.as_view({"post": "verify_email"}),
+        name="verify_email_body",
+    ),
     path(
         "verify-email/<str:uid>/<str:token>/",
         AuthViewSet.as_view({"post": "verify_email"}),
@@ -80,5 +94,15 @@ urlpatterns = [
         "auth/confirm-email-change/",
         AccountManagementViewSet.as_view({"post": "confirm_email_change"}),
         name="confirm_email_change",
+    ),
+    path(
+        "auth/resend-email-change/",
+        AccountManagementViewSet.as_view({"post": "resend_email_change"}),
+        name="resend_email_change",
+    ),
+    path(
+        "auth/cancel-email-change/",
+        AccountManagementViewSet.as_view({"post": "cancel_email_change"}),
+        name="cancel_email_change",
     ),
 ]

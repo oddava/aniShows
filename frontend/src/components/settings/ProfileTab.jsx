@@ -1,9 +1,66 @@
+import { useState } from 'react';
 import { AlertCircle, Check } from 'lucide-react';
 import RichTextEditor from '../forums/RichTextEditor';
 import CustomSelect from '../common/CustomSelect';
 import { AUTO_TIMEZONE_VALUE, normalizeTimeZonePreference } from '../../utils/dateUtils';
 import { PROFILE_COLOR_PRESETS, isGifFile, normalizeProfilePrimaryColor } from './settingsUtils';
 import SocialLinksEditor from './SocialLinksEditor';
+import { toneProfileAccentColor } from '../../utils/profileAccent';
+import useAdultContentPreference from '../../hooks/useAdultContentPreference';
+import logger from '../../utils/logger';
+
+/** The "Content" card: account-wide content preferences. */
+function ContentCard() {
+    const { enabled, toggle, isUpdating } = useAdultContentPreference();
+    const [error, setError] = useState('');
+    const labelId = 'settings-adult-content-label';
+    const descriptionId = 'settings-adult-content-description';
+
+    const handleToggle = async () => {
+        setError('');
+        try {
+            await toggle();
+        } catch (err) {
+            logger.error('Failed to update adult content preference:', err);
+            setError('Could not update this setting. Please try again.');
+        }
+    };
+
+    return (
+        <div className="bg-dark-100 p-6 rounded-2xl mt-6">
+            <h2 className="text-xl font-semibold text-white mb-6">Content</h2>
+            <div className="flex items-start justify-between gap-4">
+                <div className="pr-2">
+                    <p id={labelId} className="text-sm font-semibold leading-5 text-gray-100 sm:text-[15px]">
+                        Show adult content
+                    </p>
+                    <p id={descriptionId} className="mt-1 text-sm leading-relaxed text-gray-400">
+                        Include 18+ titles in browse, search and the schedule.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={enabled}
+                    aria-labelledby={labelId}
+                    aria-describedby={descriptionId}
+                    onClick={handleToggle}
+                    disabled={isUpdating}
+                    className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border p-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-100
+                    ${enabled ? 'border-accent bg-accent-dark' : 'border-gray-700 bg-dark-50'}
+                    ${isUpdating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                >
+                    <span
+                        className={`h-5 w-5 rounded-full bg-white transition-transform duration-200 ${enabled ? 'translate-x-5' : 'translate-x-0'}`}
+                    />
+                </button>
+            </div>
+            {error && (
+                <p role="alert" className="text-xs text-red-400 mt-3">{error}</p>
+            )}
+        </div>
+    );
+}
 
 /** The Profile tab. `profile` is the state from useProfileSettings. */
 export default function ProfileTab({ user, profile }) {
@@ -13,6 +70,7 @@ export default function ProfileTab({ user, profile }) {
         setAvatarFile,
         setBannerFile,
         removeBanner, setRemoveBanner,
+        removeAvatar, setRemoveAvatar,
         socialLinks, setSocialLinks,
         profilePrimaryColor, setProfilePrimaryColor,
         preferredTimezone, setPreferredTimezone,
@@ -30,16 +88,25 @@ export default function ProfileTab({ user, profile }) {
         handleSaveProfile,
     } = profile;
 
+    const pickedColor = normalizeProfilePrimaryColor(profilePrimaryColor);
+    const displayedColor = toneProfileAccentColor(pickedColor);
+    const hasAvatar = Boolean(avatarPreviewUrl || user?.avatar);
+
     return (
+        <>
         <div className="bg-dark-100 p-6 rounded-2xl animate-fade-in">
             <h2 className="text-xl font-semibold text-white mb-6">Profile Settings</h2>
 
             <div className="space-y-6">
                 {/* Username */}
                 <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
+                    <label htmlFor="settings-username" className="block text-sm font-medium text-gray-300 mb-2">Username</label>
                     <input
+                        id="settings-username"
                         type="text"
+                        autoComplete="username"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         className="input w-full max-w-md"
@@ -77,7 +144,7 @@ export default function ProfileTab({ user, profile }) {
                         <div className="w-24 h-24 sm:w-24 sm:h-24 rounded-2xl overflow-hidden flex items-center justify-center shrink-0">
                             {avatarPreviewUrl ? (
                                 <img src={avatarPreviewUrl} alt="Preview" className="w-full h-full object-cover" />
-                            ) : user?.avatar ? (
+                            ) : user?.avatar && !removeAvatar ? (
                                 <img src={user.avatar} alt="Current" className="w-full h-full object-cover" />
                             ) : (
                                 <div className="w-full h-full bg-accent-dark flex items-center justify-center">
@@ -92,6 +159,7 @@ export default function ProfileTab({ user, profile }) {
                                 if (e.target.files && e.target.files.length > 0) {
                                     const file = e.target.files[0];
                                     const url = URL.createObjectURL(file);
+                                    setRemoveAvatar(false);
 
                                     // Keep GIF avatars animated by uploading the original file directly.
                                     if (isGifFile(file)) {
@@ -115,7 +183,40 @@ export default function ProfileTab({ user, profile }) {
                             className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 
                                    file:text-sm file:font-semibold file:bg-dark-50 file:text-accent hover:file:bg-dark-200"
                         />
+                        {hasAvatar && !removeAvatar && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    // Only a saved avatar needs removing on the server;
+                                    // an unsaved pick is just discarded.
+                                    setRemoveAvatar(Boolean(user?.avatar));
+                                    setAvatarFile(null);
+                                    setAvatarPreviewUrl((currentUrl) => {
+                                        if (currentUrl) URL.revokeObjectURL(currentUrl);
+                                        return null;
+                                    });
+                                }}
+                                className="p-2 bg-black/60 hover:bg-red-500 text-white rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium"
+                            >
+                                Remove avatar
+                            </button>
+                        )}
+                        {removeAvatar && (
+                            <div className="flex items-center gap-3 px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                <span className="text-xs text-yellow-400">Avatar will be removed on save</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setRemoveAvatar(false)}
+                                    className="text-xs text-accent hover:text-accent/80"
+                                >
+                                    Undo
+                                </button>
+                            </div>
+                        )}
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                        Saved as WebP without photo metadata. Animated GIFs stay animated up to 512×512.
+                    </p>
                 </div>
 
                 {/* Banner */}
@@ -226,17 +327,24 @@ export default function ProfileTab({ user, profile }) {
                         <div className="flex items-center gap-3">
                             <input
                                 type="color"
-                                value={normalizeProfilePrimaryColor(profilePrimaryColor)}
+                                value={pickedColor}
                                 onChange={(e) => setProfilePrimaryColor(normalizeProfilePrimaryColor(e.target.value))}
                                 className="h-11 w-14 cursor-pointer rounded-lg border border-transparent bg-dark-50 p-1"
                                 aria-label="Choose profile primary color"
                             />
                             <input
                                 type="text"
-                                value={normalizeProfilePrimaryColor(profilePrimaryColor)}
+                                value={pickedColor}
                                 readOnly
                                 className="input w-32 font-mono uppercase cursor-default"
                                 aria-label="Selected profile color hex value"
+                            />
+                            <span
+                                className="h-11 w-11 shrink-0 rounded-lg border border-gray-800"
+                                style={{ backgroundColor: displayedColor }}
+                                title={`Shown as ${displayedColor}`}
+                                data-testid="profile-color-preview"
+                                aria-hidden="true"
                             />
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -259,6 +367,12 @@ export default function ProfileTab({ user, profile }) {
                     <p className="text-xs text-gray-500 mt-2">
                         This color is used as the accent across your profile page.
                     </p>
+                    {displayedColor !== pickedColor && (
+                        <p className="text-xs text-gray-500 mt-1">
+                            Adjusted for readability
+                            <span className="sr-only">: shown as {displayedColor}</span>
+                        </p>
+                    )}
                 </div>
 
                 {/* Social Links */}
@@ -291,5 +405,8 @@ export default function ProfileTab({ user, profile }) {
                 </button>
             </div>
         </div>
+
+        <ContentCard />
+        </>
     );
 }

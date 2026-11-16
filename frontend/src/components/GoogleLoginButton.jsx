@@ -1,30 +1,15 @@
 import { Chrome } from 'lucide-react';
+import { startGoogleSignIn } from './auth/googleSignIn';
 
-const GOOGLE_OAUTH_STATE_KEY = 'google_oauth_state';
-
-export default function GoogleLoginButton() {
-    const handleLogin = () => {
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        const redirectUri = `${window.location.origin}/auth/google/callback`;
-        const scope = 'openid profile email';
-        const responseType = 'code';
-        const accessType = 'online';
-        const state = window.crypto.randomUUID();
-
-        sessionStorage.setItem(GOOGLE_OAUTH_STATE_KEY, state);
-
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}&access_type=${accessType}&include_granted_scopes=true&state=${encodeURIComponent(state)}`;
-
-        window.location.href = authUrl;
-    };
-
+/** `returnTo` is where to land after signing in (same-origin path only). */
+export default function GoogleLoginButton({ returnTo }) {
     return (
         <button
             type="button"
-            onClick={handleLogin}
+            onClick={() => startGoogleSignIn({ returnTo })}
             className="w-full flex items-center justify-center gap-2 bg-white text-gray-900 font-semibold py-3 px-4 rounded-xl hover:bg-gray-100 transition-colors duration-200"
         >
-            <Chrome className="w-5 h-5 text-[#DB4437]" />
+            <Chrome className="w-5 h-5 text-[#DB4437]" aria-hidden="true" />
             Continue with Google
         </button>
     );

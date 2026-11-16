@@ -46,11 +46,13 @@ class DuplicateEmailMigrationTests(TransactionTestCase):
     after = [("users", "0037_customuser_email_ci_unique")]
 
     def tearDown(self):
-        User.objects.all().delete()
         # Back to the latest state of every app, not just self.after: later
-        # migrations must be reapplied for the tests that run next.
+        # migrations must be reapplied for the tests that run next. Migrate
+        # first, then delete: at 0037 the delete would cascade into user-FK
+        # tables that later migrations create but the DB does not have yet.
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())
+        User.objects.all().delete()
 
     def test_migration_stops_with_instructions_when_duplicates_exist(self):
         executor = MigrationExecutor(connection)

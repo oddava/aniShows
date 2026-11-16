@@ -1,5 +1,6 @@
 """Refresh-cookie auth flow, slim JWT claims and WebSocket tickets."""
 
+from typing import Any
 from unittest.mock import patch
 
 from asgiref.sync import async_to_sync, sync_to_async
@@ -19,7 +20,8 @@ from ..views.social_auth import SocialLoginView
 
 User = get_user_model()
 
-XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+# Any-valued so mypy does not map it onto APIClient.post(follow: bool).
+XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 
 class RefreshCookieFlowTests(APITestCase):
@@ -37,7 +39,7 @@ class RefreshCookieFlowTests(APITestCase):
 
     def _login(self):
         response = self.client.post(
-            self.login_url, {"username": "cookieuser", "password": "securepass123"}
+            self.login_url, {"username": "cookieuser", "password": "securepass123"}, **XHR
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         return response
@@ -154,7 +156,7 @@ class GoogleLoginCookieTests(APITestCase):
 
         with patch.object(SocialLoginView, "post", autospec=True, side_effect=fake_post):
             # Not reverse("google_login"): allauth registers the same URL name.
-            response = self.client.post("/api/v1/auth/google/", {"code": "abc"})
+            response = self.client.post("/api/v1/auth/google/", {"code": "abc"}, **XHR)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["access"], "google-access")

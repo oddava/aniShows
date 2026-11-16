@@ -56,10 +56,11 @@ class AccountManagementTests(APITestCase):
         response = self.client.post(self.change_email_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # Check email sent
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn(new_email, mail.outbox[0].to)
-        self.assertIn("Confirm your new email", mail.outbox[0].subject)
+        # The confirmation goes to the new address, a notice to the current one.
+        self.assertEqual(len(mail.outbox), 2)
+        confirmation = next(m for m in mail.outbox if m.to == [new_email])
+        self.assertIn("Confirm your new email", confirmation.subject)
+        self.assertTrue(any(m.to == ["test@example.com"] for m in mail.outbox))
 
     def test_change_email_existing(self):
         """Test changing email to existing email fails."""
@@ -72,15 +73,13 @@ class AccountManagementTests(APITestCase):
     def test_confirm_email_change_allows_unauthenticated_requests(self):
         """Email confirmation link should work even when user is not logged in."""
         new_email = "updated@example.com"
+        self._set_pending(new_email)
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         token = EmailChangeTokenGenerator(new_email).make_token(self.user)
-        encoded_email = urlsafe_base64_encode(force_bytes(new_email))
 
         self.client.force_authenticate(user=None)
         response = self.client.post(
-            self.confirm_email_url,
-            {"uid": uid, "token": token, "new_email": encoded_email},
-            format="json",
+            self.confirm_email_url, {"uid": uid, "token": token}, format="json"
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -90,25 +89,27 @@ class AccountManagementTests(APITestCase):
         self.assertEqual(self.user.email, new_email)
         self.assertTrue(self.profile.email_verified)
 
-    def _confirm(self, token, new_email):
+    def _confirm(self, token, new_email=None):
         self.client.force_authenticate(user=None)
-        return self.client.post(
-            self.confirm_email_url,
-            {
-                "uid": urlsafe_base64_encode(force_bytes(self.user.pk)),
-                "token": token,
-                "new_email": urlsafe_base64_encode(force_bytes(new_email)),
-            },
-            format="json",
-        )
+        body = {"uid": urlsafe_base64_encode(force_bytes(self.user.pk)), "token": token}
+        if new_email is not None:  # the legacy 3-segment link's address
+            body["new_email"] = urlsafe_base64_encode(force_bytes(new_email))
+        return self.client.post(self.confirm_email_url, body, format="json")
+
+    def _set_pending(self, address):
+        UserProfile.objects.filter(user=self.user).update(pending_email=address)
+        self.user.refresh_from_db()
+
+    def _emailed_link(self):
+        message = next(m for m in mail.outbox if "/confirm-email-change/" in m.body)
+        return message.body.split("/confirm-email-change/")[1].split()[0].strip("/").split("/")
 
     def test_confirm_email_change_rejects_swapped_address(self):
-        """The address in the emailed link is bound to the token and cannot be edited."""
+        """A legacy link's address must be the pending one; it cannot be edited."""
         self.client.post(
             self.change_email_url, {"new_email": "mine@example.com", "password": "testpassword123"}
         )
-        link = mail.outbox[0].body.split("/confirm-email-change/")[1].split()[0]
-        _uid, token, _encoded_email = link.strip("/").split("/")
+        _uid, token = self._emailed_link()
 
         response = self._confirm(token, "someone-else@example.com")
 
@@ -124,23 +125,21 @@ class AccountManagementTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_confirm_email_change_link_is_single_use(self):
+        self._set_pending("new@example.com")
         token = EmailChangeTokenGenerator("new@example.com").make_token(self.user)
-        self.assertEqual(self._confirm(token, "new@example.com").status_code, 200)
+        self.assertEqual(self._confirm(token).status_code, 200)
 
-        self.assertEqual(self._confirm(token, "new@example.com").status_code, 400)
+        self.assertEqual(self._confirm(token).status_code, 400)
 
     def test_emailed_change_link_confirms(self):
         self.client.post(
             self.change_email_url, {"new_email": "New@Example.com", "password": "testpassword123"}
         )
-        link = mail.outbox[0].body.split("/confirm-email-change/")[1].split()[0]
-        uid, token, encoded_email = link.strip("/").split("/")
+        uid, token = self._emailed_link()
 
         self.client.force_authenticate(user=None)
         response = self.client.post(
-            self.confirm_email_url,
-            {"uid": uid, "token": token, "new_email": encoded_email},
-            format="json",
+            self.confirm_email_url, {"uid": uid, "token": token}, format="json"
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
