@@ -119,7 +119,8 @@ const AdminUsers = () => {
             } else if (kind === 'delete') {
                 const res = await api.delete(`/admin/users/${user.id}/`);
                 message = res.data?.message || `${user.username} deleted`;
-                if (drawerUserId === user.id) setDrawerUserId(null);
+                // Return focus to the row's opener rather than dropping it on <body>.
+                if (drawerUserId === user.id) closeDrawer();
             } else {
                 const res = await api.post('/admin/bulk/', {
                     operation: kind === 'bulk-ban' ? 'ban' : 'unban',

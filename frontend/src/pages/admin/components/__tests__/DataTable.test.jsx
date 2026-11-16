@@ -86,4 +86,17 @@ describe('DataTable', () => {
         expect(within(cards[0]).getByRole('button', { name: 'Edit alice' })).toBeInTheDocument();
         expect(within(cards[0]).getByRole('checkbox', { name: 'Select alice' })).toBeChecked();
     });
+
+    it('offers sorting through a select in the phone card layout', () => {
+        mockMatchMedia(true);
+        const onSort = vi.fn();
+        render(<DataTable columns={columns} data={rows} ordering="username" onSort={onSort} />);
+
+        const select = screen.getByRole('combobox', { name: 'Sort by' });
+        expect(select).toHaveValue('username');
+        fireEvent.change(select, { target: { value: '-username' } });
+        expect(onSort).toHaveBeenCalledWith('-username');
+        expect(within(select).queryByRole('option', { name: /Email/ })).toBeNull();
+    });
 });
+

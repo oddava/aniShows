@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import AdminSettings from '../AdminSettings';
+import AdminSettings, { describeSettingsErrors } from '../AdminSettings';
 
 const { getMock, putMock, toastSuccess, role } = vi.hoisted(() => ({
     getMock: vi.fn(),
@@ -70,4 +70,13 @@ describe('AdminSettings', () => {
         expect(await screen.findByLabelText('Maintenance mode')).toBeDisabled();
         expect(screen.queryByRole('button', { name: 'Save settings' })).toBeNull();
     });
+
+    it('names the refused fields in the error message', () => {
+        expect(describeSettingsErrors({
+            'users.minUsernameLength': 'Cannot be greater than maxUsernameLength.',
+            general: 'Unknown settings section.',
+        })).toBe('Minimum username length: Cannot be greater than maxUsernameLength. Site: Unknown settings section.');
+        expect(describeSettingsErrors(undefined)).toBe('');
+    });
 });
+

@@ -90,14 +90,19 @@ export function useBulkDelete({ entityType, noun, invalidate = [], extra = {}, o
   const queryClient = useQueryClient();
   const [state, setState] = useState(null);
   const resolver = useRef(null);
+  const inFlight = useRef(false);
 
   const close = useCallback((value) => {
     resolver.current?.(value);
     resolver.current = null;
+    inFlight.current = false;
     setState(null);
   }, []);
 
   const start = useCallback(async (ids) => {
+    // A second click while the dry run (or the dialog) is pending starts nothing.
+    if (inFlight.current) return null;
+    inFlight.current = true;
     let preview;
     try {
       const res = await api.post('/admin/bulk/', {
@@ -109,6 +114,7 @@ export function useBulkDelete({ entityType, noun, invalidate = [], extra = {}, o
       });
       preview = res.data;
     } catch (err) {
+      inFlight.current = false;
       onError?.(getDetail(err, `Failed to check the selected ${noun}`));
       return null;
     }

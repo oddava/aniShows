@@ -13,6 +13,17 @@ import ConfirmDialog from './components/ConfirmDialog';
 import { getAdminErrorMessage, useAdminQuery } from './hooks/useAdminQuery';
 import useAdminRole from './hooks/useAdminRole';
 
+const settingLabel = (path) => {
+  const [section, key] = path.split('.');
+  const group = SETTINGS_SCHEMA.find((item) => item.section === section);
+  return group?.fields.find((field) => field.key === key)?.label || group?.title || path;
+};
+
+/** "Minimum username length: Must be <= 50." for each field the API refused. */
+export const describeSettingsErrors = (errors) => Object.entries(errors || {})
+  .map(([path, message]) => `${settingLabel(path)}: ${message}`)
+  .join(' ');
+
 /** The settings the backend actually enforces; nothing else is shown or sent. */
 export const SETTINGS_SCHEMA = [
   {
@@ -135,8 +146,8 @@ const AdminSettings = () => {
       toast.success('Settings saved successfully');
     } catch (err) {
       logger.error('Failed to save admin settings:', err);
-      const fieldErrors = Object.values(err.response?.data?.errors || {});
-      toast.error(fieldErrors[0] || getAdminErrorMessage(err, 'Failed to save settings'));
+      toast.error(describeSettingsErrors(err.response?.data?.errors)
+        || getAdminErrorMessage(err, 'Failed to save settings'));
     }
   };
 

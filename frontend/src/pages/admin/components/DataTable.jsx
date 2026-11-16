@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import PropTypes from 'prop-types';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 
@@ -39,6 +40,7 @@ const DataTable = ({
   rowLabel = defaultRowLabel,
 }) => {
   const isPhone = useMediaQuery(PHONE_QUERY);
+  const sortSelectId = useId();
   const sort = parseOrdering(ordering);
 
   const sortFieldOf = (column) => column.sortKey || column.key;
@@ -86,8 +88,30 @@ const DataTable = ({
   if (isPhone) {
     const fields = columns.filter((column) => column.key !== 'actions');
     const actions = columns.find((column) => column.key === 'actions');
+    // Cards have no header row to click, so sorting moves into a select.
+    const sortable = columns.filter(isSortable);
     return (
       <div>
+        {sortable.length > 0 && (
+          <div className="flex items-center gap-3 px-4 min-h-[44px] border-b border-white/5 text-sm">
+            <label htmlFor={sortSelectId} className="text-white/60 shrink-0">Sort by</label>
+            <select
+              id={sortSelectId}
+              value={ordering}
+              onChange={(e) => onSort(e.target.value)}
+              className="flex-1 min-h-[44px] bg-transparent text-white/85 focus:outline-none"
+            >
+              <option value="">Default</option>
+              {sortable.flatMap((column) => {
+                const field = sortFieldOf(column);
+                return [
+                  <option key={field} value={field}>{column.title} (ascending)</option>,
+                  <option key={`-${field}`} value={`-${field}`}>{column.title} (descending)</option>,
+                ];
+              })}
+            </select>
+          </div>
+        )}
         {selectable && data.length > 0 && (
           <label className="flex items-center gap-3 px-4 min-h-[44px] text-sm text-white/70 border-b border-white/5">
             <input type="checkbox" checked={allSelected} onChange={handleSelectAll} className={CHECKBOX} />
