@@ -75,6 +75,40 @@ describe('useFriendsWatching', () => {
         expect(result.current.loading).toBe(false);
     });
 
+    it('never shows one account the cached friends of another, even across an unmount', async () => {
+        followApi.getFriendsWatching
+            .mockResolvedValueOnce({ data: [friend(2)], headers: { 'x-total-count': '1' } })
+            .mockResolvedValueOnce({ data: [], headers: { 'x-total-count': '0' } });
+        const client = makeClient();
+        const wrapper = ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+
+        const first = render(<Probe id="a" animeId={5} />, { wrapper });
+        await waitFor(() => expect(screen.getByTestId('probe-a')).toHaveTextContent('1/1'));
+        first.unmount();
+
+        // Account B signs in while the page is closed, then opens the same anime.
+        auth.current = { isAuthenticated: true, user: { id: 2, username: 'other' } };
+        render(<Probe id="b" animeId={5} />, { wrapper });
+
+        await waitFor(() => expect(screen.getByTestId('probe-b')).toHaveTextContent('0/0'));
+        expect(followApi.getFriendsWatching).toHaveBeenCalledTimes(2);
+    });
+
+    it('shows nothing cached to a signed-out viewer after an account was used', async () => {
+        followApi.getFriendsWatching.mockResolvedValueOnce({ data: [friend(2)], headers: { 'x-total-count': '1' } });
+        const client = makeClient();
+        const wrapper = ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+        const first = render(<Probe id="a" animeId={5} />, { wrapper });
+        await waitFor(() => expect(screen.getByTestId('probe-a')).toHaveTextContent('1/1'));
+        first.unmount();
+
+        auth.current = { isAuthenticated: false, user: null };
+        render(<Probe id="c" animeId={5} />, { wrapper });
+
+        expect(screen.getByTestId('probe-c')).toHaveTextContent('0/0');
+        expect(followApi.getFriendsWatching).toHaveBeenCalledTimes(1);
+    });
+
     it('does not fetch for signed-out viewers', () => {
         auth.current = { isAuthenticated: false, user: null };
         const wrapper = ({ children }) => <QueryClientProvider client={makeClient()}>{children}</QueryClientProvider>;

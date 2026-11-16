@@ -132,9 +132,27 @@ describe('ForumThreadDetail', () => {
         renderPage('/forums/thread/5?post=77');
 
         expect(await screen.findByText('Deep reply')).toBeInTheDocument();
-        expect(forumsApi.getPostSubtree).toHaveBeenCalledWith('5', 77);
+        expect(forumsApi.getPostSubtree).toHaveBeenCalledWith('5', 77, 1);
         expect(forumsApi.getPosts).not.toHaveBeenCalled();
         expect(screen.queryByRole('button', { name: /^Reply$/ })).not.toBeInTheDocument();
+    });
+
+    it('pages a wide focused subtree by its direct replies and keeps the focus', async () => {
+        forumsApi.getThread.mockResolvedValue(THREAD);
+        const reply = (id) => ({ ...POSTS.results[0], id, parent: 70, depth: 1, content: `Reply ${id}` });
+        const root = { ...POSTS.results[0], id: 70, content: 'Root', reply_count: 3, has_hidden_replies: true };
+        forumsApi.getPostSubtree
+            .mockResolvedValueOnce({ count: 3, next: 'next', previous: null, results: [root, reply(71), reply(72)] })
+            .mockResolvedValueOnce({ count: 3, next: null, previous: 'prev', results: [root, reply(73)] });
+        renderPage('/forums/thread/5?post=70');
+
+        expect(await screen.findByText('Reply 72')).toBeInTheDocument();
+        expect(screen.getByText(/Page/)).toHaveTextContent('Page 1 of 2');
+        await userEvent.click(screen.getByRole('button', { name: /Next/ }));
+
+        expect(await screen.findByText('Reply 73')).toBeInTheDocument();
+        expect(forumsApi.getPostSubtree).toHaveBeenLastCalledWith('5', 70, 2);
+        expect(forumsApi.getPosts).not.toHaveBeenCalled();
     });
 
     it('replaces the reply box with a locked note for non-staff', async () => {

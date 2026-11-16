@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { forumsApi } from '../../api/client';
 import { getApiErrorMessage } from '../../api/errors';
-import { forumKeys } from '../../api/queries/forums';
+import { forumKeys, invalidateForumLists } from '../../api/queries/forums';
 import { patchCachedPosts, restorePosts, snapshotPosts } from './postsCache';
 
 export const TOO_FAST_MESSAGE = 'You are doing that too fast. Please wait a moment.';
@@ -92,7 +92,7 @@ export default function useThreadMutations({
         onMutate: () => optimisticThread((old) => ({ is_pinned: !old.is_pinned })),
         onSuccess: (data) => {
             patchThread({ is_pinned: data.is_pinned });
-            queryClient.invalidateQueries({ queryKey: forumKeys.threadsAll });
+            invalidateForumLists(queryClient);
             toast.success(data.is_pinned ? 'Thread pinned' : 'Thread unpinned');
         },
         onError: (error, _vars, context) => {
@@ -214,7 +214,7 @@ export default function useThreadMutations({
         onSuccess: (data) => {
             const isLocked = typeof data?.is_locked === 'boolean' ? data.is_locked : data?.status === 'locked';
             patchThread({ is_locked: isLocked });
-            queryClient.invalidateQueries({ queryKey: forumKeys.threadsAll });
+            invalidateForumLists(queryClient);
             queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
             toast.success(isLocked ? 'Thread locked' : 'Thread unlocked');
         },
@@ -226,7 +226,7 @@ export default function useThreadMutations({
         onSuccess: (_data, reason) => {
             patchThread({ is_removed: true, removal_reason: reason || '' });
             queryClient.invalidateQueries({ queryKey: threadKey });
-            queryClient.invalidateQueries({ queryKey: forumKeys.threadsAll });
+            invalidateForumLists(queryClient);
             toast.success('Thread removed');
         },
         onError: toastError('Failed to remove thread'),
@@ -237,7 +237,7 @@ export default function useThreadMutations({
         onSuccess: () => {
             patchThread({ is_removed: false, removal_reason: '' });
             queryClient.invalidateQueries({ queryKey: threadKey });
-            queryClient.invalidateQueries({ queryKey: forumKeys.threadsAll });
+            invalidateForumLists(queryClient);
             toast.success('Thread restored');
         },
         onError: toastError('Failed to restore thread'),

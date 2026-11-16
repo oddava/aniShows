@@ -20,8 +20,23 @@ export const forumKeys = {
     postsAll: (threadId) => ['forumPosts', threadId],
     posts: (threadId, page) => ['forumPosts', threadId, page],
     // Under `postsAll(threadId)`, so every posts invalidation also covers it.
-    postSubtree: (threadId, rootId) => ['forumPosts', threadId, 'root', rootId],
+    postSubtree: (threadId, rootId, page = 1) => ['forumPosts', threadId, 'root', rootId, page],
 };
+
+/**
+ * Refresh every cached thread list after a change that can hide, show or move a thread
+ * (moderation, pin): category pages, the index feeds, search and the category counts.
+ */
+export function invalidateForumLists(queryClient) {
+    [
+        forumKeys.threadsAll,
+        ['forumActiveThreads'],
+        ['forumNewThreads'],
+        ['forumSearch'],
+        forumKeys.categories,
+        ['forumCategory'],
+    ].forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
+}
 
 // forumsApi methods already unwrap `response.data`.
 export const forumQueries = {
@@ -65,8 +80,8 @@ export const forumQueries = {
         queryKey: forumKeys.posts(threadId, page),
         queryFn: () => forumsApi.getPosts(threadId, page),
     }),
-    postSubtree: (threadId, rootId) => queryOptions({
-        queryKey: forumKeys.postSubtree(threadId, rootId),
-        queryFn: () => forumsApi.getPostSubtree(threadId, rootId),
+    postSubtree: (threadId, rootId, page = 1) => queryOptions({
+        queryKey: forumKeys.postSubtree(threadId, rootId, page),
+        queryFn: () => forumsApi.getPostSubtree(threadId, rootId, page),
     }),
 };

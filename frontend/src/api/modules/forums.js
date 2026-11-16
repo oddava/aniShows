@@ -72,10 +72,13 @@ export const forumsApi = {
         });
         return response.data;
     },
-    /** One post and its subtree ("Continue this thread"), even off the current page. */
-    getPostSubtree: async (threadId, rootId) => {
+    /**
+     * One post and its subtree ("Continue this thread"), even off the current page.
+     * `page` pages the post's direct replies, so a very wide reply list stays reachable.
+     */
+    getPostSubtree: async (threadId, rootId, page = 1) => {
         const response = await api.get('/forums/posts/', {
-            params: { thread__id: threadId, root: rootId },
+            params: { thread__id: threadId, root: rootId, page },
         });
         return response.data;
     },

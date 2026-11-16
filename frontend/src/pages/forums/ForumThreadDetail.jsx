@@ -89,8 +89,9 @@ const ForumThreadDetail = () => {
 
     // Focus mode: the focused post and its subtree, wherever it sits
     const subtreeQuery = useQuery({
-        ...forumQueries.postSubtree(id, focusedPostId),
+        ...forumQueries.postSubtree(id, focusedPostId, page),
         staleTime: 60 * 1000,
+        placeholderData: keepPreviousData,
         enabled: !!thread && !!focusedPostId,
     });
 
@@ -189,7 +190,8 @@ const ForumThreadDetail = () => {
     const isOwner = (username) => Boolean(username) && user?.username === username;
 
     const setPage = (newPage) => {
-        setSearchParams({ page: newPage });
+        // In focus mode the pages are the focused post's direct replies: keep ?post=.
+        setSearchParams(focusedPostId ? { post: String(focusedPostId), page: newPage } : { page: newPage });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -231,7 +233,9 @@ const ForumThreadDetail = () => {
         return <div className="min-h-screen"></div>;
     }
 
-    const totalPages = focusedPostId ? 0 : getTotalPages(postsData, page, isTopLevelPost);
+    const totalPages = focusedPostId
+        ? getTotalPages(postsData, page, (post) => post.parent === focusedPostId)
+        : getTotalPages(postsData, page, isTopLevelPost);
     const isSubscribed = Boolean(thread.is_subscribed);
 
     return (

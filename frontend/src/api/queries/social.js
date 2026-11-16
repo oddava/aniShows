@@ -26,7 +26,8 @@ export const friendKeys = {
 
 export const friendsWatchingKeys = {
     all: ['friendsWatching'],
-    byAnime: (animeId) => ['friendsWatching', animeId],
+    // Per viewer: an account switch (even while unmounted) never reuses another's answer.
+    byAnime: (animeId, viewerId = null) => ['friendsWatching', animeId, viewerId],
 };
 
 /** The copy every community write shows when the server throttles (429). */
@@ -57,8 +58,8 @@ export const socialQueries = {
      * Mutual follows with this anime on their list. Callers add
      * `enabled: isAuthenticated` (the endpoint needs a signed-in viewer).
      */
-    friendsWatching: (animeId) => queryOptions({
-        queryKey: friendsWatchingKeys.byAnime(animeId),
+    friendsWatching: (animeId, viewerId = null) => queryOptions({
+        queryKey: friendsWatchingKeys.byAnime(animeId, viewerId),
         queryFn: () => followApi.getFriendsWatching(animeId).then((res) => normalizeFriendsWatching(res.data, res.headers)),
         staleTime: 60 * 1000,
         enabled: animeId !== undefined && animeId !== null && animeId !== '',
