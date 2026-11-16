@@ -1,5 +1,9 @@
 import CustomSelect from '../../../../components/common/CustomSelect';
 
+/** Server-side caps for admin-triggered imports (the API answers 400 above them). */
+export const SLICE_LIMIT = 500;
+export const BATCH_SIZE_MAX = 500;
+
 /** The form in the "Trigger New Job" modal; its state lives in AdminImportJobs. */
 export default function TriggerImportJobForm({
   FULL_CATALOG_LIMIT,
@@ -72,7 +76,7 @@ export default function TriggerImportJobForm({
             <input
               type="number"
               min="1"
-              max={FULL_CATALOG_LIMIT}
+              max={triggerSyncType === 'full_catalog' ? FULL_CATALOG_LIMIT : SLICE_LIMIT}
               value={triggerLimit}
               onChange={(e) => setTriggerLimit(e.target.value)}
               disabled={isTriggering}
@@ -93,6 +97,7 @@ export default function TriggerImportJobForm({
             <input
               type="number"
               min="1"
+              max={BATCH_SIZE_MAX}
               value={triggerBatchSize}
               onChange={(e) => setTriggerBatchSize(e.target.value)}
               disabled={isTriggering}
