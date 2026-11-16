@@ -64,14 +64,6 @@ vi.mock('../../components/ReviewSummary', () => ({
     default: () => <div data-testid="review-summary" />,
 }));
 
-vi.mock('../../components/CharacterModal', () => ({
-    default: () => <div data-testid="character-modal" />,
-}));
-
-vi.mock('../../components/StaffModal', () => ({
-    default: () => <div data-testid="staff-modal" />,
-}));
-
 vi.mock('../../components/StatsTab', () => ({
     default: () => <div data-testid="stats-tab" />,
 }));
