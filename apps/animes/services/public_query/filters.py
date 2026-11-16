@@ -14,7 +14,8 @@ from ....users.models import UserProfile
 from ...models import Genre
 from .sorting import VALID_SEASONS
 
-VALID_STATUSES = {"airing", "finished", "upcoming", "not_yet_aired"}
+# The stored ``Anime.AnimeStatus`` values (``Unknown`` is never a filter).
+VALID_STATUSES = {"airing", "finished", "upcoming"}
 VALID_TYPES = {"tv", "movie", "ova", "ona", "special", "music"}
 MAX_RATING = 10.0
 MIN_RATING = 0.0

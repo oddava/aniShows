@@ -13,7 +13,7 @@ from ...core.utils import get_client_ip
 from ...shared.pagination import LargePagination, NoCountPagination, StandardPagination
 from ...shared.public_cache import Degraded, get_or_build_public_payload
 from ...users.permissions import VerifiedEmailForWrites
-from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
+from ..models import Anime, AnimeCharacter, AnimeStaff, AnimeStudio, Genre, Studio
 from ..serializers import (
     AnimeCharacterSerializer,
     AnimeDetailSerializer,
@@ -516,13 +516,26 @@ class GenreViewSet(ReadOnlyModelViewSet):
 
 
 class StudioViewSet(ReadOnlyModelViewSet):
+    """Studios for Browse's filter: only those with a public, non-adult anime (P2-2)."""
+
+    CACHE_KEY = "anime_studios:v2"
     queryset = Studio.objects.only("id", "name", "website").order_by("name")
     serializer_class = StudioSerializer
     pagination_class = None
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.action != "list":
+            return queryset
+        listed_anime = AnimeStudio.objects.filter(
+            studio=OuterRef("pk"),
+            anime__in=Anime.public_queryset().filter(is_adult=False).values("pk"),
+        )
+        return queryset.filter(Exists(listed_anime))
+
     def list(self, request, *args, **kwargs):
         data, cache_status = get_or_build_public_payload(
-            "anime_studios:v1",
+            self.CACHE_KEY,
             # Use an explicit super() target because the cache builder runs in a nested callable.
             lambda: super(StudioViewSet, self).list(request, *args, **kwargs).data,
             ttl=3600,
