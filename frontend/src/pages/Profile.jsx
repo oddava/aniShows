@@ -12,7 +12,6 @@ import {
     ProfileContent,
 } from '../components/profile';
 import useUserProfile from '../hooks/useUserProfile';
-import { setUserContext } from '../sentry';
 import {
     DEFAULT_PROFILE_PRIMARY_COLOR,
     getProfileAccentTheme,
@@ -245,7 +244,6 @@ export default function Profile({ forcedUsername }) {
     useEffect(() => {
         if (displayUser?.username) {
             document.title = `${displayUser.username}'s Profile - AniShows`;
-            setUserContext(displayUser);
         }
     }, [displayUser]);
 
