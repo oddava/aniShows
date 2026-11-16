@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import ConfirmEmailChange from '../ConfirmEmailChange';
 import { authApi } from '../../api/client';
 
@@ -19,6 +19,27 @@ vi.mock('../../context/AuthContext', () => ({
     }),
 }));
 
+let currentPath = '';
+function PathSpy() {
+    currentPath = useLocation().pathname;
+    return null;
+}
+
+const renderAt = (entry) =>
+    render(
+        <MemoryRouter initialEntries={[entry]}>
+            <PathSpy />
+            <Routes>
+                <Route path="/confirm-email-change" element={<ConfirmEmailChange />} />
+                <Route path="/confirm-email-change/:uid/:token" element={<ConfirmEmailChange />} />
+                <Route
+                    path="/confirm-email-change/:uid/:token/:new_email"
+                    element={<ConfirmEmailChange />}
+                />
+            </Routes>
+        </MemoryRouter>,
+    );
+
 describe('ConfirmEmailChange', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -28,16 +49,7 @@ describe('ConfirmEmailChange', () => {
         authApi.confirmEmailChange.mockResolvedValue({ data: { message: 'ok' } });
         refreshProfileMock.mockResolvedValue({});
 
-        render(
-            <MemoryRouter initialEntries={['/confirm-email-change/Nw/token123/anVzdGNvZGVyckBnbWFpbC5jb20']}>
-                <Routes>
-                    <Route
-                        path="/confirm-email-change/:uid/:token/:new_email"
-                        element={<ConfirmEmailChange />}
-                    />
-                </Routes>
-            </MemoryRouter>,
-        );
+        renderAt('/confirm-email-change/Nw/token123/anVzdGNvZGVyckBnbWFpbC5jb20');
 
         await waitFor(() => {
             expect(authApi.confirmEmailChange).toHaveBeenCalledWith(
@@ -52,5 +64,19 @@ describe('ConfirmEmailChange', () => {
         });
 
         expect(screen.getByText('Email Updated!')).toBeInTheDocument();
+    });
+
+    it('confirms a {uid, token} link and strips it from the address bar', async () => {
+        authApi.confirmEmailChange.mockResolvedValue({ data: { message: 'ok' } });
+        refreshProfileMock.mockResolvedValue({});
+
+        renderAt('/confirm-email-change/Nw/token123');
+
+        await waitFor(() => {
+            expect(authApi.confirmEmailChange).toHaveBeenCalledWith('Nw', 'token123', undefined);
+        });
+        expect(authApi.confirmEmailChange).toHaveBeenCalledTimes(1);
+        expect(currentPath).toBe('/confirm-email-change');
+        expect(await screen.findByText(/sign in again/i)).toBeInTheDocument();
     });
 });

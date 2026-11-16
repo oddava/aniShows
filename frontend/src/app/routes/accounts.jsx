@@ -21,17 +21,23 @@ export const accountRoutes = (
     <>
         <Route path="profile/*" element={<Profile />} />
         <Route path="u/:username/*" element={<Profile />} />
-        <Route path="kiyo" element={<Profile forcedUsername="kiyo" />} />
         <Route path="settings" element={<Settings />} />
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
         <Route path="verification-pending" element={<VerificationPending />} />
+        {/* Emailed links: the page moves the token into router state and
+            replaces the URL with the param-less route (A14). */}
+        <Route path="verify-email" element={<VerifyEmail />} />
         <Route path="verify-email/:uid/:token" element={<VerifyEmail />} />
+        <Route path="confirm-email-change" element={<ConfirmEmailChange />} />
+        <Route path="confirm-email-change/:uid/:token" element={<ConfirmEmailChange />} />
+        {/* Links sent before pending_email; kept for one release. */}
         <Route
             path="confirm-email-change/:uid/:token/:new_email"
             element={<ConfirmEmailChange />}
         />
         <Route path="forgot-password" element={<PasswordReset />} />
+        <Route path="reset-password" element={<PasswordResetConfirm />} />
         <Route path="reset-password/:uid/:token" element={<PasswordResetConfirm />} />
         <Route path="auth/google/callback" element={<GoogleCallback />} />
         <Route path="terms" element={<Terms />} />

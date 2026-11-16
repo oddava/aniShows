@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { getApiErrorMessage } from '../api/errors';
 import { useAuth } from '../context/AuthContext';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import logger from '../utils/logger';
+import useTokenLinkParams from '../components/auth/useTokenLinkParams';
 
 export default function VerifyEmail() {
-    const { uid, token } = useParams();
+    // The token moves out of the address bar before anything else runs (A14).
+    const { linkParams, isRedirecting } = useTokenLinkParams(['uid', 'token'], '/verify-email');
+    const uid = linkParams?.uid;
+    const token = linkParams?.token;
     const navigate = useNavigate();
     const { startSession } = useAuth();
     const [status, setStatus] = useState('loading'); // loading, success, already_verified, error
@@ -16,8 +20,14 @@ export default function VerifyEmail() {
     const requestedLink = useRef(null);
 
     useEffect(() => {
+        if (isRedirecting) return;
+        if (!uid || !token) {
+            setStatus('error');
+            setMessage('This verification link is incomplete. Open it again from the email.');
+            return;
+        }
         const link = `${uid}/${token}`;
-        if (!uid || !token || requestedLink.current === link) return;
+        if (requestedLink.current === link) return;
         requestedLink.current = link;
 
         const verify = async () => {
@@ -51,7 +61,7 @@ export default function VerifyEmail() {
         };
 
         verify();
-    }, [uid, token, startSession, navigate]);
+    }, [uid, token, isRedirecting, startSession, navigate]);
 
     return (
         <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
