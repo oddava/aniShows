@@ -105,6 +105,31 @@ export const getImageUrl = (url, title = 'Anime') => {
     return `${import.meta.env.VITE_API_URL || ''}${cleanUrl}`;
 };
 
+export const SITE_ORIGIN = 'https://anishows.com';
+
+/**
+ * An absolute http(s) URL for an image, for places outside the page such as
+ * og:image or JSON-LD, where crawlers can't resolve "/media/...". Relative
+ * paths resolve against the public site origin (media is served from it).
+ * Returns null when there is no shareable image (blank, data:, blob:), so
+ * callers can fall back to a default.
+ *
+ * @param {string} url - Image URL as stored or as returned by getImageUrl
+ * @param {string} [origin] - Origin for relative paths
+ * @returns {string|null}
+ */
+export const absoluteMediaUrl = (url, origin = SITE_ORIGIN) => {
+    const normalizedUrl = coerceUrl(url);
+    if (!normalizedUrl || /^(data|blob):/i.test(normalizedUrl)) return null;
+    if (normalizedUrl.startsWith('//')) return `https:${normalizedUrl}`;
+
+    const cleanUrl = getImageUrl(normalizedUrl);
+    if (/^https?:\/\//i.test(cleanUrl)) return cleanUrl;
+
+    const path = cleanUrl.startsWith('/') ? cleanUrl : `/${cleanUrl}`;
+    return `${origin.replace(/\/+$/, '')}${path}`;
+};
+
 /**
  * Get optimized image URL for anime with multiple sizes
  * @param {Object} anime - Anime object with image URLs
