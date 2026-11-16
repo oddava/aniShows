@@ -1,3 +1,4 @@
+from contextlib import suppress
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -73,6 +74,20 @@ class CeleryAdminApiTests(APITestCase):
         self.assertEqual((audit.user, audit.entity_repr), (self.superuser, SYNC_TASK))
 
     @patch("apps.core.services.celery_admin_service.current_app.send_task")
+    def test_trigger_is_refused_while_the_same_task_is_in_flight(self, mock_send_task):
+        CeleryTaskResult.objects.create(task_id="import-1", task_name=SYNC_TASK, status="STARTED")
+
+        response = self.root.post(
+            "/api/v1/admin/celery/tasks/trigger/",
+            {"task": SYNC_TASK, "kwargs": {"sync_type": "trending"}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        mock_send_task.assert_not_called()
+        self.assertFalse(AuditLog.objects.exists())
+
+    @patch("apps.core.services.celery_admin_service.current_app.send_task")
     def test_trigger_failure_does_not_echo_the_exception(self, mock_send_task):
         mock_send_task.side_effect = RuntimeError("redis://:secret@broker:6379 refused")
 
@@ -114,6 +129,18 @@ class CeleryAdminApiTests(APITestCase):
                 post = self.root.post(url, {"action": "shutdown"}, format="json")
                 self.assertIn(get.status_code, (404, 405))
                 self.assertIn(post.status_code, (404, 405))
+
+    def test_bulk_delete_rolls_back_when_the_audit_row_fails(self):
+        row = CeleryTaskResult.objects.create(task_id="keep-1", task_name=SYNC_TASK)
+        with (
+            patch("apps.core.views.celery_admin.record_admin_action", side_effect=RuntimeError),
+            suppress(RuntimeError),  # the test client re-raises unhandled view errors
+        ):
+            self.root.post(
+                "/api/v1/admin/celery/tasks/results/bulk_delete/", {"ids": [row.id]}, format="json"
+            )
+
+        self.assertTrue(CeleryTaskResult.objects.filter(pk=row.pk).exists())
 
     def test_bulk_delete_validates_ids_and_is_audited(self):
         rows = [

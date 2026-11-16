@@ -309,10 +309,16 @@ def enqueue_tracked_task(
 
 
 def trigger_task(*, task_path: str, args=None, kwargs=None, user):
-    """Send an allowlisted task with validated kwargs. Routing follows ``task_routes``."""
+    """Send an allowlisted task with validated kwargs. Routing follows ``task_routes``.
+
+    Exclusive like the import triggers (several allowlisted tasks are import sources):
+    raises ``TaskAlreadyRunningError`` while a run of the same task is in flight.
+    """
     args, kwargs = validate_task_invocation(task_path=task_path, args=args, kwargs=kwargs)
     task_info = AVAILABLE_TASKS[task_path]
-    job = enqueue_tracked_task(task_path=task_path, args=args, kwargs=kwargs, user=user)
+    job = enqueue_tracked_task(
+        task_path=task_path, args=args, kwargs=kwargs, user=user, exclusive=True
+    )
     return {
         "message": f"Task {task_info['name']} triggered successfully.",
         "task_id": job.task_id,

@@ -1,11 +1,15 @@
 """Suspend and restore with a reason (G6 P1-2)."""
 
-from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.test import RequestFactory, TestCase
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.models import AuditLog
+from ..services.user_admin_service import AdminUserActionError, suspend_user
 from .helpers import bearer_client, make_user
+
+User = get_user_model()
 
 
 def _url(user, action):
@@ -114,3 +118,32 @@ class UserSuspensionTests(TestCase):
         )
         skipped = self.staff_client.get(f"/api/v1/admin/users/{other_staff.id}/").data
         self.assertEqual(skipped["moderation_history"], [])
+
+
+class SuspensionUsesCurrentStateTests(TestCase):
+    """The service re-reads the target under a lock (council round 2)."""
+
+    def test_a_target_promoted_after_it_was_loaded_is_refused(self):
+        moderator = make_user("mod-stale", role="staff")
+        stale = make_user("soon-staff")
+        User.objects.filter(pk=stale.pk).update(is_staff=True)  # a superuser promotes them
+        request = RequestFactory().post("/api/v1/admin/users/x/suspend/")
+        request.user = moderator
+
+        with self.assertRaises(AdminUserActionError) as refused:
+            suspend_user(request, stale, "Too late")
+
+        self.assertEqual(refused.exception.status_code, 403)
+        self.assertTrue(User.objects.get(pk=stale.pk).is_active)
+
+    def test_a_repeat_on_a_stale_object_reports_no_change(self):
+        moderator = make_user("mod-repeat", role="staff")
+        target = make_user("already-out")
+        User.objects.filter(pk=target.pk).update(is_active=False)
+        request = RequestFactory().post("/api/v1/admin/users/x/suspend/")
+        request.user = moderator
+
+        result = suspend_user(request, target, "Again")
+
+        self.assertFalse(result.payload["changed"])
+        self.assertFalse(AuditLog.objects.exists())

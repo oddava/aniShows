@@ -73,8 +73,18 @@ def set_user_active(target_user, *, active: bool) -> bool:
 
 
 @transaction.atomic
+def _lock_user(target_user):
+    """Re-read the target under a row lock, so checks and changes see its current state.
+
+    Without it a staff moderator could suspend an account a superuser promoted a moment
+    earlier, and two concurrent suspends would both report (and audit) a change.
+    """
+    return type(target_user)._default_manager.select_for_update().get(pk=target_user.pk)
+
+
 def _set_active_and_audit(request, target_user, *, active: bool, raw_reason) -> dict:
     actor = request.user
+    target_user = _lock_user(target_user)
     check_can_moderate(target_user, actor)
     reason = clean_reason(raw_reason)
     changed = set_user_active(target_user, active=active)
@@ -125,6 +135,7 @@ def set_user_staff(request, target_user, is_staff) -> AdminUserActionResult:
     if target_user.pk == actor.pk:
         raise AdminUserActionError("Cannot modify your own staff status.", 400)
 
+    target_user = _lock_user(target_user)
     previous = target_user.is_staff
     if previous != is_staff:
         target_user.is_staff = is_staff

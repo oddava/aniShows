@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -102,7 +103,7 @@ class CreatePendingJobTests(TestCase):
 
     @patch("apps.core.services.celery_admin_service.current_app.send_task")
     def test_row_is_recorded_before_the_task_is_sent(self, mock_send_task):
-        seen = {}
+        seen: dict[str, str] = {}
 
         def send(task_path, **options):
             row = CeleryTaskResult.objects.get(task_id=options["task_id"])
@@ -134,7 +135,7 @@ class CreatePendingJobTests(TestCase):
     @patch("apps.core.services.celery_admin_service.current_app.send_task")
     def test_a_failed_send_marks_the_row_failed_and_does_not_block(self, mock_send_task):
         mock_send_task.side_effect = OSError("broker down")
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "user": None,
             "task_path": "apps.animes.tasks.sync.sync_anime_catalog",
             "task_module": "apps.animes.tasks.sync",

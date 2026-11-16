@@ -241,7 +241,8 @@ def perform_bulk_operation(request, data) -> BulkOperationResult:
             }
         else:  # ban / unban
             active = operation == "unban"
-            changed = [user.pk for user in queryset if set_user_active(user, active=active)]
+            locked = queryset.select_for_update().order_by("pk")
+            changed = [user.pk for user in locked if set_user_active(user, active=active)]
             metadata["changed_ids"] = changed
             verb = "Unbanned" if active else "Banned"
             payload = {**base, "updated": len(changed), "message": f"{verb} {len(changed)} users."}

@@ -1,5 +1,6 @@
 """The admin System page (G6 P1-3). Broker, workers and AniList are mocked."""
 
+from contextlib import suppress
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -235,6 +236,24 @@ class BeatRunTests(TestCase):
         self.assertEqual((first.status_code, second.status_code), (202, 409))
         self.assertEqual(self.send_task.call_count, 1)
         self.assertFalse(CeleryTaskResult.objects.exists())
+
+    def test_untracked_claim_is_released_when_the_send_fails(self):
+        self.send_task.side_effect = OSError("broker down")
+        with suppress(OSError):  # the test client re-raises unhandled view errors
+            response = self._run("flush-forum-view-counts-minute")
+            self.assertEqual(response.status_code, 500)
+
+        self.send_task.side_effect = None
+        self.assertEqual(self._run("flush-forum-view-counts-minute").status_code, 202)
+
+    def test_untracked_run_goes_ahead_when_the_cache_is_down(self):
+        broken_cache = MagicMock()
+        broken_cache.add.side_effect = OSError("cache down")
+        with patch.object(system_service, "cache", broken_cache):
+            response = self._run("flush-forum-view-counts-minute")
+
+        self.assertEqual(response.status_code, 202)
+        self.send_task.assert_called_once()
 
     def test_unknown_entry_is_404(self):
         self.assertEqual(self._run("drop-all-tables").status_code, 404)

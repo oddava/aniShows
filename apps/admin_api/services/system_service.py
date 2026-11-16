@@ -420,6 +420,31 @@ def build_system_payload(*, refresh: bool = False) -> dict:
     )
 
 
+def _run_untracked(entry: BeatEntry) -> str:
+    """Send an untracked entry, at most once a minute (a cache claim; no result rows).
+
+    If the cache is down the run goes ahead unclaimed (these tasks are idempotent
+    every-minute jobs); if the send fails, the claim is released for a retry.
+    """
+    claim_key = f"{UNTRACKED_RUN_CLAIM_PREFIX}{entry.name}"
+    try:
+        claimed = bool(cache.add(claim_key, 1, UNTRACKED_RUN_CLAIM_SECONDS))
+    except CACHE_ERRORS:
+        logger.warning("Run-now claim unavailable; sending unclaimed", extra={"entry": entry.name})
+        claimed, claim_key = True, ""
+    if not claimed:
+        raise SystemActionError("This task was run moments ago.", 409)
+    try:
+        return current_app.send_task(
+            entry.task, args=list(entry.args), kwargs=entry.kwargs, queue=entry.queue
+        ).id
+    except Exception:
+        if claim_key:
+            with suppress(*CACHE_ERRORS):
+                cache.delete(claim_key)
+        raise
+
+
 def run_beat_entry(request, entry_name: str) -> dict:
     """Send one beat entry's task now, with its configured args/kwargs only.
 
@@ -432,18 +457,7 @@ def run_beat_entry(request, entry_name: str) -> dict:
         raise SystemActionError("Unknown beat entry.", 404)
 
     if is_untracked(entry.task):
-        claimed = False
-        with suppress(*CACHE_ERRORS):
-            claimed = bool(
-                cache.add(
-                    f"{UNTRACKED_RUN_CLAIM_PREFIX}{entry.name}", 1, UNTRACKED_RUN_CLAIM_SECONDS
-                )
-            )
-        if not claimed:
-            raise SystemActionError("This task was run moments ago.", 409)
-        task_id = current_app.send_task(
-            entry.task, args=list(entry.args), kwargs=entry.kwargs, queue=entry.queue
-        ).id
+        task_id = _run_untracked(entry)
     else:
         try:
             task_id = enqueue_tracked_task(

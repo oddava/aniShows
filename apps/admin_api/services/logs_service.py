@@ -6,6 +6,9 @@ from django.utils import timezone
 
 def build_system_log_stats(queryset, *, last_24h_only: bool = True):
     """Counts by level and type. Unfiltered, it covers only the last 24h (bounded cost)."""
+    # A list ordering (``-timestamp`` from OrderingFilter) would join the GROUP BY and
+    # split one level into many groups.
+    queryset = queryset.order_by()
     if last_24h_only:
         queryset = queryset.filter(timestamp__gte=timezone.now() - timedelta(hours=24))
     by_level = dict(queryset.values_list("level").annotate(count=Count("id")))

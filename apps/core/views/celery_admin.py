@@ -22,6 +22,7 @@ from ..serializers import CeleryTaskResultDetailSerializer, CeleryTaskResultList
 from ..services.celery_admin_service import (
     AVAILABLE_TASKS,
     CeleryTaskValidationError,
+    TaskAlreadyRunningError,
     bulk_delete_task_results,
     control_task,
     trigger_task,
@@ -81,18 +82,19 @@ class CeleryTaskResultViewSet(
 
     @action(detail=False, methods=["post"])
     def bulk_delete(self, request):
-        result = bulk_delete_task_results(
-            ids=request.data.get("ids", []),
-            days=request.data.get("days"),
-        )
-        if result.status_code < 400:
-            record_admin_action(
-                request,
-                action=AuditLog.ActionType.BULK_ACTION,
-                entity_type="CeleryTaskResult",
-                entity_repr=result.payload.get("message", "")[:200],
-                metadata={"operation": "bulk_delete", "deleted": result.payload.get("deleted")},
+        with transaction.atomic():
+            result = bulk_delete_task_results(
+                ids=request.data.get("ids", []),
+                days=request.data.get("days"),
             )
+            if result.status_code < 400:
+                record_admin_action(
+                    request,
+                    action=AuditLog.ActionType.BULK_ACTION,
+                    entity_type="CeleryTaskResult",
+                    entity_repr=result.payload.get("message", "")[:200],
+                    metadata={"operation": "bulk_delete", "deleted": result.payload.get("deleted")},
+                )
         return Response(result.payload, status=result.status_code)
 
 
@@ -120,6 +122,11 @@ class CeleryAdminControlViewSet(AdminPolicyMixin, viewsets.ViewSet):
             )
         except CeleryTaskValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except TaskAlreadyRunningError:
+            return Response(
+                {"detail": "This task is already pending or running."},
+                status=status.HTTP_409_CONFLICT,
+            )
         except Exception:
             logger.exception("Celery admin trigger failed", extra={"task": task_path})
             return Response(
