@@ -46,13 +46,43 @@ describe('ConfirmDialog', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Open' }));
 
         const confirm = screen.getByRole('button', { name: 'Delete' });
-        expect(confirm).toBeDisabled();
+        expect(confirm).toHaveAttribute('aria-disabled', 'true');
+        fireEvent.click(confirm);
+        expect(onConfirm).not.toHaveBeenCalled();
         fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'Narut' } });
-        expect(confirm).toBeDisabled();
+        fireEvent.submit(confirm.closest('form'));
+        expect(onConfirm).not.toHaveBeenCalled();
         fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'Naruto' } });
-        expect(confirm).toBeEnabled();
+        expect(confirm).not.toHaveAttribute('aria-disabled');
 
         fireEvent.click(confirm);
         expect(onConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps Tab inside the dialog while the confirm button is gated', async () => {
+        render(<Harness requireText="Naruto" />);
+        fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+        const dialog = screen.getByRole('alertdialog');
+        const input = screen.getByLabelText(/to confirm/);
+        const cancel = screen.getByRole('button', { name: 'Cancel' });
+        const confirm = screen.getByRole('button', { name: 'Delete' });
+        await waitFor(() => expect(dialog).toContainElement(document.activeElement), { timeout: 5000 });
+
+        // The gated confirm stays in the tab order, so the trap's last stop is real.
+        expect(confirm).not.toHaveAttribute('disabled');
+        confirm.focus();
+        fireEvent.keyDown(confirm, { key: 'Tab' });
+        expect(dialog).toContainElement(document.activeElement);
+        expect(document.activeElement).not.toBe(confirm);
+
+        input.focus();
+        fireEvent.keyDown(input, { key: 'Tab', shiftKey: true });
+        expect(document.activeElement).toBe(confirm);
+
+        // Clicking the gated confirm does nothing and keeps the dialog open.
+        fireEvent.click(confirm);
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+        expect(cancel).toBeInTheDocument();
     });
 });

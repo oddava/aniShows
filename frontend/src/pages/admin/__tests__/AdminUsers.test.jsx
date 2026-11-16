@@ -111,12 +111,14 @@ describe('AdminUsers', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Suspend user1' }));
         const dialog = screen.getByRole('alertdialog', { name: 'Suspend user1?' });
         const confirm = within(dialog).getByRole('button', { name: 'Suspend' });
-        expect(confirm).toBeDisabled();
+        expect(confirm).toHaveAttribute('aria-disabled', 'true');
+        fireEvent.click(confirm);
+        expect(postMock).not.toHaveBeenCalled();
 
         fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'ab' } });
-        expect(confirm).toBeDisabled();
+        expect(confirm).toHaveAttribute('aria-disabled', 'true');
         fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'Spam links' } });
-        expect(confirm).toBeEnabled();
+        expect(confirm).not.toHaveAttribute('aria-disabled');
         fireEvent.click(confirm);
 
         await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('User user1 suspended.'));

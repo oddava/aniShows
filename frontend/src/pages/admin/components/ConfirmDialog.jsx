@@ -1,9 +1,11 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
-import { useFocusTrap } from '../../../hooks/useFocusTrap';
+import useAdminFocusTrap from '../hooks/useAdminFocusTrap';
 
-const BUTTON = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0';
+// Gated buttons use aria-disabled, not `disabled`: a disabled button drops out of the
+// tab order, and the shared focus trap would then let Tab escape the dialog.
+const BUTTON = 'px-4 py-2 rounded-lg text-sm font-medium transition-colors aria-disabled:opacity-50 aria-disabled:cursor-not-allowed min-h-[44px] sm:min-h-0';
 
 function ConfirmDialogPanel({
     title,
@@ -22,7 +24,7 @@ function ConfirmDialogPanel({
     const messageId = useId();
     const inputId = useId();
     const [typed, setTyped] = useState('');
-    const containerRef = useFocusTrap(true, busy ? undefined : onCancel);
+    const containerRef = useAdminFocusTrap(true, busy ? undefined : onCancel);
 
     const typedOk = !requireText || typed.trim() === requireText;
     const disabled = busy || confirmDisabled || !typedOk;
@@ -30,6 +32,10 @@ function ConfirmDialogPanel({
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!disabled) onConfirm();
+    };
+
+    const handleCancel = () => {
+        if (!busy) onCancel();
     };
 
     return (
@@ -66,15 +72,15 @@ function ConfirmDialogPanel({
                     <div className="flex justify-end gap-3 pt-2">
                         <button
                             type="button"
-                            onClick={onCancel}
-                            disabled={busy}
+                            onClick={handleCancel}
+                            aria-disabled={busy || undefined}
                             className={`${BUTTON} bg-white/10 text-white hover:bg-white/20`}
                         >
                             {cancelLabel}
                         </button>
                         <button
                             type="submit"
-                            disabled={disabled}
+                            aria-disabled={disabled || undefined}
                             className={`${BUTTON} ${destructive
                                 ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
                                 : 'bg-[#7c3aed] text-white hover:bg-violet-700'}`}

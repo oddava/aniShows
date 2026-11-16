@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 
 import api from '../../../api/client';
 import ErrorState from '../../../components/common/ErrorState';
-import { useFocusTrap } from '../../../hooks/useFocusTrap';
+import useAdminFocusTrap from '../hooks/useAdminFocusTrap';
 import { getAdminErrorMessage, useAdminQuery } from '../hooks/useAdminQuery';
 
 export const userDetailKey = (id) => ['admin', 'users', 'detail', id];
@@ -38,7 +38,7 @@ Row.propTypes = { label: PropTypes.string.isRequired, children: PropTypes.node }
  */
 export default function UserDrawer({ userId, onClose, renderActions, paused = false }) {
   const titleId = useId();
-  const containerRef = useFocusTrap(!paused, onClose);
+  const containerRef = useAdminFocusTrap(!paused, onClose);
   const query = useAdminQuery({
     queryKey: userDetailKey(userId),
     queryFn: ({ signal }) => api.get(`/admin/users/${userId}/`, { signal }).then((res) => res.data),

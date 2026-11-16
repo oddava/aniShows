@@ -2,7 +2,7 @@ import { useEffect, useId } from 'react';
 import PropTypes from 'prop-types';
 import { X } from 'lucide-react';
 
-import { useFocusTrap } from '../../../hooks/useFocusTrap';
+import useAdminFocusTrap from '../hooks/useAdminFocusTrap';
 
 const SIZE_CLASSES = {
   small: 'max-w-md',
@@ -14,7 +14,7 @@ const SIZE_CLASSES = {
 
 function ModalPanel({ onClose, title, children, size }) {
   const titleId = useId();
-  const containerRef = useFocusTrap(true, onClose);
+  const containerRef = useAdminFocusTrap(true, onClose);
 
   useEffect(() => {
     const previous = document.body.style.overflow;
