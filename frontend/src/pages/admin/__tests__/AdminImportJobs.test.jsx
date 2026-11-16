@@ -18,6 +18,9 @@ vi.mock('../../../api/client', () => ({
 vi.mock('react-hot-toast', () => ({ toast: { success: toastSuccess, error: vi.fn() } }));
 vi.mock('../hooks/useAdminRole', () => ({ default: () => role }));
 
+// The page renders behind lazy chunks and a query; give it room on a busy CI box.
+const SLOW = { timeout: 5000 };
+
 const offlineJob = {
     id: 3,
     task_id: 'abc',
@@ -54,7 +57,7 @@ describe('AdminImportJobs', () => {
         expect(enrichmentRowsOf({ overall: { queued: 1 } }).map((r) => r.label)).toEqual(['Overall']);
 
         renderPage();
-        fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Details' }, SLOW));
         const dialog = screen.getByRole('dialog', { name: 'Import Job #3' });
         expect(within(dialog).getByText('Enrichment Progress')).toBeInTheDocument();
         const groups = within(dialog).getAllByRole('term').map((term) => term.textContent);
@@ -64,7 +67,7 @@ describe('AdminImportJobs', () => {
     it('triggers metadata enrichment with the slim API payload', async () => {
         postMock.mockResolvedValue({ data: { message: 'ok', job_id: 9, status: 'pending' } });
         renderPage();
-        fireEvent.click(await screen.findByRole('button', { name: /Trigger job/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /Trigger job/ }, SLOW));
 
         fireEvent.click(screen.getByRole('button', { name: 'Import source' }));
         fireEvent.click(screen.getByRole('option', { name: 'AniList Metadata' }));
@@ -81,7 +84,7 @@ describe('AdminImportJobs', () => {
         role.isSuperuser = false;
         getMock.mockResolvedValue({ data: { results: [{ ...offlineJob, status: 'processing' }], count: 1 } });
         renderPage();
-        await screen.findByRole('button', { name: 'Details' });
+        await screen.findByRole('button', { name: 'Details' }, SLOW);
 
         expect(screen.queryByRole('button', { name: /Trigger job/ })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
