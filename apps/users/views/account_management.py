@@ -35,7 +35,9 @@ class AccountManagementViewSet(ViewSet):
         return super().get_permissions()
 
     def get_throttles(self):
-        if self.action in ["delete_account", "change_email", "confirm_email_change"]:
+        if self.action == "change_email":
+            return [throttling.StrictUserRateThrottle(), throttling.ChangeEmailRateThrottle()]
+        if self.action in ["delete_account", "confirm_email_change"]:
             return [throttling.StrictUserRateThrottle()]
         return super().get_throttles()
 

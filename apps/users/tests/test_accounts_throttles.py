@@ -83,3 +83,127 @@ class SocialLinksThrottleTests(APITestCase):
     def test_unparseable_links_still_report_a_validation_error(self):
         response = self.client.patch(self.url, {"social_links": "{not json"}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+
+
+class LoginIdentifierThrottleTests(APITestCase):
+    """Failures per identifier lock it whatever IP they come from (A09)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="target", email="target@example.com", password="right-password-1"
+        )
+        self.url = reverse("token_obtain_pair")
+
+    def _login(self, password, ip, username="target"):
+        return self.client.post(
+            self.url,
+            {"username": username, "password": password},
+            format="json",
+            REMOTE_ADDR=ip,
+            **XHR,
+        )
+
+    def test_eleventh_failure_from_rotating_ips_is_429(self):
+        for attempt in range(10):
+            response = self._login("wrong", f"10.0.0.{attempt}")
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        response = self._login("wrong", "10.0.1.1")
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertGreater(int(response["Retry-After"]), 0)
+        self.assertLessEqual(int(response["Retry-After"]), 15 * 60)
+        # Even the right password waits until the lock ends.
+        self.assertEqual(
+            self._login("right-password-1", "10.0.1.2").status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    def test_identifier_case_and_spacing_share_one_counter(self):
+        for attempt in range(10):
+            self._login(
+                "wrong", f"10.0.2.{attempt}", username=" TARGET " if attempt % 2 else "target"
+            )
+        self.assertEqual(
+            self._login("wrong", "10.0.3.1").status_code, status.HTTP_429_TOO_MANY_REQUESTS
+        )
+
+    def test_success_resets_the_counter(self):
+        for attempt in range(9):
+            self._login("wrong", f"10.0.4.{attempt}")
+        self.assertEqual(
+            self._login("right-password-1", "10.0.4.99").status_code, status.HTTP_200_OK
+        )
+        for attempt in range(9):
+            self.assertEqual(
+                self._login("wrong", f"10.0.5.{attempt}").status_code,
+                status.HTTP_401_UNAUTHORIZED,
+            )
+
+    def test_other_identifiers_are_unaffected(self):
+        for attempt in range(10):
+            self._login("wrong", f"10.0.6.{attempt}")
+        self.assertEqual(
+            self._login("wrong", "10.0.6.50", username="someone-else").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_validation_errors_do_not_count(self):
+        for attempt in range(12):
+            response = self.client.post(
+                self.url, {"password": "x"}, format="json", REMOTE_ADDR=f"10.0.7.{attempt}", **XHR
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ScopedThrottleTests(APITestCase):
+    """New scopes; their real rates are patched in (test settings relax every scope)."""
+
+    def test_resend_verification_has_its_own_bucket(self):
+        from ..throttling import PasswordResetRateThrottle, ResendVerificationRateThrottle
+
+        with (
+            patch.object(ResendVerificationRateThrottle, "rate", "3/hour", create=True),
+            patch.object(PasswordResetRateThrottle, "rate", "3/hour", create=True),
+        ):
+            for _ in range(3):
+                self.client.post(reverse("resend_verification"), {"email": "a@b.c"}, format="json")
+            resend = self.client.post(
+                reverse("resend_verification"), {"email": "a@b.c"}, format="json"
+            )
+            reset = self.client.post(reverse("password_reset"), {"email": "a@b.c"}, format="json")
+
+        self.assertEqual(resend.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(reset.status_code, status.HTTP_200_OK)
+
+    def test_change_email_is_limited_per_user(self):
+        from ..throttling import ChangeEmailRateThrottle
+
+        user = User.objects.create_user(
+            username="mover", email="mover@example.com", password="securepass123"
+        )
+        self.client.force_authenticate(user)
+        with patch.object(ChangeEmailRateThrottle, "rate", "5/hour", create=True):
+            statuses = [
+                self.client.post(
+                    reverse("change_email"),
+                    {"new_email": f"n{index}@example.com", "password": "securepass123"},
+                    format="json",
+                ).status_code
+                for index in range(6)
+            ]
+        self.assertEqual(statuses[:5], [status.HTTP_200_OK] * 5)
+        self.assertEqual(statuses[5], status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_configured_rates(self):
+        from django.conf import settings
+
+        from root.settings import base
+
+        rates = base.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+        self.assertEqual(rates["resend_verification"], "3/hour")
+        self.assertEqual(rates["change_email"], "5/hour")
+        self.assertEqual(settings.LOGIN_IDENTIFIER_MAX_FAILURES, 10)
+        self.assertEqual(settings.LOGIN_IDENTIFIER_WINDOW_SECONDS, 900)

@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.decorators import action
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.exceptions import AuthenticationFailed, Throttled, ValidationError
 from rest_framework.fields import CharField, EmailField
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -113,7 +113,32 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         rejected = cookie_auth_rejected(request)
         if rejected is not None:
             return rejected
-        return move_refresh_to_cookie(super().post(request, *args, **kwargs))
+
+        identifier = _login_identifier(request.data)
+        identifier_throttle = throttling.LoginIdentifierThrottle(identifier) if identifier else None
+        if identifier_throttle is not None:
+            wait = identifier_throttle.wait()
+            if wait is not None:
+                raise Throttled(wait=wait)
+
+        try:
+            response = super().post(request, *args, **kwargs)
+        except AuthenticationFailed:
+            if identifier_throttle is not None:
+                identifier_throttle.record_failure()
+            raise
+        if identifier_throttle is not None:
+            identifier_throttle.reset()
+        return move_refresh_to_cookie(response)
+
+
+def _login_identifier(data) -> str | None:
+    """The username or email a login attempt names, if it is a usable string."""
+    for field in ("username", "email"):
+        value = data.get(field) if hasattr(data, "get") else None
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
 
 
 class RegisterView(generics.CreateAPIView):
@@ -176,7 +201,9 @@ class AuthViewSet(ViewSet):
         self.email_service = EmailService()
 
     def get_throttles(self):
-        if self.action in ["resend_verification", "password_reset"]:
+        if self.action == "resend_verification":
+            return [throttling.ResendVerificationRateThrottle()]
+        if self.action == "password_reset":
             return [throttling.PasswordResetRateThrottle()]
         if self.action in ["verify_email", "password_reset_confirm"]:
             return [throttling.StrictUserRateThrottle()]

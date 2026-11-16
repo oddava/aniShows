@@ -3,6 +3,12 @@ Custom throttle classes for API rate limiting.
 Provides different rate limits for different types of endpoints.
 """
 
+import hashlib
+import math
+import time
+
+from django.conf import settings
+from django.core.cache import cache
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 
@@ -136,3 +142,52 @@ class ForumWriteRateThrottle(UserRateThrottle):
     """
 
     scope = "forum_write"
+
+
+class ResendVerificationRateThrottle(AnonRateThrottle):
+    """Resending a verification link has its own bucket (it used to share password reset's)."""
+
+    scope = "resend_verification"
+
+
+class ChangeEmailRateThrottle(UserRateThrottle):
+    """Email-change requests mail an arbitrary address: 5 per hour per user (A09)."""
+
+    scope = "change_email"
+
+
+class LoginIdentifierThrottle:
+    """Lock an identifier after repeated failed logins, whatever IP they come from (A09).
+
+    ``LoginRateThrottle`` limits per IP only, so guessing spread over many IPs was
+    unbounded. This counts *failures* per normalised identifier (stored as a
+    SHA-256, never in clear) in a fixed window; a success clears the count, so the
+    owner can still sign in once the lock ends. Locking a known name out for the
+    window is the accepted trade-off (spec R5).
+    """
+
+    def __init__(self, identifier: str):
+        digest = hashlib.sha256(identifier.strip().lower().encode()).hexdigest()
+        self.count_key = f"throttle:login_identifier:{digest}:count"
+        self.reset_key = f"throttle:login_identifier:{digest}:reset_at"
+        self.max_failures = settings.LOGIN_IDENTIFIER_MAX_FAILURES
+        self.window = settings.LOGIN_IDENTIFIER_WINDOW_SECONDS
+
+    def wait(self) -> int | None:
+        """Seconds until the lock ends, or None when attempts are allowed."""
+        if (cache.get(self.count_key) or 0) < self.max_failures:
+            return None
+        reset_at = cache.get(self.reset_key) or (time.time() + self.window)
+        return max(1, math.ceil(reset_at - time.time()))
+
+    def record_failure(self) -> None:
+        if cache.add(self.count_key, 0, timeout=self.window):
+            cache.set(self.reset_key, time.time() + self.window, timeout=self.window)
+        try:
+            cache.incr(self.count_key)
+        except ValueError:  # expired between add() and incr()
+            cache.set(self.count_key, 1, timeout=self.window)
+            cache.set(self.reset_key, time.time() + self.window, timeout=self.window)
+
+    def reset(self) -> None:
+        cache.delete_many([self.count_key, self.reset_key])

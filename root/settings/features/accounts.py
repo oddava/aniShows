@@ -21,6 +21,8 @@ Documented overrides (spec 1, "Integrator requests"):
 - ``SIMPLE_JWT["UPDATE_LAST_LOGIN"] = True`` (A33): a password login bumps
   ``last_login``, which is part of the reset-token hash, so an unused reset link
   stops working after the next sign-in.
+- New throttle scopes (A09): ``resend_verification`` (its own bucket, no longer
+  password reset's) and ``change_email`` (per user).
 """
 
 from ..base import REST_FRAMEWORK, SIMPLE_JWT, _env_bool
@@ -49,3 +51,13 @@ REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"] = _authentication_classes(
 )
 
 SIMPLE_JWT["UPDATE_LAST_LOGIN"] = True
+
+# Throttles (A09). New scopes go through the settings dict so test.py's relaxed
+# rates cover them like every other scope.
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["resend_verification"] = "3/hour"
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["change_email"] = "5/hour"
+
+# Failed logins per identifier (any IP) before a 429 with Retry-After, and the
+# fixed window they are counted in (apps.users.throttling.LoginIdentifierThrottle).
+LOGIN_IDENTIFIER_MAX_FAILURES = 10
+LOGIN_IDENTIFIER_WINDOW_SECONDS = 15 * 60
