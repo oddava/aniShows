@@ -75,7 +75,7 @@ function FriendAvatar({ friend, accentColor }) {
 }
 
 export default function FriendsWatching({ animeId, accentColor }) {
-    const { friends, loading, error } = useFriendsWatching(animeId);
+    const { friends, total, loading, error, refetch } = useFriendsWatching(animeId);
 
     if (loading) {
         return (
@@ -93,7 +93,28 @@ export default function FriendsWatching({ animeId, accentColor }) {
         );
     }
 
-    if (error || friends.length === 0) {
+    if (error) {
+        return (
+            <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
+                <div className="flex items-center gap-2 mb-4">
+                    <Users className="w-4 h-4 text-gray-500" />
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Friends Watching</h3>
+                </div>
+                <p className="text-gray-500 text-sm" role="alert">
+                    Couldn't load friends watching.
+                </p>
+                <button
+                    type="button"
+                    onClick={() => refetch()}
+                    className="mt-3 px-4 py-2 rounded-lg bg-dark-100 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-colors"
+                >
+                    Try Again
+                </button>
+            </div>
+        );
+    }
+
+    if (friends.length === 0) {
         return (
             <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
                 <div className="flex items-center gap-2 mb-4">
@@ -109,7 +130,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
 
     const MAX_DISPLAYED = 6;
     const displayedFriends = friends.slice(0, MAX_DISPLAYED);
-    const remainingCount = friends.length - MAX_DISPLAYED;
+    const remainingCount = Math.max(total, friends.length) - displayedFriends.length;
 
     return (
         <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
