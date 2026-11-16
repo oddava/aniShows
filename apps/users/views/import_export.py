@@ -161,7 +161,7 @@ class ImportExportViewSet(ViewSet):
 
     @action(detail=False, methods=["get"])
     def export_user_data(self, request):
-        """Export user data as JSON or XML (Handles JSON programmatic vs file download)"""
+        """``?type=json|xml``; ``download=false`` (JSON only) returns ``{"data": <object>}``."""
         export_format = request.query_params.get("type", "json")
         download = request.query_params.get("download", "true").lower() == "true"
 
@@ -172,14 +172,14 @@ class ImportExportViewSet(ViewSet):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        export_data = ExportService.export_user_data(request.user, export_format)
         if not download and export_format == "json":
-            return Response({"data": export_data})
+            return Response({"data": ExportService.export_user_data_object(request.user)})
 
-        content_type = "application/json" if export_format == "json" else "application/xml"
-        filename = ExportService.get_export_filename(request.user, export_format)
-        response = HttpResponse(export_data, content_type=content_type)
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        export = ExportService.export_file(request.user, export_format)
+        response = HttpResponse(export.content, content_type=export.content_type)
+        response["Content-Disposition"] = f'attachment; filename="{export.filename}"'
+        if export.skipped:
+            response["X-Export-Skipped"] = str(export.skipped)
         return response
 
 
