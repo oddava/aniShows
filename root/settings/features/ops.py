@@ -16,3 +16,45 @@ it replaces base's value for every group (``test_seams_guard`` fails on it).
 Document every override in the group's spec.
 Empty in the prep commit: it changes nothing until the group adds to it.
 """
+
+import os
+
+from django.core.exceptions import ImproperlyConfigured
+
+from ..base import DATABASES
+
+# =============================================================================
+# DATABASE TLS (external / shared Postgres)
+# =============================================================================
+# The bundled `db` service needs no TLS (same Docker network). An external or
+# shared Postgres usually does: DB_SSLMODE=require (or verify-full together
+# with DB_SSLROOTCERT). Unset: libpq's default, as before.
+
+_VALID_SSLMODES = {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+
+DB_SSLMODE = os.getenv("DB_SSLMODE", "").strip().lower()
+DB_SSLROOTCERT = os.getenv("DB_SSLROOTCERT", "").strip()
+
+if DB_SSLMODE:
+    if DB_SSLMODE not in _VALID_SSLMODES:
+        raise ImproperlyConfigured(
+            f"DB_SSLMODE={DB_SSLMODE!r} is not a libpq sslmode; "
+            f"expected one of {', '.join(sorted(_VALID_SSLMODES))}."
+        )
+    DATABASES["default"]["OPTIONS"]["sslmode"] = DB_SSLMODE
+if DB_SSLROOTCERT:
+    DATABASES["default"]["OPTIONS"]["sslrootcert"] = DB_SSLROOTCERT
+
+# =============================================================================
+# LOGGING FORMAT AND RELEASE
+# =============================================================================
+# production.py builds LOGGING from LOG_FORMAT: "json" (one object per line,
+# with request_id and every extra= key) or "text" (the previous format).
+
+LOG_FORMAT = os.getenv("LOG_FORMAT", "json").strip().lower() or "json"
+if LOG_FORMAT not in {"json", "text"}:
+    raise ImproperlyConfigured(f"LOG_FORMAT={LOG_FORMAT!r}; expected 'json' or 'text'.")
+
+# The image's git commit (Dockerfile ARG/ENV GIT_SHA, set by CI): the Sentry
+# release and what a deploy smoke test can compare against.
+GIT_SHA = os.getenv("GIT_SHA", "").strip()
