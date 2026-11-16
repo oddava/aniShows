@@ -1,6 +1,6 @@
 """Google login: JWT only, no Django session left behind (A05, D-1)."""
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import patch
 
 from django.conf import settings
@@ -99,7 +99,7 @@ class SessionAuthFlagTests(SimpleTestCase):
 
     def test_default_is_on(self):
         self.assertTrue(settings.API_SESSION_AUTH_ENABLED)
-        self.assertIn(SESSION, list(settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]))
+        self.assertIn(SESSION, cast(list[str], settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]))
 
 
 class SessionAuthFlagBehaviourTests(APITestCase):
@@ -118,7 +118,7 @@ class SessionAuthFlagBehaviourTests(APITestCase):
         classes = [
             import_string(name)
             for name in _authentication_classes(
-                list(settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]),
+                cast(list[str], settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]),
                 session_enabled=False,
             )
         ]

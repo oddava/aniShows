@@ -73,7 +73,7 @@ class ResanitizeBiosCommandTests(TestCase):
 
     def test_dry_run_counts_without_saving(self):
         self.assertIn("would change 1", self._run("--dry-run"))
-        self.assertIn("class=", UserProfile.objects.get(user=self.dirty).bio)
+        self.assertIn("class=", UserProfile.objects.get(user=self.dirty).bio or "")
 
     def test_run_cleans_only_what_changed_and_is_idempotent(self):
         self.assertIn("changed 1", self._run("--batch-size", "1"))
