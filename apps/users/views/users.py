@@ -90,8 +90,12 @@ class UserProfileView(APIView):
                 "request_keys": sorted(request.data.keys()),
             },
         )
+        # partial=True: Settings saves with FormData, and for HTML input DRF
+        # reads an omitted BooleanField as False, so every save that did not
+        # resend is_private / show_adult_content turned them off (a private
+        # profile became public). Partial validation leaves omitted fields out.
         serializer = UserProfileUpdateSerializer(
-            data=self._profile_patch_data(request), context={"request": request}
+            data=self._profile_patch_data(request), context={"request": request}, partial=True
         )
         serializer.is_valid(raise_exception=True)
 

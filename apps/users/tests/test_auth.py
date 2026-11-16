@@ -630,6 +630,17 @@ class ProfilePatchPrivacyTests(APITestCase):
                 self.user.userprofile.refresh_from_db()
                 self.assertTrue(self.user.userprofile.is_private)
 
+    def test_multipart_patch_without_booleans_keeps_them(self):
+        """Settings saves with FormData; DRF reads an omitted HTML boolean as False."""
+        UserProfile.objects.filter(user=self.user).update(show_adult_content=True)
+        for data in ({"bio": "from a form"}, {"bio": "x", "social_links": "[]"}):
+            with self.subTest(data=data):
+                response = self.client.patch(reverse("user_profile"), data, format="multipart")
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                profile = UserProfile.objects.get(user=self.user)
+                self.assertTrue(profile.is_private)
+                self.assertTrue(profile.show_adult_content)
+
     def test_non_string_social_link_fields_are_rejected_not_500(self):
         response = self.client.patch(
             reverse("user_profile"),

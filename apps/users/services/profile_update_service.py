@@ -5,7 +5,7 @@ from datetime import timedelta
 from botocore.exceptions import BotoCoreError, ClientError
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -190,7 +190,13 @@ def _handle_username_change(user, validated_data, *, profile=None) -> None:
         raise ValidationError({"username": "This username is already taken."})
 
     user.username = normalized_username
-    user.save(update_fields=["username"])
+    try:
+        # Savepoint: a rename racing this one to the same name trips the 0038
+        # index; report it like the check above instead of a 500.
+        with transaction.atomic():
+            user.save(update_fields=["username"])
+    except IntegrityError as exc:
+        raise ValidationError({"username": "This username is already taken."}) from exc
     profile.last_username_change = timezone.now()
     profile.save(update_fields=["last_username_change"])
 
