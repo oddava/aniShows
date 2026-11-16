@@ -19,6 +19,15 @@ from ...animes.serializers.anime import (
     AnimeMinimalSerializer,
 )
 from ..models import UserActivity, UserAnimeList
+from ..services.list_rules import ListRuleError, normalize_entry, user_today
+
+STATUS_ALIASES = {
+    "watching": UserAnimeList.UserAnimeStatus.watching,
+    "completed": UserAnimeList.UserAnimeStatus.completed,
+    "on_hold": UserAnimeList.UserAnimeStatus.on_hold,
+    "dropped": UserAnimeList.UserAnimeStatus.dropped,
+    "plan_to_watch": UserAnimeList.UserAnimeStatus.plan_to_watch,
+}
 
 __all__ = [
     "UserActivitySerializer",
@@ -66,51 +75,32 @@ class UserAnimeListSerializer(ModelSerializer):
             return int((obj.episodes_watched / obj.anime.episode_count) * 100)
         return 0
 
+    def to_internal_value(self, data):
+        # P2-1: accept the snake_case keys (``plan_to_watch``) the frontend uses
+        # elsewhere; the stored and returned values stay the display strings.
+        status = data.get("status") if hasattr(data, "get") else None
+        if isinstance(status, str) and status in STATUS_ALIASES:
+            data = data.copy()
+            data["status"] = STATUS_ALIASES[status]
+        return super().to_internal_value(data)
+
     def validate(self, attrs):
         if self.instance:
             # An entry belongs to one anime; re-pointing it would collide with
             # another entry or detach the user's review from their list.
             attrs.pop("anime", None)
+            anime = self.instance.anime
         else:
             if "anime" not in attrs:
                 raise ValidationError({"anime_id": "This field is required."})
-            # The model has no default; never store an empty status.
-            attrs.setdefault("status", UserAnimeList.UserAnimeStatus.plan_to_watch)
+            anime = attrs["anime"]
 
-        episodes_watched = attrs.get("episodes_watched")
-        anime = attrs.get("anime")
-        status = attrs.get("status")
-        started_at = attrs.get("started_at")
-        finished_at = attrs.get("finished_at")
-
-        if not anime and self.instance:
-            anime = self.instance.anime
-        if started_at is None and self.instance:
-            started_at = self.instance.started_at
-        if finished_at is None and self.instance:
-            finished_at = self.instance.finished_at
-
-        if episodes_watched is not None and episodes_watched < 0:
-            raise ValidationError({"episodes_watched": "Episodes watched cannot be negative."})
-
-        if episodes_watched is not None and anime and anime.episode_count > 0:
-            if episodes_watched > anime.episode_count:
-                raise ValidationError(
-                    {
-                        "episodes_watched": f"Episodes watched cannot exceed total episodes ({anime.episode_count})."
-                    }
-                )
-
-            if episodes_watched == anime.episode_count:
-                attrs["status"] = UserAnimeList.UserAnimeStatus.completed
-
-        if status == UserAnimeList.UserAnimeStatus.completed and anime and anime.episode_count > 0:
-            attrs["episodes_watched"] = anime.episode_count
-
-        if started_at and finished_at and finished_at < started_at:
-            raise ValidationError({"finished_at": "Finish date cannot be earlier than start date."})
-
-        return attrs
+        request = self.context.get("request")
+        today = user_today(getattr(request, "user", None))
+        try:
+            return normalize_entry(self.instance, attrs, anime, today, strict=True)
+        except ListRuleError as exc:
+            raise ValidationError({exc.field: exc.message}) from exc
 
 
 class UserActivitySerializer(ModelSerializer):
@@ -153,7 +143,11 @@ class UserActivitySerializer(ModelSerializer):
             return f"Added {title} to {status_label}"
 
         if obj.activity_type == at.PROGRESS:
-            if obj.old_episodes is not None and obj.new_episodes is not None:
+            if (
+                obj.old_episodes is not None
+                and obj.new_episodes is not None
+                and obj.new_episodes > obj.old_episodes
+            ):
                 if obj.new_episodes - obj.old_episodes == 1:
                     return f"Watched episode {obj.new_episodes} of {title}"
                 return f"Watched episodes {obj.old_episodes + 1}-{obj.new_episodes} of {title}"
