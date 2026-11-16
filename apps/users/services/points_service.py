@@ -11,6 +11,7 @@ rebuild it from the votes.
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+from django.db import transaction
 from django.db.models import Case, F, IntegerField, OuterRef, Subquery, Sum, Value, When
 from django.db.models.functions import Coalesce
 
@@ -58,10 +59,25 @@ def _computed_points() -> Coalesce:
     return Coalesce(Subquery(per_author[:1], output_field=IntegerField()), Value(0))
 
 
+def _lock_profiles(**filters) -> list[int]:
+    """Row-lock the matching profiles in a statement of its own and return their pks.
+
+    Under READ COMMITTED an UPDATE that waits for a row lock still computes its SET
+    subquery from the snapshot it started with, so it would overwrite a concurrent
+    vote's increment. Taking the lock first means the recomputing UPDATE starts after
+    that vote committed and counts it.
+    """
+    return list(
+        UserProfile.objects.select_for_update().filter(**filters).values_list("pk", flat=True)
+    )
+
+
 def recalculate_user_points(user) -> None:
-    """Rebuild ``user``'s points from the votes on their reviews (one UPDATE)."""
-    if not UserProfile.objects.filter(user_id=user.pk).update(points=_computed_points()):
-        UserProfile.objects.get_or_create(user_id=user.pk)
+    """Rebuild ``user``'s points from the votes on their reviews."""
+    with transaction.atomic():
+        if not _lock_profiles(user_id=user.pk):
+            UserProfile.objects.get_or_create(user_id=user.pk)
+            _lock_profiles(user_id=user.pk)
         UserProfile.objects.filter(user_id=user.pk).update(points=_computed_points())
 
 
@@ -93,8 +109,10 @@ def backfill_all_points(batch_size: int = BACKFILL_BATCH_SIZE) -> int:
     """
     updated = 0
     for changes in iter_points_changes(batch_size):
-        if changes:
-            updated += UserProfile.objects.filter(
-                pk__in=[change.profile_id for change in changes]
-            ).update(points=_computed_points())
+        if not changes:
+            continue
+        with transaction.atomic():
+            # Locked first (see ``_lock_profiles``), so a vote landing meanwhile is counted.
+            locked = _lock_profiles(pk__in=[change.profile_id for change in changes])
+            updated += UserProfile.objects.filter(pk__in=locked).update(points=_computed_points())
     return updated

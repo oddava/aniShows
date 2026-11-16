@@ -92,10 +92,10 @@ class PointsTests(TestCase):
         large_sql = self._delete_queries(large)
 
         self.assertEqual(points(author), 4)
-        # One points UPDATE however many votes cascade, and no per-vote query at all.
-        # (Django's cascade itself is 5 queries; the anime app's review receivers add
-        # their own, which this test doesn't pin.)
-        self.assertEqual(sum("users_userprofile" in sql for sql in large_sql), 1, large_sql)
+        # One recalculation (lock the profile, then one UPDATE) however many votes
+        # cascade, and no per-vote query at all. (Django's cascade itself is 5 queries;
+        # the anime app's review receivers add their own, which this test doesn't pin.)
+        self.assertEqual(sum("users_userprofile" in sql for sql in large_sql), 2, large_sql)
         self.assertEqual(len(large_sql), len(small_sql), large_sql)
         self.assertLessEqual(sum("anime_review" in sql for sql in large_sql), 6, large_sql)
 
