@@ -127,6 +127,18 @@ class PreferenceApiTests(APITestCase):
         self.assertTrue(body["preferences"]["replies"]["push"])
         self.assertTrue(body["preferences"]["likes"]["push"])
 
+    def test_episode_description_follows_the_plan_to_watch_setting(self):
+        def description():
+            body = self.client.get(self.url).json()
+            return next(c for c in body["schema"]["categories"] if c["key"] == "episodes")[
+                "description"
+            ]
+
+        with override_settings(PLAN_TO_WATCH_ALERTS="all"):
+            self.assertIn("Plan to Watch", description())
+        with override_settings(PLAN_TO_WATCH_ALERTS="premiere"):
+            self.assertIn("premieres", description())
+
     def test_bad_updates_are_400(self):
         for payload in ({"nope": {"push": True}}, {"account": {"in_app": False}}):
             with self.subTest(payload=payload):

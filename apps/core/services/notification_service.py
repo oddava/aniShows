@@ -77,7 +77,7 @@ def _anime_payload(anime) -> Dict[str, Any]:
     }
 
 
-def _episode_data(anime, episode_number: int, aired_at=None) -> Dict[str, Any]:
+def episode_data(anime, episode_number: int, aired_at=None) -> Dict[str, Any]:
     data = {**_anime_payload(anime), "episode_number": episode_number}
     if aired_at is not None:
         data["aired_at"] = aired_at if isinstance(aired_at, str) else aired_at.isoformat()
@@ -714,7 +714,7 @@ class NotificationService:
         return _emit(
             user,
             TYPES.NEW_EPISODE,
-            data=_episode_data(anime, episode_number, aired_at),
+            data=episode_data(anime, episode_number, aired_at),
             dedupe_key=f"new_episode:{anime.id}:{episode_number}",
             group_key=f"new_episode:{anime.id}",
         )
@@ -947,7 +947,7 @@ def _prepare(notification_type: str, actor, data: dict) -> tuple[dict, str | Non
         anime = Anime.objects.get(pk=data["anime_id"])
         episode = int(data["episode_number"])
         return (
-            _episode_data(anime, episode, data.get("aired_at")),
+            episode_data(anime, episode, data.get("aired_at")),
             f"new_episode:{anime.id}:{episode}",
             f"new_episode:{anime.id}",
         )
@@ -1009,7 +1009,10 @@ def notify_many(
     dedupe_key: str | None = None,
     group_key: str | None = None,
 ) -> int:
-    """Notify each distinct recipient; return how many notifications were written.
+    """Notify each distinct recipient; return how many rows were written.
+
+    A row counts when it was inserted or merged into an unread aggregate (both reach the
+    recipient); suppressed and deduplicated recipients do not.
 
     Capped at ``NOTIFY_MANY_MAX_RECIPIENTS`` for every type except ``new_episode``.
     """

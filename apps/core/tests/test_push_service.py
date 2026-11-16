@@ -1,12 +1,14 @@
 import base64
 import ipaddress
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
 import requests  # type: ignore[import-untyped]
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from pywebpush import WebPushException
 from rest_framework.test import APITestCase
 
@@ -101,9 +103,14 @@ class PushTransportTests(TestCase):
         self.subscription.refresh_from_db()
         self.assertIsNotNone(self.subscription.last_used)
 
+    def _age_device(self, hours):
+        PushSubscription.objects.filter(pk=self.subscription.pk).update(
+            created_at=timezone.now() - timedelta(hours=hours), last_used=None
+        )
+
     @patch("apps.core.services.push_service.webpush")
-    def test_gone_and_rejected_endpoints_are_deactivated(self, mock_webpush):
-        for status in (410, 404, 403, 400, 413):
+    def test_gone_endpoints_are_deactivated_at_once(self, mock_webpush):
+        for status in (410, 404):
             with self.subTest(status=status):
                 PushSubscription.objects.filter(pk=self.subscription.pk).update(is_active=True)
                 mock_webpush.side_effect = _http_error(status)
@@ -112,7 +119,28 @@ class PushTransportTests(TestCase):
                 self.assertFalse(self.subscription.is_active)
 
     @patch("apps.core.services.push_service.webpush")
-    def test_transient_failures_retry_then_deactivate_after_five(self, mock_webpush):
+    def test_rejections_are_not_retried_and_do_not_drop_a_device_at_once(self, mock_webpush):
+        for status in (400, 403, 413):
+            with self.subTest(status=status):
+                mock_webpush.side_effect = _http_error(status)
+                self.assertIs(self._send(), PushResult.FAILED)
+                self.subscription.refresh_from_db()
+                self.assertTrue(self.subscription.is_active)
+        self.assertEqual(self.subscription.failure_count, 2)  # 413 is the payload's fault
+
+    @patch("apps.core.services.push_service.webpush")
+    def test_a_burst_of_429s_never_drops_a_recently_working_device(self, mock_webpush):
+        PushSubscription.objects.filter(pk=self.subscription.pk).update(last_used=timezone.now())
+        mock_webpush.side_effect = _http_error(429)
+        for _ in range(8):
+            self.assertIs(self._send(), PushResult.RETRY)
+        self.subscription.refresh_from_db()
+        self.assertTrue(self.subscription.is_active)
+        self.assertEqual(self.subscription.failure_count, 8)
+
+    @patch("apps.core.services.push_service.webpush")
+    def test_a_device_failing_for_over_a_day_is_dropped_after_five(self, mock_webpush):
+        self._age_device(hours=25)
         mock_webpush.side_effect = _http_error(429)
         for attempt in range(1, 5):
             self.assertIs(self._send(), PushResult.RETRY)

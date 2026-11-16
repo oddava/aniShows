@@ -64,61 +64,76 @@ def _keys_for(notification_type, data):
     return dedupe_key, group_key, actor_id
 
 
-def backfill_notification_keys(apps, schema_editor):
-    Notification = apps.get_model("core", "Notification")
-    User = apps.get_model("users", "CustomUser")
+USERS_PER_CHUNK = 500
 
+
+def _backfill_users(Notification, User, user_ids):
+    """Backfill every row of these users (keys are per user, so chunks are independent)."""
     first_dedupe: dict[tuple[int, str], int] = {}  # (user_id, key) -> earliest id
     newest_unread_group: dict[tuple[int, str], int] = {}  # (user_id, key) -> newest unread
     actor_by_id: dict[int, int] = {}
-    last_id = 0
-    while True:
-        rows = list(
-            Notification.objects.filter(id__gt=last_id)
-            .order_by("id")
-            .values_list("id", "user_id", "notification_type", "is_read", "data")[:BATCH_SIZE]
-        )
-        if not rows:
-            break
-        last_id = rows[-1][0]
-        for row_id, user_id, notification_type, is_read, data in rows:
-            dedupe_key, group_key, actor_id = _keys_for(notification_type, data)
-            if dedupe_key is not None:
-                first_dedupe.setdefault((user_id, dedupe_key), row_id)
-            if group_key is not None and not is_read:
-                newest_unread_group[(user_id, group_key)] = row_id
-            if actor_id is not None:
-                actor_by_id[row_id] = actor_id
+    rows = (
+        Notification.objects.filter(user_id__in=user_ids)
+        .order_by("id")
+        .values_list("id", "user_id", "notification_type", "is_read", "data")
+        .iterator(chunk_size=BATCH_SIZE)
+    )
+    for row_id, user_id, notification_type, is_read, data in rows:
+        dedupe_key, group_key, actor_id = _keys_for(notification_type, data)
+        if dedupe_key is not None:
+            first_dedupe.setdefault((user_id, dedupe_key), row_id)
+        if group_key is not None and not is_read:
+            newest_unread_group[(user_id, group_key)] = row_id
+        if actor_id is not None:
+            actor_by_id[row_id] = actor_id
 
     updates: dict[int, dict[str, object]] = {}
     for (_user_id, key), row_id in first_dedupe.items():
         updates.setdefault(row_id, {})["dedupe_key"] = key
     for (_user_id, key), row_id in newest_unread_group.items():
         updates.setdefault(row_id, {})["group_key"] = key
-
-    existing_users = set()
-    candidate_actor_ids = sorted(set(actor_by_id.values()))
-    for start in range(0, len(candidate_actor_ids), BATCH_SIZE):
-        chunk = candidate_actor_ids[start : start + BATCH_SIZE]
-        existing_users.update(User.objects.filter(pk__in=chunk).values_list("pk", flat=True))
+    existing_users = set(
+        User.objects.filter(pk__in=set(actor_by_id.values())).values_list("pk", flat=True)
+    )
     for row_id, actor_id in actor_by_id.items():
         if actor_id in existing_users:
             updates.setdefault(row_id, {})["actor_id"] = actor_id
 
-    row_ids = sorted(updates)
-    for start in range(0, len(row_ids), BATCH_SIZE):
-        batch = []
-        for row_id in row_ids[start : start + BATCH_SIZE]:
-            values = updates[row_id]
-            batch.append(
-                Notification(
-                    id=row_id,
-                    dedupe_key=values.get("dedupe_key"),
-                    group_key=values.get("group_key"),
-                    actor_id=values.get("actor_id"),
-                )
+    Notification.objects.bulk_update(
+        [
+            Notification(
+                id=row_id,
+                dedupe_key=values.get("dedupe_key"),
+                group_key=values.get("group_key"),
+                actor_id=values.get("actor_id"),
             )
-        Notification.objects.bulk_update(batch, ["dedupe_key", "group_key", "actor_id"])
+            for row_id, values in updates.items()
+        ],
+        ["dedupe_key", "group_key", "actor_id"],
+        batch_size=BATCH_SIZE,
+    )
+
+
+def backfill_notification_keys(apps, schema_editor):
+    """Set the contract keys on legacy rows, a few hundred users at a time.
+
+    Earliest row wins a dedupe key and only the newest unread row of a target gets
+    its group key, so both partial unique indexes can be built afterwards. Memory is
+    bounded by the rows of one user chunk, not the table.
+    """
+    Notification = apps.get_model("core", "Notification")
+    User = apps.get_model("users", "CustomUser")
+    user_ids = (
+        Notification.objects.order_by("user_id").values_list("user_id", flat=True).distinct()
+    )
+    chunk: list[int] = []
+    for user_id in user_ids.iterator(chunk_size=BATCH_SIZE):
+        chunk.append(user_id)
+        if len(chunk) >= USERS_PER_CHUNK:
+            _backfill_users(Notification, User, chunk)
+            chunk = []
+    if chunk:
+        _backfill_users(Notification, User, chunk)
 
     if schema_editor.connection.vendor == "postgresql":
         # The actor FK is deferrable: fire its checks now, so the ALTER TABLEs that

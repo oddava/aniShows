@@ -42,12 +42,7 @@ class Category:
 CATEGORIES: dict[str, Category] = {
     c.key: c
     for c in (
-        Category(
-            EPISODES,
-            "Episodes",
-            "New episodes of shows in your Watching list",
-            (IN_APP, PUSH, EMAIL),
-        ),
+        Category(EPISODES, "Episodes", "", (IN_APP, PUSH, EMAIL)),
         Category(REPLIES, "Replies", "Replies to you and mentions in the forums", (IN_APP, PUSH)),
         Category(LIKES, "Likes", "Likes on your reviews, threads and posts", (IN_APP, PUSH)),
         Category(FOLLOWS, "Follows", "New followers", (IN_APP, PUSH)),
@@ -89,6 +84,18 @@ def normalize(raw: Any) -> Preferences:
     return result
 
 
+def _description(category: Category) -> str:
+    if category.key != EPISODES:
+        return category.description
+    # Follows the D-4 setting, so the copy never promises less or more than is sent.
+    plan_to_watch = getattr(settings, "PLAN_TO_WATCH_ALERTS", "all")
+    if plan_to_watch == "all":
+        return "New episodes of shows in your Watching and Plan to Watch lists"
+    if plan_to_watch == "premiere":
+        return "New episodes of shows you're watching, and premieres of shows you plan to watch"
+    return "New episodes of shows in your Watching list"
+
+
 def schema() -> dict[str, Any]:
     return {
         "channels": [{"key": key, "label": label} for key, label in CHANNEL_LABELS.items()],
@@ -96,7 +103,7 @@ def schema() -> dict[str, Any]:
             {
                 "key": c.key,
                 "label": c.label,
-                "description": c.description,
+                "description": _description(c),
                 "channels": list(c.channels),
                 "locked": list(c.locked),
             }

@@ -139,6 +139,15 @@ class PushApiTests(APITestCase):
         row = PushSubscription.objects.get()
         self.assertEqual(row.user, self.other)
 
+    def test_re_subscribing_reactivates_a_dropped_device(self):
+        endpoint = "https://fcm.googleapis.com/fcm/send/again"
+        self._subscribe(endpoint)
+        PushSubscription.objects.update(is_active=False, failure_count=7)
+        self.assertEqual(self._subscribe(endpoint).status_code, 201)
+        row = PushSubscription.objects.get()
+        self.assertTrue(row.is_active)
+        self.assertEqual(row.failure_count, 0)
+
     def test_list_hides_endpoints(self):
         self._subscribe("https://fcm.googleapis.com/fcm/send/a")
         rows = self.client.get(reverse("push_subscribe")).json()
@@ -198,6 +207,11 @@ class EmailUnsubscribeApiTests(APITestCase):
                     self.client.post(self.url, {"token": bad}, format="json").status_code, 400
                 )
         self.assertTrue(self._email_on())
+
+    def test_a_non_object_body_is_400_not_500(self):
+        for body in ([], "x", 3):
+            with self.subTest(body=body):
+                self.assertEqual(self.client.post(self.url, body, format="json").status_code, 400)
 
     def test_get_never_unsubscribes(self):
         token = make_unsubscribe_token(self.user.pk)

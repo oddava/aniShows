@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
 from django.core import signing
@@ -317,7 +319,8 @@ class EmailUnsubscribeView(APIView):
     throttle_scope = "notification_email_unsubscribe"
 
     def post(self, request):
-        token = request.query_params.get("token") or request.data.get("token")
+        body = request.data if isinstance(request.data, Mapping) else {}
+        token = request.query_params.get("token") or body.get("token")
         serializer = EmailUnsubscribeSerializer(data={"token": token})
         serializer.is_valid(raise_exception=True)
         try:

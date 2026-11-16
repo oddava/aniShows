@@ -22,7 +22,7 @@ from ..models import Notification, PushSubscription
 from . import notification_preferences as prefs
 from . import notification_types
 from .notification_delivery import enqueue_delivery
-from .notification_service import NotificationService, _episode_data
+from .notification_service import NotificationService, episode_data
 from .push_service import PushService
 
 NEW_EPISODE_LOOKBACK_HOURS = 24
@@ -140,7 +140,7 @@ def notify_episode(anime, episode: int, aired_at) -> dict[str, int]:
 
     dedupe_key = f"new_episode:{anime.id}:{episode}"
     group_key = f"new_episode:{anime.id}"
-    data = _episode_data(anime, episode, aired_at)
+    data = episode_data(anime, episode, aired_at)
     grouped = {**data, "grouped": True}
     already_have_it = Notification.objects.filter(
         dedupe_key=dedupe_key, user_id=OuterRef("user_id")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import enum
 import json
+from datetime import timedelta
 from email.utils import parseaddr
 from typing import Any
 
@@ -18,16 +19,23 @@ from ..models import Notification, PushSubscription
 from . import notification_types
 
 PUSH_TIMEOUT_SECONDS = 10
-# A subscription is dropped after this many consecutive transient failures.
+# A subscription is dropped after this many consecutive failures, and only once it has
+# not delivered for FAILURE_GRACE: a burst (several rows sent in one sweep while the
+# push service rate-limits, or a short VAPID mistake) never drops a working device.
 MAX_TRANSIENT_FAILURES = 5
+FAILURE_GRACE = timedelta(hours=24)
 PUSH_BODY_MAX_CHARS = 180
 PUSH_TITLE_MAX_CHARS = 80
 PUSH_PAYLOAD_MAX_BYTES = 1024
 PAYLOAD_VERSION = 1
 
 GONE_STATUSES = frozenset({404, 410})
-# Bad keys, VAPID mismatch or an oversized payload: retrying cannot help.
-PERMANENT_STATUSES = frozenset({400, 403, 413})
+# Bad keys or a VAPID mismatch: retrying this row cannot help, but a server-side VAPID
+# mistake would answer 403 for every device, so these count as failures (see above)
+# instead of deactivating at once.
+REJECTED_STATUSES = frozenset({400, 403})
+# The payload was too large: a problem with this notification, not with the device.
+PAYLOAD_STATUSES = frozenset({413})
 
 
 class PushResult(enum.Enum):
@@ -127,18 +135,21 @@ class PushService:
                 logger.info("Push endpoint gone; deactivating subscription %s", subscription.pk)
                 cls._deactivate(subscription)
                 return PushResult.GONE
-            if status in PERMANENT_STATUSES:
+            if status in REJECTED_STATUSES:
+                logger.error("Push rejected with %s for subscription %s", status, subscription.pk)
+                cls._record_failure(subscription, f"HTTP {status}")
+                return PushResult.FAILED
+            if status in PAYLOAD_STATUSES:
                 logger.error(
-                    "Push rejected with %s; deactivating subscription %s", status, subscription.pk
+                    "Push payload rejected (%s) for subscription %s", status, subscription.pk
                 )
-                cls._deactivate(subscription)
-                return PushResult.GONE
+                return PushResult.FAILED
             if status is None or status == 429 or status >= 500:
-                return cls._record_transient_failure(subscription, f"HTTP {status}")
+                return cls._record_failure(subscription, f"HTTP {status}")
             logger.warning("Push failed with %s for subscription %s", status, subscription.pk)
             return PushResult.FAILED
         except requests.RequestException as exc:
-            return cls._record_transient_failure(subscription, type(exc).__name__)
+            return cls._record_failure(subscription, type(exc).__name__)
         except Exception:
             # Malformed keys or VAPID config: logged, never retried, row left alone.
             logger.exception("Failed to send push notification to subscription %s", subscription.pk)
@@ -155,23 +166,29 @@ class PushService:
         subscription.is_active = False
 
     @classmethod
-    def _record_transient_failure(cls, subscription: PushSubscription, reason: str) -> PushResult:
+    def _record_failure(cls, subscription: PushSubscription, reason: str) -> PushResult:
+        """Count a failed send; RETRY, or GONE once the device has been failing for a day."""
         PushSubscription.objects.filter(pk=subscription.pk).update(
             failure_count=F("failure_count") + 1
         )
-        failures = (
+        row = (
             PushSubscription.objects.filter(pk=subscription.pk)
-            .values_list("failure_count", flat=True)
+            .values("failure_count", "last_used", "created_at")
             .first()
-            or 0
         )
+        if row is None:
+            return PushResult.GONE
         logger.warning(
-            "Transient push failure (%s) for subscription %s (%s in a row)",
+            "Push failure (%s) for subscription %s (%s in a row)",
             reason,
             subscription.pk,
-            failures,
+            row["failure_count"],
         )
-        if failures >= MAX_TRANSIENT_FAILURES:
+        last_success = row["last_used"] or row["created_at"]
+        if (
+            row["failure_count"] >= MAX_TRANSIENT_FAILURES
+            and last_success < timezone.now() - FAILURE_GRACE
+        ):
             cls._deactivate(subscription)
             return PushResult.GONE
         return PushResult.RETRY
