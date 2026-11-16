@@ -46,14 +46,18 @@ class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
         """Join the forum thread group."""
         self.thread_id = self.scope["url_route"]["kwargs"]["thread_id"]
         self.is_staff = bool(getattr(self.scope.get("user"), "is_staff", False))
+        self.group_name = f"forum_thread_{self.thread_id}"
+        # Join before checking: a removal committing in between then reaches this socket
+        # as ``thread_removed`` instead of slipping past both the check and the event.
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
         if not await _thread_is_visible(self.thread_id, is_staff=self.is_staff):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            del self.group_name
             # Accept first: a close before the handshake can't carry a code.
             await self.accept()
             await self.close(code=CLOSE_THREAD_NOT_FOUND)
             return
 
-        self.group_name = f"forum_thread_{self.thread_id}"
-        await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
         logger.info(

@@ -88,7 +88,7 @@ def update_thread(serializer, *, request) -> Thread:
         if thread.category_id != previous_category_id:
             _move_thread(thread, previous_category_id)
             record_thread_move(request, thread, from_category_id=previous_category_id)
-        if thread.content != previous_content:
+        if thread.content != previous_content and not thread.is_removed:
             run_after_commit(
                 lambda: notify_mentions(thread.author, thread, previous_text=previous_content),
                 "Failed to process thread mentions for thread %s",
@@ -265,8 +265,9 @@ def _lock_reply_targets(serializer, author) -> tuple[Thread, Post | None]:
     """
     is_staff = author.is_staff
     thread = Thread.objects.select_for_update().get(pk=serializer.validated_data["thread"].pk)
-    if thread.is_removed and not is_staff:
-        raise ValidationError({"thread": messages.THREAD_NOT_FOUND})
+    if thread.is_removed:
+        message = messages.THREAD_REMOVED if is_staff else messages.THREAD_NOT_FOUND
+        raise ValidationError({"thread": message})
     if thread.is_locked and not is_staff:
         raise ValidationError({"thread": messages.THREAD_LOCKED})
     parent = serializer.validated_data.get("parent")
@@ -311,9 +312,7 @@ def create_post(serializer, author) -> Post:
             "Failed to queue the subscriber fan-out for post %s",
             post.id,
         )
-        # A removed thread is staff-only: its live channel carries no new content.
-        if not thread.is_removed:
-            _broadcast_new_post(post)
+        _broadcast_new_post(post)
     return post
 
 
@@ -337,12 +336,13 @@ def update_post(serializer) -> Post:
                 "Failed to invalidate post list cache for thread %s",
                 post.thread_id,
             )
-            run_after_commit(
-                lambda: notify_mentions(post.author, post, previous_text=previous_content),
-                "Failed to process post mentions for post %s",
-                post.id,
-            )
+            # A removed thread is staff-only: no mentions out of it, nothing on its channel.
             if not post.thread.is_removed:
+                run_after_commit(
+                    lambda: notify_mentions(post.author, post, previous_text=previous_content),
+                    "Failed to process post mentions for post %s",
+                    post.id,
+                )
                 broadcast_post_updated(post)
     return post
 

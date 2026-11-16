@@ -18,7 +18,7 @@ from ..services.excerpt import EXCERPT_SOURCE_LENGTH, build_excerpt
 from ..services.interactions import create_post, update_post, update_thread
 from ..services.mentions import notify_mentions
 from ..services.moderation import lock_thread_then_post
-from ..services.nesting import max_container_nesting
+from ..services.nesting import ContainerStats, container_stats, max_container_nesting
 from .conftest import make_reply
 
 POSTS_URL = reverse("forums:post-list")
@@ -313,9 +313,10 @@ def test_post_writes_lock_the_thread_before_the_post(make_user, make_thread):
 class TestRemovedThreadsStayQuietLive:
     """Removed threads are staff-only: nothing new from them goes to the public channel."""
 
-    def test_new_and_edited_posts_in_a_removed_thread_are_not_broadcast(
+    def test_a_removed_thread_takes_no_replies_and_its_edits_stay_quiet(
         self, make_user, make_thread, api_for, staff, django_capture_on_commit_callbacks
     ):
+        make_user("alice")
         thread = make_thread(make_user())
         mine = make_reply(thread, staff, content="before")
         thread.is_removed = True
@@ -328,10 +329,17 @@ class TestRemovedThreadsStayQuietLive:
             created = api_for(staff).post(
                 POSTS_URL, {"thread": thread.id, "content": "STAFF ONLY NOTE"}, format="json"
             )
-            edited = api_for(staff).patch(_post_url(mine), {"content": "after"}, format="json")
+            edited = api_for(staff).patch(
+                _post_url(mine), {"content": "after @alice"}, format="json"
+            )
 
-        assert (created.status_code, edited.status_code) == (201, 200)
+        assert created.status_code == 400
+        assert "thread" in created.data["errors"]
+        assert edited.status_code == 200
         broadcast.assert_not_called()
+        assert not Notification.objects.filter(notification_type=MENTION).exists()
+        staff_view = api_for(staff).get(POSTS_URL, {"thread__id": thread.id}).data["results"][0]
+        assert staff_view["can_reply"] is False
 
     def test_removing_a_thread_tells_its_channel(
         self, make_user, make_thread, api_for, staff, django_capture_on_commit_callbacks
@@ -409,8 +417,14 @@ class TestNesting:
             (">>>> x", 4),
             ("-----", 0),  # a separator, not a list
             ("- - -", 3),
-            ("   > three spaces indent", 1),
-            ("    > four spaces is code", 0),
+            # Indentation counts half its columns (tab = 4): it continues open list items.
+            ("   > three spaces indent", 2),
+            ("    > four spaces", 3),
+            ("\t- tabbed", 3),
+            # The round-3 bypasses: markers continued on an indented line all nest.
+            ("- - a\n    " + "- " * 100 + "a", 102),
+            ("-\ta\n\t" + "- " * 100 + "a", 102),
+            (" " * 64 + "- " * 16 + "a", 48),
             ("a\n> b\n> > c", 2),
         ],
     )
@@ -449,3 +463,38 @@ def test_nesting_at_the_cap_is_accepted(make_user, make_thread, api_for):
     )
 
     assert response.status_code == 201
+
+
+class TestContainerBudget:
+    def test_counts_markers_across_lines(self):
+        assert container_stats("- a\n- b\n> > c\nplain") == ContainerStats(depth=2, markers=4)
+
+    @pytest.mark.django_db
+    def test_too_many_markers_in_total_is_400(self, make_user, make_thread, api_for):
+        author = make_user()
+        thread = make_thread(author)
+        body = "- a\n" * (settings.FORUM_MAX_CONTAINER_MARKERS + 1)
+
+        response = api_for(author).post(
+            POSTS_URL, {"thread": thread.id, "content": body}, format="json"
+        )
+
+        assert response.status_code == 400
+        assert "content" in response.data["errors"]
+
+    @pytest.mark.django_db
+    @pytest.mark.parametrize(
+        "body",
+        ["- - a\n    " + "- " * 2_000 + "a", "-\ta\n\t" + "- " * 2_000 + "a"],
+    )
+    def test_indented_continuation_bypasses_are_refused(
+        self, make_user, make_thread, api_for, body
+    ):
+        author = make_user()
+        thread = make_thread(author)
+
+        response = api_for(author).post(
+            POSTS_URL, {"thread": thread.id, "content": body}, format="json"
+        )
+
+        assert response.status_code == 400

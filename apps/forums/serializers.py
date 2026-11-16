@@ -10,7 +10,7 @@ from ..users.services.avatar_service import get_user_avatar_url
 from . import messages
 from .models import Category, Post, Tag, Thread
 from .services.excerpt import build_excerpt
-from .services.nesting import max_container_nesting
+from .services.nesting import container_stats
 
 User = get_user_model()
 
@@ -27,8 +27,11 @@ class ContentNestingMixin:
     """Refuse bodies nested deeper than the markdown parser can safely handle."""
 
     def validate_content(self, value: str) -> str:
-        if max_container_nesting(value) > settings.FORUM_MAX_CONTAINER_NESTING:
+        stats = container_stats(value)
+        if stats.depth > settings.FORUM_MAX_CONTAINER_NESTING:
             raise ValidationError(messages.TOO_NESTED)
+        if stats.markers > settings.FORUM_MAX_CONTAINER_MARKERS:
+            raise ValidationError(messages.TOO_MANY_CONTAINERS)
         return value
 
 
@@ -253,8 +256,11 @@ class PostSerializer(ContentNestingMixin, RemovalReasonMixin, LikedByUserMixin, 
         ]
 
     def validate_thread(self, thread):
-        if thread.is_removed and not _viewer_is_staff(self):
-            raise ValidationError(messages.THREAD_NOT_FOUND)
+        # Nobody replies in a removed thread (``can_reply`` is false there for everyone);
+        # non-staff aren't told it exists.
+        if thread.is_removed:
+            staff = _viewer_is_staff(self)
+            raise ValidationError(messages.THREAD_REMOVED if staff else messages.THREAD_NOT_FOUND)
         return thread
 
     def validate(self, attrs):

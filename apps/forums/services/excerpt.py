@@ -14,11 +14,12 @@ EXCERPT_SOURCE_LENGTH = 4_000
 # Spoiler openers and their closers (``||x||`` in forums, ``>!x!<`` in reviews).
 _SPOILER_CLOSERS = {"||": "||", ">!": "!<"}
 
-# ``[ \t]`` (never ``\s``) and bounded classes: no pattern can rescan across lines.
+# ``[ \t]`` (never ``\s``) and bounded classes that exclude their own delimiters, so no
+# pattern rescans across lines or backtracks through a run of brackets.
 _CODE_FENCE_MARKERS = re.compile(r"^[ \t]*(```|~~~)[^\n]*$", re.MULTILINE)
 # ``@[title](url)`` embeds and ``![alt](url|width|align)`` images carry no text.
-_EMBEDS = re.compile(r"(?:!|@)\[[^\]\n]{0,300}\]\([^)\n]{0,500}\)")
-_LINKS = re.compile(r"\[([^\]\n]{0,300})\]\([^)\n]{0,500}\)")
+_EMBEDS = re.compile(r"(?:!|@)\[[^\[\]\n]{0,300}\]\([^()\n]{0,500}\)")
+_LINKS = re.compile(r"\[([^\[\]\n]{0,300})\]\([^()\n]{0,500}\)")
 _LINE_PREFIXES = re.compile(
     r"^[ \t]{0,3}(?:#{1,6}[ \t]+|>[ \t]?|[-*+][ \t]+|\d{1,9}[.)][ \t]+)", re.MULTILINE
 )

@@ -44,8 +44,10 @@ REVIEW_REPORTS_PER_DAY = 20
 FORUM_MAX_MENTIONS_PER_POST = 10
 # Longest forum thread/post body accepted (characters). Every viewer's browser renders it.
 FORUM_CONTENT_MAX_LENGTH = 20_000
-# Leading container markers (`>`, `-`, `1.`) one line may nest. Deeper nesting makes the
-# markdown parser in every viewer's browser hang or overflow its stack.
-FORUM_MAX_CONTAINER_NESTING = 32
+# Markdown container limits (`>`, `-`, `1.` and list indentation). Deeper nesting makes the
+# parser in every viewer's browser hang or overflow its stack, and parse time grows with the
+# total marker count. See apps/forums/services/nesting.py (the frontend mirrors both values).
+FORUM_MAX_CONTAINER_NESTING = 16
+FORUM_MAX_CONTAINER_MARKERS = 1_500
 # Subscribers notified about one new post (spec 5 P1-3).
 FORUM_SUBSCRIPTION_FANOUT_CAP = 500
