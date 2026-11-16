@@ -219,10 +219,6 @@ export default function Browse() {
     writeStored('title_language', titleLanguage);
   }, [titleLanguage]);
 
-  useEffect(() => {
-    document.title = 'Browse Anime - AniShows';
-  }, []);
-
   const toggleSection = useCallback((section) => {
     const newCollapsed = { ...collapsedSections, [section]: !collapsedSections[section] };
     setCollapsedSections(newCollapsed);
