@@ -667,6 +667,7 @@ class ContentBasedRecommender:
 
                 score, metadata = self._score(anime, taste, pool)
                 prequel_title = taste.titles.get(sequel_of) if sequel_of is not None else None
+                reason: str
                 if prequel_title:
                     score = min(100.0, score + SEQUEL_BOOST)
                     metadata["source_anime"] = prequel_title

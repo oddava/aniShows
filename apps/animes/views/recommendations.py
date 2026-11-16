@@ -7,7 +7,7 @@ per user, keyed by the adult-content setting it was built for: 1 h when fresh, 1
 otherwise (stale, fallback or empty), and the task drops the key once it has written.
 """
 
-from datetime import timedelta
+from datetime import UTC, timedelta
 
 from django.core.cache import cache
 from django.utils import timezone
@@ -60,7 +60,7 @@ def _is_recommendations_cache_fresh(cached_data, stale_after_hours: int = 24) ->
         if parsed is None:
             continue
         if timezone.is_naive(parsed):
-            parsed = timezone.make_aware(parsed, timezone.utc)
+            parsed = timezone.make_aware(parsed, UTC)
         if newest_created_at is None or parsed > newest_created_at:
             newest_created_at = parsed
 
@@ -79,6 +79,23 @@ def _queue_refresh(user_id: int) -> bool:
         logger.warning("Could not queue recommendations for user %s", user_id, exc_info=True)
         return False
     return True
+
+
+def _build_items(request, *, can_view_adult: bool) -> tuple[list[dict], bool]:
+    """Return (serialized items, whether they are fresh personal rows)."""
+    service = RecommendationService()
+    recs = service.get_recommendations_for_user(
+        request.user, limit=MAX_LIMIT, can_view_adult=can_view_adult
+    )
+    if recs:
+        items = list(
+            UserRecommendationSerializer(recs, many=True, context={"request": request}).data
+        )
+        return items, _is_recommendations_cache_fresh(items, STALE_AFTER_HOURS)
+    fallback = service.trending_fallback(
+        request.user, can_view_adult=can_view_adult, request=request
+    )
+    return fallback, False
 
 
 class RecommendationsQuerySerializer(Serializer):
@@ -105,7 +122,7 @@ class RecommendationsViewSet(ViewSet):
             return Response(cached["items"][:limit])
 
         try:
-            items, fresh = self._build_items(request, can_view_adult=can_view_adult)
+            items, fresh = _build_items(request, can_view_adult=can_view_adult)
         except Exception:
             logger.exception("Error fetching recommendations")
             return error_response(
@@ -122,23 +139,6 @@ class RecommendationsViewSet(ViewSet):
             FRESH_CACHE_TTL if fresh else SHORT_CACHE_TTL,
         )
         return Response(items[:limit])
-
-    @staticmethod
-    def _build_items(request, *, can_view_adult: bool) -> tuple[list, bool]:
-        """Return (serialized items, whether they are fresh personal rows)."""
-        service = RecommendationService()
-        recs = service.get_recommendations_for_user(
-            request.user, limit=MAX_LIMIT, can_view_adult=can_view_adult
-        )
-        if recs:
-            items = list(
-                UserRecommendationSerializer(recs, many=True, context={"request": request}).data
-            )
-            return items, _is_recommendations_cache_fresh(items, STALE_AFTER_HOURS)
-        fallback = service.trending_fallback(
-            request.user, can_view_adult=can_view_adult, request=request
-        )
-        return fallback, False
 
     @action(
         detail=False,
