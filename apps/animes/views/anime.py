@@ -1,4 +1,6 @@
+from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404
+from django.utils.cache import patch_vary_headers
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -45,16 +47,21 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     payload_service = AnimePublicPayloadService()
     query_service = AnimeQueryService()
     PUBLIC_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=900"
+    # The same URL answers guests and members differently (user fields), so a
+    # browser must not reuse a guest response once the viewer signs in (B12).
+    VARY_HEADERS = ("Authorization", "Cookie")
 
     @classmethod
     def _with_public_cache_control(cls, response: Response, request) -> Response:
         if not request.user.is_authenticated:
             response["Cache-Control"] = cls.PUBLIC_CACHE_CONTROL
+        patch_vary_headers(response, cls.VARY_HEADERS)
         return response
 
-    @staticmethod
-    def _with_cache_status_header(response: Response, cache_status: str) -> Response:
+    @classmethod
+    def _with_cache_status_header(cls, response: Response, cache_status: str) -> Response:
         response["X-Cache-Status"] = cache_status
+        patch_vary_headers(response, cls.VARY_HEADERS)
         return response
 
     def _build_queryset(self, *, include_user_context: bool = True):
@@ -92,27 +99,16 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         )
 
     def list(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            queryset = self.filter_queryset(self.get_queryset())
-            page = self.paginate_queryset(queryset)
-            if page is not None:
-                serializer = self.get_serializer(page, many=True)
-                data = self.payload_service.enrich_collection_payload_for_user(
-                    serializer.data,
-                    request.user,
-                )
-                return self.get_paginated_response(data)
-            serializer = self.get_serializer(queryset, many=True)
-            data = self.payload_service.enrich_collection_payload_for_user(
-                serializer.data,
-                request.user,
-            )
-            return Response(data)
+        # One cached page per parameters and adult-content setting, shared by
+        # guests and members; the viewer's own state is added afterwards (B10).
+        # The list queryset carries no user context, so the build is viewer-free.
         result = self.payload_service.cache_list_payload(
             request,
             lambda: super(AnimeViewSet, self).list(request, *args, **kwargs).data,
+            can_view_adult_content=self.query_service.can_view_adult_content(request.user),
         )
-        response = self._with_cache_status_header(Response(result.data), result.cache_status)
+        data = self.payload_service.enrich_list_payload_for_user(result.data, request.user)
+        response = self._with_cache_status_header(Response(data), result.cache_status)
         return self._with_public_cache_control(response, request)
 
     def _get_cached_shelf(self, request, cache_key: str, queryset_fn):

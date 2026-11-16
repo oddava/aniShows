@@ -44,6 +44,10 @@ ENDPOINTS = {**PUBLIC_ENDPOINTS, **SIGNED_IN_ENDPOINTS}
 # enrichment applied after the shared cache), independent of row count.
 # search: +1 since the relevance ordering (2026-11-16), which first checks
 # whether a query has too many matches to rank them all.
+# list_authenticated/search_signed_in (2026-11-16, P1-2): members now share the
+# guests' cached page, so a cold request is the anonymous count + 3 (adult-content
+# setting, favourites, list entries) and a warm one is 3 (see WARM_BUDGETS).
+# Every count includes the admin-panel settings lookup each request makes.
 BUDGETS = {
     "list": 4,
     "list_authenticated": 7,

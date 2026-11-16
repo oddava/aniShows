@@ -31,6 +31,9 @@ RELEVANCE_SORTS = {"", "relevance"}
 # quarter of the catalog) is not ranked as a whole, which would read and score
 # every match on each request: see ``RankedSearchResults``.
 RELEVANCE_WINDOW = 500
+# ``exclude_ids`` beyond this many are ignored: a shelf deep link sends a few
+# dozen, and an unbounded ``NOT IN`` list is a cheap way to slow a query (B11).
+MAX_EXCLUDE_IDS = 100
 SEASON_MONTH_RANGES = {
     "winter": ((1, 1), (3, 31)),
     "spring": ((4, 1), (6, 30)),
@@ -194,7 +197,7 @@ class ListFilterMixin:
             tags = [tag.strip().lower() for tag in tags_param.split(",") if tag.strip()]
             queryset = self._apply_tags_filter(queryset, tags)
 
-        exclude_ids = self._parse_positive_int_params(query_params.get("exclude_ids"))
+        exclude_ids = self.parse_exclude_ids(query_params.get("exclude_ids"))
         if exclude_ids:
             # Home shelves may deep-link into browse with already-shown cards removed.
             queryset = queryset.exclude(id__in=exclude_ids)
@@ -376,6 +379,11 @@ class ListFilterMixin:
             return []
 
         return [parsed for value in raw_value.split(",") if (parsed := positive_int(value))]
+
+    @classmethod
+    def parse_exclude_ids(cls, raw_value: str | None) -> list[int]:
+        """The first ``MAX_EXCLUDE_IDS`` positive IDs of an ``exclude_ids`` value."""
+        return cls._parse_positive_int_params(raw_value)[:MAX_EXCLUDE_IDS]
 
     @staticmethod
     def _filter_case_insensitive_values(

@@ -425,15 +425,14 @@ class AnimePublicPayloadService:
         )
 
     @classmethod
-    def cache_list_payload(cls, request, build_payload):
-        if request.user.is_authenticated:
-            return CachedPayloadResult(data=build_payload(), cache_status="skip")
+    def cache_list_payload(cls, request, build_payload, *, can_view_adult_content: bool):
+        """The list page every viewer with this adult-content setting shares (B10).
 
-        params = dict(request.query_params)
-        param_string = json.dumps(sorted(params.items()), separators=(",", ":"))
-        cache_key_hash = hashlib.sha256(param_string.encode()).hexdigest()
+        ``build_payload`` must build it without the viewer; signed-in callers add
+        their own state afterwards (``enrich_list_payload_for_user``).
+        """
         cache_key = cls._with_collection_namespace(
-            f"anime_list:{cls.PUBLIC_CACHE_VERSION}:{cache_key_hash}"
+            cls.list_cache_key(request.query_params, can_view_adult_content=can_view_adult_content)
         )
         data, cache_status = get_or_build_public_payload(
             cache_key,
@@ -579,6 +578,18 @@ class AnimePublicPayloadService:
             }
             for item in data
         ]
+
+    @classmethod
+    def enrich_list_payload_for_user(cls, data, user):
+        """``enrich_collection_payload_for_user`` for a list page (paginated or not)."""
+        if isinstance(data, dict) and isinstance(data.get("results"), list):
+            return {
+                **data,
+                "results": cls.enrich_collection_payload_for_user(data["results"], user),
+            }
+        if isinstance(data, list):
+            return cls.enrich_collection_payload_for_user(data, user)
+        return data
 
     @classmethod
     def enrich_browse_rows_payload_for_user(cls, data: list[dict], user):
