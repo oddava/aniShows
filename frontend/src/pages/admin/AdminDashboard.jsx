@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
     Users, Film, Star, Heart, CheckCircle,
     TrendingUp, ExternalLink, Activity, ArrowUpRight, ArrowDownRight,
-    UsersRound, ShieldCheck, Clock, ChevronRight
+    UsersRound, ShieldCheck, Clock
 } from 'lucide-react';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -17,7 +17,7 @@ import CustomSelect from '../../components/common/CustomSelect';
 const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-dark-100/90 backdrop-blur-xl border border-white/10 p-3 rounded-xl shadow-2xl">
+            <div className="bg-dark-100 border border-white/10 p-3 rounded-xl">
                 <p className="text-gray-400 text-xs mb-1 mb-2 font-medium">{label}</p>
                 <p className="text-white text-sm font-bold flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-purple-500"></span>
@@ -44,7 +44,7 @@ const AdminDashboard = () => {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-gray-400">
                 <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin mb-4" />
-                <p className="font-medium animate-pulse">Loading dashboard telemetry...</p>
+                <p className="font-medium">Loading dashboard telemetry...</p>
             </div>
         );
     }
@@ -143,7 +143,7 @@ const AdminDashboard = () => {
                 {statCards.map((stat, idx) => (
                     <div
                         key={idx}
-                        className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20"
+                        className="bg-white/5 border border-white/10 rounded-2xl p-6 transition-all duration-300 hover:border-white/20"
                     >
                         <div className="flex justify-between items-start mb-4">
                             <div className="text-gray-400">
@@ -162,7 +162,7 @@ const AdminDashboard = () => {
                             </h3>
                             <p className="text-sm font-medium text-gray-400 flex items-center gap-1.5">
                                 {stat.label}
-                                <span className="text-xs font-normal opacity-50">• {stat.subtext}</span>
+                                <span className="text-xs font-normal text-white/50">· {stat.subtext}</span>
                             </p>
                         </div>
                     </div>
@@ -171,7 +171,7 @@ const AdminDashboard = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Main Growth Chart */}
-                <div className="lg:col-span-2 bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 relative overflow-hidden flex flex-col">
+                <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden flex flex-col">
 
                     <div className="flex items-center justify-between mb-8 z-10">
                         <div>
@@ -240,7 +240,7 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Popular Anime / Top Engagement */}
-                <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex flex-col">
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col">
                     <div className="flex items-center justify-between mb-6">
                         <h2 className="text-lg font-bold text-white flex items-center gap-2">
                             <Heart className="text-pink-500" size={20} />
@@ -253,23 +253,26 @@ const AdminDashboard = () => {
 
                     <div className="flex-1 flex flex-col gap-3">
                         {stats?.popular_anime?.slice(0, 5).map((anime, idx) => (
-                            <div key={anime.id} className="group relative bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-3 flex items-center gap-4 transition-all hover:pr-8">
-                                <div className="w-10 h-10 rounded-lg border border-white/10 text-gray-400 flex items-center justify-center font-bold flex-shrink-0">
-                                    #{idx + 1}
+                            <Link
+                                key={anime.id}
+                                to={`/anime/${anime.slug}`}
+                                className="bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl p-3 flex items-center gap-4 transition-colors min-h-[44px]"
+                            >
+                                <div className="w-10 h-14 rounded-md border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center text-gray-400 text-sm font-bold">
+                                    {anime.poster
+                                        ? <img src={anime.poster} alt="" loading="lazy" className="w-full h-full object-cover" />
+                                        : `#${idx + 1}`}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h4 className="text-sm font-bold text-white truncate" title={anime.title}>
-                                        {anime.title}
-                                    </h4>
+                                    <h3 className="text-sm font-bold text-white truncate" title={anime.title}>
+                                        <span className="text-white/50 font-medium mr-1.5">#{idx + 1}</span>{anime.title}
+                                    </h3>
                                     <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                                        <Heart size={10} className="text-gray-400" />
-                                        {anime.favorite_count.toLocaleString()} saves
+                                        <Heart size={10} className="text-gray-400" aria-hidden="true" />
+                                        {(anime.favorite_count ?? 0).toLocaleString()} favorites
                                     </p>
                                 </div>
-                                <div className="absolute right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <ChevronRight size={16} className="text-gray-400" />
-                                </div>
-                            </div>
+                            </Link>
                         ))}
                     </div>
                 </div>
@@ -279,7 +282,7 @@ const AdminDashboard = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* Recent Signups */}
-                <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden">
+                <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                     <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
                         <h2 className="text-lg font-bold text-white flex items-center gap-2">
                             <UsersRound className="text-gray-400" size={20} />
@@ -335,7 +338,7 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Recent Reviews */}
-                <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden">
+                <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                     <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between">
                         <h2 className="text-lg font-bold text-white flex items-center gap-2">
                             <Star className="text-gray-400" size={20} />

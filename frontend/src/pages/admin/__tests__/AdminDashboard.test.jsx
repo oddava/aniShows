@@ -73,4 +73,19 @@ describe('AdminDashboard', () => {
 
         expect(await screen.findByText('Failed to load dashboard data')).toBeInTheDocument();
     });
+
+    it('links each most-favorited card to its anime page with the real poster', async () => {
+        getMock.mockResolvedValue({
+            data: {
+                statistics: { users: { total: 1, new_7d: 0, verified: 1 }, content: {} },
+                popular_anime: [{ id: 9, title: 'Frieren', slug: 'frieren', favorite_count: 42, poster: 'https://img.example/frieren.jpg' }],
+            },
+        });
+        const { container } = renderPage();
+
+        const card = await screen.findByRole('link', { name: /Frieren/ });
+        expect(card).toHaveAttribute('href', '/anime/frieren');
+        expect(card).toHaveTextContent('42 favorites');
+        expect(container.querySelector('img[src="https://img.example/frieren.jpg"]')).not.toBeNull();
+    });
 });
