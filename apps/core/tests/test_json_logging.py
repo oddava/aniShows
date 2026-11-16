@@ -6,6 +6,7 @@ import io
 import json
 import logging
 from decimal import Decimal
+from typing import Any
 
 from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase
@@ -238,7 +239,7 @@ class SentryScrubTests(SimpleTestCase):
         self.assertEqual(scrubbed["data"]["headers"], [["Accept", "*/*"]])
 
     def test_referer_carrying_a_token_is_redacted(self):
-        event = {
+        event: dict[str, Any] = {
             "request": {
                 "url": "https://anishows.com/api/v1/auth/password-reset-confirm/",
                 "headers": {"Referer": "https://anishows.com/reset-password/MQ/tok-123/"},
