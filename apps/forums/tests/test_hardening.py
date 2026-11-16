@@ -5,11 +5,17 @@ from unittest import mock
 
 import pytest
 from django.conf import settings
+from django.db import connection, transaction
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from rest_framework.exceptions import ValidationError
 
 from ...core.models import Notification
-from ..models import Post
+from ..models import Post, Thread
+from ..serializers import PostSerializer, ThreadSerializer
 from ..services.excerpt import EXCERPT_SOURCE_LENGTH, build_excerpt
+from ..services.interactions import create_post, update_post, update_thread
+from ..services.moderation import lock_thread_then_post
 from .conftest import make_reply
 
 POSTS_URL = reverse("forums:post-list")
@@ -201,3 +207,92 @@ class TestExcerpt:
         started = time.perf_counter()
         build_excerpt(hostile)
         assert time.perf_counter() - started < 0.5
+
+
+def _request_for(user):
+    return mock.Mock(user=user)
+
+
+@pytest.mark.django_db
+class TestWritesRecheckStateUnderLock:
+    """A lock or removal can land between validation and the write; the write must see it."""
+
+    def test_a_reply_validated_before_a_lock_is_refused(self, make_user, make_thread):
+        author = make_user()
+        thread = make_thread(author)
+        serializer = PostSerializer(
+            data={"thread": thread.id, "content": "late"},
+            context={"request": _request_for(author)},
+        )
+        assert serializer.is_valid(), serializer.errors
+        Thread.objects.filter(pk=thread.pk).update(is_locked=True)  # staff lock lands now
+
+        with pytest.raises(ValidationError):
+            create_post(serializer, author)
+
+        assert not thread.posts.exists()
+
+    def test_a_reply_validated_before_its_parent_is_removed_is_refused(
+        self, make_user, make_thread
+    ):
+        author = make_user()
+        thread = make_thread(author)
+        parent = make_reply(thread, author)
+        serializer = PostSerializer(
+            data={"thread": thread.id, "parent": parent.id, "content": "late"},
+            context={"request": _request_for(author)},
+        )
+        assert serializer.is_valid(), serializer.errors
+        Post.objects.filter(pk=parent.pk).update(is_removed=True)
+
+        with pytest.raises(ValidationError):
+            create_post(serializer, author)
+
+    def test_a_stale_post_edit_does_not_undo_a_removal(self, make_user, make_thread):
+        author = make_user()
+        post = make_reply(make_thread(author), author, content="rude")
+        serializer = PostSerializer(
+            post,
+            data={"content": "edited"},
+            partial=True,
+            context={"request": _request_for(author)},
+        )
+        assert serializer.is_valid(), serializer.errors
+        Post.objects.filter(pk=post.pk).update(is_removed=True)
+
+        with pytest.raises(ValidationError):
+            update_post(serializer)
+
+        post.refresh_from_db()
+        assert (post.is_removed, post.content) == (True, "rude")
+
+    def test_a_stale_thread_edit_keeps_a_lock_that_landed_after_validation(
+        self, make_user, make_thread
+    ):
+        author = make_user()
+        thread = make_thread(author)
+        request = _request_for(author)
+        serializer = ThreadSerializer(
+            thread, data={"title": "Renamed"}, partial=True, context={"request": request}
+        )
+        assert serializer.is_valid(), serializer.errors
+        Thread.objects.filter(pk=thread.pk).update(is_locked=True, is_pinned=True)
+
+        update_thread(serializer, request=request)
+
+        thread.refresh_from_db()
+        assert (thread.title, thread.is_locked, thread.is_pinned) == ("Renamed", True, True)
+
+
+@pytest.mark.django_db
+def test_post_writes_lock_the_thread_before_the_post(make_user, make_thread):
+    """Replies lock thread then parent; removal/deletion must use the same order (no deadlock)."""
+    post = make_reply(make_thread(make_user()), make_user())
+
+    with CaptureQueriesContext(connection) as queries, transaction.atomic():
+        lock_thread_then_post(post)
+
+    locking = [q["sql"] for q in queries.captured_queries if "FOR UPDATE" in q["sql"]]
+    assert len(locking) == 2
+    assert '"forums_thread"' in locking[0].split("FROM", 1)[1].split("WHERE", 1)[0]
+    assert '"forums_post"' in locking[1].split("FROM", 1)[1].split("WHERE", 1)[0]

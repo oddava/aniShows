@@ -3,9 +3,10 @@ import hashlib
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, NotFound, ValidationError
 
 from ...core.services.notification_service import notify
+from .. import messages
 from ..cache_utils import (
     invalidate_category_detail_cache,
     invalidate_post_list_cache,
@@ -20,7 +21,7 @@ from .events import (
     run_after_commit,
 )
 from .mentions import notify_mentions
-from .moderation import mark_post_removed, record_thread_move
+from .moderation import lock_thread_then_post, mark_post_removed, record_thread_move
 
 
 class ThreadHasRepliesError(APIException):
@@ -70,17 +71,19 @@ def _move_thread(thread: Thread, from_category_id: int) -> None:
 
 
 def update_thread(serializer, *, request) -> Thread:
-    """Apply an edit (author) or a category move (staff, audited)."""
-    thread = serializer.instance
-    previous_content = thread.content
-    edit = _edit_marker(thread, serializer.validated_data, ("title", "content"))
+    """Apply an edit (author) or a category move (staff, audited).
+
+    The row is locked and re-read first, so the save starts from the current state:
+    a lock, removal or move that landed after validation is never written back.
+    """
     with transaction.atomic():
-        # Locked so two concurrent staff moves can't both count the same old category.
-        previous_category_id = (
-            Thread.objects.select_for_update()
-            .values_list("category_id", flat=True)
-            .get(pk=thread.pk)
-        )
+        thread = Thread.objects.select_for_update().get(pk=serializer.instance.pk)
+        if thread.is_removed and not request.user.is_staff:
+            raise NotFound(messages.THREAD_NOT_FOUND)
+        previous_content = thread.content
+        previous_category_id = thread.category_id
+        edit = _edit_marker(thread, serializer.validated_data, ("title", "content"))
+        serializer.instance = thread
         thread = serializer.save(**edit)
         if thread.category_id != previous_category_id:
             _move_thread(thread, previous_category_id)
@@ -254,14 +257,34 @@ def _broadcast_new_post(post: Post) -> None:
     )
 
 
+def _lock_reply_targets(serializer, author) -> tuple[Thread, Post | None]:
+    """Lock the thread, then the parent (always in that order), and re-check their state.
+
+    The serializer validated rows read before the locks; a staff lock or removal may
+    have landed since, so the checks that matter run again on the locked rows.
+    """
+    is_staff = author.is_staff
+    thread = Thread.objects.select_for_update().get(pk=serializer.validated_data["thread"].pk)
+    if thread.is_removed and not is_staff:
+        raise ValidationError({"thread": messages.THREAD_NOT_FOUND})
+    if thread.is_locked and not is_staff:
+        raise ValidationError({"thread": messages.THREAD_LOCKED})
+    parent = serializer.validated_data.get("parent")
+    if parent is None:
+        return thread, None
+    # Locked so the parent can't be deleted or removed while the reply is written.
+    parent = Post.objects.select_for_update().filter(pk=parent.pk).first()
+    if parent is None:
+        raise ValidationError({"parent": messages.PARENT_NOT_FOUND})
+    if parent.is_removed and not is_staff:
+        raise ValidationError({"parent": messages.PARENT_REMOVED})
+    return thread, parent
+
+
 def create_post(serializer, author) -> Post:
     """Create a reply (reply count and caches: ``signals``) and queue its notifications."""
     with transaction.atomic():
-        thread = Thread.objects.select_for_update().get(pk=serializer.validated_data["thread"].pk)
-        parent = serializer.validated_data.get("parent")
-        if parent is not None:
-            # Locked so the parent can't be deleted while the reply is written.
-            parent = Post.objects.select_for_update().get(pk=parent.pk)
+        thread, parent = _lock_reply_targets(serializer, author)
 
         post = serializer.save(
             author=author,
@@ -293,11 +316,18 @@ def create_post(serializer, author) -> Post:
 
 
 def update_post(serializer) -> Post:
-    """Apply an author's edit; a changed text gets ``edited_at`` and a live update."""
-    post = serializer.instance
-    previous_content = post.content
-    edit = _edit_marker(post, serializer.validated_data, ("content",))
+    """Apply an author's edit; a changed text gets ``edited_at`` and a live update.
+
+    The post is locked and re-read first: a removal that landed after validation must
+    not be undone by saving the stale instance.
+    """
     with transaction.atomic():
+        post = Post.objects.select_for_update().get(pk=serializer.instance.pk)
+        if post.is_removed:
+            raise ValidationError({"content": messages.POST_REMOVED})
+        previous_content = post.content
+        edit = _edit_marker(post, serializer.validated_data, ("content",))
+        serializer.instance = post
         post = serializer.save(**edit)
         if edit:
             run_after_commit(
@@ -317,11 +347,7 @@ def update_post(serializer) -> Post:
 def delete_post(instance: Post, *, actor) -> None:
     """Author delete: soft-remove a post that has replies, hard-delete a leaf."""
     with transaction.atomic():
-        post = (
-            Post.objects.select_related("thread")
-            .select_for_update(of=("self",))
-            .get(pk=instance.pk)
-        )
+        post = lock_thread_then_post(instance)
         if not post.replies.exists():
             post.delete()
         elif not post.is_removed:

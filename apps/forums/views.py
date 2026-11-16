@@ -393,10 +393,11 @@ class PostViewSet(ModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
 
         if root_id is not None:
+            # ``count``/``next`` page the root's direct children; the root rides on every page.
             root = get_object_or_404(queryset, pk=root_id)
-            posts = get_post_subtree(queryset, thread_id, root)
-            data = self.get_serializer(posts, many=True).data
-            return Response({"count": 1, "next": None, "previous": None, "results": data})
+            children = self.paginate_queryset(queryset.filter(parent_id=root.id))
+            posts = get_post_subtree(queryset, thread_id, root, list(children or []))
+            return self.get_paginated_response(self.get_serializer(posts, many=True).data)
 
         top_level_posts = self.paginate_queryset(queryset.filter(parent__isnull=True))
         posts = get_threaded_posts_page(queryset, thread_id, list(top_level_posts or []))

@@ -7,13 +7,12 @@ from rest_framework.relations import PrimaryKeyRelatedField
 from rest_framework.serializers import ModelSerializer, Serializer
 
 from ..users.services.avatar_service import get_user_avatar_url
+from . import messages
 from .models import Category, Post, Tag, Thread
 from .services.excerpt import build_excerpt
 
 User = get_user_model()
 
-TOO_DEEP_MESSAGE = "This conversation is too deep to reply here. Reply higher up."
-REMOVED_PARENT_MESSAGE = "This reply was removed and can't be replied to."
 # Forum bodies are rendered in every viewer's browser: keep them bounded.
 CONTENT_FIELD_KWARGS = {"content": {"max_length": settings.FORUM_CONTENT_MAX_LENGTH}}
 
@@ -245,13 +244,13 @@ class PostSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
 
     def validate_thread(self, thread):
         if thread.is_removed and not _viewer_is_staff(self):
-            raise ValidationError("Thread not found.")
+            raise ValidationError(messages.THREAD_NOT_FOUND)
         return thread
 
     def validate(self, attrs):
         if self.instance is not None:
             if self.instance.is_removed:
-                raise ValidationError({"content": "A removed reply can't be edited."})
+                raise ValidationError({"content": messages.POST_REMOVED})
             # A post cannot be moved: that would bypass the checks below and
             # break the reply tree and the threads' reply counters.
             attrs.pop("thread", None)
@@ -263,12 +262,12 @@ class PostSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
         if parent and thread and parent.thread_id != thread.id:
             raise ValidationError({"parent": "Parent post must belong to the same thread."})
         if parent and parent.depth >= Post.MAX_DEPTH:
-            raise ValidationError({"parent": TOO_DEEP_MESSAGE})
+            raise ValidationError({"parent": messages.TOO_DEEP})
         if parent and parent.is_removed and not _viewer_is_staff(self):
-            raise ValidationError({"parent": REMOVED_PARENT_MESSAGE})
+            raise ValidationError({"parent": messages.PARENT_REMOVED})
 
         if thread and thread.is_locked and not _viewer_is_staff(self):
-            raise ValidationError({"thread": "This thread is locked."})
+            raise ValidationError({"thread": messages.THREAD_LOCKED})
         return attrs
 
     def to_representation(self, instance):

@@ -8,8 +8,8 @@ from django.test import TransactionTestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from ..messages import TOO_DEEP as TOO_DEEP_MESSAGE
 from ..models import Post
-from ..serializers import TOO_DEEP_MESSAGE
 from ..services.queries import MAX_DESCENDANTS_PER_PAGE
 from .conftest import make_chain, make_reply
 
@@ -104,12 +104,39 @@ def test_descendants_are_capped_and_the_cut_parent_is_flagged(make_user, make_th
         for i in range(MAX_DESCENDANTS_PER_PAGE + 5)
     )
 
-    for params in ({"thread__id": thread.id}, {"thread__id": thread.id, "root": top.id}):
-        results = APIClient().get(POSTS_URL, params).data["results"]
-        assert len(results) == 1 + MAX_DESCENDANTS_PER_PAGE
-        top_payload = next(post for post in results if post["id"] == top.id)
-        assert top_payload["has_hidden_replies"] is True
-        assert top_payload["reply_count"] == MAX_DESCENDANTS_PER_PAGE + 5
+    results = APIClient().get(POSTS_URL, {"thread__id": thread.id}).data["results"]
+    assert len(results) == 1 + MAX_DESCENDANTS_PER_PAGE
+    top_payload = next(post for post in results if post["id"] == top.id)
+    assert top_payload["has_hidden_replies"] is True
+    assert top_payload["reply_count"] == MAX_DESCENDANTS_PER_PAGE + 5
+
+
+@pytest.mark.django_db
+def test_root_pages_its_direct_children_so_wide_trees_stay_reachable(make_user, make_thread):
+    """Every one of 305 direct replies is reachable through ``?root=`` pages."""
+    author = make_user()
+    thread = make_thread(author)
+    top = make_reply(thread, author)
+    total = MAX_DESCENDANTS_PER_PAGE + 5
+    Post.objects.bulk_create(
+        Post(thread=thread, author=author, parent=top, depth=1, content=f"r{i}")
+        for i in range(total)
+    )
+    client = APIClient()
+    seen: set[int] = set()
+    page = 1
+    while True:
+        data = client.get(
+            POSTS_URL, {"thread__id": thread.id, "root": top.id, "page": page, "page_size": 50}
+        ).data
+        assert data["count"] == total
+        assert data["results"][0]["id"] == top.id  # the root rides on every page
+        seen |= {post["id"] for post in data["results"]} - {top.id}
+        if not data["next"]:
+            break
+        page += 1
+    assert page == 7
+    assert seen == set(Post.objects.filter(parent=top).values_list("id", flat=True))
 
 
 @pytest.mark.django_db

@@ -71,7 +71,13 @@ def _lock_thread(thread: Thread) -> Thread:
     )
 
 
-def _lock_post(post: Post) -> Post:
+def lock_thread_then_post(post: Post) -> Post:
+    """Lock ``post``'s thread, then the post, and return the fresh post.
+
+    Every forum write that touches both rows takes them in this order (replies lock the
+    thread, then the parent), so concurrent writes can't deadlock on each other.
+    """
+    list(Thread.objects.select_for_update().filter(pk=post.thread_id).values_list("pk", flat=True))
     return Post.objects.select_related("thread").select_for_update(of=("self",)).get(pk=post.pk)
 
 
@@ -165,7 +171,7 @@ def mark_post_removed(post: Post, *, removed_by, reason: str = "", by_author: bo
 
 def remove_post(post: Post, *, request, reason: str = "") -> ForumActionResult:
     with transaction.atomic():
-        locked = _lock_post(post)
+        locked = lock_thread_then_post(post)
         if not locked.is_removed:
             mark_post_removed(locked, removed_by=request.user, reason=reason)
             _audit(
@@ -182,7 +188,7 @@ def remove_post(post: Post, *, request, reason: str = "") -> ForumActionResult:
 
 def restore_post(post: Post, *, request) -> ForumActionResult:
     with transaction.atomic():
-        locked = _lock_post(post)
+        locked = lock_thread_then_post(post)
         if locked.is_removed:
             _clear_removed(locked)
             locked.removed_by_author = False

@@ -123,6 +123,14 @@ def get_threaded_posts_page(queryset, thread_id: int, top_level_posts: list[Post
     return posts
 
 
-def get_post_subtree(queryset, thread_id: int, root: Post) -> list[Post]:
-    """``root`` and its (capped) descendants, oldest first."""
-    return get_threaded_posts_page(queryset, thread_id, [root])
+def get_post_subtree(queryset, thread_id: int, root: Post, children: list[Post]) -> list[Post]:
+    """``root``, one page of its direct ``children`` and their (capped) descendants, oldest first.
+
+    Paging the direct children keeps every reply reachable however wide the tree is:
+    a root with more children than fit is continued on the next page.
+    """
+    descendants = _collect_descendants(queryset, thread_id, [child.id for child in children])
+    posts = [root, *children, *descendants]
+    _mark_hidden_replies(posts)
+    posts.sort(key=lambda post: (post.created_at, post.id))
+    return posts
