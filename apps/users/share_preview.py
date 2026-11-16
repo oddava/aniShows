@@ -1,4 +1,3 @@
-import json
 import re
 from html import escape, unescape
 from urllib.parse import quote
@@ -196,14 +195,16 @@ class ProfileSharePreviewView(View):
         canonical_esc = escape(canonical_url, quote=True)
         image_esc = escape(image_url, quote=True)
         redirect_block = ""
+        body_link = ""
 
         if redirect_url:
+            # Meta refresh only: an inline <script> is blocked by this page's own
+            # CSP (script-src 'self') and only logged a violation per visit (A17).
             redirect_esc = escape(redirect_url, quote=True)
-            redirect_js = json.dumps(redirect_url)
             redirect_block = f"""
   <meta http-equiv=\"refresh\" content=\"0;url={redirect_esc}\" />
-  <script>window.location.replace({redirect_js});</script>
 """
+            body_link = f'\n  <p><a href="{redirect_esc}">Open the profile</a></p>'
 
         return f"""<!doctype html>
 <html lang=\"en\">
@@ -228,7 +229,7 @@ class ProfileSharePreviewView(View):
 {redirect_block}
 </head>
 <body>
-  <p>AniShows profile preview</p>
+  <p>AniShows profile preview</p>{body_link}
 </body>
 </html>
 """
