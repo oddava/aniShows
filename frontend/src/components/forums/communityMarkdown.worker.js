@@ -14,3 +14,6 @@ self.onmessage = (event) => {
     }
     self.postMessage(reply);
 };
+
+// Loaded and ready: the main thread starts each job's time budget only after this.
+self.postMessage({ ready: true });

@@ -15,6 +15,11 @@ import remarkCommunity, { escapeLineStartSpoilers, remarkNoRawHtml, splitAligned
  */
 
 const ALIGN_CLASS_NAMES = { left: 'text-left', center: 'text-center', right: 'text-right' };
+// Most elements one post may render. Tables pad every row to the header's columns, so a 1k-character
+// post can expand to tens of thousands of cells: cheap to parse, far too slow to render.
+export const MAX_TREE_ELEMENTS = 4_000;
+
+export class TreeTooLargeError extends Error {}
 const SAFE_PROTOCOL = /^(https?|mailto)$/i;
 
 const processor = unified()
@@ -43,19 +48,34 @@ export const communityUrlTransform = (value = '') => {
     return '';
 };
 
-/** What react-markdown does to the tree before rendering: safe URLs, raw HTML as text, no positions. */
-const sanitize = (node) => {
-    delete node.position;
-    if (node.type === 'raw') {
-        node.type = 'text';
-    } else if (node.type === 'element' && node.properties) {
-        for (const [key, tagNames] of Object.entries(urlAttributes)) {
-            if (key in node.properties && (tagNames === null || tagNames.includes(node.tagName))) {
-                node.properties[key] = communityUrlTransform(String(node.properties[key] ?? ''));
+/**
+ * What react-markdown does to the tree before rendering (safe URLs, raw HTML as text, no positions),
+ * plus a size cap. An unsafe URL drops the attribute (an empty `src` would re-request the page).
+ * Iterative, so a deep tree can't overflow the stack here.
+ */
+const sanitize = (root) => {
+    let elements = 0;
+    const stack = [root];
+    while (stack.length) {
+        const node = stack.pop();
+        delete node.position;
+        if (node.type === 'raw') {
+            node.type = 'text';
+        } else if (node.type === 'element') {
+            elements += 1;
+            if (elements > MAX_TREE_ELEMENTS) throw new TreeTooLargeError('tree too large to render');
+            const properties = node.properties || {};
+            for (const [key, tagNames] of Object.entries(urlAttributes)) {
+                if (key in properties && (tagNames === null || tagNames.includes(node.tagName))) {
+                    const url = communityUrlTransform(String(properties[key] ?? ''));
+                    if (url) properties[key] = url;
+                    else delete properties[key];
+                }
             }
         }
+        // A loop, not push(...children): a very wide node would exceed the argument limit.
+        for (const child of node.children || []) stack.push(child);
     }
-    node.children?.forEach(sanitize);
 };
 
 const segmentNodes = (source) => splitAlignedBlocks(source).flatMap((segment) => {
@@ -71,7 +91,10 @@ const segmentNodes = (source) => splitAlignedBlocks(source).flatMap((segment) =>
     return processor.runSync(processor.parse(escapeLineStartSpoilers(segment.content))).children;
 });
 
-/** The hast root for community markdown `source` (as typed: no entity decoding). */
+/**
+ * The hast root for community markdown `source` (as typed: no entity decoding). Throws
+ * TreeTooLargeError past MAX_TREE_ELEMENTS; callers show the text as plain text then.
+ */
 export function buildCommunityTree(source = '') {
     const tree = { type: 'root', children: segmentNodes(source) };
     sanitize(tree);

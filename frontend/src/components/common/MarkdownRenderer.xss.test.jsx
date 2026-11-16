@@ -193,7 +193,8 @@ describe('MarkdownRenderer markdown mode rendering', () => {
     it('allows mailto and relative links, drops other schemes', async () => {
         const container = await md('[m](mailto:a@b.co) [r](/forums/1) [x](xmpp:a@b.co) [i](ircs://x)');
         const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-        expect(hrefs).toEqual(['mailto:a@b.co', '/forums/1', '', '']);
+        // An unsafe URL drops the attribute (an empty href/src would point back at the page).
+        expect(hrefs).toEqual(['mailto:a@b.co', '/forums/1', null, null]);
     });
 
     describe('mentions', () => {

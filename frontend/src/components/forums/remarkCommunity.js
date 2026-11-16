@@ -136,11 +136,12 @@ const lineStartSpoilerOffset = (line) => {
  * How deeply a line can nest containers, mirroring `apps/forums/services/nesting.py`. Lines end at
  * `\n`, `\r\n` or `\r` (the parser treats a bare `\r` as a line end too). On each line a marker run
  * is container markers separated only by whitespace: `>`, a `-`/`*`/`+` bullet or a `1.`/`1)` number
- * followed by whitespace (or the line end), or a `[^label]:` footnote definition. A run can start
- * anywhere on the line (containers also open after footnote prefixes or alignment splits); a run at
- * the start of the line also counts half the indentation in columns (a list level needs at least two
- * columns to continue). Fenced code is counted too: guessing fences differently from the parser
- * would open a bypass.
+ * followed by whitespace (or the line end), or a `[^label]:` footnote definition. Runs count where
+ * the parser can open containers: at the start of the line (plus half the indentation in columns: a
+ * list level needs at least two columns to continue), right after an alignment opener or closer
+ * (`<p align=…>`, `</p>`: the renderer splits the text there), or when the run starts with a footnote
+ * definition. So `hype >>>>> lol` is just text. Fenced code is counted too: guessing fences
+ * differently from the parser would open a bypass.
  *
  * Deep nesting overflows the parser's stack or makes it quadratic, and parse time grows with the
  * total number of markers, so text past either limit is shown as plain text (the server refuses it).
@@ -149,8 +150,10 @@ const lineStartSpoilerOffset = (line) => {
  */
 export const MAX_CONTAINER_NESTING = 16;
 export const MAX_CONTAINER_MARKERS = 1_500;
-// Longest footnote label looked at, which keeps the scan linear.
-const MAX_FOOTNOTE_LABEL = 100;
+// Longest footnote label the parser accepts (micromark: 999), which also keeps the scan linear.
+const MAX_FOOTNOTE_LABEL = 999;
+// Where splitAlignedBlocks cuts a line, so a container can open right after it.
+const ALIGNMENT_TAG = /<(?:p|div)\s+align=["'](?:left|center|right)["']\s*>|<\/(?:p|div)\s*>/gi;
 
 const isSpaceOrTab = (char) => char === ' ' || char === '\t';
 const isLineEnd = (char) => char === '\n' || char === '\r';
@@ -193,6 +196,21 @@ const markerRun = (source, index, end) => {
     }
 };
 
+/** Offsets on the line just after an alignment tag (and any whitespace): where a segment starts. */
+const segmentStarts = (source, start, end) => {
+    const starts = new Set();
+    const line = source.slice(start, end);
+    ALIGNMENT_TAG.lastIndex = 0;
+    for (let match = ALIGNMENT_TAG.exec(line); match; match = ALIGNMENT_TAG.exec(line)) {
+        let index = start + match.index + match[0].length;
+        while (index < end && isSpaceOrTab(source[index])) index += 1;
+        starts.add(index);
+    }
+    return starts;
+};
+
+const isFootnoteDefinition = (source, index) => source[index] === '[' && source[index + 1] === '^';
+
 const lineContainerStats = (source, start, end) => {
     let columns = 0;
     let index = start;
@@ -201,11 +219,14 @@ const lineContainerStats = (source, start, end) => {
         index += 1;
     }
     const indentDepth = Math.floor(columns / 2);
+    const tagAt = source.indexOf('<', start);
+    const starts = tagAt !== -1 && tagAt < end ? segmentStarts(source, start, end) : null;
     let depth = indentDepth;
     let markers = 0;
     let atLineStart = true;
     while (index < end) {
-        const run = markerRun(source, index, end);
+        const opensContainers = atLineStart || starts?.has(index) || isFootnoteDefinition(source, index);
+        const run = opensContainers ? markerRun(source, index, end) : { markers: 0 };
         if (run.markers) {
             markers += run.markers;
             depth = Math.max(depth, run.markers + (atLineStart ? indentDepth : 0));

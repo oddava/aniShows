@@ -238,7 +238,7 @@ describe('maxContainerNesting (mirrors apps/forums/services/nesting.py)', () => 
         ['> quote', 1],
         ['> > - 1. item', 4],
         ['>>>> x', 4],
-        ['-----', 1], // the last "-" ends the line; a separator can't nest
+        ['-----', 0], // a separator, not a list
         ['- - -', 3],
         // Indentation counts half its columns (tab = 4): it continues open list items.
         ['   > three spaces indent', 2],
@@ -251,8 +251,12 @@ describe('maxContainerNesting (mirrors apps/forums/services/nesting.py)', () => 
         // Round-4 bypasses: containers opening mid-line, after a footnote or a bare CR.
         [`[^a]: ${'- '.repeat(100)}x`, 101],
         [`a\r${'- '.repeat(100)}x`, 100],
-        [`a<p align="center">${'- '.repeat(100)}x</p>`, 101],
-        ['well - yes, in 2023. Then version 2.0 > 1.9', 1],
+        [`a<p align="center">${'- '.repeat(100)}x</p>`, 100],
+        ['well - yes, in 2023. Then version 2.0 > 1.9', 0],
+        // Mid-line runs count only where containers can open (alignment splits, footnotes).
+        [`hype ${'>'.repeat(20)} lol`, 0],
+        [`a<p align="center">b</p>${'- '.repeat(100)}x`, 100],
+        [`[^${'b'.repeat(120)}]: ${'- '.repeat(50)}`, 51],
         ['a\r\n> b\r\n> > c', 2],
         ['a\n> b\n> > c', 2],
     ])('%j nests %i containers', (text, depth) => {
