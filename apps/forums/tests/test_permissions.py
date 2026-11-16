@@ -1,5 +1,7 @@
 """Edit/delete authorization, category moves, locking and staff moderation (spec 5 P0-3, P1-1)."""
 
+from unittest import mock
+
 import pytest
 from django.core.cache import cache
 from django.urls import reverse
@@ -103,6 +105,34 @@ class TestOwnership:
             format="json",
         )
         assert nested.status_code == 201
+
+        # Likes on the deleted account's content work and notify nobody.
+        with mock.patch("apps.forums.services.interactions.notify") as notify:
+            assert client.post(_thread_url(own_thread, "like")).status_code in (200, 201)
+            assert client.post(_post_url(own_reply, "like")).status_code in (200, 201)
+        notify.assert_not_called()
+
+    def test_deleting_a_user_drops_cached_forum_pages_that_named_them(
+        self, make_user, make_thread, api_for, django_capture_on_commit_callbacks
+    ):
+        author, reader = make_user(), make_user()
+        thread = make_thread(author)
+        make_reply(thread, author)
+        client = api_for(reader)
+        # Warm the caches as an anonymous visitor would.
+        assert client.get(THREADS_URL).status_code == 200
+        assert client.get(_thread_url(thread)).status_code == 200
+        assert client.get(POSTS_URL, {"thread": thread.id}).status_code == 200
+
+        with django_capture_on_commit_callbacks(execute=True):
+            author.delete()
+
+        listing = client.get(THREADS_URL).json()
+        rows = listing.get("results", listing)
+        assert all(row.get("author") is None for row in rows if row["id"] == thread.id)
+        assert client.get(_thread_url(thread)).json()["author"] is None
+        posts = client.get(POSTS_URL, {"thread": thread.id}).json()
+        assert all(row["author"] is None for row in posts.get("results", posts))
 
 
 @pytest.mark.django_db

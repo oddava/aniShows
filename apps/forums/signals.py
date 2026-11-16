@@ -1,5 +1,6 @@
+from django.conf import settings
 from django.db import transaction
-from django.db.models.signals import post_delete, post_save
+from django.db.models.signals import post_delete, post_save, pre_delete
 from django.dispatch import receiver
 
 from .cache_utils import (
@@ -143,3 +144,38 @@ def update_category_on_thread_delete(sender, instance, **kwargs):
     invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.category.slug))
     invalidate_after_commit(invalidate_thread_list_cache)
     invalidate_after_commit(lambda: invalidate_thread_detail_cache(instance.id))
+
+
+# --- D-6: deleting an account keeps its threads and posts (author SET_NULL) ---
+# SET_NULL is a bulk UPDATE: no Thread/Post save signal runs, so the cached
+# thread lists, details and post pages would keep showing the account's name
+# and avatar. Capture the threads it appears in, then drop their caches.
+
+
+@receiver(pre_delete, sender=settings.AUTH_USER_MODEL)
+def capture_forum_threads_of_deleted_user(sender, instance, using=None, **kwargs):
+    thread_ids = set(
+        Thread.objects.using(using).filter(author_id=instance.pk).values_list("pk", flat=True)
+    ) | set(
+        Post.objects.using(using)
+        .filter(author_id=instance.pk)
+        .values_list("thread_id", flat=True)
+        .distinct()
+    )
+    instance._forum_thread_ids = thread_ids
+
+
+@receiver(post_delete, sender=settings.AUTH_USER_MODEL)
+def invalidate_forum_caches_of_deleted_user(sender, instance, **kwargs):
+    thread_ids: set[int] = getattr(instance, "_forum_thread_ids", set())
+    if not thread_ids:
+        return
+
+    def invalidate():
+        for thread_id in thread_ids:
+            invalidate_thread_detail_cache(thread_id)
+            invalidate_post_list_cache(thread_id)
+        invalidate_thread_list_cache()
+        invalidate_category_list_cache()
+
+    invalidate_after_commit(invalidate)

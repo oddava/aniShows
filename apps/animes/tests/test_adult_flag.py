@@ -162,7 +162,7 @@ def test_the_queries_ask_anilist_for_the_flag():
 
 def test_apply_flags_by_anilist_then_mal_id(django_capture_on_commit_callbacks, monkeypatch):
     by_anilist = make_anime(anilist_id=5001)
-    by_mal = make_anime(mal_id=6001)
+    by_mal = make_anime(mal_id=6001)  # no AniList ID locally
     cleared = make_anime(anilist_id=5002, is_adult=True)
     untouched = make_anime(anilist_id=5003, is_adult=True)
     invalidated = []
@@ -173,7 +173,8 @@ def test_apply_flags_by_anilist_then_mal_id(django_capture_on_commit_callbacks, 
     result = apply_anilist_adult_flags(
         [
             {"id": 5001, "isAdult": True},
-            {"idMal": 6001, "isAdult": True},
+            # AniList always returns both IDs (a MAL-ID query included).
+            {"id": 9001, "idMal": 6001, "isAdult": True},
             {"id": 5002, "isAdult": False},
             {"id": 5003},  # no flag: skipped, never cleared
             {"id": 9999, "isAdult": True},  # not in the catalog
@@ -232,7 +233,7 @@ def test_sync_reads_the_flag_for_the_whole_catalog_in_chunks(monkeypatch):
     fake = _FakeAniList(
         [{"id": 7001, "isAdult": True}, {"id": 7003, "isAdult": True}]
         + [{"id": 7000 + n, "isAdult": False} for n in (0, 2, 4)]
-        + [{"idMal": 8001, "isAdult": True}]
+        + [{"id": 98001, "idMal": 8001, "isAdult": True}]
     )
     monkeypatch.setattr("apps.animes.services.anilist.AniListService", fake)
 
@@ -275,6 +276,13 @@ def test_management_command_and_task_run_the_sync(monkeypatch):
     sync_adult_flags.apply()
 
     assert calls == [{"limit": 3}, {}]
+
+    # --enqueue (what deploy-prod.sh runs) queues the task instead.
+    from unittest import mock
+
+    with mock.patch.object(sync_adult_flags, "delay") as delay:
+        call_command("sync_adult_flags", "--enqueue")
+    delay.assert_called_once_with()
 
 
 # ------------------------------------------------------- offline catalog
@@ -359,23 +367,30 @@ def test_offline_import_hides_hentai_until_anilist_reports_and_never_overrides_i
 # ------------------------------------------------------- migration and reads
 
 
-def test_migration_seeds_from_the_hentai_genre_only(genres):
-    hentai, erotica_only = make_anime(), make_anime()
-    tags_only, plain = make_anime(tags=["nsfw", "prostitution"]), make_anime(is_adult=True)
-    hentai.genres.add(genres["hentai"])
+def test_migration_seeds_from_anilist_markers_and_keeps_unverified_rows(genres):
+    hentai_genre, erotica_only = make_anime(), make_anime()
+    thematic = make_anime(tags=["prostitution", "succubus"])  # e.g. The Apothecary Diaries
+    offline_tagged = make_anime(tags=["drama", "Hentai"])  # offline row, no AniList data
+    offline_legacy = make_anime(tags=["nsfw"])  # hidden by the old rule, no genres yet
+    plain = make_anime(is_adult=True)  # no genres: not verified, stays hidden
+    for anime in (hentai_genre,):
+        anime.genres.add(genres["hentai"])
     erotica_only.genres.add(genres["erotica"])
-    Anime.objects.filter(pk__in=[erotica_only.pk, tags_only.pk]).update(is_adult=True)
+    thematic.genres.add(genres["drama"])
+    Anime.objects.filter(pk__in=[erotica_only.pk, thematic.pk, offline_legacy.pk]).update(
+        is_adult=True
+    )
 
     migration = importlib.import_module("apps.animes.migrations.0060_adult_flag_from_anilist")
     with connection.schema_editor() as schema_editor:
         migration.seed_from_anilist_genre(django_apps, schema_editor)
-    assert flagged_ids() == {hentai.pk}
-    assert not Anime.objects.get(pk=plain.pk).is_adult
+    # AniList data and no marker: cleared. No AniList data: nothing is unhidden.
+    assert flagged_ids() == {hentai_genre.pk, offline_tagged.pk, offline_legacy.pk, plain.pk}
 
     # Reversing restores 0054's genre/tag rule.
     with connection.schema_editor() as schema_editor:
         migration.restore_legacy_rule(django_apps, schema_editor)
-    assert flagged_ids() == {hentai.pk, erotica_only.pk, tags_only.pk}
+    assert {hentai_genre.pk, erotica_only.pk, thematic.pk, offline_legacy.pk} <= flagged_ids()
 
 
 def test_public_list_hides_exactly_the_flagged_rows(client):

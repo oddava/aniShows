@@ -5,7 +5,8 @@ SPA serves every other path. URLs are absolute on ``FRONTEND_URL``, the public
 origin. The sitemap is an index (``/sitemap.xml``) of one static-pages file and
 anime files of ``ANIME_PER_FILE`` URLs each (the protocol allows 50,000), so it
 keeps working as the catalog grows. Adult titles (AniList ``isAdult``) and
-quarantined rows are left out: they are not public pages. Each file is cached.
+quarantined rows are left out: they are not public pages. Each file is cached
+under the catalog's collection namespace, so visibility changes drop it at once.
 """
 
 from xml.sax.saxutils import escape
@@ -46,15 +47,24 @@ def _origin() -> str:
 
 
 def _cached(key: str, build) -> str:
+    """``build()``, cached under the catalog's collection namespace.
+
+    Every change to what is public (an anime saved, flagged adult, quarantined)
+    bumps that namespace, so a title hidden since stops being advertised at once.
+    """
+    from ...animes.services.public_anime_service import AnimePublicPayloadService
+
     try:
-        body = cache.get(CACHE_PREFIX + key)
+        namespace = AnimePublicPayloadService.collection_cache_namespace()
+        cache_key = f"{CACHE_PREFIX}{namespace}:{key}"
+        body = cache.get(cache_key)
     except CACHE_ERRORS:
         logger.warning("SEO cache unavailable (read)", exc_info=True)
         return build()
     if body is None:
         body = build()
         try:
-            cache.set(CACHE_PREFIX + key, body, CACHE_TTL_SECONDS)
+            cache.set(cache_key, body, CACHE_TTL_SECONDS)
         except CACHE_ERRORS:
             logger.warning("SEO cache unavailable (write)", exc_info=True)
     return body

@@ -78,3 +78,22 @@ def test_cache_outage_still_serves(client):
         mock.patch.object(cache, "set", side_effect=RedisConnectionError("down")),
     ):
         assert client.get("/sitemap.xml").status_code == 200
+
+
+@override_settings(FRONTEND_URL="https://anishows.example")
+def test_a_title_hidden_after_caching_leaves_the_sitemap_at_once(client):
+    from apps.animes.adult_content import apply_anilist_adult_flags
+
+    anime = Anime.objects.create(
+        title="Later Adult", slug="later-adult", synopsis="s", anilist_id=77
+    )
+    assert _locs(client.get("/sitemap-anime-1.xml")) == [
+        "https://anishows.example/anime/later-adult"
+    ]
+
+    from django.test import TestCase
+
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        apply_anilist_adult_flags([{"id": anime.anilist_id, "isAdult": True}])
+
+    assert _locs(client.get("/sitemap-anime-1.xml")) == []

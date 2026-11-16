@@ -327,7 +327,8 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
 
 
 class AnimePublicPayloadService:
-    PUBLIC_CACHE_VERSION = "v11"
+    # v12: detail payloads carry is_adult (the D-2 gate reads it).
+    PUBLIC_CACHE_VERSION = "v12"
     COLLECTION_CACHE_NAMESPACE_KEY = f"anime_collection_ns:{PUBLIC_CACHE_VERSION}"
     INTERNAL_MEDIA_HOSTS = {"localhost", "127.0.0.1", "minio", "web"}
     MEDIA_URL_FIELDS = (

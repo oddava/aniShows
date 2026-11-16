@@ -29,9 +29,10 @@ inside the stack, runs no ACME, and is published on the host's loopback only
 The app network has a fixed subnet, `APP_SUBNET` (default `10.250.250.0/25`; change it if it
 overlaps a host network), so both trust lists can name it exactly.
 
-**Two trust lists, no defaults.** `deploy-prod.sh` refuses to start without them (and refuses
-`0.0.0.0/0`, `::/0`, `private_ranges` and other very wide ranges); Compose itself refuses the file
-without `TRUSTED_PROXY_CIDRS`:
+**Two trust lists, no defaults.** `deploy-prod.sh` refuses to start without them; Compose itself
+refuses the file without `TRUSTED_PROXY_CIDRS`. Each entry of `TRUSTED_PROXY_CIDRS` must lie inside
+`APP_SUBNET`; `CADDY_TRUSTED_PROXIES` refuses anything wider than /16 (IPv6 /64) or
+`private_ranges`, and warns below /24 (every container on such a network could set the client IP):
 
 | Variable | Who it trusts | Value for the default layout |
 |---|---|---|

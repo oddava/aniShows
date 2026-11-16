@@ -305,3 +305,28 @@ class RecommendationsCacheDownTests(RecommendationsViewTestBase):
         self.assertEqual(response.status_code, 200, response.content)
         rec.refresh_from_db()
         self.assertTrue(rec.is_dismissed)
+
+
+class RecommendationsRedisOutageTests(RecommendationsViewTestBase):
+    """The whole default cache down, throttles included: still no 500 (G2)."""
+
+    def test_list_and_dismiss_answer_with_the_default_cache_down(self):
+        from redis.exceptions import ConnectionError as RedisConnectionError
+
+        rec = self._row(self._anime("Outage Show"))
+        down = RedisConnectionError("cache down")
+        with (
+            patch.object(cache, "get", side_effect=down),
+            patch.object(cache, "get_many", side_effect=down),
+            patch.object(cache, "set", side_effect=down),
+            patch.object(cache, "add", side_effect=down),
+            patch.object(cache, "delete", side_effect=down),
+            patch.object(cache, "incr", side_effect=down),
+            patch("apps.animes.views.recommendations._queue_refresh", return_value=False),
+        ):
+            listed = self.client.get(URL)
+            dismissed = self.client.post(f"{URL}{rec.anime_id}/dismiss/")
+
+        self.assertEqual(listed.status_code, 200, listed.content)
+        self.assertEqual([item["anime"]["title"] for item in listed.json()], ["Outage Show"])
+        self.assertEqual(dismissed.status_code, 200, dismissed.content)

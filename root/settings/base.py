@@ -519,9 +519,10 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
     ],
+    # The site-wide limits fail open if Redis is down (apps/shared/throttling.py).
     "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
+        "apps.shared.throttling.ResilientAnonRateThrottle",
+        "apps.shared.throttling.ResilientUserRateThrottle",
     ],
     "EXCEPTION_HANDLER": "apps.core.api_errors.api_exception_handler",
     "DEFAULT_THROTTLE_RATES": {

@@ -113,6 +113,9 @@ if [ "${#edge_problems[@]}" -gt 0 ]; then
     printf '      - %s\n' "${edge_problems[@]}"
     die "Set them in .env (see .env.production.example and docs/deploy/DEPLOY.md)."
 fi
+while IFS= read -r edge_warning; do
+    [ -n "$edge_warning" ] && warn "$edge_warning"
+done < <(edge_config_warnings)
 if [ "$ADMIN_ALLOW_CIDRS" = 100::/64 ]; then
     warn "ADMIN_ALLOW_CIDRS is empty: /django-admin, /metrics and readiness answer 403 to every client."
 fi
@@ -397,6 +400,13 @@ ok "migrations applied"
 
 step "Workers and backups"
 "${COMPOSE[@]}" up -d --no-deps celery beat backup
+if grep -q "0060_adult_flag_from_anilist" "$PLAN_FILE"; then
+    # anime.0060 seeded is_adult; the worker now re-reads AniList's isAdult for
+    # the whole catalog (about one request per 50 titles, rate-limited).
+    "${COMPOSE[@]}" exec -T web python manage.py sync_adult_flags --enqueue \
+        && ok "AniList adult-flag sync queued" \
+        || warn "could not queue the adult-flag sync: run scripts/deploy/compose.sh exec web python manage.py sync_adult_flags"
+fi
 if [ "$ANALYTICS" = 1 ]; then
     "${COMPOSE[@]}" up -d --wait --no-deps umami_db
     "${COMPOSE[@]}" up -d --no-deps umami

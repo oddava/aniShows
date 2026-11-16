@@ -155,7 +155,7 @@ case "$args" in
   *" ps -q "*) echo "c0ffee000001" ;;
   *"migrate --plan"*)
     if [ "${FAKE_EMPTY_PLAN:-0}" = 1 ]; then printf 'Planned operations:\n  No planned migration operations.\n';
-    else printf 'Planned operations:\nusers.0038_accounts_example\n'; fi ;;
+    else printf 'Planned operations:\n%s\n' "${FAKE_PLAN:-users.0038_accounts_example}"; fi ;;
   *"migrate --noinput"*) [ "${FAKE_FAIL_MIGRATE:-0}" = 1 ] && exit 1 ;;
 esac
 exit 0
@@ -370,6 +370,18 @@ class DeployScriptRefusalTests(SimpleTestCase):
                 {**PROXY_ENV, "ADMIN_ALLOW_CIDRS": '"0.0.0.0/0 ::/0"'},
                 "ADMIN_ALLOW_CIDRS lists 0.0.0.0/0",
             ),
+            "the old private-ranges default for Django": (
+                {**PROXY_ENV, "TRUSTED_PROXY_CIDRS": "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"},
+                "TRUSTED_PROXY_CIDRS lists 10.0.0.0/8",
+            ),
+            "a Django trust range outside APP_SUBNET": (
+                {**PROXY_ENV, "TRUSTED_PROXY_CIDRS": "172.18.0.0/24"},
+                "TRUSTED_PROXY_CIDRS lists 172.18.0.0/24, outside Caddy's network",
+            ),
+            "a Caddy trust range wider than /16": (
+                {**PROXY_ENV, "CADDY_TRUSTED_PROXIES": '"172.16.0.0/12 127.0.0.1/8 ::1/128"'},
+                "CADDY_TRUSTED_PROXIES lists 172.16.0.0/12",
+            ),
             "ADMIN_ALLOW_CIDRS nearly everyone": (
                 {**PROXY_ENV, "ADMIN_ALLOW_CIDRS": '"203.0.113.10/32 0.0.0.0/1"'},
                 "ADMIN_ALLOW_CIDRS lists 0.0.0.0/1",
@@ -382,6 +394,17 @@ class DeployScriptRefusalTests(SimpleTestCase):
                 self.assertIn("the edge is not configured", result.stdout)
                 self.assertIn(message, result.stdout)
                 self.assertEqual(calls, "", "nothing runs before the refusal")
+
+    def test_a_whole_docker_network_in_caddys_trust_list_warns(self):
+        result, _ = self._run(
+            {**PROXY_ENV, "CADDY_TRUSTED_PROXIES": '"172.18.0.0/16 127.0.0.1/8 ::1/128"'}
+        )
+        self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
+        self.assertIn("every container on that network can set the client IP", result.stdout)
+
+    def test_a_subset_of_app_subnet_is_fine(self):
+        result, _ = self._run({**PROXY_ENV, "TRUSTED_PROXY_CIDRS": "10.250.250.0/28"})
+        self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
 
     def test_insecure_defaults_override_does_not_open_the_edge(self):
         result, calls = self._run(
@@ -473,6 +496,13 @@ class DeployScriptFailureRecipeTests(SimpleTestCase):
             out,
         )
         self.assertIn("BACKEND_TAG=rollback FRONTEND_TAG=rollback SKIP_PULL=1", out)
+
+    def test_the_adult_rule_migration_queues_the_anilist_sync(self):
+        result, calls = self._run(FAKE_PLAN="anime.0060_adult_flag_from_anilist")
+        self.assertIn("exec -T web python manage.py sync_adult_flags --enqueue", calls)
+        self.assertIn("AniList adult-flag sync queued", result.stdout)
+        result, calls = self._run()
+        self.assertNotIn("sync_adult_flags", calls)
 
     def test_no_schema_steps_without_migrations(self):
         result, _ = self._run(FAKE_EMPTY_PLAN="1")

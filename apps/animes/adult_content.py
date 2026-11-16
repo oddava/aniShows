@@ -20,9 +20,10 @@ Where the flag comes from:
   database's mirror of the providers' adult flag). The first AniList payload or
   sync replaces that guess. This is the only place a tag is read.
 
-Migration 0060 seeded the flag for existing rows from the Hentai genre, which
-AniList assigns only to ``isAdult`` media; the sync then replaces it with
-AniList's own value.
+Migration 0060 seeded the flag for existing rows from the Hentai genre (which
+AniList assigns only to ``isAdult`` media) or a ``hentai`` tag, without unhiding
+rows that have no AniList data; deploy-prod.sh then queues the sync, which
+replaces the seed with AniList's own value.
 """
 
 from collections.abc import Iterable
@@ -71,9 +72,11 @@ def apply_anilist_adult_flags(payloads: Iterable[dict], *, using: str = "default
         flag = anilist_is_adult(payload)
         if flag is None:
             continue
+        # AniList returns both IDs. Rows with an AniList ID match on it; rows
+        # that only have a MAL ID match on idMal (anilist_id__isnull below).
         if payload.get("id"):
             (adult_ids if flag else general_ids).add(payload["id"])
-        elif payload.get("idMal"):
+        if payload.get("idMal"):
             (adult_mal if flag else general_mal).add(payload["idMal"])
 
     rows = anime_model.objects.using(using)

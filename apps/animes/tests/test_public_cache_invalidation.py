@@ -22,7 +22,7 @@ from apps.animes.services.public_anime_service import AnimePublicPayloadService
 from apps.shared import public_cache
 from apps.users.models import UserAnimeList
 
-NAMESPACE_KEY = "anime_collection_ns:v11"
+NAMESPACE_KEY = "anime_collection_ns:v12"
 LIST_URL = f"{reverse('anime-list')}?page_size=24"
 
 

@@ -211,11 +211,11 @@ resolve_deploy_mode() {
     export CADDY_CLIENT_IP_HEADERS ADMIN_ALLOW_CIDRS
 }
 
-# cidr_is_wide CIDR: true for a range that covers a large part of the internet
-# (an IPv4 prefix shorter than /8, an IPv6 prefix shorter than /16, or Caddy's
-# private_ranges shorthand, which spans every Docker network on the host).
-cidr_is_wide() {
-    local cidr="${1,,}" prefix
+# cidr_prefix_below CIDR V4 V6: true when CIDR is wider than /V4 (IPv4) or /V6
+# (IPv6), or is Caddy's private_ranges shorthand (every Docker network on the
+# host). A bare address counts as a single host.
+cidr_prefix_below() {
+    local cidr="${1,,}" v4="$2" v6="$3" prefix
     case "$cidr" in
         private_ranges) return 0 ;;
         */*) prefix="${cidr##*/}" ;;
@@ -223,20 +223,44 @@ cidr_is_wide() {
     esac
     [[ "$prefix" =~ ^[0-9]+$ ]] || return 0
     if [[ "$cidr" == *:* ]]; then
-        [ "$prefix" -lt 16 ]
+        [ "$prefix" -lt "$v6" ]
     else
-        [ "$prefix" -lt 8 ]
+        [ "$prefix" -lt "$v4" ]
     fi
+}
+
+# cidr_is_wide CIDR: covers a large part of the internet (wider than /8 or IPv6 /16).
+cidr_is_wide() { cidr_prefix_below "$1" 8 16; }
+
+_ipv4_to_int() {
+    local a b c d
+    IFS=. read -r a b c d <<<"$1"
+    [[ "$a.$b.$c.$d" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    echo $(( (a << 24) | (b << 16) | (c << 8) | d ))
+}
+
+# cidr_within CIDR NET: true when the IPv4 range CIDR lies inside the IPv4 network NET.
+cidr_within() {
+    local inner="$1" outer="$2" inner_ip inner_len outer_ip outer_len mask
+    inner_ip="$(_ipv4_to_int "${inner%%/*}")" || return 1
+    outer_ip="$(_ipv4_to_int "${outer%%/*}")" || return 1
+    inner_len="${inner##*/}"; [ "$inner_len" = "$inner" ] && inner_len=32
+    outer_len="${outer##*/}"; [ "$outer_len" = "$outer" ] && outer_len=32
+    [[ "$inner_len" =~ ^[0-9]+$ && "$outer_len" =~ ^[0-9]+$ ]] || return 1
+    [ "$inner_len" -ge "$outer_len" ] || return 1
+    mask=$(( outer_len == 0 ? 0 : (0xFFFFFFFF << (32 - outer_len)) & 0xFFFFFFFF ))
+    [ $(( inner_ip & mask )) -eq $(( outer_ip & mask )) ]
 }
 
 # edge_config_problems: one line per missing or unsafe edge setting (none
 # when the edge is fully configured). Run after resolve_deploy_mode.
 #   - TRUSTED_PROXY_CIDRS (Django's trusted peers, comma-separated): required
-#     in every mode, never wide. Without it every request looks like Caddy's
-#     own address (one throttle bucket for the whole site).
+#     in every mode, and only Caddy's network: each entry inside APP_SUBNET.
+#     Without it every request looks like Caddy's own address (one throttle
+#     bucket for the whole site); wider, other containers could pick their IP.
 #   - CADDY_TRUSTED_PROXIES: required in proxy mode and for an external
-#     cloudflared; never wide. Without it Django sees http behind the proxy
-#     (redirect loop) and every client shares one address.
+#     cloudflared; nothing wider than /16 (IPv6 /64). Without it Django sees
+#     http behind the proxy (redirect loop) and every client shares one address.
 #   - ADMIN_ALLOW_CIDRS: never wide, unless ALLOW_WIDE_ADMIN_CIDRS=1.
 edge_config_problems() {
     local cidr
@@ -246,6 +270,8 @@ edge_config_problems() {
         for cidr in ${TRUSTED_PROXY_CIDRS//,/ }; do
             if cidr_is_wide "$cidr"; then
                 echo "TRUSTED_PROXY_CIDRS lists ${cidr}, which is far wider than Caddy's network (APP_SUBNET ${APP_SUBNET})"
+            elif [[ "$cidr" == *:* ]] || ! cidr_within "$cidr" "$APP_SUBNET"; then
+                echo "TRUSTED_PROXY_CIDRS lists ${cidr}, outside Caddy's network (APP_SUBNET ${APP_SUBNET}): list APP_SUBNET or part of it"
             fi
         done
     fi
@@ -257,8 +283,10 @@ edge_config_problems() {
     fi
     if [ "$TRUSTED_PROXIES_EXPLICIT" = 1 ]; then
         for cidr in ${CADDY_TRUSTED_PROXIES}; do
-            if cidr_is_wide "$cidr"; then
-                echo "CADDY_TRUSTED_PROXIES lists ${cidr}: list only the proxy's own address or subnet"
+            # Loopback (127.0.0.1/8) is Caddy's own container: always fine.
+            [ "$cidr" = 127.0.0.1/8 ] && continue
+            if cidr_prefix_below "$cidr" 16 64; then
+                echo "CADDY_TRUSTED_PROXIES lists ${cidr}: list only the proxy's own address or a small subnet (/16 at most)"
             fi
         done
     fi
@@ -269,4 +297,16 @@ edge_config_problems() {
             fi
         done
     fi
+}
+
+# edge_config_warnings: acceptable but worth a second look (printed, not refused).
+edge_config_warnings() {
+    local cidr
+    [ "${TRUSTED_PROXIES_EXPLICIT:-0}" = 1 ] || return 0
+    for cidr in ${CADDY_TRUSTED_PROXIES}; do
+        [ "$cidr" = 127.0.0.1/8 ] && continue
+        if cidr_prefix_below "$cidr" 24 120 && ! cidr_prefix_below "$cidr" 16 64; then
+            echo "CADDY_TRUSTED_PROXIES lists ${cidr}: every container on that network can set the client IP; prefer the proxy's own address (/32)"
+        fi
+    done
 }

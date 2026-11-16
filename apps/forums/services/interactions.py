@@ -144,7 +144,8 @@ def toggle_thread_like(thread: Thread, user) -> ForumActionResult:
             )
         like_count = locked_thread.like_count + 1
 
-        if locked_thread.author_id != user.id:
+        # A deleted account (author NULL, D-6) has nobody to tell.
+        if locked_thread.author_id is not None and locked_thread.author_id != user.id:
             run_after_commit(
                 lambda: notify(
                     locked_thread.author_id,
@@ -370,7 +371,7 @@ def toggle_post_like(post: Post, user) -> ForumActionResult:
             )
         like_count = locked_post.like_count + 1
 
-        if locked_post.author_id != user.id:
+        if locked_post.author_id is not None and locked_post.author_id != user.id:
             run_after_commit(
                 lambda: notify(
                     locked_post.author_id,

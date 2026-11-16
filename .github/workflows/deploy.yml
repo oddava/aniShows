@@ -41,17 +41,31 @@ jobs:
         uses: actions/checkout@v4
 
       # The production stack must parse in every mode before anything ships
-      # (env_file .env is required by the services, so an empty one stands in).
+      # (env_file .env is required by the services, so a stub stands in).
+      # TRUSTED_PROXY_CIDRS has no default (compose refuses the file without
+      # it), so the stub sets the template's value; the refusal itself is
+      # checked last.
       - name: Lint production compose files
         run: |
           set -euo pipefail
-          : > .env
+          {
+            echo "TRUSTED_PROXY_CIDRS=10.250.250.0/25"
+            echo "PROXY_NETWORK=proxy"
+            echo "TUNNEL_NETWORK=cloudflared"
+          } > .env
           for profiles in "" bundled-db analytics tunnel "bundled-db,analytics,tunnel"; do
             COMPOSE_PROFILES="$profiles" docker compose -f docker-compose.prod.yml config -q
+            COMPOSE_PROFILES="$profiles" docker compose -f docker-compose.prod.yml -f infra/compose/proxy-port.yml config -q
             COMPOSE_PROFILES="$profiles" docker compose -f docker-compose.prod.yml -f infra/compose/public-ports.yml config -q
           done
+          docker compose -f docker-compose.prod.yml -f infra/compose/shared-proxy-network.yml config -q
           docker compose -f docker-compose.prod.yml -f infra/compose/loopback-port.yml config -q
           docker compose -f docker-compose.prod.yml -f infra/compose/shared-tunnel-network.yml config -q
+          : > .env
+          if docker compose -f docker-compose.prod.yml config -q 2>/dev/null; then
+            echo "docker-compose.prod.yml must refuse an unset TRUSTED_PROXY_CIDRS" >&2
+            exit 1
+          fi
           bash -n deploy-prod.sh backups/entrypoint.sh backups/shell/*.sh scripts/deploy/*.sh
           rm .env
 
