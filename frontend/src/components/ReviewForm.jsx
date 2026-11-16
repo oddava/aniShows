@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Star, AlertTriangle, X, ChevronDown, ChevronUp } from 'lucide-react';
 import logger from '../utils/logger';
+import { getReviewErrorMessage } from '../api/queries/reviews';
 
 // Helper component for 5-star input (handles 1-10 backend value)
 const StarInput = ({ label, value, onChange, size = "md" }) => {
@@ -195,24 +196,13 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
             const data = err.response?.data;
             const status = err.response?.status;
 
-            if (data) {
-                if (typeof data === 'string' && data.includes('<!doctype html>')) {
-                    setError(`Server Error (${status || 500}). Please check backend logs.`);
-                } else if (typeof data === 'string') {
-                    setError(data);
-                } else if (data.detail) {
-                    setError(data.detail);
-                } else if (data.non_field_errors) {
-                    setError(data.non_field_errors[0]);
-                } else {
-                    // Collect field errors
-                    const fieldErrors = Object.entries(data)
-                        .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs[0] : msgs}`)
-                        .join(', ');
-                    setError(fieldErrors || 'Failed to submit review');
-                }
-            } else {
+            if (!err.response) {
                 setError('Failed to connect to server. Please try again.');
+            } else if (typeof data === 'string' && data.toLowerCase().includes('<!doctype html>')) {
+                setError(`Server Error (${status || 500}). Please check backend logs.`);
+            } else {
+                // Envelope {detail, code, errors?}: `detail` already holds the first field error; 429 gets the throttle copy.
+                setError(getReviewErrorMessage(err, 'Failed to submit review'));
             }
             setIsSubmitting(false);
         }
