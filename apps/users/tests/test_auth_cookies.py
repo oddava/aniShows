@@ -37,7 +37,7 @@ class RefreshCookieFlowTests(APITestCase):
 
     def _login(self):
         response = self.client.post(
-            self.login_url, {"username": "cookieuser", "password": "securepass123"}
+            self.login_url, {"username": "cookieuser", "password": "securepass123"}, **XHR
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         return response
@@ -154,7 +154,7 @@ class GoogleLoginCookieTests(APITestCase):
 
         with patch.object(SocialLoginView, "post", autospec=True, side_effect=fake_post):
             # Not reverse("google_login"): allauth registers the same URL name.
-            response = self.client.post("/api/v1/auth/google/", {"code": "abc"})
+            response = self.client.post("/api/v1/auth/google/", {"code": "abc"}, **XHR)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["access"], "google-access")

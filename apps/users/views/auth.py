@@ -24,7 +24,7 @@ from ...shared.logger import logger
 from .. import throttling
 from ..auth_cookies import (
     clear_refresh_cookie,
-    cookie_csrf_failure,
+    cookie_auth_rejected,
     end_django_session,
     get_refresh_cookie,
     move_refresh_to_cookie,
@@ -111,6 +111,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [throttling.LoginRateThrottle]
 
     def post(self, request, *args, **kwargs):
+        # Login CSRF (A08): the same header + Origin check as refresh/logout,
+        # so a cross-site form cannot sign the victim into another account.
+        rejected = cookie_auth_rejected(request)
+        if rejected is not None:
+            return rejected
         return move_refresh_to_cookie(super().post(request, *args, **kwargs))
 
 
@@ -187,6 +192,11 @@ class AuthViewSet(ViewSet):
         POST-only so mail scanners and link prefetchers that GET the URL
         can't consume the single-use token.
         """
+        # It sets the refresh cookie, so it needs the login-CSRF check (A08).
+        rejected = cookie_auth_rejected(request)
+        if rejected is not None:
+            return rejected
+
         uidb64 = kwargs.get("uid") or request.data.get("uid")
         token = kwargs.get("token") or request.data.get("token")
 
@@ -304,14 +314,6 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
             raise
 
 
-def _cookie_auth_rejected(request):
-    reason = cookie_csrf_failure(request)
-    if reason is None:
-        return None
-    logger.warning("Rejected cookie-authenticated auth request", extra={"reason": reason})
-    return error_response(reason, code="csrf_failed", status_code=status.HTTP_403_FORBIDDEN)
-
-
 class LoggingTokenRefreshView(BaseTokenRefreshView):
     """Rotate the refresh cookie and return a fresh access token.
 
@@ -322,7 +324,7 @@ class LoggingTokenRefreshView(BaseTokenRefreshView):
     authentication_classes = []
 
     def post(self, request, *args, **kwargs):
-        rejected = _cookie_auth_rejected(request)
+        rejected = cookie_auth_rejected(request)
         if rejected is not None:
             return rejected
 
@@ -364,7 +366,7 @@ class LogoutView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        rejected = _cookie_auth_rejected(request)
+        rejected = cookie_auth_rejected(request)
         if rejected is not None:
             return rejected
 

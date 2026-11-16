@@ -17,7 +17,11 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth import logout as django_logout
+from rest_framework import status
 from rest_framework_simplejwt.settings import api_settings as jwt_settings
+
+from ..core.api_errors import error_response
+from ..shared.logger import logger
 
 REFRESH_COOKIE_NAME = "anishows_refresh"
 REFRESH_COOKIE_PATH = "/api/v1/auth/refresh/"
@@ -77,6 +81,19 @@ def cookie_csrf_failure(request) -> str | None:
     if origin and origin.rstrip("/") not in _allowed_origins(request):
         return "Origin not allowed."
     return None
+
+
+def cookie_auth_rejected(request):
+    """A 403 ``csrf_failed`` response when ``cookie_csrf_failure`` fires, else None.
+
+    Used by every endpoint that reads or sets the refresh cookie: refresh,
+    logout, and the login-style endpoints (password, Google, verify-email).
+    """
+    reason = cookie_csrf_failure(request)
+    if reason is None:
+        return None
+    logger.warning("Rejected cookie-authenticated auth request", extra={"reason": reason})
+    return error_response(reason, code="csrf_failed", status_code=status.HTTP_403_FORBIDDEN)
 
 
 def end_django_session(request) -> None:

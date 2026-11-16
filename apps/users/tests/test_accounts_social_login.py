@@ -157,3 +157,66 @@ class LastLoginTests(APITestCase):
         self._login()
 
         self.assertTrue(email_verification_token_generator.check_token(self.user, verify_token))
+
+
+class GoogleCodeFlowOnlyTests(APITestCase):
+    """A raw provider token from the client is never accepted (A07)."""
+
+    def test_access_token_without_code_is_400_code_required(self):
+        for body in (
+            {"access_token": "ya29.token-minted-for-another-app"},
+            {"id_token": "eyJ..."},
+            {"access_token": "ya29.x", "code": ""},
+            {"code": 5},
+            {},
+        ):
+            with self.subTest(body=body):
+                response = self.client.post(GOOGLE_URL, body, format="json", **XHR)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(response.data["code"], "code_required")
+
+    def test_serializer_has_no_token_fields(self):
+        fields = SocialLoginSerializer().fields
+        self.assertEqual(set(fields), {"code"})
+        self.assertTrue(fields["code"].required)
+
+
+class LoginCsrfTests(APITestCase):
+    """Login-style endpoints set the refresh cookie, so they need the CSRF check (A08)."""
+
+    def setUp(self):
+        User.objects.create_user(username="victim", email="v@example.com", password="pw-12345678")
+
+    def _assert_rejected(self, url, body, **headers):
+        response = self.client.post(url, body, format="json", **headers)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "csrf_failed")
+        self.assertNotIn(REFRESH_COOKIE_NAME, response.cookies)
+
+    def test_endpoints_reject_a_missing_header_and_a_foreign_origin(self):
+        cases = (
+            (reverse("token_obtain_pair"), {"username": "victim", "password": "pw-12345678"}),
+            (GOOGLE_URL, {"code": "abc"}),
+            ("/api/v1/verify-email/MQ/token/", {}),
+        )
+        for url, body in cases:
+            with self.subTest(url=url, case="no header"):
+                self._assert_rejected(url, body)
+            with self.subTest(url=url, case="foreign origin"):
+                self._assert_rejected(url, body, HTTP_ORIGIN="https://evil.example", **XHR)
+
+    def test_form_encoded_cross_site_post_is_rejected(self):
+        response = self.client.post(
+            reverse("token_obtain_pair"), {"username": "victim", "password": "pw-12345678"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_same_origin_login_with_the_header_still_works(self):
+        response = self.client.post(
+            reverse("token_obtain_pair"),
+            {"username": "victim", "password": "pw-12345678"},
+            format="json",
+            HTTP_ORIGIN="http://testserver",
+            **XHR,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
