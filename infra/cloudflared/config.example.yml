@@ -1,0 +1,25 @@
+# Locally managed tunnel (alternative to the token in TUNNEL_TOKEN).
+# The compose `cloudflared` service runs a *remotely managed* tunnel: create it
+# in the Cloudflare dashboard (Zero Trust > Networks > Tunnels), add the public
+# hostnames below with service http://caddy:80, and put its token in .env.
+# Use this file only if you manage ingress as code:
+#   cloudflared tunnel create anishows      # writes <TUNNEL_ID>.json
+#   cloudflared tunnel route dns anishows anishows.com
+# then mount this file and the credentials JSON into the container and run
+#   cloudflared tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+no-autoupdate: true
+metrics: 127.0.0.1:20241
+
+ingress:
+  # Everything goes to Caddy, which holds the routing, media proxy, CSP and
+  # SPA fallback. Caddy listens on plain HTTP :80 in tunnel mode.
+  - hostname: anishows.com
+    service: http://caddy:80
+  - hostname: www.anishows.com
+    service: http://caddy:80
+  # Umami (only with the `analytics` profile).
+  # - hostname: stats.anishows.com
+  #   service: http://caddy:80
+  - service: http_status:404

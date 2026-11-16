@@ -1,0 +1,8 @@
+# Public mode (CADDY_MODE=public, the default): Caddy owns the host's 80/443
+# and gets certificates by ACME. deploy-prod.sh adds this file in that mode.
+#   docker compose -f docker-compose.prod.yml -f infra/compose/public-ports.yml ...
+services:
+  caddy:
+    ports:
+      - "80:80"
+      - "443:443"

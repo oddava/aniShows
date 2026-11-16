@@ -1,22 +1,42 @@
+# Production edge. Two deploy modes share every route below (snippet "app"):
+#
+#   public  (default) Caddy owns the host's 80/443, gets certificates by ACME
+#           and redirects HTTP to HTTPS. CADDY_SITE_ADDRESS is the domain.
+#   tunnel  Cloudflare Tunnel (cloudflared) is the only client. Caddy serves
+#           plain HTTP on :80 inside the compose network, publishes no host
+#           port and runs no ACME. CADDY_SITE_ADDRESS is ":80".
+#
+# deploy-prod.sh derives the CADDY_* variables from CADDY_MODE; see
+# docs/deploy/tunnel.md for the proxy chain and .env.production.example.
 {
-	# ACME account email for certificate issuance/recovery notifications.
-	# Keep separate from application mail settings (e.g., RESEND/SMTP users).
+	# ACME account email for certificate issuance/recovery notifications
+	# (public mode only; tunnel mode has no site that needs a certificate).
 	email {$CADDY_ACME_EMAIL:admin@anishows.local}
+
+	servers {
+		# Peers whose client-IP headers Caddy believes. Public mode: loopback
+		# only, so a client can never choose its own address. Tunnel mode:
+		# the compose network (cloudflared), which sets CF-Connecting-IP to the
+		# address Cloudflare saw. {client_ip} below resolves through this.
+		trusted_proxies static {$CADDY_TRUSTED_PROXIES:127.0.0.1/8 ::1/128}
+		client_ip_headers CF-Connecting-IP
+	}
 }
 
-{$DOMAIN_NAME:localhost} {
-	encode gzip zstd
+# Every reverse_proxy to Django sends exactly one X-Forwarded-For entry: the
+# real client. The app trusts exactly one proxy hop (Caddy), in both modes:
+# DRF NUM_PROXIES=1 and get_client_ip() both read that single entry, so each
+# client gets its own throttle bucket. X-Forwarded-Proto is Caddy's default:
+# its own scheme, or the trusted peer's (Cloudflare's "https") in tunnel mode.
+(django) {
+	header_up X-Forwarded-For {client_ip}
+}
 
-	# Django spools a whole request body to disk before any auth check, so
-	# cap it here. The largest real upload is the 10MB MAL XML import.
-	request_body {
-		max_size 12MB
-	}
-
-	# Security headers
+(security_headers) {
 	header {
-		# Enable HSTS
-		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		# Matches Django's SECURE_HSTS_* (deploy-prod.sh builds both from the
+		# same env). Default: 1 year, includeSubDomains, preload.
+		Strict-Transport-Security "{$CADDY_HSTS_HEADER:max-age=31536000; includeSubDomains; preload}"
 		# Prevent MIME type sniffing
 		X-Content-Type-Options "nosniff"
 		# Prevent clickjacking
@@ -27,35 +47,70 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		# Note: Content-Security-Policy is set by Django csp_middleware.py for backend routes
 		# and in the frontend handle block below for static pages.
-		# Note: Permissions-Policy header removed to prevent console warnings
-		# Modern browsers handle feature permissions without this header
 		# Remove server header
 		-Server
+	}
+}
+
+# Operator-only routes (owner decision D-9): /metrics, readiness and the
+# Django admin. ADMIN_ALLOW_CIDRS is a space-separated CIDR list; the default
+# lets everyone through, so nothing changes until it is set. Loopback always
+# passes (deploy smoke tests run inside the container). {client_ip} is the
+# real client in both modes (see trusted_proxies above). Imported inside each
+# handle block: a top-level respond would sort after handle and never run.
+(operator_gate) {
+	@operator_denied_{args[0]} not client_ip {$ADMIN_ALLOW_CIDRS:0.0.0.0/0 ::/0} 127.0.0.1/8 ::1/128
+	respond @operator_denied_{args[0]} 403
+}
+
+(api_proxy) {
+	reverse_proxy {$WEB_UPSTREAMS:web:8000} {
+		import django
+		lb_policy least_conn
+		lb_try_duration 10s
+		lb_try_interval 250ms
+		fail_duration 30s
+		max_fails 3
+		# Liveness, never readiness: a database blip must not eject
+		# every replica at once.
+		health_uri /api/v1/health/
+		health_interval 15s
+		health_timeout 5s
+		transport http {
+			dial_timeout 5s
+			read_timeout 30s
+			write_timeout 30s
+			keepalive 120s
+		}
+	}
+}
+
+(app) {
+	encode gzip zstd
+
+	# Django spools a whole request body to disk before any auth check, so
+	# cap it here. The largest real upload is the 10MB MAL XML import.
+	request_body {
+		max_size 12MB
+	}
+
+	import security_headers
+
+	# Readiness (live DB/cache/migration checks): operator-only.
+	handle /api/v1/health/ready/ {
+		import operator_gate ready
+		import api_proxy
 	}
 
 	# API
 	handle /api/* {
-		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
-			lb_policy least_conn
-			lb_try_duration 10s
-			lb_try_interval 250ms
-			fail_duration 30s
-			max_fails 3
-			health_uri /api/v1/health/
-			health_interval 15s
-			health_timeout 5s
-			transport http {
-				dial_timeout 5s
-				read_timeout 30s
-				write_timeout 30s
-				keepalive 120s
-			}
-		}
+		import api_proxy
 	}
 
 	# WebSockets are served by the same ASGI (uvicorn) workers as the API
 	handle /ws/* {
 		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
+			import django
 			lb_policy random_choose 2
 			lb_try_duration 10s
 			lb_try_interval 500ms
@@ -75,18 +130,35 @@
 
 	# Django Admin (backend)
 	handle /django-admin/* {
-		reverse_proxy {$WEB_UPSTREAMS:web:8000}
+		import operator_gate admin
+		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
+			import django
+		}
 	}
 
-	# Django static (optional)
+	# Django static (whitenoise)
 	handle /static/* {
-		reverse_proxy {$WEB_UPSTREAMS:web:8000}
+		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
+			import django
+		}
 	}
 
-	# Metrics: public route, but the view requires basic auth with explicit,
-	# non-default METRICS_USERNAME/METRICS_PASSWORD (else it is disabled).
+	# Metrics: the view also requires basic auth with explicit, non-default
+	# METRICS_USERNAME/METRICS_PASSWORD (else it is disabled).
 	handle /metrics {
-		reverse_proxy {$WEB_UPSTREAMS:web:8000}
+		import operator_gate metrics
+		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
+			import django
+		}
+	}
+
+	# Image optimization endpoint - proxy to Django for on-demand resizing.
+	# (handle_path strips the prefix, so it must come before /media/*.)
+	handle_path /media/resize/* {
+		rewrite * /api/v1/media/resize/{path}
+		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
+			import django
+		}
 	}
 
 	# MinIO Media - proxy /media/* to MinIO bucket
@@ -141,19 +213,6 @@
 		# Add cross-origin headers for images
 		header Access-Control-Allow-Origin "*"
 		header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
-	}
-
-	# ImageKit CACHE - serve locally generated thumbnails (Unused when USE_S3=True)
-	# handle_path /media/CACHE/* {
-	#     root * /app/CACHE
-	#     file_server
-	#     header Cache-Control "public, max-age=31536000, immutable"
-	# }
-
-	# Image optimization endpoint - proxy to Django for on-demand resizing
-	handle_path /media/resize/* {
-		rewrite * /api/v1/media/resize/{path}
-		reverse_proxy {$WEB_UPSTREAMS:web:8000}
 	}
 
 	# Service worker - never cache to ensure updates are detected
@@ -214,7 +273,9 @@
 		header_regexp User-Agent (?i)(facebookexternalhit|facebot|twitterbot|slackbot|discordbot|whatsapp|telegram(?:bot)?|linkedinbot|skypeuripreview|googlebot|bingbot|duckduckbot|applebot|pinterestbot|vkshare|line|kakaotalk-scrap)
 	}
 	handle @profile_share_crawlers {
-		reverse_proxy {$WEB_UPSTREAMS:web:8000}
+		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
+			import django
+		}
 	}
 
 	# Frontend (STATIC) - Production mode
@@ -236,39 +297,31 @@
 	}
 }
 
-{$UMAMI_DOMAIN} {
+# The application. Public mode: the domain (ACME + HTTP->HTTPS redirect).
+# Tunnel mode: ":80", any Host (Django's ALLOWED_HOSTS still checks it).
+{$CADDY_SITE_ADDRESS:localhost} {
+	import app
+}
+
+# Umami analytics (the "analytics" compose profile). Public mode: its domain;
+# tunnel mode: "http://<domain>" (no ACME). The default never matches a real
+# request, so the config loads when analytics is off.
+{$CADDY_UMAMI_SITE_ADDRESS:http://umami.invalid} {
 	encode gzip zstd
 
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		-Server
-	}
+	import security_headers
 
-	reverse_proxy umami:3000
+	reverse_proxy umami:3000 {
+		header_up X-Forwarded-For {client_ip}
+	}
 
 	log {
 		output file /var/log/caddy/umami-access.log
 	}
 }
 
-www.oddava.me {
-	redir https://oddava.me{uri} permanent
-}
-
-oddava.me {
-	encode zstd gzip
-
-	reverse_proxy oddava-app:4321 {
-		# oddava-app relies on explicit forwarded host/proto/client metadata
-		# for canonical URL generation and origin-aware behavior.
-		# Keep these header_up directives even though Caddy may warn that
-		# some overlap with defaults.
-		header_up Host {host}
-		header_up X-Forwarded-Host {host}
-		header_up X-Forwarded-Proto {scheme}
-		header_up X-Forwarded-For {remote_host}
-	}
-}
+# Extra sites for this mode only (infra/caddy/sites-<mode>.d/*.caddy, mounted
+# at /etc/caddy/sites-<mode>.d). Public mode keeps serving the owner's other
+# site on this Caddy, as before; tunnel mode adds none (cloudflared routes
+# other projects itself). An empty directory is fine.
+import /etc/caddy/sites-{$CADDY_MODE:public}.d/*.caddy

@@ -1,0 +1,8 @@
+# Tunnel mode with cloudflared running on the host (systemd) instead of in
+# this stack: Caddy listens on the host's loopback only. Point the tunnel's
+# service at http://127.0.0.1:${CADDY_LOOPBACK_PORT}. Nothing is reachable
+# from outside the host. Add it with COMPOSE_EXTRA_FILES (deploy-prod.sh).
+services:
+  caddy:
+    ports:
+      - "127.0.0.1:${CADDY_LOOPBACK_PORT:-8080}:80"

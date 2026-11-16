@@ -1,0 +1,18 @@
+# Tunnel mode with a cloudflared container that already serves other projects
+# on this host: Caddy joins that container's Docker network as
+# "anishows-caddy". Point the tunnel's public hostnames at
+# http://anishows-caddy:80. Add it with COMPOSE_EXTRA_FILES (deploy-prod.sh)
+# and do not enable the `tunnel` profile. Set CADDY_TRUSTED_PROXIES to that
+# network's subnet (or keep private_ranges).
+services:
+  caddy:
+    networks:
+      default: {}
+      tunnel:
+        aliases:
+          - anishows-caddy
+
+networks:
+  tunnel:
+    name: ${TUNNEL_NETWORK:-cloudflared}
+    external: true
