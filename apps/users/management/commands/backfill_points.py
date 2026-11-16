@@ -1,16 +1,18 @@
-"""
-Management command to backfill points for existing users based on their review votes.
-This is a one-time command to initialize points for users with existing helpful votes.
+"""Rebuild every user's points from the votes on their reviews.
+
+Points semantics: ``apps/users/services/points_service.py``.
 
 Usage:
-    python manage.py backfill_points
+    python manage.py backfill_points [--dry-run] [--batch-size 500]
 """
 
 from django.core.management.base import BaseCommand
-from django.db.models import Case, IntegerField, Sum, When
 
-from ....animes.models import ReviewVote
-from ...models import UserProfile
+from ...services.points_service import (
+    BACKFILL_BATCH_SIZE,
+    backfill_all_points,
+    iter_points_changes,
+)
 
 
 class Command(BaseCommand):
@@ -22,47 +24,22 @@ class Command(BaseCommand):
             action="store_true",
             help="Show what would be updated without making changes",
         )
+        parser.add_argument("--batch-size", type=int, default=BACKFILL_BATCH_SIZE)
 
     def handle(self, *args, **options):
-        dry_run = options["dry_run"]
-
+        batch_size = options["batch_size"]
         self.stdout.write("Calculating points for all users...")
 
-        # Get all users with profiles
-        profiles = UserProfile.objects.select_related("user").all()
-        updated_count = 0
+        if not options["dry_run"]:
+            updated = backfill_all_points(batch_size=batch_size)
+            self.stdout.write(self.style.SUCCESS(f"\nSuccessfully updated {updated} users"))
+            return
 
-        for profile in profiles:
-            # Count helpful votes as +1, unhelpful as -1
-            result = ReviewVote.objects.filter(review__user=profile.user).aggregate(
-                total_points=Sum(
-                    Case(
-                        When(vote_type=ReviewVote.VoteType.HELPFUL, then=1),
-                        When(vote_type=ReviewVote.VoteType.DISLIKE, then=-1),
-                        default=0,
-                        output_field=IntegerField(),
-                    )
+        pending = 0
+        for changes in iter_points_changes(batch_size):
+            for change in changes:
+                self.stdout.write(
+                    f"  [DRY RUN] {change.username}: {change.old_points} -> {change.new_points}"
                 )
-            )
-
-            new_points = result["total_points"] or 0
-
-            if profile.points != new_points:
-                if dry_run:
-                    self.stdout.write(
-                        f"  [DRY RUN] {profile.user.username}: {profile.points} -> {new_points}"
-                    )
-                else:
-                    profile.points = new_points
-                    profile.save(update_fields=["points"])
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            f"  Updated {profile.user.username}: {new_points} points"
-                        )
-                    )
-                updated_count += 1
-
-        if dry_run:
-            self.stdout.write(self.style.WARNING(f"\n[DRY RUN] Would update {updated_count} users"))
-        else:
-            self.stdout.write(self.style.SUCCESS(f"\nSuccessfully updated {updated_count} users"))
+            pending += len(changes)
+        self.stdout.write(self.style.WARNING(f"\n[DRY RUN] Would update {pending} users"))

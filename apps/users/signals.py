@@ -3,7 +3,7 @@ from allauth.socialaccount.signals import social_account_added
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import F
+from django.db.models import QuerySet
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -124,69 +124,74 @@ def handle_profile_update(sender, instance, created, **kwargs):
 
 
 # =============================================================================
-# Points signals (from review votes)
+# Points signals (from review votes; semantics in services/points_service.py)
 # =============================================================================
 
-from ..animes.models import ReviewVote
+from ..animes.models import Review, ReviewVote
+from .services import points_service
+
+# Kept importable from here (older callers import it from the signals module).
+recalculate_user_points = points_service.recalculate_user_points
+
+
+def _invalidate_after_commit(user_id: int, username: str) -> None:
+    transaction.on_commit(lambda: invalidate_user_caches(user_id, username))
+
+
+def _deletion_started_at(origin, model) -> bool:
+    """Whether the delete that sent this signal started at a ``model`` row or queryset."""
+    return isinstance(origin, model) or (isinstance(origin, QuerySet) and origin.model is model)
+
+
+def _deletion_covers(origin, model, pk) -> bool:
+    """Whether the delete that started at ``origin`` is deleting the ``model`` row ``pk``."""
+    if isinstance(origin, model):
+        return origin.pk == pk
+    if isinstance(origin, QuerySet) and origin.model is model:
+        return origin.filter(pk=pk).exists()
+    return False
 
 
 @receiver(post_save, sender=ReviewVote)
 def update_points_on_vote_save(sender, instance, created, **kwargs):
-    """Update author's points when a vote is added or changed."""
-    if not created:
-        recalculate_user_points(instance.review.user)
-        transaction.on_commit(
-            lambda: invalidate_user_caches(instance.review.user.id, instance.review.user.username)
-        )
-        return
-
-    review_author = instance.review.user
-    _adjust_points(review_author, _vote_points(instance.vote_type))
-    transaction.on_commit(lambda: invalidate_user_caches(review_author.id, review_author.username))
+    """Update the review author's points when a vote is added or changed."""
+    author = instance.review.user
+    if created:
+        points_service.adjust_points(author.pk, points_service.vote_points(instance.vote_type))
+    else:
+        points_service.recalculate_user_points(author)
+    _invalidate_after_commit(author.pk, author.username)
 
 
 @receiver(post_delete, sender=ReviewVote)
-def update_points_on_vote_delete(sender, instance, **kwargs):
-    """Update author's points when a vote is removed."""
-    review_author = instance.review.user
+def update_points_on_vote_delete(sender, instance, origin=None, **kwargs):
+    """Take a removed vote's points back from the review author.
 
-    if not user_exists(review_author):
+    When the review itself is being deleted (its votes cascade first), the Review
+    receiver below recalculates the author once instead of once per vote.
+    """
+    if _deletion_started_at(origin, Review):
+        # Only the deleted reviews' votes cascade from a review delete.
         return
-
-    _adjust_points(review_author, -_vote_points(instance.vote_type))
-    transaction.on_commit(lambda: invalidate_user_caches(review_author.id, review_author.username))
-
-
-def _vote_points(vote_type) -> int:
-    return 1 if vote_type == ReviewVote.VoteType.HELPFUL else -1
-
-
-def _adjust_points(user, delta: int) -> None:
-    # A single UPDATE: votes on different reviews by the same author run
-    # concurrently and must not overwrite each other's increments.
-    UserProfile.objects.get_or_create(user=user)
-    UserProfile.objects.filter(user=user).update(points=F("points") + delta)
-
-
-def recalculate_user_points(user):
-    """
-    Recalculate all points for a user based on their reviews' votes.
-    Used for vote updates and as a safety net.
-    """
-    from django.db.models import Case, IntegerField, Sum, When
-
-    profile, _ = UserProfile.objects.get_or_create(user=user)
-
-    result = ReviewVote.objects.filter(review__user=user).aggregate(
-        total_points=Sum(
-            Case(
-                When(vote_type=ReviewVote.VoteType.HELPFUL, then=1),
-                When(vote_type=ReviewVote.VoteType.DISLIKE, then=-1),
-                default=0,
-                output_field=IntegerField(),
-            )
-        )
+    author = (
+        Review.objects.filter(pk=instance.review_id)
+        .values_list("user_id", "user__username")
+        .first()
     )
+    if author is None:
+        return
+    author_id, username = author
+    if _deletion_covers(origin, User, author_id):
+        return
+    points_service.adjust_points(author_id, -points_service.vote_points(instance.vote_type))
+    _invalidate_after_commit(author_id, username)
 
-    profile.points = result["total_points"] or 0
-    profile.save(update_fields=["points"])
+
+@receiver(post_delete, sender=Review)
+def update_points_on_review_delete(sender, instance, origin=None, **kwargs):
+    """Recalculate the author once after a review and its votes are gone."""
+    if _deletion_covers(origin, User, instance.user_id):
+        return
+    author = instance.user
+    points_service.recalculate_user_points(author)
+    _invalidate_after_commit(author.pk, author.username)

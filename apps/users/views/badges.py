@@ -1,11 +1,19 @@
-from rest_framework import status
+from collections.abc import Mapping
+
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.viewsets import GenericViewSet
 
 from ..models import UserBadge
 from ..serializers.badges import UserBadgeSerializer
+from ..services.badge_service import set_featured_badges
+
+
+class CommunityActionRateThrottle(UserRateThrottle):
+    scope = "community_action"
 
 
 class UserBadgeViewSet(GenericViewSet):
@@ -18,51 +26,19 @@ class UserBadgeViewSet(GenericViewSet):
 
     @action(detail=False, methods=["get"])
     def mine(self, request):
-        """Get all my badges."""
-        user_badges = self.get_queryset()
-        serializer = UserBadgeSerializer(user_badges, many=True)
+        """Get all my badges (each with ``badge.is_active``)."""
+        serializer = UserBadgeSerializer(self.get_queryset(), many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=["put"])
+    @action(detail=False, methods=["put"], throttle_classes=[CommunityActionRateThrottle])
     def featured(self, request):
-        """Update featured badges (max 3)."""
-        badge_ids = request.data.get("badge_ids", [])
-
-        if not isinstance(badge_ids, list):
-            return Response(
-                {"detail": "Please provide a list of user_badge ids."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if len(badge_ids) > 3:
-            return Response(
-                {"detail": "You can feature a maximum of 3 badges."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Verify ownership of all badges being featured
-        owned_badges = self.get_queryset().filter(id__in=badge_ids)
-        if owned_badges.count() != len(badge_ids):
-            return Response(
-                {"detail": "You can only feature badges you own."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Reset all featured
-        self.get_queryset().update(is_featured=False)
-
-        # Set new featured
-        if badge_ids:
-            self.get_queryset().filter(id__in=badge_ids).update(is_featured=True)
-
-        # Invalidate user cache so profile shows updated badges
-        from ..services.cache import invalidate_user_caches
-
-        invalidate_user_caches(request.user.id, request.user.username, trigger_stats_update=False)
-
-        # Return updated list
-        updated = self.get_queryset().filter(is_featured=True)
-        serializer = UserBadgeSerializer(updated, many=True)
+        """Replace the featured badges with ``badge_ids`` (user_badge ids, at most 3)."""
+        if not isinstance(request.data, Mapping):
+            raise ValidationError({"badge_ids": "Please provide a list of user_badge ids."})
+        featured = set_featured_badges(request.user, request.data.get("badge_ids", []))
         return Response(
-            {"detail": "Featured badges updated successfully.", "featured_badges": serializer.data}
+            {
+                "detail": "Featured badges updated successfully.",
+                "featured_badges": UserBadgeSerializer(featured, many=True).data,
+            }
         )

@@ -2,22 +2,33 @@ from dataclasses import dataclass
 
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, models, transaction
-from django.db.models import Count, Exists, OuterRef, Prefetch
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Exists, OuterRef, Prefetch, QuerySet, Window
 from django.http import Http404
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from ...shared.logger import logger
 from ..models import UserAnimeList, UserFollow
 from .cache import invalidate_user_caches
+from .profile_visibility import can_view_profile
 
 User = get_user_model()
+
+FRIENDS_WATCHING_LIMIT = 50
+# Shorter ``?search=`` terms are ignored (they would match nearly everyone).
+MIN_SEARCH_LENGTH = 2
 
 
 @dataclass(slots=True)
 class FollowActionResult:
     payload: dict
     status_code: int
+
+
+@dataclass(frozen=True, slots=True)
+class FriendsWatching:
+    results: list[UserAnimeList]
+    total: int
 
 
 def google_accounts_prefetch(lookup: str) -> Prefetch:
@@ -38,26 +49,29 @@ def get_target_user(username):
 
 
 def ensure_profile_visible(target_user, request_user):
-    profile = getattr(target_user, "userprofile", None)
-    if (
-        profile
-        and profile.is_private
-        and (not request_user.is_authenticated or target_user != request_user)
-    ):
+    # 403 (not G1's 404) is this endpoint family's established answer for private lists.
+    if not can_view_profile(target_user, request_user):
         raise PermissionDenied("This profile is private.")
+
+
+def _search_by_username(queryset: QuerySet, user_field: str, search: str | None) -> QuerySet:
+    term = (search or "").strip()
+    if len(term) < MIN_SEARCH_LENGTH:
+        return queryset
+    return queryset.filter(**{f"{user_field}__username__icontains": term})
 
 
 def toggle_follow(user, username) -> FollowActionResult:
     if not user.is_authenticated:
         return FollowActionResult(
-            payload={"detail": "Authentication required."},
+            payload={"detail": "Authentication required.", "code": "not_authenticated"},
             status_code=401,
         )
 
     target_user = get_target_user(username)
     if target_user == user:
         return FollowActionResult(
-            payload={"detail": "You cannot follow yourself."},
+            payload={"detail": "You cannot follow yourself.", "code": "cannot_follow_self"},
             status_code=400,
         )
 
@@ -78,27 +92,24 @@ def toggle_follow(user, username) -> FollowActionResult:
     invalidate_user_caches(target_user.id, target_user.username)
     invalidate_user_caches(user.id, user.username)
 
-    counts = User.objects.filter(pk__in=[target_user.pk, user.pk]).aggregate(
-        target_followers=Count("followers", filter=models.Q(pk=target_user.pk)),
-        user_following=Count("following", filter=models.Q(pk=user.pk)),
-    )
+    # Two separate counts: one aggregate over both reverse relations would multiply rows.
     return FollowActionResult(
         payload={
             "status": "followed" if created else "unfollowed",
             "is_following": created,
-            "followers_count": counts["target_followers"],
-            "following_count": counts["user_following"],
+            "followers_count": UserFollow.objects.filter(following=target_user).count(),
+            "following_count": UserFollow.objects.filter(follower=user).count(),
         },
         status_code=201 if created else 200,
     )
 
 
-def get_followers_queryset(username, request_user):
+def get_followers_queryset(username, request_user, search: str | None = None):
     target_user = get_target_user(username)
     ensure_profile_visible(target_user, request_user)
 
     queryset = (
-        UserFollow.objects.filter(following=target_user)
+        _search_by_username(UserFollow.objects.filter(following=target_user), "follower", search)
         .select_related("follower__userprofile")
         .prefetch_related(google_accounts_prefetch("follower"))
     )
@@ -116,12 +127,12 @@ def get_followers_queryset(username, request_user):
     return queryset
 
 
-def get_following_queryset(username, request_user):
+def get_following_queryset(username, request_user, search: str | None = None):
     target_user = get_target_user(username)
     ensure_profile_visible(target_user, request_user)
 
     queryset = (
-        UserFollow.objects.filter(follower=target_user)
+        _search_by_username(UserFollow.objects.filter(follower=target_user), "following", search)
         .select_related("following__userprofile")
         .prefetch_related(google_accounts_prefetch("following"))
     )
@@ -139,14 +150,18 @@ def get_following_queryset(username, request_user):
     return queryset
 
 
-def get_mutuals_queryset(username, request_user):
+def get_mutuals_queryset(username, request_user, search: str | None = None):
     target_user = get_target_user(username)
     ensure_profile_visible(target_user, request_user)
 
     queryset = (
-        UserFollow.objects.filter(
-            follower=target_user,
-            following__following__following=target_user,
+        _search_by_username(
+            UserFollow.objects.filter(
+                follower=target_user,
+                following__following__following=target_user,
+            ),
+            "following",
+            search,
         )
         .select_related("following__userprofile")
         .prefetch_related(google_accounts_prefetch("following"))
@@ -171,7 +186,16 @@ def is_following(request_user, username):
     return UserFollow.objects.filter(follower=request_user, following=target_user).exists()
 
 
-def get_friends_watching_queryset(request_user, anime_id):
+def mutual_follow_ids(user) -> QuerySet:
+    """Ids of the users ``user`` follows who follow ``user`` back (a subquery)."""
+    followers = UserFollow.objects.filter(following=user).values("follower_id")
+    return UserFollow.objects.filter(follower=user, following_id__in=followers).values(
+        "following_id"
+    )
+
+
+def get_friends_watching(request_user, anime_id) -> FriendsWatching:
+    """List entries of ``anime_id`` by mutual follows (newest first, capped) and their total."""
     if not anime_id:
         raise ValidationError({"detail": "anime_id parameter is required."})
 
@@ -180,15 +204,17 @@ def get_friends_watching_queryset(request_user, anime_id):
     except (TypeError, ValueError) as exc:
         raise ValidationError({"detail": "anime_id must be an integer."}) from exc
 
-    return (
+    entries = list(
         UserAnimeList.objects.filter(
             anime_id=resolved_anime_id,
-            user__followers__follower=request_user,
-            user__following__following=request_user,
+            user_id__in=mutual_follow_ids(request_user),
         )
         # Private lists are hidden from everyone else, mutual followers included.
         .exclude(user__userprofile__is_private=True)
         .select_related("user__userprofile", "anime")
         .prefetch_related(google_accounts_prefetch("user"))
-        .order_by("-updated_at")[:50]
+        # The full count rides along on every row (no second query).
+        .annotate(_total=Window(Count("id")))
+        .order_by("-updated_at")[:FRIENDS_WATCHING_LIMIT]
     )
+    return FriendsWatching(results=entries, total=entries[0]._total if entries else 0)
