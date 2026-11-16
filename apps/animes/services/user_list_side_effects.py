@@ -10,9 +10,9 @@ from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ...shared.logger import logger
 from ...users.models import UserActivity, UserAnimeList
 from ...users.services.cache import invalidate_user_caches
+from ...users.services.list_service import invalidate_lists_summary
 from ...users.services.stats_service import create_or_update_user_stats
 from ...users.services.user_queryset import user_exists
-from ..models import Anime
 
 User = get_user_model()
 
@@ -49,45 +49,88 @@ def invalidate_heatmap_cache(user_id):
     logger.debug("Invalidated heatmap cache for user %s", user_id)
 
 
-def update_anime_status_distribution(anime_id):
+SITE_STATUS_KEYS = ("watching", "completed", "on_hold", "dropped", "plan_to_watch")
+SITE_STATUS_CACHE_TIMEOUT = 600
+# A +1 within this window of the last +1 on the same anime extends that activity row.
+PROGRESS_COALESCE_WINDOW = timedelta(minutes=30)
+
+
+def site_status_cache_key(anime_id) -> str:
+    return f"site_status:v1:{anime_id}"
+
+
+def site_status_counts(anime_id) -> dict[str, int]:
+    """How many aniShows users have ``anime_id`` in each list status (G3 contract for G2).
+
+    One aggregate on ``UserAnimeList(anime_id, status)``, cached 10 minutes and dropped
+    by every list change. ``Anime.status_distribution`` is left to the catalog provider
+    (AniList's global counts, D-3); list writes never touch the Anime row.
+    """
+    empty = dict.fromkeys(SITE_STATUS_KEYS, 0)
     if not anime_id:
-        return
-
-    distribution = UserAnimeList.objects.filter(anime_id=anime_id).aggregate(
-        watching=Count(
-            "id",
-            filter=Q(status=UserAnimeList.UserAnimeStatus.watching),
-        ),
-        completed=Count(
-            "id",
-            filter=Q(status=UserAnimeList.UserAnimeStatus.completed),
-        ),
-        on_hold=Count(
-            "id",
-            filter=Q(status=UserAnimeList.UserAnimeStatus.on_hold),
-        ),
-        dropped=Count(
-            "id",
-            filter=Q(status=UserAnimeList.UserAnimeStatus.dropped),
-        ),
-        plan_to_watch=Count(
-            "id",
-            filter=Q(status=UserAnimeList.UserAnimeStatus.plan_to_watch),
-        ),
-    )
-    normalized_distribution = {
-        key: int(distribution.get(key, 0) or 0)
-        for key in ("watching", "completed", "on_hold", "dropped", "plan_to_watch")
-    }
-
+        return empty
+    key = site_status_cache_key(anime_id)
     try:
-        anime = Anime.objects.get(pk=anime_id)
-    except Anime.DoesNotExist:
-        return
+        cached = cache.get(key)
+    except CACHE_ERRORS:
+        cached = None
+    if cached is not None:
+        return cached
 
-    if anime.status_distribution != normalized_distribution:
-        anime.status_distribution = normalized_distribution
-        anime.save(update_fields=["status_distribution"])
+    status = UserAnimeList.UserAnimeStatus
+    aggregate = UserAnimeList.objects.filter(anime_id=anime_id).aggregate(
+        watching=Count("id", filter=Q(status=status.watching)),
+        completed=Count("id", filter=Q(status=status.completed)),
+        on_hold=Count("id", filter=Q(status=status.on_hold)),
+        dropped=Count("id", filter=Q(status=status.dropped)),
+        plan_to_watch=Count("id", filter=Q(status=status.plan_to_watch)),
+    )
+    counts = {name: int(aggregate.get(name) or 0) for name in SITE_STATUS_KEYS}
+    try:
+        cache.set(key, counts, timeout=SITE_STATUS_CACHE_TIMEOUT)
+    except CACHE_ERRORS:
+        logger.warning("Could not cache site status counts for anime %s", anime_id, exc_info=True)
+    return counts
+
+
+def invalidate_site_status_counts(anime_ids) -> None:
+    keys = [site_status_cache_key(anime_id) for anime_id in anime_ids if anime_id]
+    if not keys:
+        return
+    try:
+        cache.delete_many(keys)
+    except CACHE_ERRORS:
+        logger.warning("Could not drop site status counts", exc_info=True)
+
+
+def _coalesce_progress(kwargs) -> bool:
+    """Fold a +1 into the user's last PROGRESS row for the same anime (spec 3 P1-7).
+
+    True when the activity was absorbed (updated or, when it nets to zero, removed),
+    so binge clicks leave one feed row; the heatmap sum of episode diffs is unchanged.
+    """
+    now = tz.now()
+    with transaction.atomic():
+        latest = (
+            UserActivity.objects.select_for_update()
+            .filter(user=kwargs["user"], anime=kwargs["anime"])
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        if (
+            latest is None
+            or latest.activity_type != UserActivity.ActivityType.PROGRESS
+            or latest.created_at < now - PROGRESS_COALESCE_WINDOW
+            or latest.created_at.date() != now.date()
+        ):
+            return False
+        new_episodes = kwargs.get("new_episodes")
+        if new_episodes == latest.old_episodes:
+            latest.delete()
+        else:
+            latest.new_episodes = new_episodes
+            latest.save(update_fields=["new_episodes"])
+    return True
 
 
 def _create_activity_deduped(**kwargs):
@@ -121,6 +164,10 @@ def _create_activity_deduped(**kwargs):
         return
 
     try:
+        if kwargs["activity_type"] == UserActivity.ActivityType.PROGRESS and _coalesce_progress(
+            kwargs
+        ):
+            return
         UserActivity.objects.create(**kwargs)
     except IntegrityError:
         logger.debug("Skipping activity creation for deleted user", exc_info=True)
@@ -224,15 +271,14 @@ def log_user_activity_on_delete(instance):
 
 def schedule_recommendations_debounced(user_id, *, task, countdown=300):
     cache_key = f"reco_pending:{user_id}"
-    if cache.get(cache_key):
+    # ``add`` is atomic: of two concurrent list changes only one schedules the task.
+    if not cache.add(cache_key, True, timeout=countdown + 30):
         logger.debug(
             "Skipping duplicate recommendation task for user %s (already scheduled within %ss window)",
             user_id,
             countdown,
         )
         return
-
-    cache.set(cache_key, True, timeout=countdown + 30)
 
     task.apply_async(
         kwargs={"user_id": user_id},
@@ -253,9 +299,14 @@ def handle_user_anime_list_change(instance, *, schedule_recommendations):
     )
     update_user_stats_and_cache(instance.user)
     schedule_recommendations(instance.user.id, countdown=300)
-    transaction.on_commit(
-        lambda anime_id=instance.anime_id: update_anime_status_distribution(anime_id)
-    )
+    user_id, anime_id = instance.user.id, instance.anime_id
+
+    def drop_derived_caches():
+        # One key each, no namespace bump: the public collections stay cached.
+        invalidate_site_status_counts([anime_id])
+        invalidate_lists_summary(user_id)
+
+    transaction.on_commit(drop_derived_caches)
 
 
 def handle_user_favorite_change(instance, *, schedule_recommendations):

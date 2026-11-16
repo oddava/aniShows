@@ -2,13 +2,14 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.db.models import Case, F, IntegerField, Sum, Value, When
+from django.db.models import Case, F, IntegerField, Q, Sum, Value, When
 from django.db.models.functions import Greatest, TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from ...animes.models import Anime
-from ..models import UserActivity
+from ..models import UserActivity, UserAnimeList
 
 try:
     from .cache import get_user_heatmap_cache_key
@@ -58,7 +59,21 @@ def build_activity_queryset(request):
 
     activity_type = request.query_params.get("type")
     if activity_type:
+        if activity_type not in UserActivity.ActivityType.values:
+            raise ValidationError({"type": f"Unknown activity type '{activity_type}'."})
         queryset = queryset.filter(activity_type=activity_type)
+
+    # The feed's status filter ("Completed", "Plan to Watch", ...): rows that moved an
+    # entry into that status, or removed one that was in it.
+    list_status = request.query_params.get("status")
+    if list_status:
+        if list_status not in UserAnimeList.UserAnimeStatus.values:
+            raise ValidationError({"status": f"Unknown status '{list_status}'."})
+        removed = UserActivity.ActivityType.REMOVED
+        queryset = queryset.filter(
+            (~Q(activity_type=removed) & Q(new_status=list_status))
+            | Q(activity_type=removed, old_status=list_status)
+        )
 
     return queryset.order_by("-created_at")
 
