@@ -2,11 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from ..core.views.admin_import_jobs import AdminImportJobViewSet
-from ..core.views.celery_admin import (
-    CeleryAdminControlViewSet,
-    CeleryTaskResultViewSet,
-    CeleryTaskScheduleViewSet,
-)
+from ..core.views.celery_admin import CeleryAdminControlViewSet, CeleryTaskResultViewSet
 
 # Import the badge and import views from their respective apps for now
 # or we can move them later. We'll leave them in their original spots and route them here.
@@ -24,6 +20,7 @@ from .views.logs import AdminAuditLogViewSet, AdminSystemLogViewSet
 from .views.reports import AdminBulkOperationsView, AdminReportsView
 from .views.reviews import AdminReviewViewSet
 from .views.settings import AdminSettingsView
+from .views.system import AdminSystemBeatRunView, AdminSystemView
 from .views.users import AdminFavoritesViewSet, AdminUserListViewSet, AdminUserViewSet
 
 # SimpleRouter: no browsable root view listing every admin endpoint.
@@ -52,9 +49,6 @@ celery_router = SimpleRouter()
 celery_router.register(
     r"celery/tasks/results", CeleryTaskResultViewSet, basename="celery-task-results"
 )
-celery_router.register(
-    r"celery/tasks/schedules", CeleryTaskScheduleViewSet, basename="celery-task-schedules"
-)
 
 urlpatterns = [
     path("", include(admin_router.urls)),
@@ -64,11 +58,11 @@ urlpatterns = [
     path("bulk/", AdminBulkOperationsView.as_view(), name="admin-bulk"),
     path("reports/", AdminReportsView.as_view(), name="admin-reports"),
     path("settings/", AdminSettingsView.as_view(), name="admin-settings"),
-    # Specific Celery control endpoints
+    path("system/", AdminSystemView.as_view(), name="admin-system"),
     path(
-        "celery/dashboard/",
-        CeleryAdminControlViewSet.as_view({"get": "dashboard"}),
-        name="celery-dashboard",
+        "system/beat/<str:entry>/run/",
+        AdminSystemBeatRunView.as_view(),
+        name="admin-system-beat-run",
     ),
     path(
         "celery/tasks/trigger/",
@@ -79,15 +73,5 @@ urlpatterns = [
         "celery/tasks/control/",
         CeleryAdminControlViewSet.as_view({"post": "control_task"}),
         name="celery-task-control",
-    ),
-    path(
-        "celery/workers/",
-        CeleryAdminControlViewSet.as_view({"get": "worker_status"}),
-        name="celery-workers",
-    ),
-    path(
-        "celery/workers/control/",
-        CeleryAdminControlViewSet.as_view({"post": "worker_control"}),
-        name="celery-workers-control",
     ),
 ]

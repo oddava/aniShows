@@ -1,11 +1,9 @@
-"""
-Celery Task Management API Endpoints
+"""Celery drill-down for superusers: task results, trigger an allowlisted task, revoke.
 
-Provides REST API for:
-- Listing and triggering Celery tasks
-- Monitoring task status and results
-- Managing scheduled tasks
-- Viewing worker status
+Queue sizes, workers, beat and recent failures live on the admin System page
+(``apps.admin_api.views.system``). Every endpoint here is superuser-only (task
+results hold task payloads) and every mutation is audited. Error responses never
+echo exception text.
 """
 
 from django_filters import CharFilter, DateFilter, FilterSet
@@ -15,26 +13,16 @@ from rest_framework.decorators import action
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
 
+from ...admin_api.permissions import AdminPolicyMixin
+from ...admin_api.services.audit import record_admin_action
 from ...shared.logger import logger
-from ..models import CeleryTaskResult, CeleryTaskSchedule
-from ..permissions import IsAdminUser, SuperUserRequiredForActionsMixin
-from ..serializers import (
-    CeleryTaskResultDetailSerializer,
-    CeleryTaskResultListSerializer,
-    CeleryTaskScheduleDetailSerializer,
-    CeleryTaskScheduleListSerializer,
-    CeleryTaskScheduleWriteSerializer,
-)
+from ..models import AuditLog, CeleryTaskResult
+from ..serializers import CeleryTaskResultDetailSerializer, CeleryTaskResultListSerializer
 from ..services.celery_admin_service import (
     AVAILABLE_TASKS,
     CeleryTaskValidationError,
-    build_dashboard_payload,
-    build_task_result_stats,
     bulk_delete_task_results,
     control_task,
-    get_worker_status_payload,
-    perform_worker_control,
-    run_schedule_now,
     trigger_task,
 )
 
@@ -53,14 +41,12 @@ class CeleryTaskResultFilter(FilterSet):
 
 
 class CeleryTaskResultViewSet(
-    SuperUserRequiredForActionsMixin,
+    AdminPolicyMixin,
     ListModelMixin,
     RetrieveModelMixin,
     DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset({"destroy", "bulk_delete"})
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = CeleryTaskResultFilter
     search_fields = ["task_id", "task_name", "error_message", "result_summary"]
@@ -76,263 +62,104 @@ class CeleryTaskResultViewSet(
         return CeleryTaskResultListSerializer
 
     def destroy(self, request, *args, **kwargs):
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": "Only superusers can delete task results."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
         instance = self.get_object()
+        record_admin_action(
+            request,
+            action=AuditLog.ActionType.DELETE,
+            entity_type="CeleryTaskResult",
+            entity_id=instance.id,
+            entity_repr=instance.task_name,
+            metadata={"task_id": instance.task_id, "status": instance.status},
+        )
         self.perform_destroy(instance)
         return Response({"message": "Task result deleted successfully."})
 
     @action(detail=False, methods=["post"])
     def bulk_delete(self, request):
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": "Only superusers can delete task results."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         result = bulk_delete_task_results(
             ids=request.data.get("ids", []),
             days=request.data.get("days"),
         )
-        return Response(result.payload, status=result.status_code)
-
-    @action(detail=False, methods=["get"])
-    def stats(self, request):
-        return Response(build_task_result_stats())
-
-
-class CeleryTaskScheduleFilter(FilterSet):
-    status = CharFilter(field_name="status", lookup_expr="iexact")
-    schedule_type = CharFilter(field_name="schedule_type", lookup_expr="iexact")
-
-    class Meta:
-        model = CeleryTaskSchedule
-        fields = ["status", "schedule_type"]
-
-
-class CeleryTaskScheduleViewSet(SuperUserRequiredForActionsMixin, viewsets.ModelViewSet):
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset(
-        {
-            "create",
-            "update",
-            "partial_update",
-            "destroy",
-            "enable",
-            "disable",
-            "run_now",
-        }
-    )
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_class = CeleryTaskScheduleFilter
-    ordering_fields = ["name", "created_at", "last_run_at"]
-    ordering = ["name"]
-
-    def get_queryset(self):
-        return CeleryTaskSchedule.objects.all()
-
-    def get_serializer_class(self):
-        if self.action in {"create", "update", "partial_update"}:
-            return CeleryTaskScheduleWriteSerializer
-        if self.action == "list":
-            return CeleryTaskScheduleListSerializer
-        return CeleryTaskScheduleDetailSerializer
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        schedule = serializer.save()
-        return Response(
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "message": "Schedule created successfully.",
-            },
-            status=status.HTTP_201_CREATED,
-        )
-
-    def update(self, request, *args, **kwargs):
-        serializer = self.get_serializer(
-            self.get_object(),
-            data=request.data,
-            partial=kwargs.get("partial", False),
-        )
-        serializer.is_valid(raise_exception=True)
-        schedule = serializer.save()
-        return Response(
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "message": "Schedule updated successfully.",
-            }
-        )
-
-    def destroy(self, request, *args, **kwargs):
-        schedule = self.get_object()
-        name = schedule.name
-        self.perform_destroy(schedule)
-        return Response({"message": f'Schedule "{name}" deleted successfully.'})
-
-    @action(detail=True, methods=["post"])
-    def enable(self, request, pk=None):
-        schedule = self.get_object()
-        schedule.status = CeleryTaskSchedule.TaskStatus.ENABLED
-        schedule.save(update_fields=["status", "updated_at"])
-        return Response(
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "status": schedule.status,
-                "message": "Schedule enabled successfully.",
-            }
-        )
-
-    @action(detail=True, methods=["post"])
-    def disable(self, request, pk=None):
-        schedule = self.get_object()
-        schedule.status = CeleryTaskSchedule.TaskStatus.DISABLED
-        schedule.save(update_fields=["status", "updated_at"])
-        return Response(
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "status": schedule.status,
-                "message": "Schedule disabled successfully.",
-            }
-        )
-
-    @action(detail=True, methods=["post"])
-    def run_now(self, request, pk=None):
-        schedule = self.get_object()
-        try:
-            result = run_schedule_now(schedule=schedule, user=request.user)
-        except CeleryTaskValidationError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as exc:
-            logger.exception("Celery admin action failed")
-            return Response(
-                {"detail": f"Failed to trigger task: {exc}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        if result.status_code < 400:
+            record_admin_action(
+                request,
+                action=AuditLog.ActionType.BULK_ACTION,
+                entity_type="CeleryTaskResult",
+                entity_repr=result.payload.get("message", "")[:200],
+                metadata={"operation": "bulk_delete", "deleted": result.payload.get("deleted")},
             )
         return Response(result.payload, status=result.status_code)
 
 
-class CeleryAdminControlViewSet(SuperUserRequiredForActionsMixin, viewsets.ViewSet):
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset({"trigger_task", "control_task", "worker_control"})
-
-    @action(detail=False, methods=["get"])
-    def tasks(self, request):
-        tasks_list = [
-            {
-                "task_path": task_path,
-                "name": task_info["name"],
-                "description": task_info["description"],
-                "args_schema": task_info["args_schema"],
-                "default_queue": task_info.get("default_queue", "default"),
-            }
-            for task_path, task_info in AVAILABLE_TASKS.items()
-        ]
-        return Response({"tasks": tasks_list})
-
+class CeleryAdminControlViewSet(AdminPolicyMixin, viewsets.ViewSet):
     @action(detail=False, methods=["post"])
     def trigger_task(self, request):
+        """Send an allowlisted task with validated kwargs; it goes to its routed queue."""
         task_path = request.data.get("task")
-        args = request.data.get("args", [])
-        kwargs = request.data.get("kwargs", {})
-        queue = request.data.get("queue")
-
         if not task_path:
             return Response(
-                {"detail": "Task path is required."},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"detail": "Task path is required."}, status=status.HTTP_400_BAD_REQUEST
             )
-        if task_path not in AVAILABLE_TASKS:
+        if not isinstance(task_path, str) or task_path not in AVAILABLE_TASKS:
             return Response(
-                {"detail": f"Task {task_path} is not allowed or does not exist."},
+                {"detail": "Task is not allowed or does not exist."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             payload = trigger_task(
                 task_path=task_path,
-                args=args,
-                kwargs=kwargs,
-                queue=queue,
+                args=request.data.get("args", []),
+                kwargs=request.data.get("kwargs", {}),
                 user=request.user,
             )
         except CeleryTaskValidationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as exc:
-            logger.exception("Celery admin action failed")
+        except Exception:
+            logger.exception("Celery admin trigger failed", extra={"task": task_path})
             return Response(
-                {"detail": f"Failed to trigger task: {exc}"},
+                {"detail": "Failed to trigger the task."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+        record_admin_action(
+            request,
+            action=AuditLog.ActionType.TRIGGER,
+            entity_type="CeleryTask",
+            entity_id=payload["task_result_id"],
+            entity_repr=task_path,
+            metadata={"task_id": payload["task_id"], "kwargs": payload["kwargs"]},
+        )
         return Response(payload, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=False, methods=["post"])
     def control_task(self, request):
+        """Revoke a task (optionally terminating it)."""
         task_id = request.data.get("task_id")
         task_action = request.data.get("action", "revoke")
         terminate = request.data.get("terminate", False)
 
-        if not task_id:
+        if not task_id or not isinstance(task_id, str):
+            return Response({"detail": "Task ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(terminate, bool):
             return Response(
-                {"detail": "Task ID is required."},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"detail": "terminate must be a boolean."}, status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
             result = control_task(task_id=task_id, action=task_action, terminate=terminate)
-        except Exception as exc:
-            logger.exception("Celery admin action failed")
+        except Exception:
+            logger.exception("Celery admin control failed", extra={"task_id": task_id})
             return Response(
-                {"detail": f"Failed to {task_action} task: {exc}"},
+                {"detail": "Failed to control the task."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        if result.status_code < 400:
+            record_admin_action(
+                request,
+                action=AuditLog.ActionType.CONTROL,
+                entity_type="CeleryTask",
+                entity_id=task_id[:50],
+                entity_repr=f"{task_action} {task_id}",
+                metadata={"operation": task_action, "terminate": terminate},
             )
         return Response(result.payload, status=result.status_code)
-
-    @action(detail=False, methods=["get"])
-    def worker_status(self, request):
-        try:
-            return Response(get_worker_status_payload())
-        except Exception as exc:
-            logger.exception("Celery admin action failed")
-            return Response(
-                {"detail": f"Failed to get worker status: {exc}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-    @action(detail=False, methods=["post"])
-    def worker_control(self, request):
-        action_name = request.data.get("action")
-        worker = request.data.get("worker")
-
-        if not action_name:
-            return Response(
-                {"detail": "Action is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        if action_name == "shutdown" and not request.user.is_superuser:
-            return Response(
-                {"detail": "Only superusers can shutdown workers."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        try:
-            result = perform_worker_control(action=action_name, worker=worker)
-        except Exception as exc:
-            logger.exception("Celery admin action failed")
-            return Response(
-                {"detail": f"Failed to perform action: {exc}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-        return Response(result.payload, status=result.status_code)
-
-    @action(detail=False, methods=["get"])
-    def dashboard(self, request):
-        return Response(build_dashboard_payload())
