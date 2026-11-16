@@ -138,9 +138,11 @@ def test_offline_catalog_flush_invalidates_current_detail_cache(api_client):
     ],
 )
 def test_filter_option_cache_refreshes_after_model_update(
-    api_client, basename, factory_class, updated_name
+    api_client, django_capture_on_commit_callbacks, basename, factory_class, updated_name
 ):
     obj = factory_class()
+    if basename == "studio":  # only studios with a listed anime are offered (P2-2)
+        create_anime(title="Studio Showcase").studios.add(obj)
 
     first_response = api_client.get(reverse(f"{basename}-list"))
     assert first_response.status_code == 200
@@ -151,7 +153,8 @@ def test_filter_option_cache_refreshes_after_model_update(
     if basename == "genre":
         obj.slug = slugify(updated_name)
         update_fields.append("slug")
-    obj.save(update_fields=update_fields)
+    with django_capture_on_commit_callbacks(execute=True):  # invalidated on commit
+        obj.save(update_fields=update_fields)
 
     refreshed_response = api_client.get(reverse(f"{basename}-list"))
     refreshed_names = [item["name"] for item in refreshed_response.data]
