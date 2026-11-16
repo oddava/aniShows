@@ -30,6 +30,7 @@ from ..utils.image_processing import ProfileImageError, normalize_profile_image
 
 __all__ = [
     "ALLOWED_BIO_ATTRIBUTES",
+    "ALLOWED_BIO_CLASSES",
     "ALLOWED_BIO_TAGS",
     "MAX_AVATAR_SIZE",
     "MAX_BANNER_SIZE",
@@ -40,6 +41,7 @@ __all__ = [
     "UserLightweightSerializer",
     "UserProfileUpdateSerializer",
     "UserSerializer",
+    "sanitize_bio",
 ]
 
 
@@ -74,13 +76,45 @@ ALLOWED_BIO_TAGS = [
     "youtube",
     "mention",
 ]
+# ``class`` used to be allowed on every tag, and MarkdownRenderer spreads props
+# after its own className, so a bio could apply any Tailwind class
+# (``fixed inset-0 z-50``) and overlay the page (A11). The editor writes
+# Markdown only; the one class the renderer reads, ``is-spoiler``, is the only
+# value kept. Anything else drops the whole attribute.
+ALLOWED_BIO_CLASSES = frozenset({"is-spoiler"})
+
+
+def _allow_global_bio_attribute(tag: str, name: str, value: str) -> bool:
+    if name == "align":
+        return True
+    if name == "class":
+        classes = value.split()
+        return bool(classes) and all(item in ALLOWED_BIO_CLASSES for item in classes)
+    return False
+
+
 ALLOWED_BIO_ATTRIBUTES = {
-    "*": ["class", "align"],
+    "*": _allow_global_bio_attribute,
     "a": ["href", "title", "target", "rel"],
     "img": ["src", "alt", "width", "height", "data-align", "data-width"],
     "youtube": ["src"],
     "mention": ["username"],
 }
+
+
+def sanitize_bio(value: str | None) -> str:
+    """The stored form of a bio: Markdown and allowed HTML kept, unsafe tags/attributes removed.
+
+    Also used by ``manage.py resanitize_bios`` for bios saved under older rules.
+    """
+    # Normalize legacy escaped content (&lt;p&gt;...) back to raw HTML before sanitizing.
+    normalized_value = decode_escaped_html_entities(value or "")
+    return bleach.clean(
+        normalized_value,
+        tags=ALLOWED_BIO_TAGS,
+        attributes=ALLOWED_BIO_ATTRIBUTES,
+        strip=True,
+    )
 
 
 class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
@@ -305,16 +339,7 @@ class UserProfileUpdateSerializer(Serializer):
     preferred_timezone = CharField(required=False, allow_blank=True, max_length=64)
 
     def validate_bio(self, value):
-        # Normalize legacy escaped content (&lt;p&gt;...) back to raw HTML before sanitizing.
-        normalized_value = decode_escaped_html_entities(value or "")
-
-        # Keep markdown/allowed HTML intact while stripping unsafe tags/attributes.
-        return bleach.clean(
-            normalized_value,
-            tags=ALLOWED_BIO_TAGS,
-            attributes=ALLOWED_BIO_ATTRIBUTES,
-            strip=True,
-        )
+        return sanitize_bio(value)
 
     def validate_profile_primary_color(self, value):
         normalized = (value or "").strip().lower()
