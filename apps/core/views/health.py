@@ -7,6 +7,10 @@ from ...shared.logger import logger
 from ..services.admin_settings_service import is_maintenance_mode_enabled
 from ..services.migration_health import has_pending_migrations
 
+# Readiness reuses the pending-migrations answer this long (per process, and
+# across workers of one release); the graph is too costly for every probe.
+MIGRATION_CHECK_MAX_AGE = 60
+
 
 def _safe_maintenance_mode() -> bool:
     try:
@@ -51,7 +55,11 @@ def health_check(request):
 
 
 def readiness_check(request):
-    """Readiness endpoint with live dependency checks."""
+    """Readiness endpoint: live database and cache checks, cached migration state.
+
+    Operator-only behind Caddy when ADMIN_ALLOW_CIDRS is set (D-9). The keys
+    are a contract (G7): new checks are additive only.
+    """
     checks = {
         "database": False,
         "cache": False,
@@ -75,7 +83,7 @@ def readiness_check(request):
 
     if checks["database"]:
         try:
-            checks["migrations"] = not has_pending_migrations()
+            checks["migrations"] = not has_pending_migrations(max_age=MIGRATION_CHECK_MAX_AGE)
         except Exception:
             logger.exception("Readiness check - Migration status failed")
 
