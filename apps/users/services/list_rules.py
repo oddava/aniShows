@@ -33,10 +33,6 @@ MAX_NOTES_LENGTH = 5000
 MAX_EPISODES_UNKNOWN_TOTAL = 10000
 MIN_ENTRY_DATE = date(1960, 1, 1)
 
-# Statuses that full progress may promote to Completed. An explicit On Hold or Dropped
-# with every episode watched is a deliberate choice and is kept.
-_AUTO_COMPLETE_FROM = {Status.watching, Status.plan_to_watch}
-
 
 class ListRuleError(ValueError):
     """A field value the API must reject (strict mode only)."""
@@ -163,8 +159,8 @@ def normalize_entry(
         if not (episodes_sent and (total is None or episodes < total)):
             episodes = 0
     elif episodes_sent and total is not None and episodes == total:
-        if not status_sent or status in _AUTO_COMPLETE_FROM:
-            status = Status.completed
+        # Every episode watched means Completed, whatever status came with it.
+        status = Status.completed
     elif (
         episodes_sent
         and not status_sent

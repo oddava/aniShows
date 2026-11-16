@@ -371,6 +371,32 @@ class ImportPipelineTests(ImportTestMixin, TestCase):
         self.assertEqual((local.status, local.episodes_watched, local.score), ("On Hold", 6, 9))
         self.assertEqual(job.imported_entries, 1)
 
+    def test_an_edit_made_while_the_import_runs_is_kept(self):
+        # The merge read the row, then the user saved a new score and note before the
+        # batch was written: the user's version wins (council finding).
+        anime = make_anime(1, anilist_id=101)
+        local = UserAnimeList.objects.create(
+            user=self.user, anime=anime, status=Status.watching, episodes_watched=2, score=5
+        )
+        UserAnimeList.objects.filter(pk=local.pk).update(
+            updated_at=timezone.now() - timedelta(days=2)
+        )
+        real_write = BaseImporter.write_pending
+
+        def user_edits_first(importer, **kwargs):
+            UserAnimeList.objects.filter(pk=local.pk).update(
+                score=9, notes="mine", updated_at=timezone.now()
+            )
+            return real_write(importer, **kwargs)
+
+        updated = int((timezone.now() - timedelta(days=1)).timestamp())
+        with patch.object(BaseImporter, "write_pending", user_edits_first):
+            job, _ = self.run_anilist(FakeFetcher([anilist_row(101, score=60, updated=updated)]))
+
+        local.refresh_from_db()
+        self.assertEqual((local.score, local.notes), (9, "mine"))
+        self.assertEqual((job.imported_entries, job.skipped_entries), (0, 1))
+
     def test_local_edit_newer_than_remote_is_kept(self):
         anime = make_anime(1, anilist_id=101)
         local = UserAnimeList.objects.create(
@@ -512,6 +538,26 @@ class ImportLifecycleTests(ImportTestMixin, TestCase):
         self.assertEqual(job.status, JobStatus.cancelled)
         self.assertEqual(fetcher.pages_requested, 1)  # stopped at the next flush
         self.assertEqual(UserAnimeList.objects.filter(user=self.user).count(), 0)
+
+    def test_cancel_during_the_merge_writes_nothing_after_it(self):
+        for n in range(25):
+            make_anime(100 + n, anilist_id=1000 + n)
+        rows = [anilist_row(1000 + n, progress=1) for n in range(25)]
+        job = self.make_job()
+        real_merge = BaseImporter.merge
+
+        def cancel_after_first(importer, entry, anime, local):
+            real_merge(importer, entry, anime, local)
+            if importer.imported_count == 1:
+                UserImportJob.objects.filter(pk=job.pk).update(status=JobStatus.cancelled)
+
+        with patch.object(BaseImporter, "merge", cancel_after_first):
+            result = AniListImporter(job, "remote-name", fetcher=FakeFetcher(rows)).run()
+
+        job.refresh_from_db()
+        self.assertEqual((result["outcome"], job.status), ("cancelled", JobStatus.cancelled))
+        self.assertFalse(UserAnimeList.objects.filter(user=self.user).exists())
+        self.assertEqual(job.imported_entries, 0)
 
     def test_cancel_api_marks_active_job_cancelled(self):
         job = self.make_job()

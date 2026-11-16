@@ -21,6 +21,7 @@ Each source only implements ``load_entries()``. The rest is common:
 
 from __future__ import annotations
 
+import contextlib
 import time
 from datetime import timedelta
 from typing import Any
@@ -108,6 +109,9 @@ class BaseImporter:
         self._to_create: list[UserAnimeList] = []
         self._to_update: list[UserAnimeList] = []
         self._touched_anime_ids: set[int] = set()
+        # ``updated_at`` of each row to update as the import read it; a row the user
+        # changed since then is left alone at write time.
+        self._seen_updated_at: dict[int, Any] = {}
         # Entries left out for a reason that may pass (catalog cap, AniList busy, a bad
         # payload, an entry error): an incremental sync must not move its cursor past them.
         self.retry_entries: list[ImportedEntry] = []
@@ -385,28 +389,65 @@ class BaseImporter:
         if not changed:
             self.skipped_count += 1
             return
+        self._seen_updated_at[local.pk] = local.updated_at
         local.updated_at = timezone.now()
         self._to_update.append(local)
         self._touched_anime_ids.add(anime.id)
         self.imported_count += 1
 
+    def _discard_pending(self) -> None:
+        """Drop writes that will not happen (the job was cancelled before them)."""
+        self.imported_count -= len(self._to_create) + len(self._to_update)
+        self._to_create, self._to_update = [], []
+
     def write_pending(self, *, force: bool = False) -> None:
+        """Write the pending batch, if the job is still running and the rows unchanged.
+
+        The job row is locked first: a cancel that arrived while the batch was being
+        prepared stops the run here, so nothing after the cancel is written. Rows to
+        update are locked and compared with the ``updated_at`` the merge read; a row
+        the user edited (or removed) meanwhile keeps the user's version.
+        """
         pending = len(self._to_create) + len(self._to_update)
         if not pending or (not force and pending < self.WRITE_BATCH_SIZE):
             return
         with transaction.atomic():
+            running = (
+                self._job_queryset()
+                .select_for_update()
+                .filter(status=UserImportJob.ImportStatus.processing)
+                .exists()
+            )
+            if not running:
+                self._discard_pending()
+                raise ImportCancelledError
             if self._to_create:
                 # A concurrent manual add wins; the import does not fail on it.
                 UserAnimeList.objects.bulk_create(
                     self._to_create, batch_size=self.WRITE_BATCH_SIZE, ignore_conflicts=True
                 )
             if self._to_update:
-                UserAnimeList.objects.bulk_update(
-                    self._to_update,
-                    [*ENTRY_FIELDS, "updated_at"],
-                    batch_size=self.WRITE_BATCH_SIZE,
+                current = dict(
+                    UserAnimeList.objects.select_for_update()
+                    .filter(pk__in=[row.pk for row in self._to_update])
+                    .values_list("pk", "updated_at")
                 )
+                unchanged = [
+                    row
+                    for row in self._to_update
+                    if row.pk in current and current[row.pk] == self._seen_updated_at.get(row.pk)
+                ]
+                kept_local = len(self._to_update) - len(unchanged)
+                self.imported_count -= kept_local
+                self.skipped_count += kept_local
+                if unchanged:
+                    UserAnimeList.objects.bulk_update(
+                        unchanged,
+                        [*ENTRY_FIELDS, "updated_at"],
+                        batch_size=self.WRITE_BATCH_SIZE,
+                    )
         self._to_create, self._to_update = [], []
+        self._seen_updated_at.clear()
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -528,7 +569,7 @@ class BaseImporter:
                 self._store_counters()
         except ImportCancelledError:
             outcome = "cancelled"
-            self.write_pending(force=True)
+            self._discard_pending()
             self._store_counters()
         except ImportSourceError as exc:
             outcome = "failed"
@@ -536,7 +577,9 @@ class BaseImporter:
             self._fail(str(exc))
         except SoftTimeLimitExceeded:
             outcome = "failed"
-            self.write_pending(force=True)
+            # Cancelled meanwhile: nothing is written and _fail leaves the cancel in place.
+            with contextlib.suppress(ImportCancelledError):
+                self.write_pending(force=True)
             self._fail(
                 f"Took too long; {self.processed_count} of {self.total_count} processed. "
                 "Run it again to continue."

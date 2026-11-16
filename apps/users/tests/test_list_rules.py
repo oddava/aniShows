@@ -69,13 +69,21 @@ class CompletionRuleTests(SimpleTestCase):
         self.assertEqual(result["status"], Status.completed)
         self.assertEqual(result.get("episodes_watched", 40), 40)
 
-    def test_explicit_dropped_at_full_progress_is_kept(self):
-        result = normalize(
-            entry(episodes_watched=11), {"status": Status.dropped, "episodes_watched": 12}
-        )
+    def test_full_progress_completes_whatever_status_is_sent(self):
+        # The contract (P0-8): progress == known total and status != Completed -> Completed.
+        for sent in (Status.dropped, Status.on_hold, Status.watching):
+            with self.subTest(sent=str(sent)):
+                result = normalize(
+                    entry(episodes_watched=11), {"status": sent, "episodes_watched": 12}
+                )
+                self.assertEqual(result["status"], Status.completed)
+                self.assertEqual(result["finished_at"], TODAY)
+
+    def test_explicit_dropped_below_full_progress_is_kept(self):
+        result = normalize(entry(episodes_watched=3), {"status": Status.dropped})
 
         self.assertEqual(result["status"], Status.dropped)
-        self.assertNotIn("finished_at", result)
+        self.assertNotIn("episodes_watched", result)  # unchanged progress is not resent
 
     def test_lowering_progress_on_completed_entry_uncompletes_it(self):
         result = normalize(
