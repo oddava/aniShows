@@ -41,7 +41,6 @@ class Review(TimestampMixin, Model):
         indexes = [
             Index(fields=["anime", "-created_at"]),
             Index(fields=["user", "-created_at"]),
-            Index(fields=["anime", "user"]),
             Index(fields=["rating", "-created_at"]),
             Index(fields=["has_spoilers", "-created_at"]),
         ]
@@ -63,10 +62,6 @@ class ReviewVote(CreatedAtMixin, Model):
         unique_together = ("user", "review")
         indexes = [
             Index(fields=["review", "vote_type"], name="anime_revie_review__5b332b_idx"),
-            Index(
-                fields=["user", "review"],
-                name="anime_revie_user_review_idx",
-            ),
         ]
 
     def __str__(self):
@@ -89,10 +84,6 @@ class ReviewReaction(CreatedAtMixin, Model):
         unique_together = ("user", "review", "reaction_type")
         indexes = [
             Index(fields=["review", "reaction_type"], name="anime_revie_review__9feeb4_idx"),
-            Index(
-                fields=["user", "review", "reaction_type"],
-                name="anime_revie_user_id_60a9d1_idx",
-            ),
         ]
 
     def __str__(self):

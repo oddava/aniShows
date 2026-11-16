@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import (
     BooleanField,
     CharField,
@@ -13,11 +14,12 @@ from rest_framework.serializers import (
 
 from ..models import Anime, Review, ReviewReaction, ReviewReport, ReviewVote
 from ..serializers_mixins import UserProfileMixin
-from .anime import AnimeListSerializer
+from .anime import AnimeCompactSerializer, AnimeListSerializer
 
 User = get_user_model()
 
 MAX_REVIEW_LENGTH = settings.MAX_REVIEW_LENGTH
+ANIME_IMMUTABLE_MESSAGE = "A review cannot be moved to another anime."
 
 REACTION_EMOJI_MAP = {
     ReviewReaction.ReactionType.THUMBS_UP: "👍",
@@ -26,6 +28,11 @@ REACTION_EMOJI_MAP = {
     ReviewReaction.ReactionType.SURPRISED: "😮",
     ReviewReaction.ReactionType.SAD: "😢",
 }
+
+
+def wants_compact_anime(query_params) -> bool:
+    """A per-anime listing (``?anime=<slug>``) nests the compact anime shape."""
+    return bool(query_params.get("anime"))
 
 
 class ReviewUserSerializer(UserProfileMixin, ModelSerializer):
@@ -43,7 +50,33 @@ class ReviewUserSerializer(UserProfileMixin, ModelSerializer):
         read_only_fields = fields
 
 
-class ReviewSerializer(ModelSerializer):
+class ReviewInteractionStateSerializer(Serializer):
+    """Vote and reaction counts plus the viewer's state, read from queryset annotations."""
+
+    helpful_count = IntegerField(read_only=True, source="_helpful_count")
+    dislike_count = IntegerField(read_only=True, source="_dislike_count")
+    user_votes = SerializerMethodField()
+    reactions = SerializerMethodField()
+
+    def get_user_votes(self, obj) -> dict[str, bool]:
+        return {
+            "helpful": bool(getattr(obj, "_user_helpful_vote", False)),
+            "dislike": bool(getattr(obj, "_user_dislike_vote", False)),
+        }
+
+    def get_reactions(self, obj) -> list[dict]:
+        return [
+            {
+                "type": reaction_type,
+                "emoji": REACTION_EMOJI_MAP[reaction_type],
+                "count": getattr(obj, f"_reaction_count_{reaction_type}", None) or 0,
+                "active": bool(getattr(obj, f"_reaction_active_{reaction_type}", False)),
+            }
+            for reaction_type in ReviewReaction.ReactionType.values
+        ]
+
+
+class ReviewSerializer(ReviewInteractionStateSerializer, ModelSerializer):
     user = ReviewUserSerializer(read_only=True)
     anime = AnimeListSerializer(read_only=True)
     anime_slug = SlugRelatedField(
@@ -53,10 +86,6 @@ class ReviewSerializer(ModelSerializer):
     text = CharField(required=False, allow_blank=True, max_length=MAX_REVIEW_LENGTH)
 
     is_completed = BooleanField(read_only=True, source="_is_completed")
-    helpful_count = IntegerField(read_only=True, source="_helpful_count")
-    dislike_count = IntegerField(read_only=True, source="_dislike_count")
-    user_votes = SerializerMethodField()
-    reactions = SerializerMethodField()
 
     class Meta:
         model = Review
@@ -82,42 +111,20 @@ class ReviewSerializer(ModelSerializer):
         ]
         read_only_fields = ["id", "user", "anime", "created_at", "updated_at"]
 
-    def get_user_votes(self, obj):
-        helpful_attr = getattr(obj, "_user_helpful_vote", None)
-        dislike_attr = getattr(obj, "_user_dislike_vote", None)
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        if request is not None and wants_compact_anime(request.query_params):
+            fields["anime"] = AnimeCompactSerializer(read_only=True)
+        return fields
 
-        if helpful_attr is not None and dislike_attr is not None:
-            return {
-                "helpful": helpful_attr,
-                "dislike": dislike_attr,
-            }
-
-        return {
-            "helpful": False,
-            "dislike": False,
-        }
-
-    def get_reactions(self, obj):
-        reactions = []
-        for reaction_type in ReviewReaction.ReactionType.values:
-            count = getattr(obj, f"_reaction_count_{reaction_type}", None)
-            if count is None:
-                count = 0
-
-            active = getattr(obj, f"_reaction_active_{reaction_type}", None)
-            if active is None:
-                active = False
-
-            reactions.append(
-                {
-                    "type": reaction_type,
-                    "emoji": REACTION_EMOJI_MAP[reaction_type],
-                    "count": count,
-                    "active": active,
-                }
-            )
-
-        return reactions
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if self.instance is not None and "anime" in attrs:
+            if attrs["anime"].pk != self.instance.anime_id:
+                raise ValidationError({"anime_slug": ANIME_IMMUTABLE_MESSAGE})
+            del attrs["anime"]
+        return attrs
 
 
 class ReviewReportCreateSerializer(Serializer):

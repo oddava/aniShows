@@ -1,15 +1,48 @@
 from dataclasses import dataclass
+from datetime import timedelta
 
 from allauth.socialaccount.models import SocialAccount
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, Exists, OuterRef, Prefetch, Q
+from django.db.models import (
+    Avg,
+    Count,
+    Exists,
+    FloatField,
+    IntegerField,
+    OuterRef,
+    Prefetch,
+    Q,
+    QuerySet,
+    Subquery,
+    Value,
+)
+from django.db.models.functions import Cast, Coalesce, NullIf, Sqrt
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from ...core.models import Notification
 from ...core.services.admin_settings_service import are_reviews_enabled
-from ...core.services.notification_service import NotificationService
+from ...core.services.notification_service import notify, retract
+from ...shared.public_cache import get_or_build_public_payload, invalidate_public_cache_keys
 from ...users.models import UserAnimeList
 from ...users.services.cache import invalidate_user_caches
+from ...users.services.profile_visibility import can_view_profile
 from ..models import Anime, Review, ReviewReaction, ReviewReport, ReviewVote
+from ..serializers.reviews import wants_compact_anime
+
+User = get_user_model()
+
+REVIEW_STATS_CACHE_TTL = 300
+# z for a 95% confidence interval, used by the "Most helpful" Wilson lower bound.
+WILSON_Z = 1.96
+
+POSITIVE_REVIEW_REACTIONS = {
+    ReviewReaction.ReactionType.THUMBS_UP,
+    ReviewReaction.ReactionType.HEART,
+}
+ACTIVE_REPORT_STATUSES = (ReviewReport.Status.OPEN, ReviewReport.Status.IN_REVIEW)
 
 
 @dataclass(slots=True)
@@ -18,25 +51,20 @@ class ReviewActionResult:
     status_code: int
 
 
-POSITIVE_REVIEW_REACTIONS = {
-    ReviewReaction.ReactionType.THUMBS_UP,
-    ReviewReaction.ReactionType.HEART,
-}
-
-
 def ensure_reviews_enabled():
     if not are_reviews_enabled():
         raise PermissionDenied("Reviews are currently disabled by the administrator.")
 
 
-def _base_review_queryset():
-    return Review.objects.select_related(
-        "user",
-        "user__userprofile",
-        "anime",
-    ).prefetch_related(
-        "anime__genres",
-        Anime.studios_prefetch("anime__"),
+# --- Read side -----------------------------------------------------------------
+
+
+def _base_review_queryset(*, compact_anime: bool) -> QuerySet:
+    queryset = Review.objects.select_related("user", "user__userprofile", "anime")
+    if not compact_anime:
+        # ``AnimeListSerializer`` nests the genres and the primary studio.
+        queryset = queryset.prefetch_related("anime__genres", Anime.studios_prefetch("anime__"))
+    return queryset.prefetch_related(
         Prefetch(
             "user__socialaccount_set",
             queryset=SocialAccount.objects.filter(provider="google").only(
@@ -47,15 +75,32 @@ def _base_review_queryset():
     )
 
 
-def _reaction_count_annotations() -> dict:
-    return {
-        f"_reaction_count_{reaction_type}": Count(
-            "reactions",
-            filter=Q(reactions__reaction_type=reaction_type),
-            distinct=True,
-        )
-        for reaction_type in ReviewReaction.ReactionType.values
+def _per_review_count(model, **filters) -> Coalesce:
+    """A correlated ``COUNT(*)`` of ``model`` rows for the outer review (no join, no GROUP BY)."""
+    counts = (
+        model.objects.filter(review=OuterRef("pk"), **filters)
+        .order_by()
+        .values("review")
+        .annotate(total=Count("pk"))
+        .values("total")
+    )
+    return Coalesce(Subquery(counts, output_field=IntegerField()), Value(0))
+
+
+def _count_annotations() -> dict:
+    annotations = {
+        "_helpful_count": _per_review_count(ReviewVote, vote_type=ReviewVote.VoteType.HELPFUL),
+        "_dislike_count": _per_review_count(ReviewVote, vote_type=ReviewVote.VoteType.DISLIKE),
     }
+    annotations.update(
+        {
+            f"_reaction_count_{reaction_type}": _per_review_count(
+                ReviewReaction, reaction_type=reaction_type
+            )
+            for reaction_type in ReviewReaction.ReactionType.values
+        }
+    )
+    return annotations
 
 
 def _viewer_review_annotations(request_user) -> dict:
@@ -63,20 +108,10 @@ def _viewer_review_annotations(request_user) -> dict:
         return {}
 
     annotations = {
-        "_user_helpful_vote": Exists(
-            ReviewVote.objects.filter(
-                user=request_user,
-                review=OuterRef("pk"),
-                vote_type=ReviewVote.VoteType.HELPFUL,
-            )
-        ),
-        "_user_dislike_vote": Exists(
-            ReviewVote.objects.filter(
-                user=request_user,
-                review=OuterRef("pk"),
-                vote_type=ReviewVote.VoteType.DISLIKE,
-            )
-        ),
+        f"_user_{vote_type}_vote": Exists(
+            ReviewVote.objects.filter(user=request_user, review=OuterRef("pk"), vote_type=vote_type)
+        )
+        for vote_type in ReviewVote.VoteType.values
     }
     annotations.update(
         {
@@ -93,6 +128,14 @@ def _viewer_review_annotations(request_user) -> dict:
     return annotations
 
 
+def _filter_by_author(queryset: QuerySet, request_user, username: str) -> QuerySet:
+    """``?user=``: a private profile's reviews are listed to its owner only."""
+    author = User.objects.select_related("userprofile").filter(username=username).first()
+    if author is None or not can_view_profile(author, request_user):
+        return queryset.none()
+    return queryset.filter(user=author)
+
+
 def _apply_review_filters(queryset, request_user, query_params):
     anime_slug = query_params.get("anime")
     if anime_slug:
@@ -100,7 +143,7 @@ def _apply_review_filters(queryset, request_user, query_params):
 
     target_username = query_params.get("user")
     if target_username:
-        queryset = queryset.filter(user__username=target_username)
+        queryset = _filter_by_author(queryset, request_user, target_username)
 
     if query_params.get("mine") == "true" and request_user.is_authenticated:
         queryset = queryset.filter(user=request_user)
@@ -119,6 +162,21 @@ def _apply_review_filters(queryset, request_user, query_params):
     return queryset.filter(rating__gte=min_rating, rating__lte=max_rating)
 
 
+def _wilson_lower_bound() -> Coalesce:
+    """95% Wilson lower bound of helpful among helpful + dislike votes (0 without votes).
+
+    With h helpful, d dislike and n = h + d:
+    (h + z^2/2 - z * sqrt(h*d/n + z^2/4)) / (n + z^2).
+    """
+    helpful = Cast("_helpful_count", FloatField())
+    dislike = Cast("_dislike_count", FloatField())
+    total = helpful + dislike
+    z_squared = WILSON_Z * WILSON_Z
+    spread = Sqrt(helpful * dislike / NullIf(total, Value(0.0)) + Value(z_squared / 4))
+    bound = (helpful + Value(z_squared / 2) - Value(WILSON_Z) * spread) / (total + Value(z_squared))
+    return Coalesce(bound, Value(0.0), output_field=FloatField())
+
+
 def _order_reviews(queryset, query_params):
     sort = query_params.get("sort", "helpful")
     if sort == "highest":
@@ -127,22 +185,15 @@ def _order_reviews(queryset, query_params):
         return queryset.order_by("rating", "-created_at")
     if sort == "newest":
         return queryset.order_by("-created_at")
-    return queryset.order_by("-_helpful_count", "-created_at")
+    return queryset.alias(_helpfulness=_wilson_lower_bound()).order_by(
+        "-_helpfulness", "-created_at"
+    )
 
 
 def get_review_queryset(request_user, query_params):
-    queryset = _base_review_queryset().annotate(
-        _helpful_count=Count(
-            "votes",
-            filter=Q(votes__vote_type=ReviewVote.VoteType.HELPFUL),
-            distinct=True,
-        ),
-        _dislike_count=Count(
-            "votes",
-            filter=Q(votes__vote_type=ReviewVote.VoteType.DISLIKE),
-            distinct=True,
-        ),
-        **_reaction_count_annotations(),
+    queryset = _base_review_queryset(compact_anime=wants_compact_anime(query_params)).annotate(
+        **_count_annotations(),
+        **_viewer_review_annotations(request_user),
         _is_completed=Exists(
             UserAnimeList.objects.filter(
                 user=OuterRef("user"),
@@ -151,18 +202,32 @@ def get_review_queryset(request_user, query_params):
             )
         ),
     )
-
-    viewer_annotations = _viewer_review_annotations(request_user)
-    if viewer_annotations:
-        queryset = queryset.annotate(**viewer_annotations)
-
     queryset = _apply_review_filters(queryset, request_user, query_params)
     return _order_reviews(queryset, query_params)
 
 
-def get_review_stats(anime_slug):
-    reviews = Review.objects.filter(anime__slug=anime_slug)
-    stats = reviews.aggregate(
+def get_interaction_review_queryset() -> QuerySet:
+    """Reviews for the vote / reaction / report actions (only the author is needed)."""
+    return Review.objects.select_related("user")
+
+
+def get_review_interaction_state(review_id: int, request_user) -> Review:
+    """The review with fresh counts and ``request_user``'s votes and reactions annotated."""
+    return Review.objects.annotate(
+        **_count_annotations(), **_viewer_review_annotations(request_user)
+    ).get(pk=review_id)
+
+
+def review_stats_cache_key(anime_slug: str) -> str:
+    return f"review_stats:{anime_slug}"
+
+
+def invalidate_review_stats(anime_slug: str) -> None:
+    invalidate_public_cache_keys(review_stats_cache_key(anime_slug))
+
+
+def _build_review_stats(anime_slug: str) -> dict:
+    stats = Review.objects.filter(anime__slug=anime_slug).aggregate(
         total=Count("id"),
         avg_overall=Avg("rating"),
         avg_story=Avg("rating_story"),
@@ -207,6 +272,19 @@ def get_review_stats(anime_slug):
     return {"total_reviews": total, "distribution": distribution, "averages": averages}
 
 
+def get_review_stats(anime_slug: str) -> dict:
+    """Rating summary for one anime, cached for 5 minutes and dropped on any review change."""
+    payload, _cache_status = get_or_build_public_payload(
+        review_stats_cache_key(anime_slug),
+        lambda: _build_review_stats(anime_slug),
+        ttl=REVIEW_STATS_CACHE_TTL,
+    )
+    return payload
+
+
+# --- Write side ----------------------------------------------------------------
+
+
 def create_review(serializer, user):
     ensure_reviews_enabled()
     anime = serializer.validated_data.get("anime")
@@ -232,9 +310,12 @@ def update_review(serializer, user):
     ensure_reviews_enabled()
     if serializer.instance.user != user:
         raise PermissionDenied("You can only edit your own reviews.")
-    with transaction.atomic():
-        serializer.save()
-        transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
+    try:
+        with transaction.atomic():
+            serializer.save()
+            transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
+    except IntegrityError as exc:
+        raise ValidationError({"non_field_errors": ["This review could not be saved."]}) from exc
 
 
 def delete_review(instance, user):
@@ -246,121 +327,137 @@ def delete_review(instance, user):
         transaction.on_commit(lambda: invalidate_user_caches(user.id, user.username))
 
 
-def _has_active_review_like_signal(review, user):
+def _has_active_review_like_signal(review: Review, user) -> bool:
     return (
         ReviewVote.objects.filter(
-            user=user,
-            review=review,
-            vote_type=ReviewVote.VoteType.HELPFUL,
+            user=user, review=review, vote_type=ReviewVote.VoteType.HELPFUL
         ).exists()
         or ReviewReaction.objects.filter(
-            user=user,
-            review=review,
-            reaction_type__in=POSITIVE_REVIEW_REACTIONS,
+            user=user, review=review, reaction_type__in=POSITIVE_REVIEW_REACTIONS
         ).exists()
     )
 
 
-def _sync_review_like_notification(review, actor):
-    if review.user_id == actor.id:
-        return
+def _sync_review_like_notification(review: Review, actor, *, liked_before: bool) -> None:
+    """Notify the author when ``actor`` starts liking the review; retract when they stop.
 
-    if _has_active_review_like_signal(review, actor):
-        NotificationService.create_review_like_notification(
-            user=review.user,
-            author=actor,
-            review=review,
+    A helpful vote and the positive reactions all count as one "like", so only a
+    change of that combined state reaches the author (never a second notification).
+    """
+    liked_now = _has_active_review_like_signal(review, actor)
+    if liked_now == liked_before:
+        return
+    group_key = f"review_like:{review.pk}"
+    notification_type = Notification.NotificationType.REVIEW_LIKE
+    if liked_now:
+        notify(
+            review.user,
+            notification_type,
+            actor=actor,
+            data={"review_id": review.pk},
+            group_key=group_key,
         )
-        return
+    else:
+        retract(review.user, notification_type, actor=actor, group_key=group_key)
 
-    NotificationService.remove_review_like_from_notification(
-        user=review.user,
-        author=actor,
-        review=review,
-    )
+
+def _toggle_vote(review: Review, user, vote_type: str) -> bool:
+    """Add, switch or remove ``user``'s vote; return whether ``vote_type`` is now active."""
+    vote = ReviewVote.objects.select_for_update().filter(user=user, review=review).first()
+    if vote is None:
+        ReviewVote.objects.create(user=user, review=review, vote_type=vote_type)
+        return True
+    vote.review = review
+    if vote.vote_type == vote_type:
+        vote.delete()
+        return False
+    vote.vote_type = vote_type
+    vote.save(update_fields=["vote_type"])
+    return True
 
 
 def vote_on_review(review, user, vote_type):
     ensure_reviews_enabled()
-    if review.user == user:
+    if review.user_id == user.id:
         return ReviewActionResult(
             payload={"error": "Cannot vote on your own review"},
             status_code=400,
         )
 
-    with transaction.atomic():
-        locked_review = (
-            Review.objects.select_for_update().select_related("user", "anime").get(pk=review.pk)
-        )
-        locked_user = locked_review.user.__class__.objects.select_for_update().get(pk=user.pk)
-        existing_vote = (
-            ReviewVote.objects.select_for_update()
-            .filter(
-                user=locked_user,
-                review=locked_review,
-            )
-            .first()
-        )
-        if existing_vote:
-            if existing_vote.vote_type != vote_type:
-                existing_vote.vote_type = vote_type
-                existing_vote.save(update_fields=["vote_type"])
-                _sync_review_like_notification(locked_review, locked_user)
-                return ReviewActionResult(
-                    payload={"active": True, "vote_type": vote_type},
-                    status_code=200,
-                )
-            existing_vote.delete()
-            _sync_review_like_notification(locked_review, locked_user)
-            return ReviewActionResult(
-                payload={"active": False, "vote_type": vote_type},
-                status_code=200,
-            )
-
-        ReviewVote.objects.create(user=locked_user, review=locked_review, vote_type=vote_type)
-        _sync_review_like_notification(locked_review, locked_user)
+    liked_before = _has_active_review_like_signal(review, user)
+    try:
+        with transaction.atomic():
+            active = _toggle_vote(review, user, vote_type)
+    except IntegrityError:
+        # A parallel request by the same user created the vote first (unique pair).
+        active = ReviewVote.objects.filter(user=user, review=review, vote_type=vote_type).exists()
+    _sync_review_like_notification(review, user, liked_before=liked_before)
     return ReviewActionResult(
-        payload={"active": True, "vote_type": vote_type},
+        payload={"active": active, "vote_type": vote_type},
         status_code=200,
     )
+
+
+def _toggle_reaction(review: Review, user, reaction_type: str) -> bool:
+    """Add or remove one reaction; return whether it is now active."""
+    deleted, _ = ReviewReaction.objects.filter(
+        user=user, review=review, reaction_type=reaction_type
+    ).delete()
+    if deleted:
+        return False
+    ReviewReaction.objects.create(user=user, review=review, reaction_type=reaction_type)
+    return True
 
 
 def toggle_review_reaction(review, user, reaction_type):
     ensure_reviews_enabled()
-    with transaction.atomic():
-        locked_review = (
-            Review.objects.select_for_update().select_related("user", "anime").get(pk=review.pk)
+    if review.user_id == user.id:
+        return ReviewActionResult(
+            payload={"detail": "You cannot react to your own review.", "code": "own_review"},
+            status_code=400,
         )
-        locked_user = locked_review.user.__class__.objects.select_for_update().get(pk=user.pk)
-        existing_reaction = (
-            ReviewReaction.objects.select_for_update()
-            .filter(
-                user=locked_user,
-                review=locked_review,
-                reaction_type=reaction_type,
-            )
-            .first()
-        )
-        if existing_reaction:
-            existing_reaction.delete()
-            if reaction_type in POSITIVE_REVIEW_REACTIONS:
-                _sync_review_like_notification(locked_review, locked_user)
-            return ReviewActionResult(
-                payload={"active": False, "reaction_type": reaction_type},
-                status_code=200,
-            )
 
-        ReviewReaction.objects.create(
-            user=locked_user,
-            review=locked_review,
-            reaction_type=reaction_type,
-        )
-        if reaction_type in POSITIVE_REVIEW_REACTIONS:
-            _sync_review_like_notification(locked_review, locked_user)
+    positive = reaction_type in POSITIVE_REVIEW_REACTIONS
+    liked_before = positive and _has_active_review_like_signal(review, user)
+    try:
+        with transaction.atomic():
+            active = _toggle_reaction(review, user, reaction_type)
+    except IntegrityError:
+        # A parallel request by the same user added this reaction first.
+        active = True
+    if positive:
+        _sync_review_like_notification(review, user, liked_before=liked_before)
     return ReviewActionResult(
-        payload={"active": True, "reaction_type": reaction_type},
+        payload={"active": active, "reaction_type": reaction_type},
         status_code=200,
     )
+
+
+def _report_payload(report: ReviewReport, *, created: bool) -> dict:
+    return {
+        "id": report.id,
+        "review_id": report.review_id,
+        "status": report.status,
+        "created": created,
+    }
+
+
+def _daily_report_limit_reached(user) -> bool:
+    since = timezone.now() - timedelta(days=1)
+    filed = ReviewReport.objects.filter(reporter=user, created_at__gte=since).count()
+    return filed >= settings.REVIEW_REPORTS_PER_DAY
+
+
+def _refresh_open_report(report: ReviewReport, reason: str, description: str) -> ReviewReport:
+    """Update an open / in-review report's text; a moderator's decision is never reopened."""
+    if report.status in ACTIVE_REPORT_STATUSES:
+        updated = ReviewReport.objects.filter(
+            pk=report.pk, status__in=ACTIVE_REPORT_STATUSES
+        ).update(reason=reason, description=description, updated_at=timezone.now())
+        if not updated:
+            # A moderator closed it in the meantime; answer with their decision.
+            report.refresh_from_db(fields=["status"])
+    return report
 
 
 def report_review(review, user, validated_data):
@@ -371,24 +468,29 @@ def report_review(review, user, validated_data):
             status_code=400,
         )
 
-    report, created = ReviewReport.objects.update_or_create(
-        review=review,
-        reporter=user,
-        defaults={
-            "reason": validated_data["reason"],
-            "description": validated_data.get("description", "").strip(),
-            "status": ReviewReport.Status.OPEN,
-            "resolved_by": None,
-            "resolved_at": None,
-            "resolution_notes": "",
-        },
-    )
-    return ReviewActionResult(
-        payload={
-            "id": report.id,
-            "review_id": review.id,
-            "status": report.status,
-            "created": created,
-        },
-        status_code=201 if created else 200,
-    )
+    reason = validated_data["reason"]
+    description = validated_data.get("description", "").strip()
+    report = ReviewReport.objects.filter(review=review, reporter=user).first()
+    if report is None:
+        if _daily_report_limit_reached(user):
+            return ReviewActionResult(
+                payload={
+                    "detail": "You have reached the daily report limit. Try again tomorrow.",
+                    "code": "report_limit",
+                },
+                status_code=429,
+            )
+        try:
+            with transaction.atomic():
+                report = ReviewReport.objects.create(
+                    review=review, reporter=user, reason=reason, description=description
+                )
+            return ReviewActionResult(
+                payload=_report_payload(report, created=True), status_code=201
+            )
+        except IntegrityError:
+            # A parallel request filed it first; treat this one as a re-report.
+            report = ReviewReport.objects.get(review=review, reporter=user)
+
+    report = _refresh_open_report(report, reason, description)
+    return ReviewActionResult(payload=_report_payload(report, created=False), status_code=200)
