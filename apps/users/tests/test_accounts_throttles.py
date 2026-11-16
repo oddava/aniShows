@@ -279,9 +279,14 @@ class IdentifierFoldingTests(APITestCase):
             with self.subTest(variant=variant):
                 self.assertEqual(fold_identifier(variant), "chris@gmail.com")
         self.assertEqual(fold_identifier(f"{DOTTED_I}van"), fold_identifier("ivan"))
-        # Different accounts in the database stay apart (no upper() round trip).
-        self.assertNotEqual(fold_identifier(f"Stra{SHARP_S}e"), fold_identifier("STRASSE"))
-        self.assertNotEqual(fold_identifier(chr(0x3C2)), fold_identifier(chr(0x3C3)))
+        # Folding goes at least as far as the database: one account, one counter.
+        self.assertEqual(
+            fold_identifier("\u039f\u0394\u039f\u03a3"), fold_identifier("\u03bf\u03b4\u03bf\u03c3")
+        )
+        self.assertEqual(fold_identifier(chr(0x3C2)), fold_identifier(chr(0x3C3)))  # final sigma
+        self.assertEqual(fold_identifier(chr(0x1C82) + "@x.ru"), fold_identifier("\u043e@x.ru"))
+        # Over-merging is harmless (a success never clears a counter).
+        self.assertEqual(fold_identifier(f"Stra{SHARP_S}e"), fold_identifier("STRASSE"))
         # Accented letters stay distinct: they are different usernames.
         self.assertNotEqual(fold_identifier("Jos" + chr(0xE9)), fold_identifier("Jose"))
         self.assertEqual(fold_identifier("K" + chr(0x212A)), "kk")  # Kelvin sign
@@ -348,9 +353,12 @@ class CollidingAccountsLockTests(APITestCase):
                 **XHR,
             )
 
-        for attempt in range(10):
+        # The two names fold to one counter. Nine guesses at the victim, then
+        # the attacker's own successful login: it releases only its own slot.
+        for attempt in range(9):
             login(victim, "wrong", f"10.7.0.{attempt}")
         self.assertEqual(login("strasse", "attacker-p-1", "10.7.1.1").status_code, 200)
+        self.assertEqual(login(victim, "wrong", "10.7.1.2").status_code, 401)  # 10th guess
         self.assertEqual(
-            login(victim, "wrong", "10.7.1.2").status_code, status.HTTP_429_TOO_MANY_REQUESTS
+            login(victim, "wrong", "10.7.1.3").status_code, status.HTTP_429_TOO_MANY_REQUESTS
         )

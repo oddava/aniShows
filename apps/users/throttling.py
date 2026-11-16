@@ -159,18 +159,20 @@ class ChangeEmailRateThrottle(UserRateThrottle):
 
 
 def fold_identifier(identifier: str) -> str:
-    """Fold an identifier the way the database's case-insensitive lookups do.
+    """Fold an identifier at least as far as the database's case-insensitive lookups.
 
-    NFKC first (it turns long s, the Kelvin sign and fullwidth letters into
-    plain ones, as create_user does for usernames), then the two Turkish i's
-    that ``str.lower()`` leaves apart from the database (U+0130 lower-cases to
-    ``i`` in Postgres; U+0131 upper-cases to ``I`` in email ``iexact``), then
-    ``lower()``. No upper-case round trip: that would also merge sharp s with
-    "ss" and final sigma with sigma, which are different accounts. Accented
-    letters stay distinct for the same reason.
+    Username lookups compare ``lower()`` and email lookups ``UPPER()``, so no
+    single fold matches both exactly; what matters is that one account never
+    gets two counters (that would multiply the guess budget, A09). NFKC (long
+    s, Kelvin sign, fullwidth letters, as create_user does for usernames), the
+    two Turkish i's, then ``casefold()``, which also covers final sigma and the
+    Cyrillic variant letters that ``UPPER()`` merges. It merges a few spellings
+    the database keeps apart (sharp s and "ss"); that is harmless because a
+    success never clears a counter, so one account cannot unlock another.
+    Accented letters stay distinct.
     """
     composed = unicodedata.normalize("NFKC", identifier.strip())
-    return composed.replace("\u0130", "i").replace("\u0131", "i").lower()
+    return composed.replace("\u0130", "i").replace("\u0131", "i").casefold()
 
 
 class LoginIdentifierThrottle:

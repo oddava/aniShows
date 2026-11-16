@@ -103,7 +103,12 @@ def request_email_change(user, new_email, password, email_service: EmailService)
 
     # Accepted residual enumeration (spec A18): the caller is signed in and,
     # for password accounts, re-entered the password; the request is throttled.
-    if AuthService().email_exists(new_email, exclude_pk=user.pk):
+    auth_service = AuthService()
+    # An address equal to another user's (email-shaped) username would take
+    # that username's sign-in over, so it counts as in use too.
+    if auth_service.email_exists(new_email, exclude_pk=user.pk) or auth_service.username_exists(
+        new_email, exclude_pk=user.pk
+    ):
         return AccountManagementResult(
             payload={"error": "This email is already in use"},
             status_code=400,

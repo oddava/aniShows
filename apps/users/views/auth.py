@@ -186,7 +186,13 @@ class RegisterView(generics.CreateAPIView):
         username = validated_data.get("username") or ""
         email = validated_data.get("email") or ""
 
-        if self.auth_service.username_exists(username) or self.auth_service.email_exists(email):
+        # An address that equals an existing (legacy, email-shaped) username
+        # would take that username's sign-in over, so it counts as in use.
+        if (
+            self.auth_service.username_exists(username)
+            or self.auth_service.email_exists(email)
+            or self.auth_service.username_exists(email)
+        ):
             raise ValidationError(
                 {
                     "username": [generic_message],

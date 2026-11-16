@@ -196,3 +196,41 @@ class EmailShapedUsernameTests(TestCase):
         update_user_profile(user, {"username": "".join(chr(0xFEE0 + ord(c)) for c in "bob")})
         user.userprofile.refresh_from_db()
         self.assertIsNone(user.userprofile.last_username_change)
+
+
+class EmailEqualsUsernameTests(APITestCase):
+    def setUp(self):
+        # A legacy account whose username is an address (new ones are refused).
+        self.legacy = User.objects.create_user(
+            username="ann@home.com", email="ann@example.com", password="x"
+        )
+
+    def test_sign_up_with_that_address_is_refused(self):
+        response = self.client.post(
+            reverse("register"),
+            {"username": "newbie", "email": "ANN@home.com", "password": "N3w-Passphrase!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_email_change_to_that_address_is_refused(self):
+        other = User.objects.create_user(username="carl", email="carl@example.com", password="pw")
+        self.client.force_authenticate(other)
+        response = self.client.post(
+            reverse("change_email"), {"new_email": "ann@home.com", "password": "pw"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class RenameRaceTests(TestCase):
+    def test_losing_a_rename_race_is_a_validation_error(self):
+        user = User.objects.create_user(username="racer", email="r@example.com", password="x")
+        User.objects.create_user(username="Alice", email="al@example.com", password="x")
+        # The availability check passed before the other rename committed.
+        with (
+            patch("apps.users.services.profile_update_service.filter_username_ci") as check,
+            self.assertRaises(DRFValidationError) as ctx,
+        ):
+            check.return_value.exists.return_value = False
+            update_user_profile(user, {"username": "alice"})
+        self.assertIn("already taken", str(ctx.exception.detail))
