@@ -15,6 +15,8 @@ import hashlib
 import ipaddress
 import re
 import socket
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime
 from typing import Tuple
 from urllib.parse import urlparse, urlunparse
@@ -28,6 +30,11 @@ from ...shared.logger import logger
 
 class URLValidationError(Exception):
     """Raised when URL validation fails."""
+
+
+# WHOIS has no timeout of its own; lookups run here so a slow registry costs at
+# most WHOIS_TIMEOUT_SECONDS. A timed-out lookup finishes in the background.
+_WHOIS_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="whois")
 
 
 class URLValidator:
@@ -131,16 +138,22 @@ class URLValidator:
         url_hash = hashlib.md5(url.lower().encode(), usedforsecurity=False).hexdigest()
         return f"url_validation:{url_hash}"
 
-    def validate(self, url: str) -> Tuple[bool, str, dict]:
+    WHOIS_TIMEOUT_SECONDS = 3.0
+
+    def validate(self, url: str, *, check_reputation: bool = True) -> Tuple[bool, str, dict]:
         """
         Validate a URL for security concerns.
         Results are cached for 1 hour to avoid redundant validation.
+
+        ``check_reputation=False`` skips the slow network checks (WHOIS domain
+        age, Google Safe Browsing); the profile save path uses it and runs
+        ``reputation_problem`` later in a Celery task (A16).
 
         Returns:
             Tuple of (is_valid: bool, error_message: str, metadata: dict)
         """
         # Check cache first
-        cache_key = self._get_cache_key(url)
+        cache_key = self._get_cache_key(url) + ("" if check_reputation else ":fast")
         cached_result = cache.get(cache_key)
         if cached_result:
             return cached_result
@@ -205,30 +218,15 @@ class URLValidator:
                 cache.set(cache_key, result, self.VALIDATION_CACHE_TTL)
                 return result
 
-            # Check 7: Domain age (WHOIS) - only for suspicious domains
-            # Skip for known good platforms to speed up validation
+            # Checks 7-8: domain age (WHOIS) and Google Safe Browsing
             platform = self._detect_platform(hostname)
             domain_age_days = None
-            if not platform:  # Only check age for unknown platforms
-                domain_age_days = self._get_domain_age(hostname)
-                if domain_age_days is not None and domain_age_days < 7:
-                    result = (
-                        False,
-                        f"Domain is too new ({domain_age_days} days old). Minimum: 7 days",
-                        {},
-                    )
-                    cache.set(cache_key, result, self.VALIDATION_CACHE_TTL)
-                    return result
-
-            # Check 8: Google Safe Browsing (if API key provided)
-            if self.google_safe_browsing_api_key:
-                safe_browsing_result = self._check_safe_browsing(normalized_url)
-                if not safe_browsing_result["safe"]:
-                    result = (
-                        False,
-                        f"Google Safe Browsing flagged this URL: {safe_browsing_result['threat']}",
-                        {},
-                    )
+            if check_reputation:
+                problem, domain_age_days = self._reputation_check(
+                    normalized_url, hostname, platform
+                )
+                if problem:
+                    result = (False, problem, {})
                     cache.set(cache_key, result, self.VALIDATION_CACHE_TTL)
                     return result
 
@@ -253,6 +251,44 @@ class URLValidator:
             # Not cached: an unexpected failure is likely transient.
             logger.exception("Unexpected error validating URL")
             return (False, "Could not validate this URL right now. Please try again.", {})
+
+    def _reputation_check(
+        self, normalized_url: str, hostname: str, platform: str | None
+    ) -> tuple[str | None, int | None]:
+        """``(problem, domain_age_days)`` from the slow checks; ``problem`` is None when fine."""
+        domain_age_days = None
+        # Domain age only for unknown platforms (known ones are long established).
+        if not platform:
+            domain_age_days = self._get_domain_age(hostname)
+            if domain_age_days is not None and domain_age_days < 7:
+                return (
+                    f"Domain is too new ({domain_age_days} days old). Minimum: 7 days",
+                    domain_age_days,
+                )
+
+        if self.google_safe_browsing_api_key:
+            safe_browsing_result = self._check_safe_browsing(normalized_url)
+            if not safe_browsing_result["safe"]:
+                return (
+                    f"Google Safe Browsing flagged this URL: {safe_browsing_result['threat']}",
+                    domain_age_days,
+                )
+        return None, domain_age_days
+
+    def reputation_problem(self, url: str) -> str | None:
+        """Why ``url`` looks unsafe (new domain, Safe Browsing match), or None.
+
+        For links already saved after the fast checks; never raises.
+        """
+        try:
+            normalized_url = self._normalize_url(url)
+            hostname = urlparse(normalized_url).hostname or ""
+            problem, _age = self._reputation_check(
+                normalized_url, hostname, self._detect_platform(hostname)
+            )
+            return problem
+        except (URLValidationError, ValueError):
+            return "This URL could not be checked."
 
     def _normalize_url(self, url: str) -> str:
         """Normalize URL to standard format.
@@ -421,7 +457,9 @@ class URLValidator:
             registered_domain = host
 
         try:
-            domain_info = whois.whois(registered_domain)
+            domain_info = _WHOIS_POOL.submit(whois.whois, registered_domain).result(
+                timeout=self.WHOIS_TIMEOUT_SECONDS
+            )
 
             creation_date = domain_info.creation_date
             if isinstance(creation_date, list):
@@ -431,6 +469,9 @@ class URLValidator:
                 age = datetime.now() - creation_date
                 return age.days
 
+            return None
+        except FutureTimeoutError:
+            logger.warning("WHOIS lookup timed out for %s", registered_domain)
             return None
         except Exception as e:
             logger.warning("Could not get WHOIS info for %s: %s", registered_domain, e)

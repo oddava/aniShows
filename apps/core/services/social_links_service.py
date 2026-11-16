@@ -81,7 +81,11 @@ class SocialLinksService:
                 raise SocialLinkValidationError(f"Invalid URL scheme detected: '{scheme}'")
 
         normalized_url = self.validator.normalize_username(platform, value)
-        is_valid, error_message, validation_metadata = self.validator.validate(normalized_url)
+        # Fast checks only: WHOIS and Safe Browsing run after the save, in the
+        # metadata task (flag_suspicious_links), so the request never waits on them.
+        is_valid, error_message, validation_metadata = self.validator.validate(
+            normalized_url, check_reputation=False
+        )
 
         if not is_valid:
             raise SocialLinkValidationError(error_message)
@@ -105,6 +109,52 @@ class SocialLinksService:
                 "domain_age_days": validation_metadata.get("domain_age_days"),
             },
         }
+
+    def reputation_problems(self, urls: List[str]) -> Dict[str, str]:
+        """``{url: reason}`` for the URLs that fail the slow reputation checks."""
+        problems = {}
+        for url in urls:
+            problem = self.validator.reputation_problem(url)
+            if problem:
+                problems[url] = problem
+        return problems
+
+    def flag_suspicious_links(self, user_id: int, problems: Dict[str, str]) -> int:
+        """Mark saved links that failed the reputation checks; return how many changed.
+
+        A link to a days-old domain or a Safe Browsing match is kept, shown with
+        a warning (``trust_level="suspicious"``), rather than rejected after the
+        save (spec R4). Links are re-read under a row lock, as the metadata
+        writer does, so concurrent edits are not overwritten.
+        """
+        if not problems:
+            return 0
+        from ...users.models import UserProfile
+
+        with transaction.atomic():
+            profile = UserProfile.objects.select_for_update().filter(user_id=user_id).first()
+            if profile is None:
+                return 0
+            links = profile.social_links or []
+            changed = 0
+            for link in links:
+                if not isinstance(link, dict):
+                    continue
+                url = link.get("url") or link.get("value")
+                if url not in problems:
+                    continue
+                link["trust_level"] = self.TRUST_SUSPICIOUS
+                link["metadata_pending"] = False
+                validation = link.get("validation")
+                link["validation"] = {
+                    **(validation if isinstance(validation, dict) else {}),
+                    "warning": problems[url],
+                }
+                changed += 1
+            if changed:
+                profile.social_links = links
+                profile.save(update_fields=["social_links"])
+        return changed
 
     @staticmethod
     def schedule_metadata_fetch(urls: List[str], user_id: int) -> None:
