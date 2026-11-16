@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from django.db.models import Model
 
 from ...core.models import AuditLog
 from ..services.audit import record_admin_action
+
+if TYPE_CHECKING:
+    from rest_framework.generics import GenericAPIView
+
+    _ViewBase = GenericAPIView
+else:
+    _ViewBase = object
 
 
 def jsonable(value):
@@ -34,7 +42,7 @@ def field_snapshot(instance, fields) -> dict:
     return {field: jsonable(getattr(instance, field, None)) for field in fields}
 
 
-class AuditedModelViewSetMixin:
+class AuditedModelViewSetMixin(_ViewBase):
     """Audit ``perform_create/update/destroy`` with the changed fields."""
 
     audit_entity_type = ""

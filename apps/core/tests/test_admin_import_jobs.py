@@ -141,18 +141,19 @@ class AdminImportJobTriggerApiTests(TestCase):
         self.assertEqual(kwargs["asset_name"], "anime-offline-database.jsonl.zst")
 
     def test_offline_trigger_rejects_bad_release_tag_and_asset(self):
-        for payload in (
+        bad_payloads: list[dict[str, str]] = [
             {"release_tag": "../../etc"},
             {"release_tag": "x" * 41},
             {"asset_name": "other.zip"},
-        ):
+        ]
+        for payload in bad_payloads:
             with self.subTest(payload=payload):
                 response = self._trigger(self.root, source="offline_catalog", **payload)
                 self.assertEqual(response.status_code, 400)
         self.send_task.assert_not_called()
 
     def test_limits_are_bounded(self):
-        cases = [
+        cases: list[tuple[dict[str, object], int]] = [
             ({"source": "trending", "limit": 10_000}, 400),
             ({"source": "trending", "limit": 0}, 400),
             ({"source": "anime_catalog", "sync_type": "seasonal", "limit": 501}, 400),

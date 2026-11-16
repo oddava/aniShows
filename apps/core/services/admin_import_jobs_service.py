@@ -587,7 +587,7 @@ def trigger_import_job(payload, user) -> AdminImportJobActionResult:
     """Validate one trigger request and queue it. Raises ``ImportTriggerError`` on bad input."""
     if not isinstance(payload, dict):
         raise ImportTriggerError("Invalid payload.")
-    trigger = TRIGGERS.get(payload.get("source"))
+    trigger = TRIGGERS.get(str(payload.get("source") or ""))
     if trigger is None:
         raise ImportTriggerError(f"Invalid source. Allowed: {', '.join(TRIGGERS)}.")
     return trigger(payload, user)

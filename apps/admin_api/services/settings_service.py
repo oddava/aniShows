@@ -13,7 +13,7 @@ from ...core.services.admin_settings_service import (
 )
 from .audit import mark_nothing_to_audit, record_admin_action
 
-SETTINGS_VALIDATION_RULES = {
+SETTINGS_VALIDATION_RULES: dict[str, dict[str, dict]] = {
     "general": {
         "maintenanceMode": {"type": "bool"},
         "allowRegistration": {"type": "bool"},

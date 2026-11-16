@@ -10,6 +10,7 @@ from ...core import utils as core_utils
 from ...core.middleware.logging_middleware import AdminAuditMiddleware
 from ...core.models import AuditLog
 from ...users.models import Badge
+from ..services.audit import mark_audited
 from .helpers import bearer_client, make_user
 
 PROXY = "10.0.0.2"
@@ -209,7 +210,7 @@ class AdminAuditMiddlewareFallbackTests(TestCase):
     def test_audited_request_is_not_written_twice(self):
         request = self.factory.post("/api/v1/admin/genres/12/")
         request.user = self.staff
-        request._admin_audited = True
+        mark_audited(request)  # what record_admin_action leaves behind
 
         self._run(request)
 

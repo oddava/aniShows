@@ -12,7 +12,6 @@ from __future__ import annotations
 import datetime as dt
 from contextlib import suppress
 from dataclasses import dataclass
-from numbers import Number
 
 from celery import current_app
 from celery.schedules import crontab, schedule
@@ -47,7 +46,12 @@ FAILURE_MESSAGE_LENGTH = 300
 IN_FLIGHT_STATUSES = ("PENDING", "STARTED", "RETRY")
 IN_FLIGHT_WINDOW = dt.timedelta(hours=12)
 # The R7 accessors only read the cache; anything else is a contract break.
-ACCESSOR_ERRORS = (*CACHE_ERRORS, AttributeError, TypeError, ValueError)
+ACCESSOR_ERRORS: tuple[type[Exception], ...] = (
+    *CACHE_ERRORS,
+    AttributeError,
+    TypeError,
+    ValueError,
+)
 
 
 class SystemActionError(Exception):
@@ -61,7 +65,7 @@ class SystemActionError(Exception):
 class BeatEntry:
     name: str
     task: str
-    schedule: object
+    schedule: crontab | schedule
     args: tuple
     kwargs: dict
     queue: str
@@ -116,10 +120,10 @@ def workers_section(*, refresh: bool = False) -> dict:
 # ------------------------------------------------------------------------ beat
 
 
-def _as_schedule(value):
+def _as_schedule(value) -> crontab | schedule:
     if isinstance(value, dt.timedelta):
         return schedule(run_every=value)
-    if isinstance(value, Number):
+    if isinstance(value, int | float):
         return schedule(run_every=dt.timedelta(seconds=float(value)))
     return value
 

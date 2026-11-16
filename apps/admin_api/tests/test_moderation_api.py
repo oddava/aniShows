@@ -19,7 +19,7 @@ class ModerationQueueTests(TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.staff = make_user("mod", role="staff")
-        self.client = bearer_client(self.staff)
+        self.api = bearer_client(self.staff)
         self.anime = Anime.objects.create(
             title="Mod Anime", slug="mod-anime", synopsis="x", status="Airing", anime_type="TV"
         )
@@ -45,7 +45,7 @@ class ModerationQueueTests(TestCase):
         self._report(reported, self.reporters[1], ReviewReport.Reason.SPOILER)
         self._review(rating=1, has_spoilers=True, text="")  # heuristics only: not a report
 
-        response = self.client.get(QUEUE)
+        response = self.api.get(QUEUE)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 1)
@@ -64,21 +64,21 @@ class ModerationQueueTests(TestCase):
         self._report(open_review, self.reporters[0], ReviewReport.Reason.HARASSMENT)
         self._report(closed_review, self.reporters[0], status=ReviewReport.Status.DISMISSED)
 
-        harassment = self.client.get(QUEUE, {"reason": "harassment"}).data
-        dismissed = self.client.get(QUEUE, {"status": "dismissed"}).data
-        spam_only = self.client.get(QUEUE, {"reason": "spam"}).data
+        harassment = self.api.get(QUEUE, {"reason": "harassment"}).data
+        dismissed = self.api.get(QUEUE, {"status": "dismissed"}).data
+        spam_only = self.api.get(QUEUE, {"reason": "spam"}).data
 
         self.assertEqual([row["review_id"] for row in harassment["results"]], [open_review.id])
         self.assertEqual([row["review_id"] for row in dismissed["results"]], [closed_review.id])
         self.assertEqual(spam_only["count"], 0)
-        self.assertEqual(self.client.get(QUEUE, {"status": "bogus"}).status_code, 400)
-        self.assertEqual(self.client.get(QUEUE, {"reason": "bogus"}).status_code, 400)
+        self.assertEqual(self.api.get(QUEUE, {"status": "bogus"}).status_code, 400)
+        self.assertEqual(self.api.get(QUEUE, {"reason": "bogus"}).status_code, 400)
 
     def test_signals_view_is_opt_in(self):
         flagged = self._review(rating=2, has_spoilers=True, text="")
         self._review(rating=9)
 
-        rows = self.client.get(QUEUE, {"signals": "1"}).data["results"]
+        rows = self.api.get(QUEUE, {"signals": "1"}).data["results"]
 
         self.assertEqual([row["review_id"] for row in rows], [flagged.id])
         self.assertEqual(rows[0]["signals"], ["low_rating", "spoiler_tag", "empty_text"])
@@ -91,8 +91,8 @@ class ModerationQueueTests(TestCase):
         self._report(second, self.reporters[2], ReviewReport.Reason.OTHER)
         self._report(self._review(), self.reporters[0], status=ReviewReport.Status.RESOLVED)
 
-        summary = self.client.get(SUMMARY).data
-        queue = self.client.get(QUEUE).data
+        summary = self.api.get(SUMMARY).data
+        queue = self.api.get(QUEUE).data
 
         self.assertEqual(summary["open_reviews"], queue["count"])
         self.assertEqual(summary["open_reports"], 3)
@@ -100,8 +100,8 @@ class ModerationQueueTests(TestCase):
         self.assertIsNone(summary["forums"])
 
     def test_forum_endpoints_are_404_until_g5_ships_its_module(self):
-        self.assertEqual(self.client.get("/api/v1/admin/moderation/forums/").status_code, 404)
-        response = self.client.post(
+        self.assertEqual(self.api.get("/api/v1/admin/moderation/forums/").status_code, 404)
+        response = self.api.post(
             "/api/v1/admin/moderation/forums/5/resolve/", {"outcome": "dismiss"}, format="json"
         )
         self.assertEqual(response.status_code, 404)
@@ -113,7 +113,7 @@ class ModerationResolveTests(TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.staff = make_user("resolver", role="staff")
-        self.client = bearer_client(self.staff)
+        self.api = bearer_client(self.staff)
         anime = Anime.objects.create(
             title="Res Anime", slug="res-anime", synopsis="x", status="Airing", anime_type="TV"
         )
@@ -129,7 +129,7 @@ class ModerationResolveTests(TestCase):
         ReviewReport.objects.filter(pk=self.reports[1].pk).update(status="in_review")
 
     def _resolve(self, outcome, **extra):
-        return self.client.post(
+        return self.api.post(
             f"/api/v1/admin/moderation/reviews/{self.review.id}/resolve/",
             {"outcome": outcome, **extra},
             format="json",
@@ -189,7 +189,7 @@ class ModerationResolveTests(TestCase):
     def test_bad_input(self):
         self.assertEqual(self._resolve("ban_everyone").status_code, 400)
         self.assertEqual(self._resolve("dismiss", notes="x" * 1001).status_code, 400)
-        missing = self.client.post(
+        missing = self.api.post(
             "/api/v1/admin/moderation/reviews/999999/resolve/",
             {"outcome": "dismiss"},
             format="json",

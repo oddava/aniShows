@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
 from django.db import DEFAULT_DB_ALIAS, transaction
-from django.db.models import Count
+from django.db.models import Count, Model
 from django.db.models.deletion import Collector
 
 from ...animes.models import Anime, Character, Genre, Review, Staff, Studio, UserFavorite
@@ -45,7 +45,7 @@ ENTITY_ALIASES = {
     "staff": "staff",
     "staff_members": "staff",
 }
-ENTITY_MODELS = {
+ENTITY_MODELS: dict[str, type[Model]] = {
     "anime": Anime,
     "review": Review,
     "user": User,
@@ -117,7 +117,7 @@ def clean_ids(raw) -> list[int]:
 
 
 def _target_queryset(entity: str, ids: list[int], actor):
-    queryset = ENTITY_MODELS[entity].objects.filter(id__in=ids)
+    queryset = ENTITY_MODELS[entity]._default_manager.filter(id__in=ids)
     if entity == "user":
         # Bulk never touches staff: suspend a staff account one at a time, on purpose.
         queryset = queryset.exclude(id=actor.pk).exclude(is_superuser=True).exclude(is_staff=True)

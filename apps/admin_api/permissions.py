@@ -13,9 +13,14 @@ a view or an action, is superuser-only: the policy fails closed.
 
 from __future__ import annotations
 
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from rest_framework.permissions import BasePermission
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from rest_framework.permissions import _PermissionClass
 
 STAFF: Final = "staff"
 SUPERUSER: Final = "superuser"
@@ -127,7 +132,7 @@ class AdminActionPermission(BasePermission):
 class AdminPolicyMixin:
     """Gate a view by ``ADMIN_ACTION_POLICY``. Admin views inherit this, nothing else."""
 
-    permission_classes = [AdminActionPermission]
+    permission_classes: Sequence[_PermissionClass] = (AdminActionPermission,)
 
 
 def is_superuser_request(request) -> bool:

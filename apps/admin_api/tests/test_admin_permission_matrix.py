@@ -58,7 +58,7 @@ def _endpoints():
     """``(url, method, view class name, policy key)`` for every routed method."""
     for url in ADMIN_URLS:
         func = resolve(url).func
-        view_class = getattr(func, "cls", None) or func.view_class
+        view_class = getattr(func, "cls", None) or getattr(func, "view_class")  # noqa: B009
         actions = getattr(func, "actions", None)
         for method in METHODS:
             if actions is not None:
