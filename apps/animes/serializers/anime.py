@@ -473,11 +473,6 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
                     "icon": str(link.get("icon") or "").strip(),
                 }
             )
-
-        has_banner_ref = bool(getattr(obj, "banner_image", None) or obj.banner_image_external_url)
-        if len(links) == 1 and links[0]["site"].lower() == "myanimelist" and not has_banner_ref:
-            return []
-
         return links
 
     def get_relations(self, obj):

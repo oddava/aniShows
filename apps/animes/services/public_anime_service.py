@@ -203,39 +203,51 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         localized = timezone.localtime(next_airing_date, local_tz)
         return cls.SCHEDULE_DAY_NAMES[(localized.weekday() + 1) % 7]
 
-    def get_action_anime(self, slug: str) -> Anime:
-        return Anime.public_queryset().only(*self.ACTION_ANIME_ONLY_FIELDS).get(slug=slug)
-
-    def recommendations_queryset(self, anime, *, can_view_adult_content: bool = True):
-        """AniList's recommendations that exist locally, in AniList's order.
-
-        Falls back to shared-genre recommendations when AniList has none (or
-        none that are in the catalog).
-        """
-        return self.recommendations(anime, can_view_adult_content=can_view_adult_content)[0]
-
     def recommendations(self, anime, *, can_view_adult_content: bool = True):
         """``(queryset, degraded)``: ``degraded`` when AniList could not be asked.
 
-        A degraded answer is the genre fallback served because AniList was
-        busy or down, so callers should not cache it like a real answer.
+        AniList's recommendations that exist locally, in AniList's order, or
+        shared-genre recommendations when AniList has none in the catalog. A
+        degraded answer is that fallback served because AniList was busy or
+        down, so callers should not cache it like a real answer. Franchise
+        entries (this anime's relations) are left out either way.
         """
+        related_ids, related_anilist_ids = self._relation_targets(anime)
+        degraded = False
         if anime.anilist_id or anime.mal_id:
             queryset, degraded = self._provider_recommendations_queryset(
-                anime, can_view_adult_content=can_view_adult_content
+                anime,
+                can_view_adult_content=can_view_adult_content,
+                related_ids=related_ids,
+                related_anilist_ids=related_anilist_ids,
             )
             if queryset is not None and queryset.exists():
                 return queryset, False
-        else:
-            degraded = False
 
         fallback = self._fallback_recommendations_queryset(
-            anime, can_view_adult_content=can_view_adult_content
+            anime,
+            can_view_adult_content=can_view_adult_content,
+            related_ids=related_ids,
+            related_anilist_ids=related_anilist_ids,
         )
         return fallback, degraded
 
-    def _provider_recommendations_queryset(self, anime, *, can_view_adult_content: bool):
-        """``(queryset or None, degraded)`` for AniList's recommendations."""
+    @classmethod
+    def anilist_recommendations_cache_key(cls, anime) -> str:
+        return f"anime_anilist_recommendations:v1:{anime.anilist_id or ''}:{anime.mal_id or ''}"
+
+    def _anilist_recommendations(self, anime) -> tuple[list[dict], bool]:
+        """``(recommendations, degraded)`` from AniList, a real answer kept for a day.
+
+        The key is not in the collection namespace (which catalog syncs bump
+        every hour) and holds only AniList's IDs, so both adult-content
+        variants share it; the payload built from it is cached like a shelf.
+        """
+        cache_key = self.anilist_recommendations_cache_key(anime)
+        cached = cache.get(cache_key)
+        if isinstance(cached, list):
+            return cached, False
+
         service = AniListService(enable_caching=True, enable_rate_limiting=True)
         try:
             recommendations = service.get_recommendations_for_anime(
@@ -253,15 +265,39 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         finally:
             service.close()
 
-        relation_mal_ids = set(self._relation_mal_ids(anime))
+        if not degraded:
+            compact = [
+                {"id": item.get("id"), "mal_id": item.get("mal_id")}
+                for item in recommendations
+                if isinstance(item, dict)
+            ]
+            cache.set(cache_key, compact, self.ANILIST_RECOMMENDATIONS_TTL)
+        return recommendations, degraded
+
+    def _provider_recommendations_queryset(
+        self,
+        anime,
+        *,
+        can_view_adult_content: bool,
+        related_ids: list[int],
+        related_anilist_ids: set[int],
+    ):
+        """``(queryset or None, degraded)`` for AniList's recommendations.
+
+        AniList names a title by its AniList ID and its ``idMal``; both are
+        matched against the catalog. Franchise entries are excluded by the
+        relation's local anime or AniList ID.
+        """
+        recommendations, degraded = self._anilist_recommendations(anime)
+
         ordering_cases = []
         anilist_ids: list[int] = []
         mal_ids: list[int] = []
         for position, recommendation in enumerate(recommendations):
             rec_anilist_id = recommendation.get("id")
             rec_mal_id = recommendation.get("mal_id")
-            if (rec_anilist_id and rec_anilist_id == anime.anilist_id) or (
-                rec_mal_id and (rec_mal_id == anime.mal_id or rec_mal_id in relation_mal_ids)
+            if (rec_anilist_id and rec_anilist_id in {anime.anilist_id, *related_anilist_ids}) or (
+                rec_mal_id and rec_mal_id == anime.mal_id
             ):
                 continue
             if rec_anilist_id:
@@ -280,7 +316,7 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         queryset = (
             self.shelf_queryset_for(can_view_adult_content)
             .filter(Q(anilist_id__in=anilist_ids) | Q(mal_id__in=mal_ids))
-            .exclude(id__in=[anime.id, *self._related_anime_ids(anime)])
+            .exclude(id__in=[anime.id, *related_ids])
             .annotate(recommendation_order=ordering)
             .order_by("recommendation_order", "-id")
         )
