@@ -9,6 +9,19 @@ from ...shared.celery import observed_shared_task
 from ...shared.logger import logger
 from ..tokens import EmailChangeTokenGenerator, email_verification_token_generator
 
+SECURITY_NOTICE_FOOTER = (
+    "If this was you, you can ignore this email. If it wasn't, reset your password "
+    f"at {settings.FRONTEND_URL}/forgot-password and contact us."
+)
+
+
+def mask_email(address: str) -> str:
+    """``alice@example.com`` -> ``a***@example.com`` (for notices and logs)."""
+    local, sep, domain = (address or "").partition("@")
+    if not sep:
+        return "***"
+    return f"{local[:1]}***@{domain}"
+
 
 class EmailService:
     """Handle email operations asynchronously."""
@@ -60,6 +73,43 @@ If you didn't request this change, please ignore this email.
             subject="Confirm your new email - aniShows",
             message=message,
             recipient_list=[new_email],
+        )
+
+    def _send_notice(self, address: str, subject: str, body: str) -> None:
+        """A security notice; nothing is sent when there is no address."""
+        if not address:
+            return
+        send_email_task.delay(
+            subject=subject,
+            message=f"{body}\n\n{SECURITY_NOTICE_FOOTER}",
+            recipient_list=[address],
+        )
+
+    def send_password_changed_notice(self, user) -> None:
+        """Tell the account's address that its password was changed or reset."""
+        self._send_notice(
+            user.email,
+            "Your aniShows password was changed",
+            f"The password for your aniShows account ({user.username}) was just changed, "
+            "and every device was signed out.",
+        )
+
+    def send_email_change_requested_notice(self, user, new_email: str) -> None:
+        """Tell the *current* address that a change to ``new_email`` was requested."""
+        self._send_notice(
+            user.email,
+            "Email change requested - aniShows",
+            f"Someone asked to change the email of your aniShows account ({user.username}) "
+            f"to {mask_email(new_email)}. Nothing changes unless that address confirms it.",
+        )
+
+    def send_email_changed_notice(self, user, old_email: str, new_email: str) -> None:
+        """Tell the *previous* address that the account now uses ``new_email``."""
+        self._send_notice(
+            old_email,
+            "Your aniShows email was changed",
+            f"The email of your aniShows account ({user.username}) was changed to "
+            f"{mask_email(new_email)}, and every device was signed out.",
         )
 
     def _get_verification_message(self, link: str) -> str:

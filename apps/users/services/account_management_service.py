@@ -20,11 +20,12 @@ class AccountManagementResult:
     status_code: int
 
 
-def change_password(user, new_password):
+def change_password(user, new_password, email_service: EmailService | None = None):
     """Set a new password and end every session; the caller re-issues its own."""
     user.set_password(new_password)
     user.save(update_fields=["password"])
     revoke_all_sessions(user)
+    (email_service or EmailService()).send_password_changed_notice(user)
     return AccountManagementResult(
         payload={"message": "Password changed successfully"},
         status_code=200,
@@ -88,6 +89,7 @@ def request_email_change(user, new_email, password, email_service: EmailService)
         )
 
     email_service.send_email_change_confirmation(user, new_email)
+    email_service.send_email_change_requested_notice(user, new_email)
     return AccountManagementResult(
         payload={
             "message": "Confirmation email sent to your new email address. Please check your inbox."
@@ -96,7 +98,7 @@ def request_email_change(user, new_email, password, email_service: EmailService)
     )
 
 
-def confirm_email_change(uidb64, token, new_email_encoded):
+def confirm_email_change(uidb64, token, new_email_encoded, email_service=None):
     if not all([uidb64, token, new_email_encoded]):
         return AccountManagementResult(
             payload={"error": "Missing required fields"}, status_code=400
@@ -123,6 +125,7 @@ def confirm_email_change(uidb64, token, new_email_encoded):
             status_code=400,
         )
 
+    old_email = user.email
     try:
         with transaction.atomic():
             user.email = new_email
@@ -139,7 +142,13 @@ def confirm_email_change(uidb64, token, new_email_encoded):
             status_code=400,
         )
 
+    # Whoever holds a session may have started this; every device signs in
+    # again with the new address (A32). The old address hears about it.
+    revoke_all_sessions(user)
+    (email_service or EmailService()).send_email_changed_notice(user, old_email, new_email)
     return AccountManagementResult(
-        payload={"message": "Email changed successfully!"},
+        payload={
+            "message": "Email changed successfully! Please sign in again with your new email."
+        },
         status_code=200,
     )

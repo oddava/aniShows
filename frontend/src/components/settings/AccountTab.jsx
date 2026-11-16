@@ -24,6 +24,8 @@ export default function AccountTab({ user, account, isPrivate, handlePrivacyTogg
         deleteAccountPassword, setDeleteAccountPassword,
         isDeleting,
         showDeleteConfirm, setShowDeleteConfirm,
+        reauthRequired,
+        handleReauth,
         handleChangePassword,
         handleResendVerification,
         handleChangeEmail,
@@ -39,6 +41,19 @@ export default function AccountTab({ user, account, isPrivate, handlePrivacyTogg
                     <Shield className="w-5 h-5 text-accent" />
                     Email & Security
                 </h2>
+
+                {reauthRequired && (
+                    <div role="alert" className="mb-6 p-4 rounded-xl border border-yellow-400/20 bg-yellow-400/10">
+                        <p className="text-sm font-medium text-yellow-300 mb-1">Confirm it's you</p>
+                        <p className="text-sm text-gray-300 mb-3">
+                            For your security, sign in with Google again before changing your password,
+                            email or account. You'll come back here afterwards.
+                        </p>
+                        <button type="button" onClick={handleReauth} className="btn-primary text-sm">
+                            Continue with Google
+                        </button>
+                    </div>
+                )}
 
                 {/* Email Verification Status */}
                 <div className="mb-8 p-4 bg-dark-50 rounded-xl border border-gray-700">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { getApiErrorMessage } from '../../api/errors';
-import { authApi, clearSession } from '../../api/client';
+import { authApi, clearSession, setAccessToken } from '../../api/client';
+import { startGoogleSignIn } from '../auth/googleSignIn';
 import { getPasswordProblem } from '../../utils/password';
 import logger from '../../utils/logger';
 
@@ -9,6 +10,12 @@ import logger from '../../utils/logger';
  * verification, delete account and sign out. Kept in Settings so typed values
  * survive switching tabs.
  */
+/** Settings deep link the re-auth round trip returns to. */
+export const ACCOUNT_SETTINGS_PATH = '/settings?tab=account';
+
+const isReauthRequired = (err) =>
+    err?.response?.status === 403 && err?.response?.data?.code === 'reauth_required';
+
 export default function useAccountSettings({ user, logout }) {
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -27,6 +34,21 @@ export default function useAccountSettings({ user, logout }) {
     const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    // A passwordless (Google) account must sign in again before sensitive changes.
+    const [reauthRequired, setReauthRequired] = useState(false);
+
+    // Returns true when the error was the re-auth gate (and shows its prompt).
+    const handleReauthError = (err) => {
+        if (!isReauthRequired(err)) return false;
+        setReauthRequired(true);
+        setAccountError('');
+        setAccountSuccess('');
+        return true;
+    };
+
+    const handleReauth = () => {
+        startGoogleSignIn({ returnTo: ACCOUNT_SETTINGS_PATH, prompt: 'select_account' });
+    };
 
     const handleChangePassword = async () => {
         if (newPassword !== confirmPassword) {
@@ -43,17 +65,21 @@ export default function useAccountSettings({ user, logout }) {
         setAccountError('');
         setAccountSuccess('');
         try {
-            await authApi.changePassword({
+            const response = await authApi.changePassword({
                 old_password: oldPassword,
                 new_password: newPassword
             });
+            // Every session was revoked; the response carries this device's new access token.
+            if (response?.data?.access) setAccessToken(response.data.access);
             setAccountSuccess('Password changed successfully!');
             setOldPassword('');
             setNewPassword('');
             setConfirmPassword('');
         } catch (err) {
             logger.error('Failed to change password:', err);
-            setAccountError(getApiErrorMessage(err, 'Failed to change password'));
+            if (!handleReauthError(err)) {
+                setAccountError(getApiErrorMessage(err, 'Failed to change password'));
+            }
         } finally {
             setIsSavingAccount(false);
         }
@@ -89,7 +115,9 @@ export default function useAccountSettings({ user, logout }) {
             setChangeEmail('');
             setChangeEmailPassword('');
         } catch (err) {
-            setAccountError(getApiErrorMessage(err, 'Failed to change email'));
+            if (!handleReauthError(err)) {
+                setAccountError(getApiErrorMessage(err, 'Failed to change email'));
+            }
         } finally {
             setIsChangingEmail(false);
         }
@@ -111,7 +139,9 @@ export default function useAccountSettings({ user, logout }) {
             window.location.href = '/';
         } catch (err) {
             logger.error("Delete failed:", err);
-            setAccountError(getApiErrorMessage(err, 'Failed to delete account'));
+            if (!handleReauthError(err)) {
+                setAccountError(getApiErrorMessage(err, 'Failed to delete account'));
+            }
         } finally {
             setIsDeleting(false);
         }
@@ -137,6 +167,8 @@ export default function useAccountSettings({ user, logout }) {
         deleteAccountPassword, setDeleteAccountPassword,
         isDeleting,
         showDeleteConfirm, setShowDeleteConfirm,
+        reauthRequired,
+        handleReauth,
         handleChangePassword,
         handleResendVerification,
         handleChangeEmail,

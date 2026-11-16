@@ -1,3 +1,4 @@
+import time
 from typing import Dict
 
 from allauth.account import app_settings as allauth_account_settings
@@ -7,8 +8,9 @@ from django.http import HttpRequest
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.utils.translation import gettext_lazy as _
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.services.admin_settings_service import is_email_verification_required
 from ..models import UserProfile
@@ -20,6 +22,57 @@ User = get_user_model()
 VERIFY_SUCCESS = "verified"
 VERIFY_ALREADY_VERIFIED = "already_verified"
 VERIFY_INVALID = "invalid"
+
+
+# Epoch seconds of the sign-in that started this token chain. Rotation copies
+# custom claims, so it survives refreshes; only a new sign-in moves it forward.
+AUTH_TIME_CLAIM = "auth_time"
+REAUTH_MAX_AGE_SECONDS = 600
+
+
+def add_session_claims(token, user, *, auth_time: int | None = None):
+    """Put G1's claims on a fresh refresh token and return it.
+
+    Claims stay minimal: email and role flags come from /users/me/, never
+    from a decoded token.
+    """
+    token["user_id"] = user.id
+    token["username"] = user.username
+    token[AUTH_TIME_CLAIM] = int(time.time()) if auth_time is None else int(auth_time)
+    return token
+
+
+def issue_refresh_token(user, *, auth_time: int | None = None) -> RefreshToken:
+    """A refresh token (and, via ``.access_token``, its access token) for ``user``."""
+    return add_session_claims(RefreshToken.for_user(user), user, auth_time=auth_time)
+
+
+def token_auth_time(token) -> int | None:
+    """The ``auth_time`` claim of a validated token, or None when absent or malformed."""
+    value = token.get(AUTH_TIME_CLAIM) if token is not None and hasattr(token, "get") else None
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return int(value)
+
+
+class ReauthRequired(PermissionDenied):
+    default_detail = "Please confirm it's you by signing in again."
+    default_code = "reauth_required"
+
+
+def require_recent_auth(request, max_age: int = REAUTH_MAX_AGE_SECONDS) -> None:
+    """Raise ``ReauthRequired`` (403) unless a passwordless user signed in recently.
+
+    Accounts with a password prove themselves with it on each sensitive action.
+    Accounts without one (Google sign-in) would otherwise let a stolen 15-minute
+    access token set a password, change the email or delete the account (A06),
+    so those need a sign-in within ``max_age`` seconds.
+    """
+    if request.user.has_usable_password():
+        return
+    auth_time = token_auth_time(request.auth)
+    if auth_time is None or time.time() - auth_time > max_age:
+        raise ReauthRequired()
 
 
 def revoke_all_sessions(user) -> None:

@@ -6,12 +6,17 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.services.admin_settings_service import is_email_verification_required
 from ..serializers.accounts import UserSerializer
-from .auth_service import VERIFY_ALREADY_VERIFIED, VERIFY_SUCCESS, revoke_all_sessions
+from .auth_service import (
+    VERIFY_ALREADY_VERIFIED,
+    VERIFY_SUCCESS,
+    issue_refresh_token,
+    revoke_all_sessions,
+)
 from .cache import invalidate_user_caches
+from .email_service import EmailService
 
 User = get_user_model()
 
@@ -30,7 +35,7 @@ class AuthFlowResult:
 
 
 def build_auth_response(user, request, message: str) -> AuthFlowResult:
-    refresh = RefreshToken.for_user(user)
+    refresh = issue_refresh_token(user)
     payload = {
         "message": message,
         "access": str(refresh.access_token),
@@ -105,7 +110,9 @@ def password_reset_flow(email: object, email_service) -> AuthFlowResult:
     )
 
 
-def password_reset_confirm_flow(uidb64: object, token: object, password: object) -> AuthFlowResult:
+def password_reset_confirm_flow(
+    uidb64: object, token: object, password: object, email_service: EmailService | None = None
+) -> AuthFlowResult:
     uidb64, token, password = _text(uidb64), _text(token), _text(password)
     if uidb64 is None or token is None or password is None:
         raise AuthFlowError("Missing required fields", 400)
@@ -128,6 +135,7 @@ def password_reset_confirm_flow(uidb64: object, token: object, password: object)
     user.save(update_fields=["password"])
     # Whoever prompted the reset may hold a session; end them all.
     revoke_all_sessions(user)
+    (email_service or EmailService()).send_password_changed_notice(user)
     return AuthFlowResult(
         payload={"message": "Password has been reset successfully."},
         status_code=200,

@@ -2,7 +2,6 @@ from django.contrib.auth import get_user_model
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.viewsets import ViewSet
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.api_errors import api_response
 from ...shared.logger import logger
@@ -15,6 +14,7 @@ from ..services.account_management_service import (
     delete_account,
     request_email_change,
 )
+from ..services.auth_service import issue_refresh_token, require_recent_auth, token_auth_time
 from ..services.email_service import EmailService
 
 User = get_user_model()
@@ -41,11 +41,14 @@ class AccountManagementViewSet(ViewSet):
 
     @action(detail=False, methods=["post"])
     def change_password(self, request):
+        # Setting a first password on a Google-only account needs a fresh sign-in.
+        require_recent_auth(request)
         serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         result = change_password(request.user, serializer.validated_data["new_password"])
-        # Every refresh token was revoked; keep this device signed in.
-        refresh = RefreshToken.for_user(request.user)
+        # Every refresh token was revoked; keep this device signed in, keeping
+        # the sign-in time this session already had.
+        refresh = issue_refresh_token(request.user, auth_time=token_auth_time(request.auth))
         response = api_response(
             {**result.payload, "access": str(refresh.access_token)},
             status_code=result.status_code,
@@ -56,6 +59,7 @@ class AccountManagementViewSet(ViewSet):
     @action(detail=False, methods=["delete"])
     def delete_account(self, request):
         """Allow users to delete their own account."""
+        require_recent_auth(request)
         user = request.user
         password = request.data.get("password")
 
@@ -71,6 +75,7 @@ class AccountManagementViewSet(ViewSet):
     @action(detail=False, methods=["post"])
     def change_email(self, request):
         """Request email change - sends verification to new email."""
+        require_recent_auth(request)
         new_email = request.data.get("new_email")
         password = request.data.get("password")
         user = request.user

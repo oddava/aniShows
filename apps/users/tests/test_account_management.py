@@ -56,10 +56,11 @@ class AccountManagementTests(APITestCase):
         response = self.client.post(self.change_email_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # Check email sent
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn(new_email, mail.outbox[0].to)
-        self.assertIn("Confirm your new email", mail.outbox[0].subject)
+        # The confirmation goes to the new address, a notice to the current one.
+        self.assertEqual(len(mail.outbox), 2)
+        confirmation = next(m for m in mail.outbox if m.to == [new_email])
+        self.assertIn("Confirm your new email", confirmation.subject)
+        self.assertTrue(any(m.to == ["test@example.com"] for m in mail.outbox))
 
     def test_change_email_existing(self):
         """Test changing email to existing email fails."""

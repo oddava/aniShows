@@ -38,7 +38,7 @@ from ..services.auth_flow_service import (
     resend_verification_flow,
     verify_email_flow,
 )
-from ..services.auth_service import AuthService
+from ..services.auth_service import AuthService, add_session_claims
 from ..services.email_service import EmailService
 from ..services.ws_ticket_service import TICKET_TTL_SECONDS, issue_ws_ticket
 
@@ -77,12 +77,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     @classmethod
     def get_token(cls, user):
-        # Keep claims minimal: email and role flags come from /users/me/,
-        # never from a decoded token.
-        token = super().get_token(user)
-        token["user_id"] = user.id
-        token["username"] = user.username
-        return token
+        # Also used for Google sign-in (REST_AUTH JWT_TOKEN_CLAIMS_SERIALIZER),
+        # so both kinds of sign-in stamp auth_time.
+        return add_session_claims(super().get_token(user), user)
 
     def validate(self, attrs):
         # Log in with a username or an email. Whichever is given, an unknown
