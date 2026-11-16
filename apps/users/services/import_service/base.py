@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import contextlib
 import time
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from celery.exceptions import SoftTimeLimitExceeded
@@ -45,7 +45,17 @@ from .entries import (
     ImportedEntry,
 )
 
-RETRY_REASONS = frozenset({REASON_NOT_IN_CATALOG_YET, REASON_INVALID})
+# Only a reason that a later run can clear holds the sync cursor: the per-job catalog
+# cap and AniList being busy both report ``not_in_catalog_yet``. A payload the catalog
+# rejects or an entry that errors would fail the same way again, so they do not.
+RETRY_REASONS = frozenset({REASON_NOT_IN_CATALOG_YET})
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def _updated_sort_key(entry: ImportedEntry) -> datetime:
+    return entry.remote_updated_at or _EPOCH
+
+
 RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
 
 ACTIVE_STATUSES = (UserImportJob.ImportStatus.pending, UserImportJob.ImportStatus.processing)
@@ -457,6 +467,10 @@ class BaseImporter:
         entries = self._dedupe(entries)
         cap = int(settings.MAX_IMPORT_XML_ENTRIES)
         if len(entries) > cap:
+            if any(entry.remote_updated_at for entry in entries):
+                # Oldest changes first, so the entries left over are the newest ones and
+                # a sync cursor held below them still moves forward on every run.
+                entries.sort(key=_updated_sort_key)
             self.errors.append(f"Only the first {cap} entries were imported.")
             self.retry_entries.extend(entries[cap:])
             entries = entries[:cap]
@@ -492,7 +506,6 @@ class BaseImporter:
                 except Exception as exc:
                     logger.warning("Import entry failed", exc_info=True)
                     self.failed_count += 1
-                    self.retry_entries.append(entry)
                     self.errors.append(f"{entry.title or 'Unknown'}: {exc}")
             self.write_pending()
             self._tick()

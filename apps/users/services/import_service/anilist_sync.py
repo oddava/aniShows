@@ -219,7 +219,11 @@ def sync_linked_lists(*, importer_factory=None) -> dict[str, int]:
             # No task retry here: end the job now rather than leave it processing.
             from ..celery_tasks import UserTaskService
 
-            UserTaskService.mark_import_job_failed(job_id=job.pk, error_message=str(exc))
+            try:
+                UserTaskService.mark_import_job_failed(job_id=job.pk, error_message=str(exc))
+            except Exception:
+                # The database itself is failing: the stalled-job sweep ends it later.
+                logger.exception("Could not fail the daily sync job", extra={"job_id": job.pk})
             continue
         counts["synced" if result.get("outcome") == "completed" else "failed"] += 1
     logger.info("Daily AniList sync finished", extra=counts)

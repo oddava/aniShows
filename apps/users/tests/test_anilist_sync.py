@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import httpx
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -25,8 +25,10 @@ from .test_import_service import (
     FakeFetcher,
     ImportTestMixin,
     anilist_row,
+    base_module,
     graphql_transport,
     make_anime,
+    media_item,
 )
 
 User = get_user_model()
@@ -428,6 +430,32 @@ class CursorTests(ImportTestMixin, TestCase):
     def test_titles_anilist_does_not_have_do_not_hold_the_cursor(self):
         rows = [anilist_row(11, updated=900), anilist_row(55, updated=800)]
         self.sync(FakeFetcher(recent=rows))  # 55 is fetched and not found: permanent
+
+        self.assertEqual(self.link.cursor_updated_at, 900)
+
+    def test_a_list_larger_than_the_cap_still_moves_the_cursor_forward(self):
+        # Council round 2 (N1): the cap keeps the oldest changes, so the cursor held
+        # below the newest leftovers advances on every run instead of stalling.
+        make_anime(2, anilist_id=12)
+        make_anime(3, anilist_id=13)
+        newest_first = [
+            anilist_row(13, updated=700),
+            anilist_row(12, updated=500),
+            anilist_row(11, updated=300),
+        ]
+        with override_settings(MAX_IMPORT_XML_ENTRIES=1):
+            self.sync(FakeFetcher(recent=newest_first))
+            self.assertEqual(self.link.cursor_updated_at, 300)  # 11 applied, 12 and 13 held
+            self.sync(FakeFetcher(recent=newest_first[:2]))
+            self.assertEqual(self.link.cursor_updated_at, 500)  # 12 applied, 13 held
+            self.sync(FakeFetcher(recent=newest_first[:1]))
+            self.assertEqual(self.link.cursor_updated_at, 700)
+
+    def test_a_payload_the_catalog_rejects_does_not_hold_the_cursor(self):
+        rows = [anilist_row(11, updated=900), anilist_row(55, updated=800)]
+        fetcher = FakeFetcher(recent=rows, media=[media_item(55)])
+        with patch.object(base_module, "save_media", side_effect=ValueError("no title")):
+            self.sync(fetcher)
 
         self.assertEqual(self.link.cursor_updated_at, 900)
 
