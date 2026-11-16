@@ -1,3 +1,4 @@
+import time
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -224,8 +225,9 @@ class AnimeDetailRecommendationsTests(APITestCase):
         mock_get_recommendations.assert_called_once()
         cache_key = AnimeQueryService.anilist_recommendations_cache_key(self.anime)
         self.assertEqual(cache.get(cache_key), [{"id": 300, "mal_id": 1300}])
-        expiry = cache._expire_info[cache.make_key(cache_key)]
-        self.assertGreater(expiry - __import__("time").time(), 23 * 60 * 60)
+        # LocMemCache internals: the key's expiry timestamp.
+        expiry = cache._expire_info[cache.make_key(cache_key)]  # type: ignore[attr-defined]
+        self.assertGreater(expiry - time.time(), 23 * 60 * 60)
 
     @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
     def test_a_failed_anilist_call_is_not_kept(self, mock_get_recommendations):

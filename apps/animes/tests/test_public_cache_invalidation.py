@@ -48,7 +48,7 @@ def _cached_list_keys() -> list[str]:
     """The stored list payload keys (LocMemCache keeps them as ``:<version>:<key>``)."""
     return [
         key.split(":", 2)[2]
-        for key in cache._cache
+        for key in cache._cache  # type: ignore[attr-defined]  # LocMemCache internals
         if ":anime_list:" in key and not key.endswith(":lock")
     ]
 

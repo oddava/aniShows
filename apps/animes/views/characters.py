@@ -1,3 +1,5 @@
+from typing import cast
+
 from django.db.models import Count, Model, Prefetch, Q, QuerySet
 from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import NotFound
@@ -70,7 +72,8 @@ class CachedPersonDetailViewSet(RetrieveModelMixin, GenericViewSet):
             build_payload,
             ttl=self.CACHE_TTL,
         )
-        response = Response({**data, **self.favorite_state(object_id, request.user)})
+        payload = cast("dict", data)
+        response = Response({**payload, **self.favorite_state(object_id, request.user)})
         response["X-Cache-Status"] = cache_status
         return response
 
@@ -79,7 +82,7 @@ class CachedPersonDetailViewSet(RetrieveModelMixin, GenericViewSet):
         aggregates = {"favorite_count": Count("id")}
         if user.is_authenticated:
             aggregates["is_favorite"] = Count("id", filter=Q(user_id=user.id))
-        counts = self.favorite_model.objects.filter(
+        counts = self.favorite_model._default_manager.filter(
             **{f"{self.favorite_field}_id": object_id}
         ).aggregate(**aggregates)
         return {
