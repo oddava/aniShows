@@ -30,15 +30,15 @@ const anime = {
 const GRID_KEY = animeKeys.browseList({ sort: 'popular' });
 const SCHEDULE_KEY = scheduleKeys.week(true, false);
 
-function renderCard() {
+function renderCard(card = anime) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    client.setQueryData(GRID_KEY, { pages: [{ results: [anime], next: null }], pageParams: [1] });
-    client.setQueryData(SCHEDULE_KEY, { monday: [anime] });
+    client.setQueryData(GRID_KEY, { pages: [{ results: [card], next: null }], pageParams: [1] });
+    client.setQueryData(SCHEDULE_KEY, { monday: [card] });
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     render(
         <QueryClientProvider client={client}>
             <MemoryRouter>
-                <AnimeCard anime={anime} />
+                <AnimeCard anime={card} />
             </MemoryRouter>
         </QueryClientProvider>,
     );
@@ -70,5 +70,31 @@ describe('AnimeCard patches cached anime instead of refetching them (B20)', () =
         expect(keys).not.toContain(JSON.stringify(['anime']));
         expect(keys).not.toContain(JSON.stringify(['seasonal']));
         expect(keys).toContain(JSON.stringify(['lists']));
+    });
+
+    it('a status change caches what the server saved, not just what was sent', async () => {
+        const listed = {
+            ...anime,
+            user_list_status: { id: 42, status: 'Watching', episodes_watched: 3, progress: 25 },
+        };
+        // Completing fills the progress and stamps the date server-side.
+        listApi.update.mockResolvedValue({
+            data: {
+                id: 42, status: 'Completed', episodes_watched: 12, finished_at: '2026-11-16',
+                anime: { id: 1 },
+            },
+        });
+        const { client } = renderCard(listed);
+
+        fireEvent.click(screen.getByRole('button', { name: /^List status: Watching/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Completed/ }));
+
+        await waitFor(() => expect(listApi.update).toHaveBeenCalledWith(42, { status: 'Completed' }));
+        await waitFor(() => {
+            const card = client.getQueryData(GRID_KEY).pages[0].results[0];
+            expect(card.user_list_status).toEqual({
+                id: 42, status: 'Completed', episodes_watched: 12, progress: 100, finished_at: '2026-11-16',
+            });
+        });
     });
 });

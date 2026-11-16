@@ -42,6 +42,17 @@ function getTimeRemainingLabel(dateString) {
     return `${days}d ${hours % 24}h`;
 }
 
+// The `user_list_status` fields a saved list entry (the list API's response) carries.
+const LIST_STATUS_FIELDS = [
+    'id', 'status', 'score', 'episodes_watched', 'notes', 'started_at',
+    'finished_at', 'total_rewatches', 'is_rewatching',
+];
+
+const savedListFields = (saved) => {
+    if (!saved || typeof saved !== 'object') return {};
+    return Object.fromEntries(LIST_STATUS_FIELDS.filter((key) => key in saved).map((key) => [key, saved[key]]));
+};
+
 function AnimeCard({
     anime,
     userListEntry,
@@ -136,8 +147,14 @@ function AnimeCard({
     // user's lists and profile stats, and Home's "Currently Watching" shelf (its
     // key is not under listKeys.all) are refetched.
     // `userListStatus`: the changed fields, or null when the entry was removed.
-    const syncAfterListChange = useCallback((userListStatus) => {
-        patchAnimeListStatus(queryClient, anime.id, userListStatus);
+    // The server's saved entry wins over what was sent: its normaliser may move
+    // progress or stamp dates (e.g. Completed fills episodes_watched).
+    const syncAfterListChange = useCallback((userListStatus, saved) => {
+        patchAnimeListStatus(
+            queryClient,
+            anime.id,
+            userListStatus && { ...userListStatus, ...savedListFields(saved) },
+        );
         queryClient.invalidateQueries({ queryKey: listKeys.all });
         queryClient.invalidateQueries({ queryKey: userKeys.watching });
         queryClient.invalidateQueries({ queryKey: profileKeys.own });
@@ -225,16 +242,16 @@ function AnimeCard({
         setIsLoading(true);
         try {
             if (listId) {
-                await listApi.update(listId, { status: newStatus });
-                syncAfterListChange({ id: listId, status: newStatus });
+                const response = await listApi.update(listId, { status: newStatus });
+                syncAfterListChange({ id: listId, status: newStatus }, response?.data);
             } else {
                 const response = await listApi.add({ anime_id: anime.id, status: newStatus });
                 setListId(response.data.id);
                 syncAfterListChange({
                     id: response.data.id,
                     status: newStatus,
-                    episodes_watched: response.data.episodes_watched ?? 0,
-                });
+                    episodes_watched: 0,
+                }, response.data);
             }
         } catch (error) {
             logger.error('Error updating list:', error);
@@ -283,8 +300,8 @@ function AnimeCard({
 
         try {
             const entryId = userListEntry?.id || listId;
-            await listApi.update(entryId, { episodes_watched: newEpisodes });
-            syncAfterListChange({ id: entryId, episodes_watched: newEpisodes });
+            const response = await listApi.update(entryId, { episodes_watched: newEpisodes });
+            syncAfterListChange({ id: entryId, episodes_watched: newEpisodes }, response?.data);
         } catch (error) {
             logger.error("Failed to update progress", error);
             setLocalEpisodesWatched(previousEpisodes);
