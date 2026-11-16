@@ -35,9 +35,9 @@ def subscribe_on_first_post(post: Post) -> None:
 
 def _directly_notified_user_ids(post: Post) -> set[int]:
     """Users the post's own notifications reach (reply target and mentions)."""
-    reply_target = post.thread if post.parent_id is None else post.parent
+    reply_target_author_id = post.thread.author_id if post.parent is None else post.parent.author_id
     mentioned = resolve_mentioned_users(post.content, author=post.author)
-    return {reply_target.author_id, *(user.id for user in mentioned)}
+    return {reply_target_author_id, *(user.id for user in mentioned)}
 
 
 def notify_thread_subscribers(post_id: int) -> int:

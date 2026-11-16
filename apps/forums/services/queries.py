@@ -110,7 +110,8 @@ def _mark_hidden_replies(posts: list[Post]) -> None:
     """Flag posts some of whose direct replies were cut by the descendant cap."""
     returned_children = Counter(post.parent_id for post in posts if post.parent_id)
     for post in posts:
-        post.has_hidden_replies = returned_children[post.id] < post.reply_count
+        # ``reply_count`` is annotated by ``build_post_queryset``.
+        post.has_hidden_replies = returned_children[post.id] < post.reply_count  # type: ignore[attr-defined]
 
 
 def get_threaded_posts_page(queryset, thread_id: int, top_level_posts: list[Post]) -> list[Post]:

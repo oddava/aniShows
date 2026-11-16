@@ -21,7 +21,7 @@ User = get_user_model()
 MAX_REVIEW_LENGTH = settings.MAX_REVIEW_LENGTH
 ANIME_IMMUTABLE_MESSAGE = "A review cannot be moved to another anime."
 
-REACTION_EMOJI_MAP = {
+REACTION_EMOJI_MAP: dict[str, str] = {
     ReviewReaction.ReactionType.THUMBS_UP: "👍",
     ReviewReaction.ReactionType.HEART: "❤️",
     ReviewReaction.ReactionType.LAUGH: "😂",

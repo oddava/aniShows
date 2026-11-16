@@ -279,7 +279,7 @@ def get_review_stats(anime_slug: str) -> dict:
         lambda: _build_review_stats(anime_slug),
         ttl=REVIEW_STATS_CACHE_TTL,
     )
-    return payload
+    return payload  # type: ignore[return-value]  # the builder returns a dict
 
 
 # --- Write side ----------------------------------------------------------------

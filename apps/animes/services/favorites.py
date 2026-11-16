@@ -122,7 +122,9 @@ def _new_favorite_fields(user, kind: _FavoriteKind) -> dict:
 def _add_favorite(user, kind: _FavoriteKind, lookup: dict) -> None:
     try:
         with transaction.atomic():
-            kind.favorite_model.objects.create(**lookup, **_new_favorite_fields(user, kind))
+            kind.favorite_model._default_manager.create(
+                **lookup, **_new_favorite_fields(user, kind)
+            )
     except IntegrityError:
         # A parallel toggle by the same user added it first (unique pair): same outcome.
         pass
@@ -130,7 +132,7 @@ def _add_favorite(user, kind: _FavoriteKind, lookup: dict) -> None:
 
 def _toggle(user, object_id: int, kind: _FavoriteKind) -> FavoriteActionResult:
     """Add or remove a favorite without row locks; the unique pair keeps it consistent."""
-    if not kind.model.objects.filter(pk=object_id).exists():
+    if not kind.model._default_manager.filter(pk=object_id).exists():
         return FavoriteActionResult(
             payload={"detail": kind.not_found_message, "code": "not_found"},
             status_code=404,
@@ -138,11 +140,11 @@ def _toggle(user, object_id: int, kind: _FavoriteKind) -> FavoriteActionResult:
 
     target = {f"{kind.field_name}_id": object_id}
     lookup = {"user": user, **target}
-    removed, _ = kind.favorite_model.objects.filter(**lookup).delete()
+    removed, _ = kind.favorite_model._default_manager.filter(**lookup).delete()
     if not removed:
         _add_favorite(user, kind, lookup)
 
-    favorite_count = kind.favorite_model.objects.filter(**target).count()
+    favorite_count = kind.favorite_model._default_manager.filter(**target).count()
     transaction.on_commit(
         lambda: invalidate_user_caches(
             user.id, user.username, trigger_stats_update=kind.trigger_stats_update

@@ -20,7 +20,8 @@ from ..base import REST_FRAMEWORK
 
 # Community write scopes (spec 5 P0-8). Each scope is its own bucket, so following a
 # lot of people never locks a user out of password or email changes (``strict_user``).
-REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"].update(
+_throttle_rates: dict[str, str] = REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]  # type: ignore[assignment]
+_throttle_rates.update(
     {
         # Review create / update / delete.
         "review_write": "10/minute",

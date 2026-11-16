@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from allauth.socialaccount.models import SocialAccount
@@ -27,7 +28,7 @@ class FollowActionResult:
 
 @dataclass(frozen=True, slots=True)
 class FriendsWatching:
-    results: list[UserAnimeList]
+    results: Sequence[UserAnimeList]
     total: int
 
 

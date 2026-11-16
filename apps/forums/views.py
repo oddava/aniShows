@@ -101,7 +101,9 @@ class ThreadListQuerySerializer(Serializer):
 class PostListQuerySerializer(Serializer):
     page = IntegerField(required=False, default=1, min_value=1)
     thread__id = IntegerField(required=False, min_value=1)
-    root = IntegerField(required=False, min_value=1)
+    # Shadows ``Field.root`` for the type checker only: DRF pops declared fields
+    # off the class, so the serializer's ``root`` property is untouched.
+    root = IntegerField(required=False, min_value=1)  # type: ignore[assignment]
 
 
 def _moderation_reason(request) -> str:
@@ -114,12 +116,15 @@ def _result_response(result) -> Response:
     return Response(result.payload, status=result.status_code)
 
 
-_STAFF_ACTION = {
-    "detail": True,
-    "methods": ["post"],
-    "permission_classes": [IsAdminUser],
-    "throttle_classes": [CommunityActionRateThrottle],
-}
+def _staff_action(url_path: str | None = None):
+    """A detail POST action for staff, throttled with the community scope."""
+    return action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[IsAdminUser],
+        throttle_classes=[CommunityActionRateThrottle],
+        url_path=url_path,
+    )
 
 
 class TagViewSet(ReadOnlyModelViewSet):
@@ -307,17 +312,17 @@ class ThreadViewSet(ModelViewSet):
         result = unlike_thread(thread, request.user)
         return Response(result.payload, status=result.status_code)
 
-    @action(**_STAFF_ACTION, url_path="toggle_lock")
+    @_staff_action(url_path="toggle_lock")
     def toggle_lock(self, request, pk=None):
         return _result_response(moderation.toggle_thread_lock(self.get_object(), request=request))
 
-    @action(**_STAFF_ACTION)
+    @_staff_action()
     def remove(self, request, pk=None):
         thread = self.get_object()
         reason = _moderation_reason(request)
         return _result_response(moderation.remove_thread(thread, request=request, reason=reason))
 
-    @action(**_STAFF_ACTION)
+    @_staff_action()
     def restore(self, request, pk=None):
         return _result_response(moderation.restore_thread(self.get_object(), request=request))
 
@@ -394,7 +399,7 @@ class PostViewSet(ModelViewSet):
             return Response({"count": 1, "next": None, "previous": None, "results": data})
 
         top_level_posts = self.paginate_queryset(queryset.filter(parent__isnull=True))
-        posts = get_threaded_posts_page(queryset, thread_id, list(top_level_posts))
+        posts = get_threaded_posts_page(queryset, thread_id, list(top_level_posts or []))
         response = self.get_paginated_response(self.get_serializer(posts, many=True).data)
         if cacheable:
             cache_post_list(thread_id, page, response.data)
@@ -433,12 +438,12 @@ class PostViewSet(ModelViewSet):
         result = unlike_post(post, request.user)
         return Response(result.payload, status=result.status_code)
 
-    @action(**_STAFF_ACTION)
+    @_staff_action()
     def remove(self, request, pk=None):
         post = self.get_object()
         reason = _moderation_reason(request)
         return _result_response(moderation.remove_post(post, request=request, reason=reason))
 
-    @action(**_STAFF_ACTION)
+    @_staff_action()
     def restore(self, request, pk=None):
         return _result_response(moderation.restore_post(self.get_object(), request=request))

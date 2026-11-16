@@ -202,13 +202,13 @@ def toggle_thread_pin(thread: Thread) -> ForumActionResult:
 
 def _notify_reply_target(post: Post, author) -> None:
     """Tell the thread author (top-level reply) or the parent's author (nested reply)."""
-    data = {"thread_id": post.thread_id, "post_id": post.id}
-    if post.parent_id is None:
+    data: dict[str, int | str] = {"thread_id": post.thread_id, "post_id": post.id}
+    if post.parent is None:
         recipient_id = post.thread.author_id
         data["reason"] = "thread"
     else:
         recipient_id = post.parent.author_id
-        data.update(parent_post_id=post.parent_id, reason="parent")
+        data.update(parent_post_id=post.parent.pk, reason="parent")
     if recipient_id != author.id:
         notify(
             recipient_id,

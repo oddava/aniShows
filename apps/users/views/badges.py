@@ -22,7 +22,8 @@ class UserBadgeViewSet(GenericViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return UserBadge.objects.filter(user=self.request.user).select_related("badge")
+        # ``IsAuthenticated`` guarantees a real user here.
+        return UserBadge.objects.filter(user_id=self.request.user.pk).select_related("badge")
 
     @action(detail=False, methods=["get"])
     def mine(self, request):

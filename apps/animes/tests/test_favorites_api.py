@@ -187,7 +187,7 @@ class FavoriteReorderTests(APITestCase):
 
     def test_malformed_payloads_are_400(self):
         other = _verified_user("someone-else")
-        foreign = UserFavorite.objects.create(user=other, anime=Anime.objects.first())
+        foreign = UserFavorite.objects.create(user=other, anime=Anime.objects.earliest("id"))
         payloads = [
             [1],
             {"ids": [{"id": "x"}]},

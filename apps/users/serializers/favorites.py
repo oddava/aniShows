@@ -110,7 +110,7 @@ class FavoriteReorderSerializer(Serializer):
         allow_empty=False,
         max_length=MAX_REORDER_IDS,
     )
-    items = _LegacyReorderItemSerializer(
+    items = _LegacyReorderItemSerializer(  # type: ignore[call-arg]  # many=True takes ListSerializer kwargs
         many=True,
         required=False,
         allow_empty=False,

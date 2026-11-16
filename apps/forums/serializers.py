@@ -195,7 +195,10 @@ class PostSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
     author = CustomUserSerializer(read_only=True)
     like_count = IntegerField(read_only=True)
     is_liked_by_user = SerializerMethodField()
-    parent = PrimaryKeyRelatedField(queryset=Post.objects.all(), required=False, allow_null=True)
+    # Declared fields are popped off the class, so ``Field.parent`` is not shadowed.
+    parent = PrimaryKeyRelatedField(  # type: ignore[assignment]
+        queryset=Post.objects.all(), required=False, allow_null=True
+    )
     depth = IntegerField(read_only=True)
     reply_count = SerializerMethodField()
     removal = SerializerMethodField()

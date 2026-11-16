@@ -32,13 +32,16 @@ def _audit(
     new: dict,
     reason: str = "",
 ) -> None:
-    is_thread = isinstance(entity, Thread)
+    if isinstance(entity, Thread):
+        entity_type, entity_repr = "forum_thread", entity.title
+    else:
+        entity_type, entity_repr = "forum_post", f"Post {entity.pk} in thread {entity.thread_id}"
     record_admin_action(
         request,
         action=action,
-        entity_type="forum_thread" if is_thread else "forum_post",
+        entity_type=entity_type,
         entity_id=entity.pk,
-        entity_repr=entity.title if is_thread else f"Post {entity.pk} in thread {entity.thread_id}",
+        entity_repr=entity_repr,
         previous=previous,
         new=new,
         metadata={"operation": operation},
