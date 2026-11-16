@@ -10,14 +10,7 @@ from ...shared.media_urls import normalize_media_url
 from ...shared.text import normalize_bio, normalize_primary_color
 from ..models import UserBadge, UserStats
 from .avatar_service import get_user_avatar_url
-
-try:
-    from .cache import get_user_profile_cache_key
-except ImportError:
-    # Backward-compatible fallback for environments with older cache service exports.
-    def get_user_profile_cache_key(user_id, full=False):
-        return f"user_profile:{user_id}:{'full' if full else 'light'}"
-
+from .cache import get_user_profile_cache_key
 
 User = get_user_model()
 
@@ -63,8 +56,10 @@ def build_profile_user_queryset(*, include_badges: bool = True):
     return queryset
 
 
-def get_current_user_profile(user_id: int, is_full: bool) -> ProfileResult:
-    cache_key = get_user_profile_cache_key(user_id, full=is_full)
+def get_current_user_profile(user_id: int) -> ProfileResult:
+    # One payload and one cache entry: the old ``?full=true`` variant built the
+    # same data under a second key (A22). The query parameter is still accepted.
+    cache_key = get_user_profile_cache_key(user_id)
     cached_data = cache.get(cache_key)
     if cached_data:
         normalized = _normalize_profile_payload(cached_data)

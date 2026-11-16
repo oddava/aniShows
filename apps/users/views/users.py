@@ -33,8 +33,8 @@ class UserProfileView(APIView):
     """
     Get/update current user profile.
 
-    GET /users/me/ - Returns user profile (cached, fast)
-    Supports 'full' query param for complete stats.
+    GET /users/me/ - Returns user profile (cached, fast). A ``full`` query
+    parameter is accepted for old clients and ignored: there is one payload.
     """
 
     permission_classes = [IsAuthenticated]
@@ -67,10 +67,8 @@ class UserProfileView(APIView):
     def get(self, request):
         start_time = time.time()
         user_id = request.user.id
-        is_full = request.query_params.get("full", "false").lower() == "true"
-
         try:
-            result = get_current_user_profile(user_id=user_id, is_full=is_full)
+            result = get_current_user_profile(user_id=user_id)
         except User.DoesNotExist:
             return error_response("User not found", code="user_not_found", status_code=404)
 

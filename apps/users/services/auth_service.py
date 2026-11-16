@@ -167,13 +167,6 @@ class AuthService:
             queryset = queryset.exclude(pk=exclude_pk)
         return queryset.exists()
 
-    def validate_registration_credentials(self, username: str, email: str) -> None:
-        generic_message = "Unable to create account. The email or username may already be in use."
-        if self.username_exists(username):
-            raise ValidationError(generic_message)
-        if self.email_exists(email):
-            raise ValidationError(generic_message)
-
     def register_user(self, data: Dict) -> User:
         """Create a new user with profile."""
         try:

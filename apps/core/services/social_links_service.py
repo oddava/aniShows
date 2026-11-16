@@ -9,7 +9,7 @@ from ...shared.errors import ENQUEUE_ERRORS
 from ...shared.logger import logger
 from ...users.models import SocialLinkChangeLog
 from .metadata_service import MetadataService
-from .url_validator import URLValidationError, URLValidator
+from .url_validator import URLValidator
 
 
 class SocialLinkValidationError(Exception):
@@ -224,54 +224,3 @@ class SocialLinksService:
             # The audit trail is best effort. AttributeError: a stored link that
             # is not a dict; TypeError: a link value that is not JSON-serialisable.
             logger.exception("Error logging social link changes")
-
-    def validate_single_url(self, url: str) -> Dict:
-        """
-        Validate a single URL for real-time frontend validation.
-        Returns validation result with metadata.
-        """
-        try:
-            dangerous_schemes = ["javascript:", "data:", "vbscript:", "file:"]
-            url_lower = url.lower()
-            for scheme in dangerous_schemes:
-                if url_lower.startswith(scheme):
-                    return {
-                        "valid": False,
-                        "error": f"Invalid URL scheme detected: '{scheme}'",
-                        "trust_level": self.TRUST_SUSPICIOUS,
-                    }
-
-            normalized = self.validator._normalize_url(url)
-            is_valid, error_message, validation_metadata = self.validator.validate(normalized)
-
-            if not is_valid:
-                return {
-                    "valid": False,
-                    "error": error_message,
-                    "trust_level": self.TRUST_SUSPICIOUS,
-                }
-
-            trust_level = self._determine_trust_level(
-                validation_metadata.get("platform"), validation_metadata
-            )
-            validated_url = validation_metadata.get("normalized_url", normalized)
-
-            return {
-                "valid": True,
-                "url": validated_url,
-                "platform": validation_metadata.get("platform", "website"),
-                "domain": validation_metadata.get("domain", ""),
-                "trust_level": trust_level,
-                "subdomain_count": validation_metadata.get("subdomain_count", 0),
-                "domain_age_days": validation_metadata.get("domain_age_days"),
-            }
-        except (URLValidationError, ValueError) as e:
-            # _normalize_url rejects credentials and bad ports (URLValidationError);
-            # urlparse rejects malformed IPv6 hosts (ValueError). validate()
-            # handles its own unexpected errors.
-            logger.warning("Rejected URL %s: %s", url, e)
-            return {
-                "valid": False,
-                "error": str(e),
-                "trust_level": self.TRUST_SUSPICIOUS,
-            }
