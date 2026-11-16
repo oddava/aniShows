@@ -40,10 +40,14 @@ def build_auth_response(user, request, message: str) -> AuthFlowResult:
     return AuthFlowResult(payload=payload, status_code=200)
 
 
-def verify_email_flow(
-    uidb64: str | None, token: str | None, request, auth_service
-) -> AuthFlowResult:
-    if not uidb64 or not token:
+def _text(value: object) -> str | None:
+    """``value`` if it is a non-empty string, else None (request bodies may hold anything)."""
+    return value if isinstance(value, str) and value else None
+
+
+def verify_email_flow(uidb64: object, token: object, request, auth_service) -> AuthFlowResult:
+    uidb64, token = _text(uidb64), _text(token)
+    if uidb64 is None or token is None:
         raise AuthFlowError("Missing UID or Token", 400)
 
     outcome, user = auth_service.verify_email(uidb64, token)
@@ -62,12 +66,18 @@ def verify_email_flow(
     raise AuthFlowError("Invalid or expired token", 400)
 
 
-def resend_verification_flow(email: str | None, email_service) -> AuthFlowResult:
-    if not email:
+def _require_email(email: object) -> str:
+    """Return the stripped address, or raise 400 for anything but a non-empty string."""
+    address = (_text(email) or "").strip()
+    if not address:
         raise AuthFlowError("Email is required", 400)
+    return address
 
+
+def resend_verification_flow(email: object, email_service) -> AuthFlowResult:
+    email = _require_email(email)
     users = User.objects.select_related("userprofile").filter(
-        email__iexact=email.strip(), userprofile__email_verified=False
+        email__iexact=email, userprofile__email_verified=False
     )
     for user in users:
         email_service.send_verification_email(user)
@@ -83,12 +93,10 @@ def resend_verification_flow(email: str | None, email_service) -> AuthFlowResult
     )
 
 
-def password_reset_flow(email: str | None, email_service) -> AuthFlowResult:
-    if not email:
-        raise AuthFlowError("Email is required", 400)
-
+def password_reset_flow(email: object, email_service) -> AuthFlowResult:
+    email = _require_email(email)
     # filter(), not get(): legacy rows may share an email up to case.
-    for user in User.objects.filter(email__iexact=email.strip(), is_active=True):
+    for user in User.objects.filter(email__iexact=email, is_active=True):
         email_service.send_password_reset_email(user)
 
     return AuthFlowResult(
@@ -97,10 +105,9 @@ def password_reset_flow(email: str | None, email_service) -> AuthFlowResult:
     )
 
 
-def password_reset_confirm_flow(
-    uidb64: str | None, token: str | None, password: str | None
-) -> AuthFlowResult:
-    if not all([uidb64, token, password]):
+def password_reset_confirm_flow(uidb64: object, token: object, password: object) -> AuthFlowResult:
+    uidb64, token, password = _text(uidb64), _text(token), _text(password)
+    if uidb64 is None or token is None or password is None:
         raise AuthFlowError("Missing required fields", 400)
 
     try:

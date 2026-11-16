@@ -11,6 +11,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import (
     BooleanField,
     CharField,
+    EmailField,
     FloatField,
     ImageField,
     IntegerField,
@@ -363,6 +364,9 @@ class UserProfileUpdateSerializer(Serializer):
 
 
 class RegisterSerializer(ModelSerializer):
+    # Declared explicitly: the model field is ``blank=True``, which would make
+    # the address optional and leave an account that can never verify.
+    email = EmailField(required=True, allow_blank=False)
     password = CharField(write_only=True, min_length=8)
     auth_service = AuthService()
 
