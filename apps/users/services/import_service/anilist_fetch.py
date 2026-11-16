@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import random
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
 from django.conf import settings
@@ -73,6 +73,26 @@ query ImportMediaByIds($ids: [Int], $perPage: Int) {{
     }}
 }}
 """
+
+
+class ListFetcher(Protocol):
+    """What the importers need from an AniList reader (``AniListFetcher``, or a test fake)."""
+
+    def fetch_list_collection(self, username: str) -> tuple[list[dict], int | None]: ...
+
+    def fetch_recent_entries(
+        self,
+        username: str,
+        *,
+        since: int | None,
+        on_page: Callable[[], None] | None = None,
+    ) -> list[dict]: ...
+
+    def fetch_media_by_ids(
+        self, *, anilist_ids: Iterable[int] = (), mal_ids: Iterable[int] = ()
+    ) -> Iterable[list[dict]]: ...
+
+    def close(self) -> None: ...
 
 
 class AniListFetchError(Exception):

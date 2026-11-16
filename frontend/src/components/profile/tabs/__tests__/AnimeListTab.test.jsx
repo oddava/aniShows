@@ -93,9 +93,12 @@ describe('AnimeListTab', () => {
             .mockResolvedValueOnce(page([3]));
         renderTab({ isPublicView: false });
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+        // The first page must render before Load more exists; under a loaded full run
+        // that takes longer than findBy's 1 s default.
+        await screen.findByText('Anime 2', {}, { timeout: 5000 });
+        fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
 
-        expect(await screen.findByText('Anime 3')).toBeInTheDocument();
+        expect(await screen.findByText('Anime 3', {}, { timeout: 5000 })).toBeInTheDocument();
         expect(listApi.getAll).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, page_size: 50 }));
         expect(screen.getAllByTestId('anime-card')).toHaveLength(3);
         expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();

@@ -15,7 +15,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from ..models import UserAnimeList, UserImportJob, UserListLink, UserProfile
+from ..models import CustomUser, UserAnimeList, UserImportJob, UserListLink, UserProfile
 from ..services.celery_tasks import UserTaskService
 from ..services.import_service import anilist_sync
 from ..services.import_service.anilist import AniListImporter
@@ -36,7 +36,7 @@ JobStatus = UserImportJob.ImportStatus
 QUEUE = "apps.users.services.import_job_service.process_import_job.apply_async"
 
 
-def verified_user(username: str, **fields) -> User:
+def verified_user(username: str, **fields) -> CustomUser:
     user = User.objects.create_user(
         username=username, email=f"{username}@example.com", password="pw", **fields
     )
@@ -437,8 +437,8 @@ class CursorTests(ImportTestMixin, TestCase):
             raise AniListFetchError("rate_limited", "busy")
             yield  # pragma: no cover - makes this a generator like the real one
 
-        fetcher.fetch_media_by_ids = busy
-        self.sync(fetcher)
+        with patch.object(fetcher, "fetch_media_by_ids", busy):
+            self.sync(fetcher)
 
         self.assertEqual(self.link.cursor_updated_at, 849)
 

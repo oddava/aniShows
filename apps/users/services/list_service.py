@@ -152,11 +152,11 @@ def upsert_user_anime_list_entry(serializer_class, user, data, context) -> tuple
 
     with transaction.atomic():
         existing = None
-        if anime_id not in (None, ""):
+        if anime_id is not None and anime_id != "":
             try:
                 existing = (
                     UserAnimeList.objects.select_for_update()
-                    .filter(user=user, anime_id=int(anime_id))
+                    .filter(user=user, anime_id=int(str(anime_id)))
                     .first()
                 )
             except (TypeError, ValueError):

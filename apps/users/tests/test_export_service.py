@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 from defusedxml import ElementTree
@@ -30,7 +31,13 @@ User = get_user_model()
 Status = UserAnimeList.UserAnimeStatus
 
 
-class ExportFixtureMixin:
+if TYPE_CHECKING:
+    _MixinBase = TestCase
+else:
+    _MixinBase = object
+
+
+class ExportFixtureMixin(_MixinBase):
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(

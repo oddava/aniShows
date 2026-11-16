@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -112,7 +113,7 @@ class ListQueryTests(APITestCase):
 
     def test_all_entries_are_reachable_in_pages_with_the_real_count(self):
         self._bulk_watching(120)
-        seen = []
+        seen: list[str] = []
         page = 1
         while True:
             response = self.client.get(
@@ -120,8 +121,8 @@ class ListQueryTests(APITestCase):
                 {
                     "username": "pager",
                     "status": "Watching",
-                    "page_size": 50,
-                    "page": page,
+                    "page_size": "50",
+                    "page": str(page),
                     "ordering": "title",
                 },
             )
@@ -140,7 +141,7 @@ class ListQueryTests(APITestCase):
 
         response = self.client.get(
             LISTS_URL,
-            {"username": "pager", "status": "Watching", "q": "show 115", "page_size": 50},
+            {"username": "pager", "status": "Watching", "q": "show 115", "page_size": "50"},
         )
 
         self.assertEqual(response.data["count"], 1)
@@ -280,7 +281,7 @@ class ListUpsertTests(APITestCase):
         self.assertFalse(UserAnimeList.objects.filter(user=self.user, anime=other).exists())
 
     def test_check_constraints_exist_in_the_database(self):
-        cases = [
+        cases: list[dict[str, Any]] = [
             {"score": 11},
             {"score": -1},
             {"episodes_watched": -1},

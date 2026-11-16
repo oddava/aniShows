@@ -9,6 +9,7 @@ from __future__ import annotations
 import gzip
 import json
 from datetime import UTC, date, datetime, timedelta
+from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 
 import httpx
@@ -36,7 +37,11 @@ from ..services.import_job_service import (
 from ..services.import_service import ImportService
 from ..services.import_service import base as base_module
 from ..services.import_service.anilist import AniListImporter
-from ..services.import_service.anilist_fetch import USER_MESSAGES, AniListFetcher
+from ..services.import_service.anilist_fetch import (
+    USER_MESSAGES,
+    AniListFetcher,
+    AniListFetchError,
+)
 from ..services.import_service.base import BaseImporter
 from ..services.import_service.entries import (
     REASON_NOT_FOUND,
@@ -164,7 +169,13 @@ def graphql_transport(handler):
     return fetcher, requests
 
 
-class ImportTestMixin:
+if TYPE_CHECKING:
+    _MixinBase = TestCase
+else:
+    _MixinBase = object
+
+
+class ImportTestMixin(_MixinBase):
     # Most tests stub the post-import refresh; the refresh tests turn this off.
     patch_refresh = True
 
@@ -305,7 +316,7 @@ class AniListFetcherTests(TestCase):
                     404, json={"errors": [{"message": m, "status": 404}], "data": None}
                 )
             )
-            with self.assertRaises(Exception) as ctx:
+            with self.assertRaises(AniListFetchError) as ctx:
                 fetcher.fetch_list_collection("someone")
             self.assertEqual(ctx.exception.code, code)
 
@@ -662,9 +673,11 @@ class ImportLifecycleTests(ImportTestMixin, TestCase):
 
     def test_database_error_leaves_the_job_for_the_task_retry(self):
         fetcher = FakeFetcher()
-        fetcher.fetch_list_collection = Mock(side_effect=OperationalError("db down"))
         job = self.make_job()
-        with self.assertRaises(OperationalError):
+        with (
+            patch.object(fetcher, "fetch_list_collection", side_effect=OperationalError("down")),
+            self.assertRaises(OperationalError),
+        ):
             AniListImporter(job, "remote-name", fetcher=fetcher).run()
         job.refresh_from_db()
         self.assertEqual((job.status, job.failure_reason), (JobStatus.processing, ""))
@@ -760,7 +773,7 @@ class XMLImportTests(ImportTestMixin, TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             result = create_mal_xml_import_job(self.user, "list.xml", parse_mal_xml(self.XML))
         job = UserImportJob.objects.get(pk=result.payload["job_id"])
-        self.assertEqual(len(job.payload["entries"]), 1)
+        self.assertEqual(len((job.payload or {})["entries"]), 1)
         self.assertEqual(apply_async.call_args.kwargs["kwargs"], {"job_id": job.pk})
 
 
@@ -921,7 +934,9 @@ class ImportJobServiceTests(TestCase):
         job = UserImportJob.objects.create(
             user=self.user, source=UserImportJob.ImportSource.anilist, source_identifier="stored"
         )
-        self.assertEqual(ImportService.create_importer(job).username, "stored")
+        importer = ImportService.create_importer(job)
+        assert isinstance(importer, AniListImporter)
+        self.assertEqual(importer.username, "stored")
 
     def test_old_queued_token_kwarg_is_dropped(self):
         job = UserImportJob.objects.create(
@@ -1097,7 +1112,7 @@ class ImportExportApiTests(APITestCase):
                 )
             self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, (name, response.data))
             job = UserImportJob.objects.get(pk=response.data["job_id"])
-            self.assertEqual(job.payload["entries"][0]["mal_id"], 55)
+            self.assertEqual((job.payload or {})["entries"][0]["mal_id"], 55)
         self.assertNotIn("xml_content", apply_async.call_args.kwargs["kwargs"])
 
     def test_gzip_bomb_upload_is_rejected(self):

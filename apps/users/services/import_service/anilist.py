@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from ....shared.logger import logger
 from ...models import UserImportJob, UserListLink
-from .anilist_fetch import AniListFetcher, AniListFetchError
+from .anilist_fetch import AniListFetchError, ListFetcher
 from .base import BaseImporter, ImportSourceError
 from .entries import ImportedEntry, anilist_entry
 
@@ -16,7 +16,8 @@ PERMANENT_FETCH_ERRORS = frozenset({"not_found", "private"})
 
 
 def _stamp(entry: ImportedEntry) -> int:
-    return int(entry.remote_updated_at.timestamp())
+    stamp = entry.remote_updated_at
+    return int(stamp.timestamp()) if stamp else 0
 
 
 class AniListImporter(BaseImporter):
@@ -24,7 +25,7 @@ class AniListImporter(BaseImporter):
 
     source_name = "anilist"
 
-    def __init__(self, job: UserImportJob, username: str, *, fetcher: AniListFetcher | None = None):
+    def __init__(self, job: UserImportJob, username: str, *, fetcher: ListFetcher | None = None):
         super().__init__(job, fetcher=fetcher)
         self.username = username
         # A job for the user's linked AniList name also moves the link's sync state.
@@ -49,10 +50,11 @@ class AniListImporter(BaseImporter):
 
     def load_entries(self) -> list[ImportedEntry]:
         try:
-            if self.incremental:
+            link = self.link
+            if self.incremental and link is not None:
                 rows = self.fetcher.fetch_recent_entries(
                     self.username,
-                    since=self.link.cursor_updated_at,
+                    since=link.cursor_updated_at,
                     on_page=lambda: self.flush(force=True),
                 )
             else:

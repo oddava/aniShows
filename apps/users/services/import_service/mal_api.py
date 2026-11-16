@@ -43,12 +43,13 @@ class MyAnimeListAPIImporter(BaseImporter):
     ):
         super().__init__(job, **kwargs)
         self.username = username
-        self.client_id = client_id or os.getenv("MAL_CLIENT_ID")
-        if not self.client_id:
+        resolved_client_id = client_id or os.getenv("MAL_CLIENT_ID")
+        if not resolved_client_id:
             raise ValueError(
                 "MAL_CLIENT_ID environment variable is required for MyAnimeList API imports. "
                 "Please set it in your .env file or environment."
             )
+        self.client_id: str = resolved_client_id
         self._http = http_client
 
     def _retry_delay(self, attempt: int, response: httpx.Response | None = None) -> float:
@@ -60,7 +61,12 @@ class MyAnimeListAPIImporter(BaseImporter):
 
     def _get_page(self, client: httpx.Client, offset: int) -> dict:
         url = f"{self.BASE_URL}/users/{self.username}/animelist"
-        params = {"offset": offset, "limit": self.PAGE_SIZE, "fields": LIST_FIELDS, "nsfw": "true"}
+        params: dict[str, str | int] = {
+            "offset": offset,
+            "limit": self.PAGE_SIZE,
+            "fields": LIST_FIELDS,
+            "nsfw": "true",
+        }
         for attempt in range(1, self.MAX_PAGE_RETRIES + 1):
             try:
                 response = client.get(url, params=params)

@@ -36,7 +36,7 @@ from ....shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ....shared.logger import logger
 from ...models import UserAnimeList, UserImportJob
 from ..list_rules import normalize_entry, user_today
-from .anilist_fetch import AniListFetcher, AniListFetchError, save_media
+from .anilist_fetch import AniListFetcher, AniListFetchError, ListFetcher, save_media
 from .entries import (
     REASON_INVALID,
     REASON_NOT_FOUND,
@@ -102,7 +102,7 @@ class BaseImporter:
     MISSING_ANIME_CACHE_TTL_SECONDS = 6 * 60 * 60
     source_name = "import"
 
-    def __init__(self, job: UserImportJob, *, fetcher: AniListFetcher | None = None):
+    def __init__(self, job: UserImportJob, *, fetcher: ListFetcher | None = None):
         self.job = job
         self.user = job.user
         self.errors: list[str] = []
@@ -113,9 +113,9 @@ class BaseImporter:
         self.fetched_count = 0
         self.processed_count = 0
         self.total_count = 0
-        self._fetcher = fetcher
+        self._fetcher: ListFetcher | None = fetcher
         self._owns_fetcher = fetcher is None
-        self._persistence = None
+        self._persistence: Any = None
         self._to_create: list[UserAnimeList] = []
         self._to_update: list[UserAnimeList] = []
         self._touched_anime_ids: set[int] = set()
@@ -142,7 +142,7 @@ class BaseImporter:
     # ------------------------------------------------------------------ helpers
 
     @property
-    def fetcher(self) -> AniListFetcher:
+    def fetcher(self) -> ListFetcher:
         if self._fetcher is None:
             self._fetcher = AniListFetcher()
         return self._fetcher
@@ -288,15 +288,23 @@ class BaseImporter:
         if not candidates:
             return
 
-        by_anilist = {e.anilist_id: e for e in candidates if e.anilist_id}
-        by_mal = {e.mal_id: e for e in candidates if not e.anilist_id}
+        by_anilist: dict[int, ImportedEntry] = {}
+        by_mal: dict[int, ImportedEntry] = {}
+        for candidate in candidates:
+            if candidate.anilist_id:
+                by_anilist[candidate.anilist_id] = candidate
+            elif candidate.mal_id:
+                by_mal[candidate.mal_id] = candidate
         pages = self.fetcher.fetch_media_by_ids(anilist_ids=list(by_anilist), mal_ids=list(by_mal))
         try:
             for page in pages:
                 for item in page:
-                    entry = by_anilist.get(item.get("id")) or by_mal.get(item.get("idMal"))
-                    if entry is None or entry.key() in resolved:
+                    match = by_anilist.get(item.get("id") or 0) or by_mal.get(
+                        item.get("idMal") or 0
+                    )
+                    if match is None or match.key() in resolved:
                         continue
+                    entry = match
                     try:
                         with transaction.atomic():
                             resolved[entry.key()] = save_media(self._get_persistence(), item)

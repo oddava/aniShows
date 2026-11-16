@@ -55,7 +55,7 @@ class ListBudgetTests(APITestCase):
 
     def _list_queries(self):
         with CaptureQueriesContext(connection) as ctx:
-            response = self.client.get("/api/v1/lists/", {"username": "budget", "page_size": 50})
+            response = self.client.get("/api/v1/lists/", {"username": "budget", "page_size": "50"})
         self.assertEqual(response.status_code, 200)
         return len(ctx), ctx
 
