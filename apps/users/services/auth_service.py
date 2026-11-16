@@ -164,7 +164,10 @@ class AuthService:
                 user = (
                     User.objects.filter(email__iexact=normalized_username).only("username").first()
                 )
-                return user.username if user else normalized_username
+                if user is not None:
+                    return user.username
+                # Usernames may contain "@" too; both paths still authenticate,
+                # so this adds no oracle.
 
             user = (
                 filter_username_ci(User.objects.all(), normalized_username).only("username").first()

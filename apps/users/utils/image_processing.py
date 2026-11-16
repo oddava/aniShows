@@ -105,6 +105,17 @@ def normalize_profile_image(file: File, kind: ImageKind, *, max_size: int) -> Fi
             raise ProfileImageError(
                 f"Animated {label.lower()}s can have at most {GIF_MAX_FRAMES} frames."
             )
+        # Kept as uploaded, so it must already be display-sized: a huge
+        # animation would be decoded in every viewer's browser.
+        if _target_size(image, kind) != image.size:
+            limit = (
+                f"{AVATAR_MAX_SIDE}x{AVATAR_MAX_SIDE}"
+                if kind == "avatar"
+                else f"{BANNER_MAX_WIDTH}x{BANNER_MAX_HEIGHT}"
+            )
+            raise ProfileImageError(
+                f"Animated {label.lower()}s can be at most {limit} pixels ({width}x{height})."
+            )
         file.seek(0)
         return file
 

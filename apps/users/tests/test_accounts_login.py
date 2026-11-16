@@ -98,3 +98,17 @@ class LoginIdentifierTests(APITestCase):
         self.assertGreater(wrong_password, 0)
         self.assertEqual(unknown_email, wrong_password)
         self.assertEqual(unknown_username, wrong_password)
+
+
+class AtSignUsernameTests(APITestCase):
+    def test_a_username_containing_at_still_signs_in_by_username(self):
+        User.objects.create_user(
+            username="ann@home", email="ann@example.com", password="pw-12345678"
+        )
+        response = self.client.post(
+            reverse("token_obtain_pair"),
+            {"username": "ANN@home", "password": "pw-12345678"},
+            format="json",
+            **XHR,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

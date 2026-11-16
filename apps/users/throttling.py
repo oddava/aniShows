@@ -163,13 +163,13 @@ def fold_identifier(identifier: str) -> str:
     Postgres folds some characters that ``str.lower()`` leaves alone: long s
     (U+017F) and dotless i (U+0131) upper-case to ``S`` and ``I``, and dotted
     capital I (U+0130) lower-cases to ``i``. Each such spelling would get its own
-    counter yet sign in to the same account.
-    Decomposing, dropping combining marks and round-tripping through upper case
-    merges them. Merging extra spellings into one counter is harmless here.
+    counter yet sign in to the same account. NFKC (compatibility forms such as
+    long s, Kelvin sign), mapping U+0130 to ``I`` and a round trip through upper
+    case merge them, while accented letters stay distinct, as they are distinct
+    usernames.
     """
-    decomposed = unicodedata.normalize("NFKD", identifier.strip())
-    stripped = "".join(char for char in decomposed if not unicodedata.combining(char))
-    return stripped.upper().lower()
+    composed = unicodedata.normalize("NFKC", identifier.strip()).replace("\u0130", "I")
+    return composed.upper().lower()
 
 
 class LoginIdentifierThrottle:

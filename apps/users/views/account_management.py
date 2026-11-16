@@ -37,6 +37,16 @@ class AccountManagementViewSet(ViewSet):
             return [AllowAny()]
         return super().get_permissions()
 
+    def get_authenticators(self):
+        # The confirm link may be opened anywhere and needs no identity; session
+        # auth would answer a browser holding a Django admin session with a CSRF
+        # 403. (@action kwargs do not apply: the urlconf calls as_view directly,
+        # hence these overrides.) self.action is not set yet when DRF builds the
+        # request's authenticators, so read the route's action map instead.
+        if "confirm_email_change" in getattr(self, "action_map", {}).values():
+            return []
+        return super().get_authenticators()
+
     def get_throttles(self):
         if self.action in ["change_email", "resend_email_change"]:
             return [throttling.StrictUserRateThrottle(), throttling.ChangeEmailRateThrottle()]

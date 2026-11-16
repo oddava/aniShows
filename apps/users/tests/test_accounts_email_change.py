@@ -168,3 +168,43 @@ class PendingEmailTests(APITestCase):
 
         self.assertEqual(self._confirm(uid, old_token).status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(self._confirm(uid, new_token).status_code, status.HTTP_200_OK)
+
+    def test_confirm_locks_the_user_and_rechecks_on_fresh_rows(self):
+        from unittest.mock import patch
+
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from ..tokens import EmailChangeTokenGenerator
+
+        self._request()
+        uid, token = self._link_parts()
+        real_check = EmailChangeTokenGenerator.check_token
+        calls = []
+
+        def check_then_supersede(generator, user, value):
+            calls.append(1)
+            ok = real_check(generator, user, value)
+            if len(calls) == 1:
+                # A second submit of the link committed between the checks.
+                UserProfile.objects.filter(user=self.user).update(pending_email="")
+            return ok
+
+        self.client.force_authenticate(user=None)
+        with (
+            patch.object(EmailChangeTokenGenerator, "check_token", check_then_supersede),
+            CaptureQueriesContext(connection) as queries,
+        ):
+            response = self.client.post(
+                reverse("confirm_email_change"), {"uid": uid, "token": token}, format="json"
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(
+            any(
+                "FOR UPDATE" in q["sql"] and '"users_customuser"' in q["sql"]
+                for q in queries.captured_queries
+            )
+        )
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "old@example.com")

@@ -224,3 +224,25 @@ class UploadAndRemoveTogetherTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("remove_avatar", response.data["errors"])
+
+
+class AnimatedGifSizeTests(SimpleTestCase):
+    def test_oversized_animated_avatar_is_rejected(self):
+        frames = [Image.new("RGB", (600, 600), (i, 0, 0)) for i in range(3)]
+        buffer = io.BytesIO()
+        frames[0].save(buffer, format="GIF", save_all=True, append_images=frames[1:])
+        with self.assertRaisesMessage(ProfileImageError, "at most 512x512"):
+            normalize_profile_image(
+                ContentFile(buffer.getvalue(), name="big.gif"), "avatar", max_size=5 * 1024 * 1024
+            )
+
+    def test_display_sized_animated_banner_is_kept(self):
+        frames = [Image.new("RGB", (800, 200), (0, i, 0)) for i in range(3)]
+        buffer = io.BytesIO()
+        frames[0].save(buffer, format="GIF", save_all=True, append_images=frames[1:])
+        data = buffer.getvalue()
+        result = normalize_profile_image(
+            ContentFile(data, name="ok.gif"), "banner", max_size=5 * 1024 * 1024
+        )
+        result.seek(0)
+        self.assertEqual(result.read(), data)

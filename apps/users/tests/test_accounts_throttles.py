@@ -281,6 +281,9 @@ class IdentifierFoldingTests(APITestCase):
                 self.assertEqual(fold_identifier(variant), "chris@gmail.com")
         self.assertEqual(fold_identifier(f"{DOTTED_I}van"), fold_identifier("ivan"))
         self.assertEqual(fold_identifier(f"Stra{SHARP_S}e"), fold_identifier("STRASSE"))
+        # Accented letters stay distinct: they are different usernames.
+        self.assertNotEqual(fold_identifier("Jos" + chr(0xE9)), fold_identifier("Jose"))
+        self.assertEqual(fold_identifier("K" + chr(0x212A)), "kk")  # Kelvin sign
 
     def test_long_s_variants_do_not_get_fresh_counters(self):
         User.objects.create_user(username="chris", email="chris@gmail.com", password="right-pass-1")

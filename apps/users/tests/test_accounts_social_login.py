@@ -177,7 +177,9 @@ class GoogleCodeFlowOnlyTests(APITestCase):
         ):
             with self.subTest(body=body):
                 response = self.client.post(GOOGLE_URL, body, format="json", **XHR)
-                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(
+                    response.status_code, status.HTTP_400_BAD_REQUEST, response.content
+                )
                 self.assertEqual(response.data["code"], "code_required")
 
     def test_serializer_has_no_token_fields(self):
@@ -230,5 +232,16 @@ class LoginCsrfTests(APITestCase):
 class GoogleBadBodyTests(APITestCase):
     def test_a_json_array_body_is_400_not_500(self):
         response = self.client.post(GOOGLE_URL, ["code"], format="json", **XHR)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.content)
         self.assertEqual(response.data["code"], "code_required")
+
+
+class ConfirmEmailChangeAuthTests(APITestCase):
+    def test_confirm_ignores_a_django_session_instead_of_a_csrf_403(self):
+        user = User.objects.create_user(username="admin1", email="a1@example.com", password="x")
+        self.client.force_login(user)  # e.g. a Django admin session in this browser
+        self.client.handler.enforce_csrf_checks = True
+        response = self.client.post(
+            reverse("confirm_email_change"), {"uid": "MQ", "token": "bad"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.content)
