@@ -12,12 +12,13 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 from ...core.api_errors import error_response
 from ...shared.logger import logger
 from .. import throttling
+from ..models import UserProfile
 from ..serializers.accounts import (
     PublicUserSerializer,
     UserProfileUpdateSerializer,
 )
 from ..services.profile_service import get_current_user_profile
-from ..services.profile_update_service import update_user_profile
+from ..services.profile_update_service import social_links_unchanged, update_user_profile
 from ..services.public_profile_service import (
     PublicProfileError,
     get_public_profile,
@@ -39,11 +40,29 @@ class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def get_throttles(self):
-        throttles = super().get_throttles()
-        if self.request.method == "PATCH" and "social_links" in self.request.data:
-            throttles.append(throttling.SocialLinksRateThrottle())
-        return throttles
+    def _profile_patch_data(self, request):
+        """The PATCH body, minus ``social_links`` when they equal the stored ones.
+
+        Settings re-sends unchanged links on every save; validating them again
+        would re-run DNS/WHOIS checks and burn the 5/day social-links throttle,
+        so that throttle applies only when the links really change (A03).
+        """
+        data = request.data
+        if "social_links" not in data:
+            return data
+        # Read fresh: request.user may carry a profile cached before this request.
+        stored_links = (
+            UserProfile.objects.filter(user_id=request.user.pk)
+            .values_list("social_links", flat=True)
+            .first()
+        )
+        if social_links_unchanged(stored_links, data.get("social_links")):
+            return {key: data[key] for key in data.keys() if key != "social_links"}
+
+        throttle = throttling.SocialLinksRateThrottle()
+        if not throttle.allow_request(request, self):
+            self.throttled(request, throttle.wait())
+        return data
 
     def get(self, request):
         start_time = time.time()
@@ -73,7 +92,9 @@ class UserProfileView(APIView):
                 "request_keys": sorted(request.data.keys()),
             },
         )
-        serializer = UserProfileUpdateSerializer(data=request.data, context={"request": request})
+        serializer = UserProfileUpdateSerializer(
+            data=self._profile_patch_data(request), context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
 
         logger.info(

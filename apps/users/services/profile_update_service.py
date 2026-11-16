@@ -92,6 +92,20 @@ def normalize_social_links_input(raw_value):
     return cleaned_links
 
 
+def social_links_unchanged(stored_links, raw_value) -> bool:
+    """True when ``raw_value`` (the PATCH body's links) matches what is stored.
+
+    Compares ``(platform, url or value)`` pairs, so re-sending the saved links
+    costs no network validation and no social-links throttle. Input that
+    does not parse counts as a change, so the serializer reports the error.
+    """
+    try:
+        incoming = normalize_social_links_input(raw_value)
+    except ValidationError:
+        return False
+    return _hash_links(incoming) == _hash_links(stored_links or [])
+
+
 def validate_social_links_input(raw_value):
     cleaned_links = normalize_social_links_input(raw_value)
     return SocialLinksService().validate_and_process(cleaned_links)
