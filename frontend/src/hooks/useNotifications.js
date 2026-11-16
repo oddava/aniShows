@@ -5,9 +5,9 @@ import { notificationKeys, notificationQueries } from '../api/queries/notificati
 import { useFreshError, useReportError } from './useQueryErrorReport';
 
 /*
- * Shared notification state. The bell badges (admin header, Navbar,
- * NotificationBell) and the /notifications page all read and write the same
- * cache entries, so marking something read in one place updates the others.
+ * Shared notification state. The bell badges (admin header, Navbar) and the
+ * /notifications page all read and write the same cache entries, so marking
+ * something read in one place updates the others.
  */
 
 const dedupeById = (items) => {
@@ -54,12 +54,24 @@ export const setUnreadNotificationCount = (queryClient, userId, countOrUpdater) 
     ));
 };
 
-/** Applies `updater(flatList)` to every cached /notifications feed of this user. */
+/**
+ * Applies `updater(flatList, category)` to every cached /notifications feed of
+ * this user. `category` is the feed's server-side filter (undefined for All),
+ * so an updater can keep, say, a reply out of the Episodes feed.
+ */
 export const updateNotificationFeeds = (queryClient, userId, updater) => {
-    queryClient.setQueriesData(
-        { queryKey: [...notificationKeys.forUser(userId), 'feed'] },
-        (data) => updateFeedItems(data, updater),
-    );
+    const feedPrefix = [...notificationKeys.forUser(userId), 'feed'];
+    queryClient.getQueriesData({ queryKey: feedPrefix }).forEach(([queryKey, data]) => {
+        const category = queryKey[feedPrefix.length + 1];
+        const next = updateFeedItems(data, (items) => updater(items, category));
+        if (next !== data) queryClient.setQueryData(queryKey, next);
+    });
+};
+
+/** The server's unread count from a mutation response, when it sent one. */
+const unreadCountFrom = (response) => {
+    const count = response?.data?.unread_count;
+    return typeof count === 'number' ? count : null;
 };
 
 /**
@@ -97,14 +109,14 @@ export function useUnreadNotifications(userId, { errorLog, ...options } = {}) {
 
 /**
  * Marks one notification read (`mutate(id)`). On success it leaves the unread
- * list, shows as read in the feed and the badge drops by one. Callers mark only
- * unread items, as before.
+ * list, shows as read in the feed and the badge takes the server's new count
+ * (or drops by one when the response has none).
  */
 export function useMarkNotificationRead(userId) {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (notificationId) => notificationApi.markAsRead(notificationId),
-        onSuccess: (_response, notificationId) => {
+        onSuccess: (response, notificationId) => {
             queryClient.setQueryData(
                 notificationKeys.unread(userId),
                 (list) => list?.filter((item) => item.id !== notificationId),
@@ -112,7 +124,34 @@ export function useMarkNotificationRead(userId) {
             updateNotificationFeeds(queryClient, userId, (items) => items.map((item) => (
                 item.id === notificationId ? { ...item, is_read: true } : item
             )));
-            setUnreadNotificationCount(queryClient, userId, (count) => Math.max(0, count - 1));
+            const serverCount = unreadCountFrom(response);
+            setUnreadNotificationCount(
+                queryClient,
+                userId,
+                serverCount ?? ((count) => Math.max(0, count - 1)),
+            );
+        },
+    });
+}
+
+/**
+ * Deletes one notification (`mutate(id)`): it leaves every feed and the unread
+ * list, and the badge is refetched so it shows the server's count.
+ */
+export function useDeleteNotification(userId) {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: (notificationId) => notificationApi.delete(notificationId),
+        onSuccess: (_response, notificationId) => {
+            queryClient.setQueryData(
+                notificationKeys.unread(userId),
+                (list) => list?.filter((item) => item.id !== notificationId),
+            );
+            updateNotificationFeeds(queryClient, userId, (items) => {
+                const next = items.filter((item) => item.id !== notificationId);
+                return next.length === items.length ? items : next;
+            });
+            queryClient.invalidateQueries({ queryKey: notificationKeys.unreadCount(userId), exact: true });
         },
     });
 }

@@ -27,6 +27,11 @@ const DEFAULT_OPTIONS = {
     heartbeatInterval: 30000,
     /** Whether to automatically connect on mount. */
     autoConnect: true,
+    /**
+     * After giving up (max retries), try again from scratch when the browser
+     * comes back online or the tab becomes visible.
+     */
+    resumeOnFocus: true,
 };
 
 /**
@@ -38,7 +43,7 @@ const DEFAULT_OPTIONS = {
  * @param {string} path - The WebSocket path (e.g., "/ws/notifications/").
  * @returns {Promise<string|null>} Full WebSocket URL or null if signed out.
  */
-async function buildWsUrl(path) {
+export async function buildWsUrl(path) {
     if (!hasSession()) return null;
 
     const { data } = await authApi.getWsTicket();
@@ -56,6 +61,7 @@ async function buildWsUrl(path) {
  * - Heartbeat pings to detect dead connections
  * - Graceful cleanup on unmount
  * - Manual send/connect/disconnect controls
+ * - After giving up, resumes on `online` / tab visible (`resumeOnFocus`)
  *
  * @param {string} path - WebSocket path (e.g., "/ws/notifications/").
  * @param {Object} handlers - Event handler callbacks.
@@ -77,6 +83,8 @@ export function useWebSocket(path, handlers = {}, options = {}) {
     const heartbeatTimerRef = useRef(null);
     const connectRef = useRef(null);
     const unmountedRef = useRef(false);
+    // True once reconnecting stopped at maxRetries (not on a clean or 4401 close).
+    const gaveUpRef = useRef(false);
     // Bumped by every connect/disconnect so a stale ticket fetch is dropped.
     const attemptRef = useRef(0);
 
@@ -131,6 +139,7 @@ export function useWebSocket(path, handlers = {}, options = {}) {
         if (unmountedRef.current) return;
         if (retryCountRef.current >= config.maxRetries) {
             logger.warn(`WebSocket: max retries (${config.maxRetries}) reached for ${path}`);
+            gaveUpRef.current = true;
             return;
         }
 
@@ -157,6 +166,7 @@ export function useWebSocket(path, handlers = {}, options = {}) {
         }
 
         const attempt = ++attemptRef.current;
+        gaveUpRef.current = false;
         setState(WS_STATE.CONNECTING);
 
         let url;
@@ -247,6 +257,7 @@ export function useWebSocket(path, handlers = {}, options = {}) {
         }
         stopHeartbeat();
         retryCountRef.current = 0;
+        gaveUpRef.current = false;
 
         if (wsRef.current) {
             wsRef.current.onclose = null; // prevent reconnect
@@ -296,6 +307,30 @@ export function useWebSocket(path, handlers = {}, options = {}) {
             disconnect();
         };
     }, [config.autoConnect, connect, disconnect, path]);
+
+    // Resume after giving up: a fresh round of retries when the network comes
+    // back or the tab is shown again.
+    useEffect(() => {
+        if (!config.resumeOnFocus || !config.autoConnect || !path) return undefined;
+
+        const resume = () => {
+            if (unmountedRef.current || !gaveUpRef.current) return;
+            gaveUpRef.current = false;
+            retryCountRef.current = 0;
+            logger.debug(`WebSocket: resuming ${path}`);
+            connectRef.current?.();
+        };
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') resume();
+        };
+
+        window.addEventListener('online', resume);
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => {
+            window.removeEventListener('online', resume);
+            document.removeEventListener('visibilitychange', handleVisibility);
+        };
+    }, [config.resumeOnFocus, config.autoConnect, path]);
 
     return { state, send, connect, disconnect };
 }
