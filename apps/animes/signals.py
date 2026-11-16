@@ -7,7 +7,7 @@ from ..shared.public_cache import invalidate_public_cache_keys
 from ..users.models import UserAnimeList
 from .adult_content import ADULT_GENRE_SLUGS, refresh_adult_flags
 from .models import Anime, Genre, Review, Studio, UserFavorite
-from .services.public_anime_service import AnimePublicPayloadService
+from .services.public_anime_service import AnimePublicPayloadService, invalidate_anime_detail
 from .services.user_list_side_effects import (
     handle_review_change as handle_review_change_service,
 )
@@ -47,37 +47,32 @@ def _schedule_recommendations_debounced(user_id, countdown=300):
 
 
 def _invalidate_anime_public_caches(slug: str, *, bump_namespace: bool = True) -> None:
-    """Drop ``slug``'s cached public payloads (and, unless told not to, every list's)."""
-    current = AnimePublicPayloadService.PUBLIC_CACHE_VERSION
+    """Drop ``slug``'s cached detail payload and, unless told not to, every collection.
+
+    Every list, shelf, browse-rows, schedule, related and recommendations key
+    carries the collection namespace, so the bump is what invalidates those.
+    Runs now; the receivers below defer it to the commit.
+    """
     if bump_namespace:
         AnimePublicPayloadService.bump_collection_cache_namespace()
-    invalidate_public_cache_keys(
-        f"anime_detail_base:{current}:{slug}",
-        f"anime_detail_base:v6:{slug}",
-        f"anime_detail_base:v5:{slug}",
-        f"anime_detail_base:v4:{slug}",
-        f"anime_detail_base:v3:{slug}",
-        f"anime_detail_base:v2:{slug}",
-        f"anime_detail_base:{slug}",
-        *(
-            f"{key}:adult:{flag}"
-            for key in (
-                f"anime_trending:{current}",
-                f"anime_top_rated:{current}",
-                f"anime_browse_rows:{current}",
-                f"anime_related:{current}:{slug}",
-                f"anime_recommendations:{current}:{slug}",
-            )
-            for flag in (0, 1)
-        ),
-        f"anime_related:v2:{slug}",
-        *AnimePublicPayloadService.schedule_cache_keys(),
-    )
+    invalidate_anime_detail(slug)
 
 
-def _invalidate_browse_filter_cache(cache_key: str) -> None:
-    AnimePublicPayloadService.bump_collection_cache_namespace()
-    invalidate_public_cache_keys(cache_key)
+def _invalidate_browse_filter_cache(
+    cache_key: str, *, bump_namespace: bool = True, using: str | None = None
+) -> None:
+    """After the commit, drop a filter-option list (and, unless told not to, every collection).
+
+    Cards show genre and studio names, so a rename or delete reaches every
+    collection; a new genre or studio is on no card yet.
+    """
+
+    def invalidate() -> None:
+        if bump_namespace:
+            AnimePublicPayloadService.bump_collection_cache_namespace()
+        invalidate_public_cache_keys(cache_key)
+
+    transaction.on_commit(invalidate, using=using)
 
 
 @receiver(pre_save, sender=Anime)
@@ -132,19 +127,42 @@ def trigger_watch_episode_sync(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=Anime)
-def invalidate_anime_detail_cache(sender, instance, **kwargs):
-    _invalidate_anime_public_caches(instance.slug)
+def invalidate_anime_detail_cache(sender, instance, update_fields=None, using=None, **kwargs):
+    """After the commit, drop what the save changed (B2).
+
+    A save of detail-only fields (a list change recounting ``status_distribution``,
+    a synopsis fix) drops that anime's detail payload; any other save also bumps
+    the collection namespace. Deferred so a reader cannot cache the old row again
+    between the invalidation and the commit.
+    """
+    detail_only = bool(update_fields) and (
+        set(update_fields) <= AnimePublicPayloadService.DETAIL_ONLY_FIELDS
+    )
+    slugs = {instance.slug}
+    # A renamed slug leaves its old detail payload behind (pre_save captured it).
+    old_slug = (getattr(instance, "_old_watch_sync_identity", None) or {}).get("slug")
+    if old_slug:
+        slugs.add(old_slug)
+
+    def invalidate() -> None:
+        if not detail_only:
+            AnimePublicPayloadService.bump_collection_cache_namespace()
+        for slug in slugs:
+            _invalidate_anime_public_caches(slug, bump_namespace=False)
+
+    transaction.on_commit(invalidate, using=using)
 
 
 @receiver(post_delete, sender=Anime)
-def invalidate_deleted_anime_detail_cache(sender, instance, **kwargs):
-    _invalidate_anime_public_caches(instance.slug)
+def invalidate_deleted_anime_detail_cache(sender, instance, using=None, **kwargs):
+    slug = instance.slug
+    transaction.on_commit(lambda: _invalidate_anime_public_caches(slug), using=using)
     AnimeWatchEpisodeService().invalidate_for_anime(instance)
 
 
 @receiver([post_save, post_delete], sender=Genre)
-def invalidate_genre_cache(sender, instance, **kwargs):
-    _invalidate_browse_filter_cache("anime_genres:v1")
+def invalidate_genre_cache(sender, instance, created=False, using=None, **kwargs):
+    _invalidate_browse_filter_cache("anime_genres:v1", bump_namespace=not created, using=using)
 
 
 # --- Anime.is_adult (D5): genre changes re-derive the flag --------------------
@@ -213,8 +231,9 @@ def sync_adult_flag_on_genre_delete(sender, instance, using=None, **kwargs):
 
 
 @receiver([post_save, post_delete], sender=Studio)
-def invalidate_studio_cache(sender, instance, **kwargs):
-    _invalidate_browse_filter_cache("anime_studios:v1")
+def invalidate_studio_cache(sender, instance, created=False, using=None, **kwargs):
+    # ``StudioViewSet.CACHE_KEY`` (signals must not import the views).
+    _invalidate_browse_filter_cache("anime_studios:v2", bump_namespace=not created, using=using)
 
 
 @receiver(pre_save, sender=UserAnimeList)
