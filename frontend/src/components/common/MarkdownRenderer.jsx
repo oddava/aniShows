@@ -6,9 +6,8 @@ import rehypeRaw from "rehype-raw";
 import DOMPurify from "dompurify";
 import AccessibleSpoiler from "./Spoiler";
 import remarkCommunity, {
-    MAX_CONTAINER_NESTING,
     escapeLineStartSpoilers,
-    maxContainerNesting,
+    exceedsContainerLimits,
     remarkNoRawHtml,
     splitAlignedBlocks,
 } from "../forums/remarkCommunity";
@@ -496,8 +495,9 @@ const MarkdownRenderer = ({ content, className = "", mode = "legacy" }) => {
         const source = content || "";
         return (
             <div className={`markdown-preview max-w-none ${className}`}>
-                {maxContainerNesting(source) > MAX_CONTAINER_NESTING ? (
-                    // Deep nesting overflows or stalls the parser (the server refuses it now).
+                {exceedsContainerLimits(source) ? (
+                    // Too deep, or too many containers, stalls or overflows the parser. The server
+                    // refuses such text now; any older row still renders, as plain text.
                     <PlainTextFallback source={source} />
                 ) : (
                     <CommunityMarkdownBoundary key={source} source={source}>

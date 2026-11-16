@@ -3,8 +3,11 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkCommunity, {
+    MAX_CONTAINER_MARKERS,
     MAX_CONTAINER_NESTING,
     MENTION_PATTERN,
+    containerStats,
+    exceedsContainerLimits,
     escapeLineStartSpoilers,
     extractYouTubeVideoId,
     fencedCodeRanges,
@@ -237,8 +240,14 @@ describe('maxContainerNesting (mirrors apps/forums/services/nesting.py)', () => 
         ['>>>> x', 4],
         ['-----', 0],
         ['- - -', 3],
-        ['   > three spaces indent', 1],
-        ['    > four spaces is code', 0],
+        // Indentation counts half its columns (tab = 4): it continues open list items.
+        ['   > three spaces indent', 2],
+        ['    > four spaces', 3],
+        ['\t- tabbed', 3],
+        // The round-3 bypasses: markers continued on an indented line all nest.
+        [`- - a\n    ${'- '.repeat(100)}a`, 102],
+        [`-\ta\n\t${'- '.repeat(100)}a`, 102],
+        [`${' '.repeat(64)}${'- '.repeat(16)}a`, 48],
         ['a\n> b\n> > c', 2],
     ])('%j nests %i containers', (text, depth) => {
         expect(maxContainerNesting(text)).toBe(depth);
@@ -248,7 +257,8 @@ describe('maxContainerNesting (mirrors apps/forums/services/nesting.py)', () => 
         const started = performance.now();
         expect(maxContainerNesting(`${'> '.repeat(10_000)}\n${'- '.repeat(10_000)}`)).toBe(10_000);
         expect(performance.now() - started).toBeLessThan(200);
-        expect(MAX_CONTAINER_NESTING).toBe(32);
+        expect(MAX_CONTAINER_NESTING).toBe(16);
+        expect(MAX_CONTAINER_MARKERS).toBe(1500);
     });
 });
 
@@ -260,5 +270,35 @@ describe('escapeLineStartSpoilers and fenced code', () => {
 
     it('still escapes when a real closer follows outside the fence', () => {
         expect(escapeLineStartSpoilers('>! hidden !<\n```\n!<\n```').startsWith(String.raw`\>!`)).toBe(true);
+    });
+});
+
+describe('container limits (mirror FORUM_MAX_CONTAINER_NESTING / _MARKERS)', () => {
+    it('counts markers across lines', () => {
+        expect(containerStats('- a\n- b\n> > c\nplain')).toEqual({ depth: 2, markers: 4 });
+    });
+
+    it.each([
+        ['an indented-continuation bypass', `- - a\n    ${'- '.repeat(100)}a`],
+        ['a tab-continuation bypass', `-\ta\n\t${'- '.repeat(100)}a`],
+        ['too many markers in total', '- a\n'.repeat(1501)],
+    ])('flags %s', (_name, source) => {
+        expect(exceedsContainerLimits(source)).toBe(true);
+    });
+
+    it('accepts ordinary nested lists and quotes', () => {
+        const list = Array.from({ length: 400 }, (_, i) => `${' '.repeat(2 * (i % 5))}- item ${i}`).join('\n');
+        expect(exceedsContainerLimits(list)).toBe(false);
+        expect(exceedsContainerLimits('> a\n> > b\n> > > c')).toBe(false);
+    });
+
+    it('keeps the worst accepted text fast to parse', () => {
+        // At the limits: 1500 markers on lines of depth 15.
+        const source = `${'- '.repeat(15)}a\n`.repeat(100);
+        expect(exceedsContainerLimits(source)).toBe(false);
+        const processor = unified().use(remarkParse).use(remarkNoRawHtml).use(remarkGfm).use(remarkCommunity);
+        const started = performance.now();
+        processor.runSync(processor.parse(source));
+        expect(performance.now() - started).toBeLessThan(1500);
     });
 });

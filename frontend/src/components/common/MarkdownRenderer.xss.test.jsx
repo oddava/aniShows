@@ -359,6 +359,8 @@ describe('MarkdownRenderer markdown mode on deeply nested text', () => {
     it.each([
         ['quotes', `${'> '.repeat(3000)}a`],
         ['bullets', `${'- '.repeat(2000)}a`],
+        ['an indented continuation', `- - a
+    ${'- '.repeat(2000)}a`],
     ])('shows %s nested past the cap as plain text instead of crashing', async (_name, source) => {
         const started = performance.now();
         const { container } = render(
