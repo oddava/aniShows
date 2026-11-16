@@ -18,6 +18,7 @@ import {
   STATUS_OPTIONS,
   TYPE_OPTIONS,
   YEAR_OPTIONS,
+  formatSeasonLabel,
 } from '../components/browse/browseFilterOptions';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -105,6 +106,7 @@ export default function Browse() {
     searchWithoutFilters,
     updateParam,
     setSort,
+    stepSeason,
     clearSeasonAndYear,
     clearYearRange,
     toggleArrayParam,
@@ -177,6 +179,9 @@ export default function Browse() {
     queryClient,
     refreshProfile,
   ]);
+
+  // "Fall 2026" heads the grid while a season is selected (P2-7).
+  const seasonLabel = formatSeasonLabel(currentSeason, currentYear);
 
   const shouldLoadStudios = showFilters || Boolean(currentStudio);
 
@@ -287,6 +292,7 @@ export default function Browse() {
                 {/* Controls Bar - only show view controls in grid mode */}
                 {isGridMode && (
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    {seasonLabel && <h1 className="page-title">{seasonLabel}</h1>}
                     <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto sm:ml-auto">
                       <SortSelect value={currentSort} hasSearch={Boolean(currentSearch)} onChange={setSort} />
                       <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
@@ -333,6 +339,7 @@ export default function Browse() {
                   onClearType={() => updateParam('type', '')}
                   onClearStatus={() => updateParam('status', '')}
                   onClearSeason={clearSeasonAndYear}
+                  onStepSeason={stepSeason}
                   onClearYear={() => updateParam('year', '')}
                   onClearMinRating={() => updateParam('min_rating', '')}
                   onClearMaxRating={() => updateParam('max_rating', '')}

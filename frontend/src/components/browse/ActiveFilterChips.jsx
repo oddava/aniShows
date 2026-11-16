@@ -1,5 +1,6 @@
-import { X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import PropTypes from 'prop-types';
+import { formatSeasonLabel, stepSeason } from './browseFilterOptions';
 
 export default function ActiveFilterChips({
   currentTypes,
@@ -27,6 +28,7 @@ export default function ActiveFilterChips({
   onClearType,
   onClearStatus,
   onClearSeason,
+  onStepSeason,
   onClearYear,
   onClearMinRating,
   onClearMaxRating,
@@ -66,9 +68,33 @@ export default function ActiveFilterChips({
     filters.push({
       key: 'season',
       label: `${seasonOptions.find(s => s.value === currentSeason)?.label.split(' ')[0]} ${currentYear || ''}`.trim(),
-      onClear: onClearSeason
+      onClear: onClearSeason,
+      isSeason: true,
     });
   }
+
+  // ‹ › beside the season chip step through seasons (P2-7).
+  const canStepSeason = Boolean(onStepSeason && currentSeason && currentYear);
+  const seasonStep = (direction) => {
+    const next = canStepSeason ? stepSeason(currentSeason, currentYear, direction) : null;
+    return next ? formatSeasonLabel(next.season, next.year) : '';
+  };
+  const stepButtonClass = 'flex items-center justify-center w-6 h-6 rounded-full bg-dark-100 text-gray-300 border border-gray-700 hover:border-gray-600 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed';
+  const renderSeasonStep = (direction) => {
+    const target = seasonStep(direction);
+    const Icon = direction < 0 ? ChevronLeft : ChevronRight;
+    return (
+      <button
+        type="button"
+        onClick={() => onStepSeason(direction)}
+        disabled={!target}
+        aria-label={target ? `${direction < 0 ? 'Previous' : 'Next'} season: ${target}` : `No ${direction < 0 ? 'previous' : 'next'} season`}
+        className={stepButtonClass}
+      >
+        <Icon aria-hidden="true" className="w-3.5 h-3.5" />
+      </button>
+    );
+  };
 
   if (currentYear && !currentSeason && !currentMinYear && !currentMaxYear) {
     filters.push({
@@ -177,20 +203,30 @@ export default function ActiveFilterChips({
         <span>Active:</span>
       </div>
       
-      {filters.map((filter) => (
-        <button
-          key={filter.key}
-          onClick={filter.onClear}
-          className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all
-            ${filter.isGenre 
-              ? 'bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20' 
-              : 'bg-dark-100 text-gray-300 border border-gray-700 hover:border-gray-600 hover:text-white'
-            }`}
-        >
-          {filter.label}
-          <X className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity" />
-        </button>
-      ))}
+      {filters.map((filter) => {
+        const chip = (
+          <button
+            key={filter.key}
+            onClick={filter.onClear}
+            className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all
+              ${filter.isGenre
+                ? 'bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20'
+                : 'bg-dark-100 text-gray-300 border border-gray-700 hover:border-gray-600 hover:text-white'
+              }`}
+          >
+            {filter.label}
+            <X className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity" />
+          </button>
+        );
+        if (!filter.isSeason || !canStepSeason) return chip;
+        return (
+          <div key={filter.key} className="flex items-center gap-1">
+            {renderSeasonStep(-1)}
+            {chip}
+            {renderSeasonStep(1)}
+          </div>
+        );
+      })}
       
       <button
         onClick={onClearAll}
@@ -246,6 +282,7 @@ ActiveFilterChips.propTypes = {
   onClearType: PropTypes.func.isRequired,
   onClearStatus: PropTypes.func.isRequired,
   onClearSeason: PropTypes.func.isRequired,
+  onStepSeason: PropTypes.func,
   onClearYear: PropTypes.func.isRequired,
   onClearMinRating: PropTypes.func.isRequired,
   onClearMaxRating: PropTypes.func.isRequired,

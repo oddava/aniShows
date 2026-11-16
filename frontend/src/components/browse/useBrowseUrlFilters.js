@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { DEBOUNCED_FILTER_KEYS, FILTER_UPDATE_DEBOUNCE_MS, RELEVANCE_SORT } from './browseFilterOptions';
+import {
+  DEBOUNCED_FILTER_KEYS,
+  FILTER_UPDATE_DEBOUNCE_MS,
+  RELEVANCE_SORT,
+  stepSeason,
+} from './browseFilterOptions';
 
 /**
  * The sort Browse sends (B1, P0-1). A search ranks by relevance unless the user
@@ -210,6 +215,19 @@ export default function useBrowseUrlFilters() {
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
 
+  // The ‹ › buttons beside the season chip (P2-7): one season back or forward.
+  const stepSeasonParam = useCallback((direction) => {
+    const next = stepSeason(searchParams.get('season'), searchParams.get('year'), direction);
+    if (!next) return;
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
+    newParams.delete('min_year');
+    newParams.delete('max_year');
+    newParams.set('season', next.season);
+    newParams.set('year', next.year);
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
   const clearSeasonAndYear = useCallback(() => {
     const newParams = new URLSearchParams(searchParams);
     newParams.delete('exclude_ids');
@@ -387,6 +405,7 @@ export default function useBrowseUrlFilters() {
     searchWithoutFilters,
     updateParam,
     setSort,
+    stepSeason: stepSeasonParam,
     clearSeasonAndYear,
     clearYearRange,
     toggleArrayParam,

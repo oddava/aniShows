@@ -6,7 +6,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import useBrowseUrlFilters, { resolveBrowseSort } from '../useBrowseUrlFilters';
 import useBrowseAnimeList from '../useBrowseAnimeList';
 import SortSelect from '../SortSelect';
-import { getSortOptions, TYPE_OPTIONS } from '../browseFilterOptions';
+import ActiveFilterChips from '../ActiveFilterChips';
+import {
+    formatSeasonLabel,
+    getSortOptions,
+    MAX_YEAR_BOUND,
+    MIN_YEAR_BOUND,
+    SEASON_OPTIONS,
+    stepSeason,
+    TYPE_OPTIONS,
+} from '../browseFilterOptions';
 import { usePrefetchAnime } from '../../../hooks/usePrefetchAnime';
 import { animeKeys } from '../../../api/queries/anime';
 
@@ -82,6 +91,85 @@ describe('useBrowseUrlFilters sort', () => {
         expect(searchOf().has('sort')).toBe(false);
         expect(searchOf().get('q')).toBe('frieren');
         expect(result.current.currentSort).toBe('relevance');
+    });
+});
+
+describe('season stepping (P2-7)', () => {
+    it.each([
+        ['fall', '2024', 1, { season: 'winter', year: '2025' }],
+        ['winter', '2024', -1, { season: 'fall', year: '2023' }],
+        ['spring', '2024', 1, { season: 'summer', year: '2024' }],
+        ['summer', '2024', -1, { season: 'spring', year: '2024' }],
+    ])('%s %s %+d', (season, year, direction, expected) => {
+        expect(stepSeason(season, year, direction)).toEqual(expected);
+    });
+
+    it('stops at the year bounds and ignores unknown input', () => {
+        expect(stepSeason('fall', String(MAX_YEAR_BOUND), 1)).toBeNull();
+        expect(stepSeason('winter', String(MIN_YEAR_BOUND), -1)).toBeNull();
+        expect(stepSeason('monsoon', '2024', 1)).toBeNull();
+        expect(stepSeason('fall', '', 1)).toBeNull();
+    });
+
+    it('formats the Browse header label', () => {
+        expect(formatSeasonLabel('fall', '2026')).toBe('Fall 2026');
+        expect(formatSeasonLabel('fall', '')).toBe('');
+        expect(formatSeasonLabel('', '2026')).toBe('');
+    });
+
+    it('the hook steps the URL season and rolls the year', () => {
+        const { result } = renderHook(() => useBrowseUrlFilters(), {
+            wrapper: makeWrapper('/browse?season=fall&year=2024&genre=action&exclude_ids=4'),
+        });
+
+        act(() => result.current.stepSeason(1));
+        expect(searchOf().get('season')).toBe('winter');
+        expect(searchOf().get('year')).toBe('2025');
+        expect(searchOf().get('genre')).toBe('action');
+        expect(searchOf().has('exclude_ids')).toBe(false);
+
+        act(() => result.current.stepSeason(-1));
+        expect(searchOf().get('season')).toBe('fall');
+        expect(searchOf().get('year')).toBe('2024');
+    });
+
+    it('shows ‹ › beside the season chip only when season and year are set', () => {
+        const onStepSeason = vi.fn();
+        const props = {
+            currentGenres: [],
+            currentTags: [],
+            typeOptions: TYPE_OPTIONS,
+            statusOptions: [],
+            seasonOptions: SEASON_OPTIONS,
+            sourceOptions: [],
+            onClearType: vi.fn(),
+            onClearStatus: vi.fn(),
+            onClearSeason: vi.fn(),
+            onStepSeason,
+            onClearYear: vi.fn(),
+            onClearMinRating: vi.fn(),
+            onClearMaxRating: vi.fn(),
+            onClearStudio: vi.fn(),
+            onToggleGenre: vi.fn(),
+            onToggleTag: vi.fn(),
+            onClearSource: vi.fn(),
+            onClearMinEpisodes: vi.fn(),
+            onClearMaxEpisodes: vi.fn(),
+            onClearMinDuration: vi.fn(),
+            onClearMaxDuration: vi.fn(),
+            onClearYearRange: vi.fn(),
+            onClearAll: vi.fn(),
+            hasActiveFilters: true,
+        };
+        const { rerender } = render(<ActiveFilterChips {...props} currentSeason="fall" currentYear="2024" />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Next season: Winter 2025' }));
+        expect(onStepSeason).toHaveBeenCalledWith(1);
+        fireEvent.click(screen.getByRole('button', { name: 'Previous season: Summer 2024' }));
+        expect(onStepSeason).toHaveBeenCalledWith(-1);
+
+        rerender(<ActiveFilterChips {...props} currentTypes="TV" />);
+        expect(screen.queryByRole('button', { name: /season:/ })).not.toBeInTheDocument();
     });
 });
 
