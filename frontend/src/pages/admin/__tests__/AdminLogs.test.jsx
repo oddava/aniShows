@@ -75,4 +75,39 @@ describe('AdminLogs', () => {
         });
         expect(screen.getByText('Showing entries for User #12')).toBeInTheDocument();
     });
+
+    it('asks the stats endpoint for the same filters as the list', async () => {
+        renderAt('/admin/logs');
+        await screen.findByText('GET /api/v1/x - 500', {}, { timeout: 5000 });
+        fireEvent.change(screen.getByRole('searchbox', { name: 'Search logs' }), { target: { value: 'timeout' } });
+
+        await waitFor(() => expect(getMock.mock.calls.map(([url]) => url)).toContain(
+            '/admin/logs/stats/?search=timeout',
+        ), { timeout: 5000 });
+    });
+
+    it('shows an error state, not an empty list, when loading fails', async () => {
+        getMock.mockImplementation((url) => (url.startsWith('/admin/logs/stats/')
+            ? Promise.resolve({ data: { by_level: {}, total: 0 } })
+            : Promise.reject({ response: { status: 500 } })));
+        renderAt('/admin/logs');
+
+        expect(await screen.findByText('Couldn’t load the logs', {}, { timeout: 5000 })).toBeInTheDocument();
+        expect(screen.queryByText(/No logs found/)).toBeNull();
+    });
+
+    it('debounces the audit entity type filter', async () => {
+        renderAt('/admin/logs?tab=audit');
+        await screen.findByText(/kaito/, {}, { timeout: 5000 });
+        const input = screen.getByRole('textbox', { name: 'Entity type' });
+        fireEvent.change(input, { target: { value: 'U' } });
+        fireEvent.change(input, { target: { value: 'Us' } });
+        fireEvent.change(input, { target: { value: 'User' } });
+
+        await waitFor(() => expect(getMock.mock.calls.map(([url]) => url).at(-1)).toContain('entity_type=User'), { timeout: 5000 });
+        const urls = getMock.mock.calls.map(([url]) => url);
+        expect(urls.some((url) => /entity_type=Us(&|$)/.test(url))).toBe(false);
+        expect(urls.some((url) => /entity_type=U(&|$)/.test(url))).toBe(false);
+    });
 });
+

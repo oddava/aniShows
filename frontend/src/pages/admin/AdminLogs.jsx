@@ -5,9 +5,10 @@ import { Search } from 'lucide-react';
 
 import { adminQueries } from '../../api/queries/admin';
 import CustomSelect from '../../components/common/CustomSelect';
+import ErrorState from '../../components/common/ErrorState';
 import AdminPagination from './components/AdminPagination';
 import Modal from './components/Modal';
-import { useAdminList, useAdminQuery } from './hooks/useAdminQuery';
+import { getAdminErrorMessage, useAdminList, useAdminQuery } from './hooks/useAdminQuery';
 import useAdminRole from './hooks/useAdminRole';
 import useDebouncedValue from './hooks/useDebouncedValue';
 
@@ -108,9 +109,11 @@ function RequestLogs() {
   const liveId = useId();
 
   const polling = live ? { refetchInterval: LIVE_INTERVAL_MS, refetchIntervalInBackground: false } : {};
+  // The stats cover the same filters as the list (minus the page), so the counts match it.
+  const listFilters = compact({ ...filters, search, user });
   const logsQuery = useAdminList({
     resource: 'logs',
-    params: compact({ page, ...filters, search, user }),
+    params: { page, ...listFilters },
     page,
     setPage,
     ...polling,
@@ -118,7 +121,7 @@ function RequestLogs() {
     errorToast: 'Failed to load logs',
   });
   const statsQuery = useAdminQuery({
-    ...adminQueries.stats('logs'),
+    ...adminQueries.stats('logs', listFilters),
     ...polling,
     errorLog: 'Failed to fetch stats:',
   });
@@ -199,7 +202,13 @@ function RequestLogs() {
       </dl>
 
       <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-        {loading ? (
+        {logsQuery.error ? (
+          <ErrorState
+            title="Couldn’t load the logs"
+            message={getAdminErrorMessage(logsQuery.error, 'Failed to load logs')}
+            onRetry={() => logsQuery.refetch()}
+          />
+        ) : loading ? (
           <p role="status" className="p-12 text-center text-white/50">Loading logs...</p>
         ) : logs.length === 0 ? (
           <p className="p-12 text-center text-white/50">No logs found matching your criteria</p>
@@ -231,7 +240,7 @@ function RequestLogs() {
             ))}
           </ul>
         )}
-        {!loading && <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />}
+        {!loading && !logsQuery.error && <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />}
       </div>
 
       <Modal isOpen={selected !== null} onClose={() => setSelected(null)} title="Log details" size="large">
@@ -262,11 +271,12 @@ function AuditLogs({ initial }) {
   const { filters, update, clear, active, page, setPage } = useFilters(initial);
   const search = useDebouncedValue(filters.search.trim());
   const user = useDebouncedValue(filters.user.trim());
+  const entityType = useDebouncedValue(filters.entity_type.trim());
   const [selected, setSelected] = useState(null);
 
   const auditQuery = useAdminList({
     resource: 'audit-logs',
-    params: compact({ page, ...filters, search, user }),
+    params: compact({ page, ...filters, search, user, entity_type: entityType }),
     page,
     setPage,
     errorLog: 'Failed to fetch audit logs:',
@@ -318,7 +328,13 @@ function AuditLogs({ initial }) {
       </div>
 
       <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-        {loading ? (
+        {auditQuery.error ? (
+          <ErrorState
+            title="Couldn’t load the audit log"
+            message={getAdminErrorMessage(auditQuery.error, 'Failed to load audit logs')}
+            onRetry={() => auditQuery.refetch()}
+          />
+        ) : loading ? (
           <p role="status" className="p-12 text-center text-white/50">Loading audit log...</p>
         ) : entries.length === 0 ? (
           <p className="p-12 text-center text-white/50">No audit entries found</p>
@@ -351,7 +367,7 @@ function AuditLogs({ initial }) {
             ))}
           </ul>
         )}
-        {!loading && <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />}
+        {!loading && !auditQuery.error && <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />}
       </div>
 
       <Modal isOpen={selected !== null} onClose={() => setSelected(null)} title="Audit entry" size="large">
