@@ -28,6 +28,7 @@ FAILURE_GRACE = timedelta(hours=24)
 PUSH_BODY_MAX_CHARS = 180
 PUSH_TITLE_MAX_CHARS = 80
 PUSH_PAYLOAD_MAX_BYTES = 1024
+PUSH_URL_MAX_BYTES = 512
 PAYLOAD_VERSION = 1
 
 GONE_STATUSES = frozenset({404, 410})
@@ -62,19 +63,22 @@ def build_payload(notification: Notification, *, unread_count: int) -> str:
         "notification_id": notification.pk,
         "unread_count": max(int(unread_count), 0),
     }
-    encoded = _encode(payload)
-    if len(encoded.encode()) > PUSH_PAYLOAD_MAX_BYTES:
-        # A huge URL: fall back to the list page.
+    # Multi-byte text (emoji, CJK) can exceed the budget even within the character caps:
+    # trim the body, then the title, against the encoded size. The link is kept unless
+    # it alone is too long, in which case it falls back to the list page.
+    if len(payload["url"].encode()) > PUSH_URL_MAX_BYTES:
         payload["url"] = "/notifications"
-        encoded = _encode(payload)
-    # Multi-byte text (emoji, CJK) can still exceed the budget: trim the body, then the
-    # title, against the encoded size until it fits.
+    encoded = _encode(payload)
     for key, floor in (("body", 0), ("title", 1)):
         while len(encoded.encode()) > PUSH_PAYLOAD_MAX_BYTES and len(payload[key]) > floor:
             overflow = len(encoded.encode()) - PUSH_PAYLOAD_MAX_BYTES
-            # Each character is at most 4 bytes in UTF-8: drop enough, never too few.
-            keep = max(floor, len(payload[key]) - max(1, overflow // 4) - 1)
-            payload[key] = payload[key][:keep].rstrip() + ("…" if keep else "")
+            # A character is 1-4 bytes in UTF-8 (up to 6 when JSON-escaped): cut roughly
+            # what's over, never much more, and loop until it fits.
+            keep = max(floor, len(payload[key]) - max(2, overflow // 4))
+            trimmed = payload[key][:keep].rstrip() + ("…" if keep else "")
+            if len(trimmed) >= len(payload[key]):
+                break
+            payload[key] = trimmed
             encoded = _encode(payload)
     return encoded
 

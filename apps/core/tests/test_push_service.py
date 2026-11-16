@@ -181,12 +181,16 @@ class PushTransportTests(TestCase):
 
     def test_multibyte_text_is_trimmed_to_the_byte_budget(self):
         self.notification.title = "🎉" * 300
-        self.notification.message = "日本語🎌" * 400
+        self.notification.message = "🎌" * 400
+        # 80 + 180 four-byte characters (after the character caps) overflow 1 KB.
+        untrimmed = 4 * (80 + 180)
+        self.assertGreater(untrimmed, 1024)
         raw = build_payload(self.notification, unread_count=1)
         self.assertLessEqual(len(raw.encode()), 1024)
         payload = json.loads(raw)
         self.assertTrue(payload["title"])
-        self.assertEqual(payload["url"], "/anime/jojo")
+        self.assertLess(len(payload["body"]), 180)  # the body was cut...
+        self.assertEqual(payload["url"], "/anime/jojo")  # ...and the link kept
 
     @override_settings(VAPID_PUBLIC_KEY="", VAPID_PRIVATE_KEY="")
     def test_not_configured_without_keys(self):
