@@ -256,17 +256,34 @@ throttle scopes; admin pages (G6); the notification/push transport (G4); `Notifi
 ## File ownership
 Post-seams paths (current file in brackets where the seams commit splits it).
 
+**Prep commit (`revamp/base`), see overview section 4a.** These now exist and are G5's:
+- Models: `apps/users/models/social.py` (UserFollow), `apps/users/models/badges.py` (Badge, UserBadge),
+  `apps/animes/models/favorites.py` (UserFavorite*)
+- Serializers: `apps/users/serializers/{badges,favorites,social}.py`
+- Routes and settings: `apps/users/urlconf/social.py` (`follows` + `badges` router routes), `root/settings/features/community.py`
+- Frontend API: `frontend/src/api/modules/{favorites,reviews,social,badges}.js`, `frontend/src/api/queries/{favorites,reviews,social,badges}.js`
+- Frontend UI: `frontend/src/components/profile/tabs/{FavoritesTab,ReviewsTab}.jsx` (+ the existing `FriendsTab.jsx`),
+  and `frontend/src/app/routes/community.jsx` (forum routes + `preloadForumChunks`)
+- Contract stub (keep the signatures): `apps/users/services/badge_service.py` with `MAX_FEATURED_BADGES = 3`,
+  `grant_badge(user, badge, granted_by=None, reason="")` and `revoke_badge(user, badge)` (+ `tests/test_badge_service.py`).
+  Today it does for one user what the admin grant/revoke views do, without the audit row.
+- Use G4's `notify(...)` with spec 4's names (`group_key`, not `aggregate_key`). G6's helper is `record_admin_action`
+  (not `record_audit`); both are stubs on `revamp/base`.
+- Migration space: `users` `0042`, `forums` `0009`–`0010`, `animes` `0059`.
+- Integrator request (1) is done. (3) stands: `rehype-raw` stays.
+
+
 **Backend, may change:**
 - `apps/forums/**` (all), plus new: `apps/forums/pagination.py`, `apps/forums/tasks.py`, `apps/forums/services/{moderation,subscriptions,excerpt}.py`,
   `apps/forums/migrations/0009_community_moderation_subscriptions.py`, `0010_community_reparent_deep_posts.py`, `apps/forums/tests/test_*.py`.
 - `apps/animes/views/{reviews,favorites}.py`, `apps/animes/services/{reviews,favorites}.py`, `apps/animes/serializers/reviews.py`.
-- Models `Review*`, `UserFavorite*` in `apps/animes/models/{reviews,user_data}.py` (only those classes) + `apps/animes/migrations/00NN_community_review_index_cleanup.py`.
+- Models `Review*`, `UserFavorite*` in `apps/animes/models/reviews.py` (only those classes) and `apps/animes/models/favorites.py` + `apps/animes/migrations/0059_community_review_index_cleanup.py`.
 - Review/favorite receivers in `apps/animes/signals.py` (`handle_user_favorite_change`, `handle_review_change` + new stats-cache invalidation receiver).
 - `apps/users/views/{badges,follows}.py`, `apps/users/services/follow_service.py`, new `apps/users/services/{badge_service,points_service}.py`.
 - `apps/users/serializers/badges.py` (BadgeSerializer, UserBadgeSerializer), `apps/users/serializers/favorites.py` (Favorite*, FavoriteCompactSerializer),
   `apps/users/serializers/social.py` (FollowSerializer, UserFollowListSerializer, FriendWatchingSerializer) [all from `apps/users/serializers/users.py`].
 - `apps/users/urlconf/social.py` (follows + badges routes) [from `apps/users/urls.py`].
-- Models `Badge`, `UserBadge`, `UserFollow` in `apps/users/models.py` (only those classes) + `apps/users/migrations/00NN_community_follow_no_self.py`.
+- Models `Badge`, `UserBadge`, `UserFollow` in `apps/users/models.py` (only those classes) + `apps/users/migrations/0042_community_follow_no_self.py`.
 - In `apps/users/signals.py`: points receivers (`update_points_on_vote_*`, `_adjust_points`, `recalculate_user_points`) and the cache-invalidation
   parts of `handle_new_follower`/`handle_unfollow` (not the notify call).
 - `apps/users/management/commands/backfill_points.py`; tests `apps/animes/tests/test_{reviews,favorites_api,review_stats}.py`,
@@ -281,6 +298,8 @@ Post-seams paths (current file in brackets where the seams commit splits it).
   [from `components/profile/ProfileContent.jsx`]; `components/settings/BadgesTab.jsx`.
 - `api/modules/{forums,favorites,reviews,social,badges}.js` [from `api/modules/user.js`], `api/queries/{forums,favorites,reviews,social,badges}.js`
   [from `api/queries/user.js`], and the rows for these keys in `api/queries/__tests__/queryKeys.test.js`.
+
+**Precedence (prep commit):** where this list names a file or directory that the *Prep commit* block above grants (a `root/settings/features/` module, a `celery_schedule.py` function, an `app/routes/` file, `boot.js`, a split module), the grant wins; everything else in this list stays forbidden. The frozen shells and shims (overview section 4) stay forbidden.
 
 **Must not touch:** `apps/core/**` (G4/G6; notification and audit code are consumed), `apps/admin_api/**`, `apps/{forums,animes,users}/admin.py`
 (G6), `apps/users/views/admin_badges.py` (G6), `apps/users/throttling.py`/`permissions.py` (G1, consume only), `apps/animes/serializers_mixins.py`
@@ -335,7 +354,7 @@ CharacterDetail,VoiceActorDetail,Profile}.jsx` (G2/G1), `components/profile/{Pro
 - **Integrator:** (1) seams: put `UserBadgeViewSet` + `FollowViewSet` routes in `apps/users/urlconf/social.py`; serializers into `badges.py`,
   `favorites.py`, `social.py` as listed. (2) Optional explicit route `"apps.forums.tasks.*": {"queue": "default"}` in `root/celery.py`
   (autodiscovery already picks the task up; default queue is fine). (3) `rehype-raw` stays in `package.json` (legacy mode still uses it).
-  (4) Migration renumbering at merge: anime (slim-down may take 0057), users (G1/G3 also add).
+  (4) Migration numbers are reserved (overview section 7): users 0042, forums 0009/0010, animes 0059; only `dependencies` are re-pointed at rebase.
 
 **Collision avoidance:** G5 edits `apps/animes/signals.py` only inside its two receivers + one new receiver block at the end of the file;
 `apps/users/signals.py` only below the "Points signals" banner and the cache lines of follow receivers. No edits to `apps/animes/urls.py`
@@ -416,15 +435,15 @@ CharacterDetail,VoiceActorDetail,Profile}.jsx` (G2/G1), `components/profile/{Pro
 2. **forums `0010_community_reparent_deep_posts.py`** (data, batched 500, reversible as no-op): for posts whose ancestor chain is longer than 10,
    set `parent` to the ancestor at depth 9 and `depth=10` (iterative from depth-10 posts with depth-10 parents). Backfill `ThreadSubscription` for
    each thread's author (`bulk_create(ignore_conflicts=True)`, batched). Reverse: delete backfilled subscriptions only (re-parenting isn't undone, which is safe).
-3. **anime `00NN_community_review_index_cleanup.py`** (NN = next after slim-down's leaf, currently 0057; reversible `RemoveIndex`):
+3. **anime `0059_community_review_index_cleanup.py`** (reserved number, overview section 7; depends on `0057`, or on G2's `0058` if G2 used its fallback; reversible `RemoveIndex`):
    remove `anime_revie_user_review_idx` (ReviewVote), `anime_revie_user_id_60a9d1_idx` (ReviewReaction), and Review `Index(anime, user)`.
    Pure index drops, no data.
-4. **users `00NN_community_follow_no_self.py`** (after 0037 / the current leaf): RunPython deleting self-follow rows (batched; reverse no-op), then
+4. **users `0042_community_follow_no_self.py`** (reserved number; depend on `0037` on your branch, re-point to G3's last migration at rebase): RunPython deleting self-follow rows (batched; reverse no-op), then
    `AddConstraint CheckConstraint(~Q(follower=F("following")), name="users_userfollow_no_self")` and `RemoveIndex` of the redundant
    `(follower, following)` index. Reversible (constraint/index ops reverse).
 
 Rollout: nothing is deployed yet, so migrations run at first deploy. 0010 touches only deep-chain posts (expected zero or a handful). If a
-later-merged group already took a number, renumber and re-point `dependencies` per the brief; no merge migrations.
+number is needed beyond the reserved ones, ask the integrator; otherwise only re-point `dependencies` at rebase; no merge migrations.
 
 ## Risks and open questions
 - **Markdown rework (P1-6) is the largest risk.** Remark plugins must reproduce the custom image/youtube/spoiler syntax exactly for existing

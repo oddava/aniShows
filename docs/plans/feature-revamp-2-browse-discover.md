@@ -84,6 +84,8 @@ Frontend: `pages/__tests__/{Home,AnimeDetail,Schedule}.test.jsx`, `navbar/__test
 | B28 | Low | Dead code (BE) | Unused code: `AnimeQueryService.get_action_anime` (the views use their own), `recommendations_queryset` (a wrapper), the legacy detail keys v2–v6 and the unversioned key (up to 7 Redis GETs on a miss, plus 7 deletes on each invalidation; nothing is deployed). `user_review` is always null, because `_user_review` is never set. The task's `algorithm` parameter does nothing. `AnimeMinimalSerializer` duplicates `AnimeListSerializer` (G3 consumes it). | `public_anime_service.py:186-195,308-319`; `signals.py:55-61`; `serializers/anime.py:56-106,361-364`; `tasks/recommendations.py:47-68` | P2-4 |
 | B29 | Low | Jikan/MAL remnants | BE: recommendation exclusion is keyed on MAL IDs (`_relation_mal_ids`, an extra query per call). The external-links heuristic drops a lone "MyAnimeList" link (Jikan era). Relations expose `mal_id`, and the model comment reads "Rows from before D1 (Jikan) may have only mal_id". FE: `FranchiseSection.jsx:10-11` comment and the `mal-` fallback key, and the `mal_id` path of `fetchFranchise`. No Typesense or Mongo references remain in G2 files in either tree. | `public_query/shelves.py:181-207`; `public_anime_service.py:236-252`; `serializers/anime.py:457-458,476-477`; `models/anime.py:186-188` (frozen); WT `components/FranchiseSection.jsx:10-11`, `api/modules/anime.js:19-23` | P2-6 |
 | B30 | Low | Security | The voice-actor description parser renders `href={url}` for any scheme. React 19 blocks `javascript:` URLs, but `data:` and other schemes pass. | WT `pages/VoiceActorDetail.jsx:13-35` | P1-4 |
+| B31 | High | Search | **Smoke-test finding S-1.** "one pice" finds nothing. A multi-word query ANDs one title condition per word. "pice" can match only by word similarity, and `word_similarity('pice','One Piece') = 0.40`, below the 0.5 threshold (measured on Postgres 18 on `revamp/base`), so the AND drops One Piece. The whole phrase would match: `word_similarity('one pice','One Piece') = 0.667`, `similarity = 0.583`. Any short misspelt word in a multi-word query has the same problem. | `apps/animes/services/public_query/filters.py:277-286` (`search_words` loop), `_title_match`; `root/settings/base.py` `SEARCH_WORD_SIMILARITY_THRESHOLD` | P0-7 |
+| B32 | Med | Requests | **Smoke-test finding S-2.** The app retries 404s. The QueryClient default is `retry: 1` and no query overrides it for 4xx, so a missing anime/character/staff slug, a private profile or any other 404 is fetched twice before NotFound renders. That costs a cold backend request each time, and the NotFound state is late. | `frontend/src/app/providers.jsx:18`; `api/queries/anime.js` (`animeQueries.detail` and friends set no `retry`) | P1-13 |
 
 ## Proposed scope
 
@@ -113,6 +115,20 @@ Frontend: `pages/__tests__/{Home,AnimeDetail,Schedule}.test.jsx`, `navbar/__test
      - `?day=` keeps weekday names, so existing links keep working.
    - Backend: `schedule_queryset` limits the window to `next_airing_date` within `[now-1d, now+8d]`, or no date with a broadcast day, so stale rows and hiatus rows never ship. The cache key gets a day stamp (`:d:{YYYYMMDD UTC}`) so the window rolls over.
    - Files: `utils/dateUtils.js`, `pages/Schedule.jsx`, `public_anime_service.py`.
+7. **Multi-word typo search finds the title** (B31, smoke finding S-1). Size S.
+   - In the multi-word branch, keep today's per-word AND, and OR it with a whole-phrase match on the full search
+     string: `Q(<AND of per-word _title_match>) | Q(title__trigram_word_similar=search) | Q(title_jp__trigram_word_similar=search)`
+     (the same `<%` lookup `_title_match` uses, so the existing trigram GIN indexes serve it; use the lookup names
+     `filters.py` already uses).
+   - Relevance ordering is unchanged. `search_rank` already scores the whole phrase, so a phrase-only hit ranks by its similarity.
+   - Do not lower `SEARCH_WORD_SIMILARITY_THRESHOLD` (frozen setting, and it would add noise to every one-word search).
+   - Tests:
+     - `test_search_trigram.py::test_typos_still_find_the_title` gains "one pice" → One Piece, plus a three-word case
+       with one typo (e.g. "attack on titn").
+     - A negative case: "one zzzz" does not return One Piece.
+     - The EXPLAIN index-usage test covers the multi-word query and still shows the trigram index.
+     - Regenerate `snapshots/query_sql.json` for the search entries only, and call it out in the council packet.
+   - Files: `services/public_query/filters.py`, `tests/test_search_trigram.py`, `tests/test_query_sql_snapshot.py` (+ snapshot).
 
 ### P1
 1. **One server-side search for the navbar and hero** (B8, B9, B23). Size M.
@@ -158,7 +174,20 @@ Frontend: `pages/__tests__/{Home,AnimeDetail,Schedule}.test.jsx`, `navbar/__test
 9. **Precise cache updates after list changes** (B20). Size S. `api/queries/anime.js` exports `patchAnimeListStatus(queryClient, animeId, userListStatus)`, which runs `setQueriesData` over `['anime']` and `['schedule']` and replaces `user_list_status` wherever `id === animeId` (lists, infinite pages, browse rows, the detail payload, the schedule days map). G3's hook calls it instead of `invalidateQueries(['anime'])`. Remove `seasonalKeys`.
 10. **SEO** (B21). Size S. `AnimeDetail.jsx` stops using `SEOHelmet` and renders `<SEO customTitle customDescription canonical={`https://anishows.com/anime/${slug}`} ogImage={absolute(cover)} ogType={movie ? 'video.movie' : 'video.tv_show'} />` plus its own `<Helmet><script type="application/ld+json">` (`Movie` or `TVSeries`). Description: the first 160 characters of the synopsis with tags stripped. Character and staff pages use `<SEO>` with canonical and og tags. `NotFound` passes `noIndex`. An `absoluteMediaUrl()` helper goes in `utils/imageUtils.js`.
 11. **Up next shelf (members)**. Size S. Justification: it's the most-used daily question ("what airs next from my list"), and it costs nothing new, because it reuses the cached and enriched schedule payload, which is 3 per-user queries. On Home, above Currently Watching: entries from `scheduleQueries.week` where `user_list_status.status === 'Watching'` and the next episode airs within 7 days, sorted by `next_airing_date`, at most 6, each showing "EP n · in 3h". The shelf is hidden when empty; there's no empty placeholder. Files: `pages/Home.jsx`, `api/queries/anime.js`.
-12. **My list filter on Schedule**. Size S. Members only. A "My list" toggle button (`aria-pressed`) stored in the URL as `?mine=1`. It filters client-side to entries with `user_list_status` whose status isn't Dropped or Completed, and the day counts follow the filter. Justification: the payload already carries `user_list_status`, so there's no backend change. Files: `pages/Schedule.jsx`.
+13. **Don't retry client errors** (B32, smoke finding S-2). Size S.
+    - New `frontend/src/api/queries/retry.js` (G2) exports `retryUnlessClientError(failureCount, error)`. It returns
+      `false` for any HTTP 4xx (`error.response?.status` between 400 and 499; 408 and 429 excepted, since they are
+      worth one retry), and `failureCount < 1` otherwise. The latter keeps today's single retry for network errors and 5xx.
+    - Set it as `defaultOptions.queries.retry` in `app/providers.jsx`. Overview amendment 16 gives G2 that one option;
+      the rest of the file is frozen.
+    - Queries that set their own `retry` keep it: `BrowseRowMode` `retry: 1`, and G1's `MiniProfileHoverCard`/profile queries (A27).
+    - Mutations are unaffected (TanStack's mutation default is no retry).
+    - Tests:
+      - `api/queries/__tests__/retry.test.js`: 404, 403, 400 → no retry; 500 and network → one retry; 429 → one retry.
+      - Plus one rendering test: `AnimeDetail` for a missing slug calls the API exactly once before NotFound
+        (mock `animeApi.getBySlug` rejecting with a 404).
+    - Files: `api/queries/retry.js` (new), `app/providers.jsx` (that option only), tests.
+14. **My list filter on Schedule** (was 12). Size S. Members only. A "My list" toggle button (`aria-pressed`) stored in the URL as `?mine=1`. It filters client-side to entries with `user_list_status` whose status isn't Dropped or Completed, and the day counts follow the filter. Justification: the payload already carries `user_list_status`, so there's no backend change. Files: `pages/Schedule.jsx`.
 
 ### P2
 1. Type options add ONA and Music. Drop `not_yet_aired` from `VALID_STATUSES` (no SQL change for valid values; regenerate the SQL snapshot only if a key changes). Size S.
@@ -183,10 +212,34 @@ Catalog ingestion, provider mapping and the `Anime` model's fields (frozen); col
 
 ## File ownership
 Post-seams paths. All backend paths are under `apps/`.
+
+**Prep commit (`revamp/base`), see overview section 4a.** These now exist and are G2's:
+- `apps/animes/models/recommendations.py` (UserRecommendation)
+- `apps/users/serializers/recommendations.py`
+- `root/settings/features/browse.py`
+- `_recommendation_entries()` in `celery_schedule.py`
+- `frontend/src/api/modules/recommendations.js` and `frontend/src/api/queries/recommendations.js` (Integrator request (a) is done)
+- `frontend/src/app/routes/browse.jsx`
+- `defaultOptions.queries.retry` in `app/providers.jsx` (B32 only)
+- New `frontend/src/api/queries/retry.js`
+- Contract stubs (keep the signatures): `invalidate_anime_detail(slug)`/`invalidate_public_collections()` at the end of
+  `public_anime_service.py` (+ `tests/test_public_cache_contract.py`). Today they do exactly what an `Anime` save does,
+  namespace bump included; P0-2 narrows them.
+- Contract stub: `patchAnimeListStatus(queryClient, animeId, userListStatus)` in `api/queries/anime.js` (today: the two
+  invalidations AnimeCard makes; P1-9 makes it a precise patch).
+- Migration space: `animes` `0058` (the fallback index only, if EXPLAIN demands it; overview section 7).
+
+Integrator request (c) `PUBLIC_API_CACHE_WAIT_TIMEOUT_MS`: G2 may set it in `features/browse.py` once D-10's condition
+holds (G3 merged). (b) is confirmed: the Anime/Genre/Studio cache receivers in `signals.py` are G2's (function-level,
+overview amendment 15).
+
+**Adult rule (overview section 11):** G2 must not edit `apps/animes/adult_content.py`, the provider query or
+`reconcile_adult_flags`. `is_adult` stays as computed today (`ADULT_RULE="legacy"` is the owner-gated proposal, ⚑).
 - **Backend (may change):** `animes/views/{anime,characters,staff,recommendations}.py` (minus the G3/G5 actions, whose bodies stay as they are); `animes/services/{public_anime_service,recommendations,relation_links}.py`; `animes/services/public_query/*`; `animes/serializers/{anime,base}.py`; `animes/serializers_mixins.py` (UserStatusMixin shape frozen, see contracts); `animes/lookups.py`; `animes/tasks/recommendations.py`; `users/serializers/recommendations.py` (`UserRecommendationSerializer`, after the seams split; `users/serializers/users.py` keeps re-exporting it); `shared/{public_cache,pagination}.py`; in `animes/signals.py`, only `_invalidate_anime_public_caches`, `invalidate_anime_detail_cache`, `invalidate_deleted_anime_detail_cache`, `_invalidate_browse_filter_cache`, `invalidate_genre_cache` and `invalidate_studio_cache` (pending integrator confirmation).
 - **Backend tests (may change or create):** `animes/tests/{test_query_budgets,test_public_contract,test_query_sql_snapshot,test_search_trigram,test_schedule_cache,test_public_payload_caching,test_recommendations_service,test_recommendations_view_cache,test_anime_detail_status_distribution,test_quarantined_public_visibility,test_browse_backend,test_top_rated_endpoint}.py` and `snapshots/{public_contract,query_sql}.json` (only regenerated deliberately). New: `test_public_cache_invalidation.py`, `test_list_cache_key.py`, `test_recommendations_view.py`, `test_recommendations_batch.py`, `test_schedule_window.py`, `test_character_staff_detail.py`, `test_adult_detail_gate.py`. `catalog_fixtures.py`: helper additions only; `PUBLIC_ENDPOINTS` stays unchanged.
-- **Frontend (may change):** `pages/{Home,Browse,AnimeDetail,CharacterDetail,VoiceActorDetail,Schedule,NotFound}.jsx`; `components/AnimeCard.jsx`; `components/browse/*`; `components/home/*`; `components/animeDetail/*` except `ReviewsSection.jsx` and `useAnimeReviews.js`; `components/{DetailTabs,FranchiseSection,MusicSection,LazyYouTube,InformationBox,OptimizedImage}.jsx`; `components/detailTabs/*`; `components/common/AnimeMediaImage.jsx`; `components/skeletons/*`; `components/navbar/{NavbarSearch,SearchSuggestionList,useNavbarSearch}` plus new `useAnimeSearchSuggestions.js`; `api/modules/anime.js`; `api/modules/recommendations.js` (post-seams); `api/queries/anime.js`; `api/queries/recommendations.js` (requested in seams); `hooks/{usePrefetchAnime,useAnimeAccentColor,useScrollFade}.js`; `utils/{characterRoles,realGenres,imageUtils,dateUtils}.js` and their tests; tests under `pages/__tests__/`, `components/{browse,home,navbar}/__tests__/` for these files.
+- **Frontend (may change):** `pages/{Home,Browse,AnimeDetail,CharacterDetail,VoiceActorDetail,Schedule,NotFound}.jsx`; `components/AnimeCard.jsx`; `components/VirtualizedAnimeList.jsx` (overview amendment 4); `components/browse/*`; `components/home/*`; `components/animeDetail/*` except `ReviewsSection.jsx` and `useAnimeReviews.js`; `components/{DetailTabs,FranchiseSection,MusicSection,LazyYouTube,InformationBox,OptimizedImage}.jsx`; `components/detailTabs/*`; `components/common/AnimeMediaImage.jsx`; `components/skeletons/*`; `components/navbar/{NavbarSearch,SearchSuggestionList,useNavbarSearch}` plus new `useAnimeSearchSuggestions.js`; `api/modules/anime.js`; `api/modules/recommendations.js` (post-seams); `api/queries/anime.js`; `api/queries/recommendations.js` (requested in seams); `hooks/{usePrefetchAnime,useAnimeAccentColor,useScrollFade}.js`; `utils/{characterRoles,realGenres,imageUtils,dateUtils}.js` and their tests; tests under `pages/__tests__/`, `components/{browse,home,navbar}/__tests__/` for these files.
 - **Frontend deletes:** `components/{CharacterModal,StaffModal}.jsx`, `components/browse/TrendingCarousel.jsx`, `components/common/HorizontalCarousel.jsx`, `hooks/useColorExtraction.js`, `components/navbar/useFuzzySearch.js`. Also remove the matching `vi.mock` lines in `pages/__tests__/AnimeDetail.test.jsx`.
+- **Precedence (prep commit):** where this list names a file or directory that the *Prep commit* block above grants (a `root/settings/features/` module, a `celery_schedule.py` function, an `app/routes/` file, `boot.js`, a split module), the grant wins; everything else in this list stays forbidden. The frozen shells and shims (overview section 4) stay forbidden.
 - **Must not touch:**
   - Anything FROZEN: `root/settings/*`, `root/urls.py`, `components/{SEO,SEOHelmet,Layout,Navbar}.jsx`, `components/common/{Pagination,ErrorState,SectionHeader,CustomSelect,...}`, `index.css`, `styles/components/*`, `package.json`, `public/*`, `app/routes.jsx`, `api/client.js`, `api/pagination.js`.
   - Provider and catalog services, `adult_content.py`, `Anime` model fields.
@@ -226,6 +279,8 @@ Post-seams paths. All backend paths are under `apps/`.
 
 ## Acceptance criteria and test plan
 **Checklist**
+- [ ] `/anime/?q=one%20pice` returns One Piece (and "attack on titn" finds Attack on Titan); "one zzzz" does not return One Piece; the multi-word query still uses the trigram index (S-1).
+- [ ] A 404 query (missing anime slug) is requested once, not twice; a 500 is retried once (S-2).
 - [ ] `/browse?q=frieren` lists the title "Frieren..." first; the sort select shows "Best match"; picking "Highest Rated" keeps `sort=rating` (vitest and backend `test_search_trigram.py::test_relevance_sort_param`).
 - [ ] Saving a `UserAnimeList` doesn't change `anime_collection_ns:v11`, and a cached `anime_list:*` key survives. Saving `Anime.title` bumps the namespace on commit (`test_public_cache_invalidation.py`).
 - [ ] The lock-wait never exceeds 3 s. Test: hold the lock in the test, measure with patched `time.monotonic`.
@@ -264,7 +319,7 @@ Post-seams paths. All backend paths are under `apps/`.
 **Gates:** `ruff check`, `ruff format --check`, `makemigrations --check --dry-run` (expects no migration), `pytest -n auto --cov` (all guard tests green; snapshots changed only in the `is_adult` PR), `npm run lint`, `npm run test:run`, `npm run build`. The beat snapshot must be unchanged.
 
 ## Migration plan
-None. Every change is in code or caching. Keeping dismissed recommendations needs no schema change, because the unique (user, anime) constraint plus `ignore_conflicts=True` already preserves dismissed rows. The existing indexes (`UserRecommendation` (user,-score), (user,is_dismissed); `anime_schedule_day_idx`; the trigram GIN indexes; the FK indexes on `AnimeCharacter.character` and `AnimeStaff.staff`) cover the new queries. If measurement later shows the schedule window query not using `anime_schedule_day_idx`, the fallback is `0057_browse_schedule_airing_idx.py` (renumbered at integration): `AddIndex(Index(fields=["next_airing_date"], condition=Q(status="Airing"), name="anime_airing_next_idx"))`, reversible, no data. It is not proposed up front.
+None. Every change is in code or caching. Keeping dismissed recommendations needs no schema change, because the unique (user, anime) constraint plus `ignore_conflicts=True` already preserves dismissed rows. The existing indexes (`UserRecommendation` (user,-score), (user,is_dismissed); `anime_schedule_day_idx`; the trigram GIN indexes; the FK indexes on `AnimeCharacter.character` and `AnimeStaff.staff`) cover the new queries. If measurement later shows the schedule window query not using `anime_schedule_day_idx`, the fallback is `0058_browse_schedule_airing_idx.py` (reserved number, overview section 7; depends on `0057`): `AddIndex(Index(fields=["next_airing_date"], condition=Q(status="Airing"), name="anime_airing_next_idx"))`, reversible, no data. It is not proposed up front.
 
 ## Risks and open questions
 - **Adult detail policy (P1-5).** The default is a 404 for viewers who haven't opted in. Alternative: serve the page but blur the cover with a notice. Owner decision needed before implementation. It affects crawlers, since adult pages drop out of the index, which is probably desirable.

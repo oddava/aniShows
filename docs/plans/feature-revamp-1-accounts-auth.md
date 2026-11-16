@@ -47,7 +47,7 @@ This group fixes those (P0), then makes auth and settings pleasant on phones and
 Throttle rates are in `S/root/settings/base.py:526-541`. JWT settings (base.py:550-560): 15 min access, 30 d refresh, rotate + blacklist, `UPDATE_LAST_LOGIN` unset (False). `DEFAULT_AUTHENTICATION_CLASSES` still includes `SessionAuthentication` (base.py:511).
 
 ### Celery
-- `apps.users.tasks.cleanup_unverified_accounts` (tasks.py:76-79). Its implementation is in G3's `services/celery_tasks.py:26-66` and it runs through `run_user_maintenance_workflow` (beat `user-maintenance-daily`, celery_schedule.py:89-98).
+- `apps.users.tasks.cleanup_unverified_accounts` (tasks.py:76-79). Its implementation, `UserTaskService.cleanup_unverified_accounts` in `services/celery_tasks.py:26-66`, is **G1's** (overview amendment 3: the file has function-level ownership; G1 owns this method and `warm_profile_cache`, G3 the rest) and it runs through `run_user_maintenance_workflow` (beat `user-maintenance-daily`, celery_schedule.py:89-98).
 - `apps.users.tasks.warm_profile_cache` (tasks.py:183-186). Its implementation is at celery_tasks.py:431-474; beat `warm-profile-cache-hourly` (celery_schedule.py:106-110).
 - `apps.core.tasks.metadata.fetch_multiple_link_metadata` / `fetch_link_metadata_async` → G6's `CoreTaskService` (core/services/celery_tasks.py:139-218).
 - `send_email_task` (services/email_service.py:80-190) sends via the Resend HTTP API.
@@ -109,6 +109,7 @@ Throttle rates are in `S/root/settings/base.py:526-541`. JWT settings (base.py:5
 | A32 | Low | Sessions | Confirming an email change does not revoke other sessions. After a password change other devices keep their access tokens for up to 15 min (acceptable; document it). | S/apps/users/services/account_management_service.py:126-140 | P0-6 |
 | A33 | Low | Tokens | `UPDATE_LAST_LOGIN` is off, so `last_login` (part of the reset-token hash) never changes on JWT login. An unused reset link stays valid for the full `PASSWORD_RESET_TIMEOUT` (3 d default) even after a normal sign-in. | S/root/settings/base.py:550-560; Django `PasswordResetTokenGenerator._make_hash_value` | Integrator request |
 | A34 | Low | Cache | After link metadata is stored, the own-profile cache (`user_profile:<id>:*`, 300 s) is not invalidated. Only the public version is bumped (via the post_save signal), so Settings shows `metadata_pending` for up to 5 min. | S/apps/core/services/celery_tasks.py:166-169; S/apps/users/signals.py:118-123 | P1-8 |
+| A35 | High | Login | **Smoke-test finding S-3.** `POST auth/login/` with no `username` and no `email` returns **500**: `CustomTokenObtainPairSerializer.validate` passes `attrs` to simplejwt's `validate`, which reads `attrs["username"]` (`KeyError`). With an email that has no account, `normalize_login_identifier(email=…)` returns `None`, so `username` is never set: also 500, while an unknown *username* gives 401. The 500-vs-401 difference reveals whether an email is registered. Measured on `revamp/base`: `{password}` → 500, `{email: unknown, password}` → 500, `{username: unknown, password}` → 401. | `apps/users/views/auth.py:62-73`; `apps/users/services/auth_service.py:40-60` | P0-10 |
 
 Missing tests (today): registration without email; resend with a non-string body; session cookie after Google login; access-token social path rejected; media deletion on account delete; share preview with hostile bio or username; username case collisions; Settings change detection for links; AuthContext cache clearing; VerificationPending; PasswordResetConfirm; GoogleCallback; profileAccent contrast.
 
@@ -146,6 +147,13 @@ Missing tests (today): registration without email; resend with a non-string body
    - Storage errors are logged, never raised.
    - Covers account delete, the unverified purge and admin deletes.
    - Files: `signals.py` (profile receivers), `services/profile_update_service.py`. Size S-M.
+10. **Login never 500s and does not leak which emails exist** (A35, smoke finding S-3).
+    - In `CustomTokenObtainPairSerializer.validate`: if neither `username` nor `email` is a non-empty string, raise `ValidationError({"username": "Enter a username or email."})` (400, the `{detail, code, errors}` envelope).
+    - An email with no account must fail exactly like a wrong password: set `attrs["username"]` to the stripped email (or another value that cannot authenticate), so simplejwt returns its usual 401 `no_active_account`. No `KeyError` path remains.
+    - Treat non-string `username`/`email`/`password` (numbers, objects) as missing → 400, not 500.
+    - Unify the response time of the two 401 paths where it is cheap (they already both run one user lookup plus a password hash check through `authenticate`; verify that simplejwt's dummy hashing covers the unknown-user path).
+    - Tests (in `test_accounts_registration.py` or a new `test_accounts_login.py`): `{password}` → 400 with `errors.username`; `{email: unknown}` → 401 with the same body as `{username: known, password: wrong}`; `{username: 5}` → 400; a login with the email of an existing account still works.
+    - Files: `views/auth.py`. Size S.
 
 ### P1 (daily-use UX, hardening, tests)
 1. **Throttles** (A09, A18). These are all class-level defaults inside throttling.py; DRF reads a class `rate` and falls back to settings when the scope is defined, and `test.py` stays effective because scope rates override.
@@ -218,6 +226,25 @@ Missing tests (today): registration without email; resend with a non-string body
 ## File ownership
 Post-seams paths. Everything below may be changed; new files are marked (new).
 
+**Prep commit (`revamp/base`), see overview section 4a.** These now exist and are G1's:
+- `apps/users/models/accounts.py` (CustomUser, UserProfile, SocialLinkChangeLog; add new models to its `__all__`)
+- `apps/users/serializers/accounts.py`
+- `apps/users/urlconf/accounts.py` (also holds `users/me/stats/`)
+- `root/settings/features/accounts.py`, where the D-1 `API_SESSION_AUTH_ENABLED` flag goes
+- `_account_entries()` in `root/settings/celery_schedule.py` (removing `warm-profile-cache-hourly` is G1's own edit, plus that key in the beat snapshot)
+- `frontend/src/app/routes/accounts.jsx`: Integrator request (2) is now G1's own edit. Delete `kiyo`, and add the param-less `verify-email`, `reset-password` and `confirm-email-change` routes here.
+- `frontend/src/api/queries/profile.js` (profile, user and mini-profile keys)
+- `frontend/src/components/profile/ProfileContent.jsx`: the shell only. The tab bodies are in `components/profile/tabs/*` (G3/G5).
+- Contract stubs (keep the signatures, own the implementation): `apps/users/services/profile_visibility.py` (+ `tests/test_profile_visibility.py`), `send_email_task(..., headers=None)` (+ `tests/test_email_headers.py`), and `frontend/src/hooks/useAdultContentPreference.js` (+ `hooks/__tests__/useAdultContentPreference.test.jsx`).
+- `revoke_all_sessions` already existed, so there was nothing to stub.
+
+Integrator requests after the prep commit:
+- (1) is D-1: G1 adds the flag in `features/accounts.py` (default on, current behaviour).
+- (2) and (3) are G1's own edits, as above.
+- (4): G1 sets `SIMPLE_JWT["UPDATE_LAST_LOGIN"] = True` in `features/accounts.py` itself, as a documented override.
+- (5) stays with the integrator (`root/urls.py` is frozen).
+- (6) is done.
+
 Backend:
 - `apps/users/views/{auth,account_management,google,social_auth,users}.py`
 - `apps/users/serializers/accounts.py`: `UserSerializer`, `UserLightweightSerializer`, `PublicUserSerializer`, `UserProfileUpdateSerializer`, `RegisterSerializer`, `ChangePasswordSerializer`, bio constants. `serializers/users.py` stays an integrator shim. Also `apps/users/serializers/social_auth.py`.
@@ -245,8 +272,10 @@ Frontend (`frontend/src/`):
 - `utils/{password,cropImage,profileAccent}.js`
 - Tests (new): `context/__tests__/AuthContext.test.jsx`, `pages/__tests__/{VerificationPending,PasswordResetConfirm,GoogleCallback,Settings}.test.jsx`, `components/settings/__tests__/{useProfileSettings,AccountTab}.test.jsx`, `utils/__tests__/profileAccent.test.js`, `components/__tests__/ImageCropModal.test.jsx`; extend `pages/__tests__/Auth.test.jsx`, `api/__tests__/httpClient.test.js`.
 
+**Precedence (prep commit):** where this list names a file or directory that the *Prep commit* block above grants (a `root/settings/features/` module, a `celery_schedule.py` function, an `app/routes/` file, `boot.js`, a split module), the grant wins; everything else in this list stays forbidden. The frozen shells and shims (overview section 4) stay forbidden.
+
 Must not touch:
-- `root/settings/*`, `root/urls.py`, `root/celery_schedule` (beat), `apps/users/services/celery_tasks.py` (G3), `apps/core/services/celery_tasks.py` (G6), `apps/animes/serializers/{base,serializers_mixins}` (G2), `apps/shared/*`, other receivers/tasks in `signals.py`/`tasks.py`, models other than those above.
+- `root/settings/*`, `root/urls.py`, `root/celery_schedule` (beat), `apps/users/services/celery_tasks.py` except `UserTaskService.cleanup_unverified_accounts` and `warm_profile_cache` (G1's methods; A10's purge-media fix goes there), `apps/core/services/celery_tasks.py` (G6), `apps/animes/serializers/{base,serializers_mixins}` (G2), `apps/shared/*`, other receivers/tasks in `signals.py`/`tasks.py`, models other than those above.
 - `F/app/{routes,providers}.jsx`, `App.jsx`, `sentry.js` (call its exports only), `UmamiAnalytics.jsx`, `Navbar.jsx`, `navbar/MobileNav.jsx`, `common/MarkdownRenderer.jsx` and `forums/RichTextEditor` (G5), `pages/{Browse,Schedule}.jsx` (G2), `FollowButton`/`FollowersModal` (G5), profile tab bodies under `components/profile/tabs/*` owned by G3/G5, `index.css`/design tokens.
 
 ## Cross-group contracts
@@ -288,11 +317,12 @@ Requests:
   - (5) Optionally drop `path("accounts/", include("allauth.urls"))` (urls.py:25) if `manage.py check` and the tests pass (Q5).
   - (6) Seams split of `serializers/users.py` and `urls.py` as planned.
 
-Collision avoidance: G1 touches `users` migrations only for `CustomUser`/`UserProfile`, at most two, named `00NN_accounts_*`. G1 edits only the receivers and tasks listed. Route changes go only through the integrator block. `ProfileContent.jsx` shell props stay stable, so tab-body owners need not rebase.
+Collision avoidance: G1 touches `users` migrations only for `CustomUser`/`UserProfile`, at most two, named `0038_accounts_*`/`0039_accounts_*` (reserved, overview section 7). G1 edits only the receivers and tasks listed. Route changes go in G1's own `app/routes/accounts.jsx`. `ProfileContent.jsx` shell props stay stable, so tab-body owners need not rebase.
 
 ## Acceptance criteria and test plan
 
 Checklist:
+- [ ] `POST auth/login/` without `username`/`email` → 400 `errors.username`; with an unregistered email → 401, the same body as a wrong password (no 500 anywhere; S-3).
 - [ ] `POST auth/register/` without email → 400 with `errors.email`. With `email:""` → 400. No user is created.
 - [ ] The pending page resend returns 200 and a generic message. A dict or number `email` → 400, never 500.
 - [ ] Saving only the bio of a user with 3 links sends no `social_links` and runs no `URLValidator.validate`. Six bio-only saves in a day by a new account all succeed.

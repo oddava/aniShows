@@ -235,7 +235,7 @@ No query budget covers `/lists/`, `/activity/`, imports. Frontend: `StatusSelect
   (sets progress = n, normalizer may complete the entry); rating rejects `episode_number > 10000` when the count is
   unknown. Files: `EpisodesTab.jsx`, `episode_ratings.py`.
 - **P1-9 Dead code removal (S).** Delete `fetch_anime_by_external_id` task + service method (request route removal),
-  `remove_duplicate_lists` command, `ProfileAnimeCard.jsx`, `ProfileStats.jsx` (request G1 to drop the index.js export
+  `remove_duplicate_lists` command, `ProfileAnimeCard.jsx`, `ProfileStats.jsx` (sequencing: the file is still imported by G1's `ProfileContent.jsx` shell and `profile/index.js`, so delete it only after G1 has merged those removals, i.e. at G3's rebase; request G1 to drop the index.js export
   and import), stop calling the dead cache helpers (request G1 to delete them), cancel's unreachable `except`.
 - **P1-10 AniList link + pull sync (M).** See "AniList sync design" below.
 
@@ -294,23 +294,47 @@ data migration of every row; P2-1 covers input); per-episode watch history table
 provider internals; notifications for friends' activity (G4); review/favorite domain (G5).
 
 ## File ownership
+
+**Prep commit (`revamp/base`), see overview section 4a.** These now exist and are G3's:
+- `apps/users/models/lists.py` (UserAnimeList, UserActivity, UserImportJob, UserStats). Append `UserListLink` there,
+  with its `__all__` entry; it is approved (overview amendment 5).
+- `apps/animes/models/tracking.py` (EpisodeRating, UserHistory)
+- `apps/users/serializers/lists.py`
+- `apps/users/urlconf/lists.py` (`lists`, `activity` router routes) and `urlconf/imports.py` (import/export paths)
+- `root/settings/features/lists.py`
+- `_list_entries()` in `celery_schedule.py`
+- Frontend: `frontend/src/api/modules/{lists,activity,imports}.js`, `frontend/src/api/queries/lists.js` (`userQueries.watching`;
+  `userKeys` itself lives in G1's `queries/profile.js`), `frontend/src/components/profile/tabs/{AnimeListTab,ActivityTab,InsightsTab}.jsx`
+  (prop names from the G1 shell are frozen; the tab owns its query/search/sort state under P0-1), and `frontend/src/app/routes/lists.jsx`.
+  `ActivityTab`/`InsightsTab` are the lazy `ActivityFeed`/`ProfileInsights` components; the shell keeps the section
+  error boundary + Suspense around them, so switching tabs behaves exactly as before.
+- Contract stub (keep the signature): `frontend/src/hooks/useListEntryMutation.js` (+ `hooks/__tests__/useListEntryMutation.test.jsx`).
+  Today it is AnimeCard's behaviour: optimistic state, rollback + `logger.error`, and the same invalidations, through
+  G2's `patchAnimeListStatus`. P1-2 replaces the internals.
+- Migration space: `users` `0040`–`0041` (above).
+
+The integrator's catalog requests (1)–(3), the public `AniListClient` methods, are **not** on `revamp/base`. Use the
+documented fallback tonight (own httpx + `AniListRateLimiter().acquire()`), and keep it behind one module
+(`import_service/anilist_fetch.py`, new) so the switch later is one file. Request (4), the `fetch_anime_by_external_id`
+route in `root/celery.py`, stays integrator.
+
 Backend (SLIM paths; post-seams):
 - `apps/users/models.py`: `UserAnimeList`, `UserActivity`, `UserImportJob`, `UserStats` (+ new `UserListLink`, pending approval)
 - `apps/users/views/{lists,activity,import_export}.py`
 - `apps/users/serializers/lists.py` (post-seams home of `UserAnimeListSerializer`, `UserActivitySerializer`); `apps/animes/serializers/imports.py`
 - `apps/users/urlconf/{lists,imports}.py`
-- `apps/users/services/{list_service,activity_service,import_job_service,export_service,stats_service,user_stats_service,celery_tasks}.py`, `services/import_service/*` (+ new `entries.py`, `anilist_sync.py`), new `services/list_rules.py`
+- `apps/users/services/{list_service,activity_service,import_job_service,export_service,stats_service,user_stats_service}.py`, `services/celery_tasks.py` except `UserTaskService.cleanup_unverified_accounts`/`warm_profile_cache` (G1's methods), `services/import_service/*` (+ new `entries.py`, `anilist_sync.py`), new `services/list_rules.py`
 - `apps/animes/services/{user_list_side_effects,episode_ratings}.py`; UserAnimeList receivers in `apps/animes/signals.py` (lines 220-259 only)
 - `apps/users/tasks.py`: `process_import_job`, `fetch_anime_by_external_id` (delete), `cleanup_old_import_jobs`, `run_user_maintenance_workflow`, `update_user_stats`, `update_all_user_stats`, new `sync_linked_anilist_lists`
 - `apps/users/management/commands/{remove_duplicate_lists (delete),populate_user_stats}.py`
-- Migrations: `apps/users/migrations/0038_lists_entry_constraints_import_job.py`, `0039_lists_anilist_link.py`
+- Migrations: `apps/users/migrations/0040_lists_entry_constraints_import_job.py`, `0041_lists_anilist_link.py`
 - Tests: `apps/users/tests/{test_list_entries,test_activity_tracking,test_import_service}.py` (extend), new
   `test_list_rules.py`, `test_list_api_budgets.py`, `test_list_concurrency.py`, `test_anilist_sync.py`,
   `test_export_service.py`, `test_user_stats.py`; `apps/animes/tests/{test_episode_tracking,test_episode_ratings}.py`
   (extend), new `apps/animes/tests/test_user_list_side_effects.py`
 
 Frontend (`frontend/src`, post-seams):
-- `components/{StatusSelector,ListEntryEditModal,EpisodesTab,ProfileInsights,StatusDistribution,StatsTab,ActivityHeatmap,VirtualizedAnimeList}.jsx`; delete `ProfileAnimeCard.jsx`, `profile/ProfileStats.jsx`
+- `components/{StatusSelector,ListEntryEditModal,EpisodesTab,ProfileInsights,StatusDistribution,StatsTab,ActivityHeatmap}.jsx` (`VirtualizedAnimeList.jsx` is G2's, overview amendment 4); delete `ProfileAnimeCard.jsx`, `profile/ProfileStats.jsx`
 - `components/profile/ActivityFeed.jsx`; `components/profile/tabs/{AnimeListTab,ActivityTab,InsightsTab}.jsx`
 - `pages/{ImportPage,ExportPage}.jsx`
 - `api/modules/{lists,activity,imports}.js`; `api/queries/{lists,importJobs}.js`; `utils/statusDistribution.js`
@@ -318,6 +342,8 @@ Frontend (`frontend/src`, post-seams):
 - Tests: `components/{StatusSelector,ListEntryEditModal,EpisodesTab,StatusDistribution}.test.jsx`, new
   `hooks/__tests__/useListEntryMutation.test.jsx`, `components/profile/tabs/__tests__/AnimeListTab.test.jsx`,
   `components/profile/__tests__/ActivityFeed.test.jsx`, `pages/__tests__/{ImportPage,ExportPage}.test.jsx`, `api/queries/__tests__/importJobs.test.js`
+
+**Precedence (prep commit):** where this list names a file or directory that the *Prep commit* block above grants (a `root/settings/features/` module, a `celery_schedule.py` function, an `app/routes/` file, `boot.js`, a split module), the grant wins; everything else in this list stays forbidden. The frozen shells and shims (overview section 4) stay forbidden.
 
 Must not touch: `apps/users/services/cache.py`, `views/users.py`, `serializers/{accounts,social,...}.py` (G1/G5),
 `apps/animes/serializers/anime.py`, `serializers_mixins.py`, `services/public_anime_service.py` (G2),
@@ -401,14 +427,14 @@ Manual QA (phone 390 px and desktop 1440 px, keyboard-only pass on desktop):
 Gates: `ruff check`, `ruff format --check`, `makemigrations --check --dry-run`, `pytest -n auto --cov`, `npm run lint`, `npm run test:run`, `npm run build`; existing `test_query_budgets.py`, `test_public_contract.py`, `test_query_sql_snapshot.py`, beat snapshot pass unchanged.
 
 ## Migration plan
-`users` (numbers relative to SLIM leaf 0037; renumber at integration):
-1. `0038_lists_entry_constraints_import_job.py`
+`users` (reserved numbers 0040–0041, overview section 7; depend on `0037` on your branch and re-point to G1's last migration at rebase):
+1. `0040_lists_entry_constraints_import_job.py`
    - `RunPython` (batched by pk ranges of 2,000): clamp `score` to 0..10, negative `episodes_watched`/`total_rewatches` → 0, `finished_at < started_at` → `finished_at = NULL`; reverse = noop.
    - `AddConstraint` on `UserAnimeList`: `lists_score_0_10` (`score__gte=0, score__lte=10`), `lists_episodes_nonneg`, `lists_rewatches_nonneg`, `lists_dates_ordered` (`Q(started_at__isnull=True) | Q(finished_at__isnull=True) | Q(finished_at__gte=F("started_at"))`).
    - `AlterField UserImportJob.status` (+ `cancelled`); `AddField UserImportJob.mode` (Char 12, choices full/incremental, default full); `failure_reason` (Text, blank); `unmatched` (JSON, default list); `payload` (JSON, null); `heartbeat_at` (DateTime, null).
    - Only if P2-2 ships: `AlterField UserActivity.activity_type` (+ `imported`).
    - Reversible (RemoveConstraint/RemoveField auto-reverse; choices revert); `cancelled` rows would violate nothing on reverse.
-2. `0039_lists_anilist_link.py` (pending matrix approval): `CreateModel UserListLink` — `user` OneToOne CASCADE `related_name="list_link"`, `provider` Char(16) default `anilist`, `external_username` Char(50), `external_user_id` Int null, `auto_sync` Bool default False, `cursor_updated_at` BigInt null, `last_synced_at` DateTime null, `last_error` Char(255) blank, `consecutive_failures` SmallInt default 0, `created_at`/`updated_at`; index (`auto_sync`, `last_synced_at`). Reversible.
+2. `0041_lists_anilist_link.py` (pending matrix approval): `CreateModel UserListLink` — `user` OneToOne CASCADE `related_name="list_link"`, `provider` Char(16) default `anilist`, `external_username` Char(50), `external_user_id` Int null, `auto_sync` Bool default False, `cursor_updated_at` BigInt null, `last_synced_at` DateTime null, `last_error` Char(255) blank, `consecutive_failures` SmallInt default 0, `created_at`/`updated_at`; index (`auto_sync`, `last_synced_at`). Reversible.
 `animes`: none (EpisodeRating/UserHistory unchanged; P2-5 would add one).
 Rollout: nothing deployed; constraints validate on an empty/small table. Run `populate_user_stats --all` after P1-5 once.
 

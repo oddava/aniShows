@@ -251,8 +251,30 @@ SLIM:apps/core/tasks/notifications.py has three tasks behind `cache_lock`. Beat 
 
 ## File ownership
 Paths are post-seams. G4 may change:
+
+**Prep commit (`revamp/base`), see overview section 4a.** These requests are done, and the files now exist and are G4's:
+- C-INT-1: `apps/core/services/notification_tasks_service.py` holds `NotificationTaskService.{send_pending_notifications,
+  check_new_episodes, cleanup_old_notifications}` and their helpers. `CoreTaskService` keeps delegating methods,
+  `tasks/notifications.py` calls the new class, and the `test_notification_tasks.py` patch paths moved.
+- C-INT-2: superseded. `apps/core/models/notifications.py` is G4's whole module, header included.
+- `apps/users/serializers/notifications.py`, moved out of the view module.
+- `apps/users/urlconf/notifications.py` (router route + the three pre-router paths).
+- C-INT-3, settings half: `VAPID_SUBJECT` goes in `root/settings/features/notifications.py` (G4). The env half
+  (`.env.production.example`, prod compose) is G7's.
+- `_notification_entries()` in `celery_schedule.py`: C-INT-4 (hourly at :50) is G4's own edit, plus those snapshot keys.
+- C-INT-6: `frontend/src/app/routes/notifications.jsx` is G4's own file.
+- C-INT-7: `public/boot.js` and `frontend/src/pwa/serviceWorker.js` (`clearAppRuntimeCaches`, moved from `main.jsx`)
+  are G4's, so change the unregister filter there. The `vite.config.js` part (drop the `/api/v1` runtime cache) is
+  applied by the integrator at G4's merge; it was kept out of the behaviour-neutral prep commit.
+- `frontend/src/api/modules/notifications.js`.
+- Contract stub (keep the signatures): module-level `notify`, `notify_many`, `retract`, `invalidate_unread_counts` at the
+  end of `notification_service.py` (+ `apps/core/tests/test_notify_contract.py`). Today `notify` loads the objects named in
+  `data` and calls the matching `create_*`, so it writes the same row. It ignores `dedupe_key`/`group_key` and
+  suppresses only self-notifications. P0-2 replaces the internals.
+- Migration space: `core` `0010`–`0011`.
+
 - **Backend:**
-  - `apps/core/models.py`: the `Notification`, `PushSubscription` and new `NotificationPreference` class bodies only. Header imports are FROZEN; see C-INT-2.
+  - `apps/core/models/notifications.py`: the whole module (header included): `Notification`, `PushSubscription` and the new `NotificationPreference` (add it to the module's `__all__`).
   - `apps/core/services/{notification_service,push_service}.py`
   - New `apps/core/services/{notification_types,notification_preferences,notification_delivery,notification_email,episode_notifications}.py`
   - `apps/core/tasks/notifications.py`, `apps/core/{consumers,routing}.py`, `root/asgi.py`
@@ -270,6 +292,8 @@ Paths are post-seams. G4 may change:
   - `utils/notificationUtils.js`, `api/queries/notifications.js` (+ its test), `api/modules/notifications.js`
   - Deletion of `components/NotificationBell.jsx`
   - `public/service-worker.js`, `public/site.webmanifest`
+
+**Precedence (prep commit):** where this list names a file or directory that the *Prep commit* block above grants (a `root/settings/features/` module, a `celery_schedule.py` function, an `app/routes/` file, `boot.js`, a split module), the grant wins; everything else in this list stays forbidden. The frozen shells and shims (overview section 4) stay forbidden.
 
 **Must not touch:**
 - `apps/core/services/celery_tasks.py` (G6). Its notification code is moved by the integrator (C-INT-1).
@@ -354,7 +378,7 @@ Policy per category:
 
 ### Requests
 - **C-INT-1 (seams).** Move `CoreTaskService.{send_pending_notifications, check_new_episodes, cleanup_old_notifications}` and their module helpers (SLIM:apps/core/services/celery_tasks.py:238-534) into a new G4 file `apps/core/services/notification_tasks_service.py`. `CoreTaskService` keeps one-line delegating staticmethods. The test patch paths in `test_notification_tasks.py` move with them.
-- **C-INT-2 (seams).** Add `OneToOneField, Q, UniqueConstraint` to the `django.db.models` import header of `apps/core/models.py`.
+- **C-INT-2 (seams). Superseded** by the models package: G4 owns the header of `apps/core/models/notifications.py`.
 - **C-INT-3.** Add `VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "")` to `root/settings/base.py`, and the `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` lines to `.env.example` and the prod compose env.
 - **C-INT-4.** Change `check-new-episodes` to `crontab(minute=50)` (hourly) and regenerate the beat snapshot. Leave the other two entries alone.
 - **C-INT-5 (slim-down owner).** In `airing.py::_cleanup_finished`, apply `_apply_recent_airing_transition` (or set `last_aired_*` from the old `next_airing_*` when `next_airing_date <= now`) before clearing, in both branches and in the batch clear. Add a test in `test_airing_notification_state.py`.
@@ -370,7 +394,7 @@ Policy per category:
 - **C-G6-1.** `core/admin.py` "mark read" action calls `invalidate_unread_counts`. The "delete >90d" action uses the selected queryset. Badge award keeps calling the shim.
 - **C-G3 (consume only).** G4 reads `UserAnimeList.status`, `episodes_watched` and `anime_id`, and relies on the `(anime, status)` index. Please don't rename these fields.
 
-**Collision avoidance.** G6 also writes `core` migrations: whichever group merges later renumbers per policy. G4 never edits `celery_tasks.py`; its own new file takes over after C-INT-1.
+**Collision avoidance.** G6 also writes `core` migrations: G4 has the reserved 0010/0011, G6 0012/0013 (overview section 7), so no renaming. G4 never edits `celery_tasks.py`; its own new file takes over after C-INT-1.
 
 ## Acceptance criteria and test plan
 
@@ -464,7 +488,7 @@ Policy per category:
 `ruff check`, `ruff format --check`, `makemigrations --check --dry-run`, `pytest -n auto --cov`, `npm run lint`, `npm run test:run`, `npm run build`. The beat snapshot changes only through C-INT-4.
 
 ## Migration plan
-- **`apps/core/migrations/0010_notifications_dedupe_actor_push.py`** (depends on `core.0009`, `users.0037`)
+- **`apps/core/migrations/0010_notifications_dedupe_actor_push.py`** (depends on `core.0009` and `users.0037` on the G4 branch; at rebase, on the users leaf present at G4's merge, i.e. G1's `0039`)
   1. AddField `Notification.dedupe_key` CharField(160, null) and `group_key` CharField(160, null).
   2. AddField `actor` FK→users.CustomUser, SET_NULL, null, `related_name="+"`.
   3. RunPython backfill (batched 2000, ordered by id, reverse no-op):

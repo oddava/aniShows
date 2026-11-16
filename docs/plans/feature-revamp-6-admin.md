@@ -323,14 +323,32 @@ Jikan / Mongo / Typesense: none left in SLIM's admin-owned backend (grep is clea
 
 ## File ownership
 May change (post-seams paths):
+
+**Prep commit (`revamp/base`), see overview section 4a.** These now exist and are G6's:
+- Models: `apps/core/models/{logs,settings,celery}.py` (bodies and headers; R6/R8 done)
+- `apps/core/services/celery_tasks.py`, now without the notification half; it keeps three one-line delegators to G4's
+  `NotificationTaskService`. Leave them, or delete them once nothing calls them.
+- `root/settings/features/admin.py`
+- `_maintenance_entries()` in `celery_schedule.py`: D-7's `collect-queue-metrics-minute` removal (R4) is G6's own edit,
+  plus that snapshot key.
+- `frontend/src/app/routes/admin.jsx`: R2 is G6's own edit.
+- Contract stub (keep the signature): `apps/admin_api/services/audit.py::record_admin_action(request, *, action,
+  entity_type, entity_id="", entity_repr="", previous=None, new=None, metadata=None, reason="")` (+
+  `tests/test_audit_service.py`). It writes today's `AuditLog` row, with the IP from `get_client_ip` and `reason` stored
+  in `metadata`, and sets `request._admin_audited`.
+- **Moved to G7** (overview amendment 12): `apps/core/views/health.py`, `apps/core/services/migration_health.py` and
+  their tests, so drop A20 and the "Readiness" bullet of P1-5. R5 (the Caddy IP gate, D-9) also goes to G7.
+  `apps/admin_api/tests/test_production_readiness.py` stays G6's.
+- R3 (`django_celery_beat` out of `INSTALLED_APPS`) is still an integrator step at G6's merge (`base.py` is frozen).
+- Migration space: `core` `0012`–`0013`.
+
 - **admin_api:** `apps/admin_api/**`, including new `services/{audit,moderation_service,system_service}.py`, `views/{moderation,system}.py`, `permissions.py`, and tests `tests/test_admin_permission_matrix.py`, `test_admin_audit.py`, `test_moderation_api.py`, `test_user_suspension.py`, `test_system_api.py`, `test_bulk_operations.py`, `test_admin_query_budgets.py`.
 - **core:**
-  - `apps/core/views/{admin_import_jobs,celery_admin,monitoring,health}.py`
-  - `apps/core/services/{admin_import_jobs_service,admin_settings_service,celery_admin_service,celery_monitoring,celery_tasks,migration_health}.py`
-  - in `celery_tasks.py`, only the non-notification `CoreTaskService` methods, if the R8 split has not happened
+  - `apps/core/views/{admin_import_jobs,celery_admin,monitoring}.py` (`health.py` is G7's)
+  - `apps/core/services/{admin_import_jobs_service,admin_settings_service,celery_admin_service,celery_monitoring,celery_tasks}.py` (`migration_health.py` is G7's; the R8 split is done)
   - `apps/core/middleware/*`, `apps/core/tasks/{cleanup_tasks,logging_tasks}.py`, `apps/core/celery_signals.py`, `apps/core/permissions.py`
   - models `SystemLog`, `AuditLog`, `AdminPanelSettings`, `CeleryTaskResult`, `CeleryWorkerStatus`, `CeleryTaskSchedule`
-  - migrations `apps/core/migrations/00NN_admin_*.py`
+  - migrations `apps/core/migrations/0012_admin_*.py`, `0013_admin_*.py` (reserved)
   - tests `apps/core/tests/test_site_control_middleware.py`, `test_logging_middleware.py`, `test_log_retention.py`, `test_celery_signals_tracking.py` (new), plus the existing `test_admin_import_jobs*.py`, `test_celery_admin_validation.py`
 - **Django admin:** `apps/{core,users,animes,forums}/admin.py`, `apps/{users,animes}/admin_serializers.py`, `apps/users/views/admin_badges.py`, `root/settings/jazzmin.py`.
 - **Pending R6:** `apps/core/serializers.py` and the `JAZZMIN_SETTINGS` half of `apps/core/tests/snapshots/beat_schedule_and_jazzmin.json`.
@@ -339,8 +357,10 @@ May change (post-seams paths):
   - delete `AdminReviewReports.jsx`, `AdminUserLists.jsx`, `AdminFavorites.jsx`
   - `frontend/src/components/{AdminLayout,AdminRoute,MaintenanceScreen}.jsx`, `frontend/src/admin.css`, `frontend/src/api/modules/admin.js`, `frontend/src/api/queries/admin.js`
 
+**Precedence (prep commit):** where this list names a file or directory that the *Prep commit* block above grants (a `root/settings/features/` module, a `celery_schedule.py` function, an `app/routes/` file, `boot.js`, a split module), the grant wins; everything else in this list stays forbidden. The frozen shells and shims (overview section 4) stay forbidden.
+
 Must not touch:
-- **Frozen:** `root/settings/{base,production,celery_schedule}.py`, `root/{urls,celery}.py`, `apps/core/{utils,api_errors,checks,db_safety}.py`, the header and imports of `apps/core/models.py` (only the bodies of G6 models change), `apps/shared/*`, catalog services and tasks (`apps/animes/services/{rate_limiting,offline_*}.py`, ...), `Caddyfile.prod`, compose, `frontend/src/{App.jsx,app/routes.jsx}` (request only), `components/common/*`, `index.css`.
+- **Frozen:** `root/settings/{base,production,celery_schedule}.py`, `root/{urls,celery}.py`, `apps/core/{utils,api_errors,checks,db_safety}.py`, `apps/core/models/notifications.py` (G4) and the `apps/core/models/__init__.py` composer, `apps/shared/*`, catalog services and tasks (`apps/animes/services/{rate_limiting,offline_*}.py`, ...), `Caddyfile.prod`, compose (G7), `frontend/src/App.jsx` and the `app/routes.jsx` shell (your routes are in `app/routes/admin.jsx`), `components/common/*`, `index.css`.
 - **Other groups:** the `Review`/`ReviewReport` models and `apps/animes/services/reviews.py` (G5); `apps/users/services/auth_service.py` (G1, consume only); `Notification` and its hooks (G4); `apps/core/tasks/notifications.py`.
 
 ## Cross-group contracts
@@ -387,7 +407,7 @@ Must not touch:
 - **G1 (optional):** login with correct credentials on an inactive account returns "This account is suspended." rather than the generic failure. That is G1's decision, because it reveals that the account exists.
 
 **Avoiding collisions:**
-- `core` migrations: G4 also adds some, so the later-merged group renumbers.
+- `core` migrations: G4 also adds some; G6 uses its reserved 0012/0013 and re-points `dependencies` to G4's 0011 at rebase (no renaming).
 - G6 does not edit `apps/users/serializers/*` or `apps/users/urls.py`. Admin badge routes stay in `apps/admin_api/urls.py`.
 - `AdminLayout` stops importing `hooks/useNotifications`.
 
@@ -479,12 +499,12 @@ Must not touch:
 **Gates:** `ruff check`, `ruff format --check`, `makemigrations --check --dry-run`, `pytest -n auto --cov`, `npm run lint`, `npm run test:run`, `npm run build`.
 
 ## Migration plan
-App `core` (G6 space). Leaf on SLIM is `0009`; renumber at integration if G4 merges first.
-1. **`apps/core/migrations/0010_admin_auditlog_actions_entity_index.py`**
+App `core` (G6 space). Reserved numbers 0012–0013 (overview section 7): depend on `0009` on your branch and re-point to G4's `0011` at rebase.
+1. **`apps/core/migrations/0012_admin_auditlog_actions_entity_index.py`**
    - `AlterField(AuditLog.action)`, choices extended with `SUSPEND, RESTORE, RESOLVE, DISMISS, TRIGGER, CONTROL` (`max_length` 20 is enough). No change to the database.
    - `AddIndex(AuditLog, Index(fields=["entity_type", "entity_id", "-timestamp"], name="core_audit_entity_idx"))`.
    - Reversible; no backfill.
-2. **`apps/core/migrations/0011_admin_drop_celerytaskschedule.py`**
+2. **`apps/core/migrations/0013_admin_drop_celerytaskschedule.py`**
    - `DeleteModel("CeleryTaskSchedule")`.
    - Reversible schema-wise (data is not restored). The table is unused by beat, and nothing is deployed yet.
    - Must land in the same commit that removes the serializers, the viewset, the Jazzmin icon and the `CeleryTaskSchedule.clean` validators.
