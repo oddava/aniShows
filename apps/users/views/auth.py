@@ -44,11 +44,35 @@ from ..services.ws_ticket_service import TICKET_TTL_SECONDS, issue_ws_ticket
 User = get_user_model()
 
 
+LOGIN_IDENTIFIER_REQUIRED = "Enter a username or email."
+
+
+class _StrictStringMixin:
+    """Reject non-string input instead of coercing it (DRF turns ``5`` into ``"5"``)."""
+
+    def to_internal_value(self, data):
+        if not isinstance(data, str):
+            self.fail("invalid")
+        return super().to_internal_value(data)
+
+
+class _LoginCharField(_StrictStringMixin, CharField):
+    pass
+
+
+class _LoginEmailField(_StrictStringMixin, EmailField):
+    pass
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["username"] = CharField(required=False)
-        self.fields["email"] = EmailField(required=False)
+        # Blank is allowed so "neither given" gets one clear message in validate().
+        self.fields["username"] = _LoginCharField(required=False, allow_blank=True)
+        self.fields["email"] = _LoginEmailField(required=False, allow_blank=True)
+        self.fields["password"] = _LoginCharField(
+            write_only=True, trim_whitespace=False, style={"input_type": "password"}
+        )
 
     @classmethod
     def get_token(cls, user):
@@ -60,16 +84,18 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
-        # Allow login with email or username
-        email = attrs.get("email")
-        username = attrs.get("username")
-        if username:
-            attrs["username"] = AuthService().normalize_login_identifier(username=username)
-        elif email:
-            normalized_username = AuthService().normalize_login_identifier(email=email)
-            if normalized_username:
-                attrs["username"] = normalized_username
+        # Log in with a username or an email. Whichever is given, an unknown
+        # identifier still reaches authenticate() (which hashes a dummy
+        # password), so it fails with the same 401 as a wrong password and
+        # does not reveal whether an account exists.
+        username = (attrs.get("username") or "").strip()
+        email = (attrs.get("email") or "").strip()
+        if not username and not email:
+            raise ValidationError({"username": [LOGIN_IDENTIFIER_REQUIRED]}, code="required")
 
+        attrs["username"] = AuthService().normalize_login_identifier(
+            username=username or None, email=None if username else email
+        )
         return super().validate(attrs)
 
 
@@ -102,8 +128,8 @@ class RegisterView(generics.CreateAPIView):
 
     def _validate_registration_availability(self, validated_data):
         generic_message = "Unable to create account. The email or username may already be in use."
-        username = validated_data["username"]
-        email = validated_data["email"]
+        username = validated_data.get("username") or ""
+        email = validated_data.get("email") or ""
 
         if self.auth_service.username_exists(username) or self.auth_service.email_exists(email):
             raise ValidationError(

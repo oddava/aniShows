@@ -39,6 +39,12 @@ class AuthService:
     def normalize_login_identifier(
         self, *, username: str | None = None, email: str | None = None
     ) -> str | None:
+        """Map a login identifier to the account's canonical username.
+
+        An unknown identifier is returned as given (stripped) rather than
+        ``None``, so the caller authenticates it and fails exactly as it would
+        for a wrong password.
+        """
         if username:
             normalized_username = username.strip()
             if "@" in normalized_username:
@@ -53,8 +59,9 @@ class AuthService:
             return user.username if user else normalized_username
 
         if email:
-            user = User.objects.filter(email__iexact=email).only("username").first()
-            return user.username if user else None
+            normalized_email = email.strip()
+            user = User.objects.filter(email__iexact=normalized_email).only("username").first()
+            return user.username if user else normalized_email
 
         return None
 
