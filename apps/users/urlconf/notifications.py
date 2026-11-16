@@ -1,10 +1,12 @@
-"""Notification routes (G4): feed, preferences, web-push subscriptions."""
+"""Notification routes (G4): feed, preferences, web push, email unsubscribe."""
 
 from django.urls import path
 
 from ..views.notifications import (
+    EmailUnsubscribeView,
     NotificationPreferenceView,
     NotificationViewSet,
+    PushConfigView,
     PushSubscriptionViewSet,
 )
 
@@ -28,6 +30,17 @@ priority_urlpatterns = [
         "notifications/unsubscribe/",
         PushSubscriptionViewSet.as_view({"delete": "unsubscribe"}),
         name="push_unsubscribe",
+    ),
+    path(
+        "notifications/subscriptions/<int:pk>/",
+        PushSubscriptionViewSet.as_view({"delete": "destroy"}),
+        name="push_subscription_detail",
+    ),
+    path("notifications/push/config/", PushConfigView.as_view(), name="push_config"),
+    path(
+        "notifications/email-unsubscribe/",
+        EmailUnsubscribeView.as_view(),
+        name="notification_email_unsubscribe",
     ),
 ]
 
