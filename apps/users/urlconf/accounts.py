@@ -81,4 +81,14 @@ urlpatterns = [
         AccountManagementViewSet.as_view({"post": "confirm_email_change"}),
         name="confirm_email_change",
     ),
+    path(
+        "auth/resend-email-change/",
+        AccountManagementViewSet.as_view({"post": "resend_email_change"}),
+        name="resend_email_change",
+    ),
+    path(
+        "auth/cancel-email-change/",
+        AccountManagementViewSet.as_view({"post": "cancel_email_change"}),
+        name="cancel_email_change",
+    ),
 ]

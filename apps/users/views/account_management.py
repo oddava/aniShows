@@ -9,10 +9,12 @@ from .. import throttling
 from ..auth_cookies import set_refresh_cookie
 from ..serializers.accounts import ChangePasswordSerializer
 from ..services.account_management_service import (
+    cancel_email_change,
     change_password,
     confirm_email_change,
     delete_account,
     request_email_change,
+    resend_email_change,
 )
 from ..services.auth_service import issue_refresh_token, require_recent_auth, token_auth_time
 from ..services.email_service import EmailService
@@ -35,8 +37,10 @@ class AccountManagementViewSet(ViewSet):
         return super().get_permissions()
 
     def get_throttles(self):
-        if self.action == "change_email":
+        if self.action in ["change_email", "resend_email_change"]:
             return [throttling.StrictUserRateThrottle(), throttling.ChangeEmailRateThrottle()]
+        if self.action == "cancel_email_change":
+            return [throttling.StrictUserRateThrottle()]
         if self.action in ["delete_account", "confirm_email_change"]:
             return [throttling.StrictUserRateThrottle()]
         return super().get_throttles()
@@ -90,9 +94,33 @@ class AccountManagementViewSet(ViewSet):
             default_code="change_email_failed",
         )
 
+    @action(detail=False, methods=["post"])
+    def resend_email_change(self, request):
+        """Send the confirmation link again to the pending address."""
+        result = resend_email_change(request.user, EmailService())
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="resend_email_change_failed",
+        )
+
+    @action(detail=False, methods=["post"])
+    def cancel_email_change(self, request):
+        """Drop the pending address; links already sent stop working."""
+        result = cancel_email_change(request.user)
+        return api_response(
+            result.payload,
+            status_code=result.status_code,
+            default_code="cancel_email_change_failed",
+        )
+
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def confirm_email_change(self, request):
-        """Confirm email change with token."""
+        """Confirm email change with ``{uid, token}``.
+
+        ``new_email`` is still read for links in the old 3-segment form (one
+        release); it must match the pending address.
+        """
         uidb64 = request.data.get("uid")
         token = request.data.get("token")
         new_email_encoded = request.data.get("new_email")

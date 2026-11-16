@@ -1,6 +1,7 @@
 """Re-auth for passwordless accounts and security notices (A06, A32)."""
 
 import time
+from typing import Any
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -16,6 +17,7 @@ from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 from rest_framework_simplejwt.tokens import AccessToken
 
 from ..auth_cookies import REFRESH_COOKIE_NAME
+from ..models import UserProfile
 from ..serializers.social_auth import SocialLoginSerializer
 from ..services.auth_service import REAUTH_MAX_AGE_SECONDS, issue_refresh_token
 from ..services.email_service import mask_email
@@ -23,7 +25,8 @@ from ..tokens import EmailChangeTokenGenerator
 
 User = get_user_model()
 
-XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+# Any-valued so mypy does not map it onto APIClient.post(follow: bool).
+XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 
 def _bearer(user, *, age_seconds):
@@ -82,7 +85,7 @@ class PasswordlessReauthTests(APITestCase):
         return _bearer(self.user, age_seconds=30)
 
     def test_stale_sign_in_gets_403_reauth_required_on_every_sensitive_action(self):
-        actions = (
+        actions: tuple[tuple[str, str, dict[str, Any]], ...] = (
             ("post", reverse("change_password"), {"new_password": "N3w-Passphrase!"}),
             ("post", reverse("change_email"), {"new_email": "new@example.com"}),
             ("delete", reverse("delete_account"), {}),
@@ -185,14 +188,12 @@ class SecurityNoticeTests(APITestCase):
 
     def test_confirmed_change_notifies_the_old_address_and_revokes_sessions(self):
         issue_refresh_token(self.user)  # another device
+        UserProfile.objects.filter(user=self.user).update(pending_email="new@example.com")
+        self.user.refresh_from_db()
         token = EmailChangeTokenGenerator("new@example.com").make_token(self.user)
         response = self.client.post(
             reverse("confirm_email_change"),
-            {
-                "uid": urlsafe_base64_encode(force_bytes(self.user.pk)),
-                "token": token,
-                "new_email": urlsafe_base64_encode(force_bytes("new@example.com")),
-            },
+            {"uid": urlsafe_base64_encode(force_bytes(self.user.pk)), "token": token},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)

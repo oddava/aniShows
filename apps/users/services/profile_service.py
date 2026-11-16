@@ -162,6 +162,7 @@ def _build_profile_data(user, stats_data):
         else "auto",
         "points": profile.points if profile else 0,
         "has_password": user.has_usable_password(),
+        "pending_email": (profile.pending_email or None) if profile else None,
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
     }

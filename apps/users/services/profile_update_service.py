@@ -64,6 +64,10 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
         if "avatar" in validated_data:
             profile.avatar = validated_data["avatar"]
             update_fields.append("avatar")
+        if validated_data.get("remove_avatar"):
+            profile.avatar = None
+            if "avatar" not in update_fields:
+                update_fields.append("avatar")
         if "banner" in validated_data:
             profile.banner = validated_data["banner"]
             update_fields.append("banner")

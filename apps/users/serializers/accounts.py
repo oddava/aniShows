@@ -298,6 +298,7 @@ class UserProfileUpdateSerializer(Serializer):
     avatar = ImageField(required=False, allow_null=True)
     banner = ImageField(required=False, allow_null=True)
     remove_banner = BooleanField(required=False)
+    remove_avatar = BooleanField(required=False)
     bio = CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
     # No defaults: an omitted field must leave the stored value alone.
     is_private = BooleanField(required=False)

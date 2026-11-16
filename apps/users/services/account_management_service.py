@@ -4,11 +4,14 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 
+from ..models import UserProfile
 from ..tokens import EmailChangeTokenGenerator, normalize_email
 from .auth_service import AuthService, revoke_all_sessions
+from .cache import invalidate_user_caches
 from .email_service import EmailService
 
 User = get_user_model()
@@ -54,6 +57,22 @@ def delete_account(user, password):
     )
 
 
+def _pending_email_result(message: str, profile) -> AccountManagementResult:
+    return AccountManagementResult(
+        payload={"message": message, "pending_email": profile.pending_email or None},
+        status_code=200,
+    )
+
+
+def _set_pending_email(profile, address: str) -> None:
+    profile.pending_email = address
+    profile.pending_email_requested_at = timezone.now() if address else None
+    profile.save(update_fields=["pending_email", "pending_email_requested_at"])
+    transaction.on_commit(
+        lambda: invalidate_user_caches(profile.user_id, trigger_stats_update=False)
+    )
+
+
 def request_email_change(user, new_email, password, email_service: EmailService):
     if user.has_usable_password():
         if not password:
@@ -67,7 +86,7 @@ def request_email_change(user, new_email, password, email_service: EmailService)
                 status_code=400,
             )
 
-    new_email = normalize_email(new_email)
+    new_email = normalize_email(new_email if isinstance(new_email, str) else "")
     try:
         validate_email(new_email)
     except ValidationError:
@@ -82,42 +101,79 @@ def request_email_change(user, new_email, password, email_service: EmailService)
             status_code=400,
         )
 
+    # Accepted residual enumeration (spec A18): the caller is signed in and,
+    # for password accounts, re-entered the password; the request is throttled.
     if AuthService().email_exists(new_email, exclude_pk=user.pk):
         return AccountManagementResult(
             payload={"error": "This email is already in use"},
             status_code=400,
         )
 
+    # The address waits on the profile until its owner clicks the link; the
+    # link itself carries only uid and token (A14).
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    _set_pending_email(profile, new_email)
     email_service.send_email_change_confirmation(user, new_email)
     email_service.send_email_change_requested_notice(user, new_email)
-    return AccountManagementResult(
-        payload={
-            "message": "Confirmation email sent to your new email address. Please check your inbox."
-        },
-        status_code=200,
+    return _pending_email_result(
+        "Confirmation email sent to your new email address. Please check your inbox.", profile
     )
 
 
-def confirm_email_change(uidb64, token, new_email_encoded, email_service=None):
-    if not all([uidb64, token, new_email_encoded]):
+def resend_email_change(user, email_service: EmailService) -> AccountManagementResult:
+    """Send the confirmation link again to the pending address."""
+    profile = UserProfile.objects.filter(user=user).first()
+    if profile is None or not profile.pending_email:
+        return AccountManagementResult(
+            payload={"error": "There is no email change waiting for confirmation."},
+            status_code=400,
+        )
+    email_service.send_email_change_confirmation(user, profile.pending_email)
+    return _pending_email_result("Confirmation email sent again.", profile)
+
+
+def cancel_email_change(user) -> AccountManagementResult:
+    """Forget the pending address; links already sent stop working."""
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    if profile.pending_email:
+        _set_pending_email(profile, "")
+    return _pending_email_result("Email change cancelled.", profile)
+
+
+def confirm_email_change(uidb64, token, new_email_encoded=None, email_service=None):
+    if not isinstance(uidb64, str) or not isinstance(token, str) or not uidb64 or not token:
         return AccountManagementResult(
             payload={"error": "Missing required fields"}, status_code=400
         )
 
     try:
         uid = force_str(urlsafe_base64_decode(uidb64))
-        user = User.objects.get(pk=uid)
-        new_email = normalize_email(force_str(urlsafe_base64_decode(new_email_encoded)))
+        user = User.objects.select_related("userprofile").get(pk=uid)
+        # Links from before pending_email (3-segment form, one release): the
+        # address they carry must be the one waiting on the profile.
+        legacy_email = (
+            normalize_email(force_str(urlsafe_base64_decode(new_email_encoded)))
+            if isinstance(new_email_encoded, str) and new_email_encoded
+            else None
+        )
     except (TypeError, ValueError, OverflowError, User.DoesNotExist):
         return AccountManagementResult(payload={"error": "Invalid link"}, status_code=400)
 
-    # The token is bound to this exact new address and to the current one, so
-    # it cannot be replayed or pointed at an address the user never confirmed.
+    invalid = AccountManagementResult(
+        payload={"error": "Invalid or expired link"},
+        status_code=400,
+    )
+    profile = getattr(user, "userprofile", None)
+    if profile is None:
+        return invalid
+    new_email = normalize_email(profile.pending_email)
+    if not new_email or (legacy_email is not None and legacy_email != new_email):
+        return invalid
+
+    # The token covers the current address and the pending one, so it stops
+    # working once used, cancelled or replaced by another request.
     if not EmailChangeTokenGenerator(new_email).check_token(user, token):
-        return AccountManagementResult(
-            payload={"error": "Invalid or expired link"},
-            status_code=400,
-        )
+        return invalid
 
     if AuthService().email_exists(new_email, exclude_pk=user.pk):
         return AccountManagementResult(
@@ -130,11 +186,12 @@ def confirm_email_change(uidb64, token, new_email_encoded, email_service=None):
         with transaction.atomic():
             user.email = new_email
             user.save(update_fields=["email"])
-
-            profile = getattr(user, "userprofile", None)
-            if profile:
-                profile.email_verified = True
-                profile.save(update_fields=["email_verified"])
+            profile.email_verified = True
+            profile.pending_email = ""
+            profile.pending_email_requested_at = None
+            profile.save(
+                update_fields=["email_verified", "pending_email", "pending_email_requested_at"]
+            )
     except IntegrityError:
         # Another account claimed the address after the check above.
         return AccountManagementResult(
@@ -142,6 +199,7 @@ def confirm_email_change(uidb64, token, new_email_encoded, email_service=None):
             status_code=400,
         )
 
+    invalidate_user_caches(user.id, user.username, trigger_stats_update=False)
     # Whoever holds a session may have started this; every device signs in
     # again with the new address (A32). The old address hears about it.
     revoke_all_sessions(user)

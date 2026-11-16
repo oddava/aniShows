@@ -51,14 +51,14 @@ class EmailService:
         )
 
     def send_email_change_confirmation(self, user, new_email):
-        """Queue email change confirmation email."""
+        """Queue email change confirmation email.
+
+        The link carries only uid and token: the address waits on the profile
+        (``pending_email``), so it never lands in URLs, logs or analytics (A14).
+        """
         token = EmailChangeTokenGenerator(new_email).make_token(user)
         uid = urlsafe_base64_encode(force_bytes(user.pk))
-        new_email_encoded = urlsafe_base64_encode(force_bytes(new_email))
-
-        confirm_link = (
-            f"{settings.FRONTEND_URL}/confirm-email-change/{uid}/{token}/{new_email_encoded}/"
-        )
+        confirm_link = f"{settings.FRONTEND_URL}/confirm-email-change/{uid}/{token}/"
 
         message = f"""You requested to change your email address on aniShows.
 

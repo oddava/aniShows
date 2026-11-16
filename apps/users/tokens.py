@@ -7,8 +7,8 @@ changes, so a token stops working once it has been used:
 
 - password reset: Django's ``default_token_generator`` (covers the password).
 - email verification: covers ``email_verified``.
-- email change: covers the current email *and* the requested one, so the
-  address in the link cannot be swapped for one the user does not own.
+- email change: covers the current email *and* the pending one
+  (``UserProfile.pending_email``), so it dies once used, cancelled or replaced.
 """
 
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
