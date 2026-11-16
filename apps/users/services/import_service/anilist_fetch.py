@@ -31,7 +31,7 @@ from ....shared.logger import logger
 from ....shared.retry import retry_after_seconds
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
 MAX_ATTEMPTS = 5
 REQUEST_TIMEOUT_SECONDS = 30.0
@@ -214,7 +214,12 @@ class AniListFetcher:
         return entries, user.get("id")
 
     def fetch_recent_entries(
-        self, username: str, *, since: int | None, max_pages: int = 200
+        self,
+        username: str,
+        *,
+        since: int | None,
+        max_pages: int = 200,
+        on_page: Callable[[], None] | None = None,
     ) -> list[dict]:
         """Entries changed after ``since`` (unix seconds), newest first.
 
@@ -236,6 +241,8 @@ class AniListFetcher:
                 entries.append(row)
             if not (block.get("pageInfo") or {}).get("hasNextPage"):
                 break
+            if on_page is not None:
+                on_page()  # the importer's heartbeat; raises to stop a cancelled job
         return entries
 
     # ------------------------------------------------------------------ catalog

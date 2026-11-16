@@ -51,7 +51,9 @@ class AniListImporter(BaseImporter):
         try:
             if self.incremental:
                 rows = self.fetcher.fetch_recent_entries(
-                    self.username, since=self.link.cursor_updated_at
+                    self.username,
+                    since=self.link.cursor_updated_at,
+                    on_page=lambda: self.flush(force=True),
                 )
             else:
                 rows, self._anilist_user_id = self.fetcher.fetch_list_collection(self.username)

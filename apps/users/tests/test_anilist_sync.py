@@ -235,6 +235,21 @@ class IncrementalSyncTests(ImportTestMixin, TestCase):
         self.assertEqual([row["mediaId"] for row in rows], [1])
         self.assertEqual(len(requests), 1)  # the next page is never asked for
 
+    def test_cancel_stops_the_incremental_download_between_pages(self):
+        job = self.make_job(mode=UserImportJob.ImportMode.incremental)
+        pages = []
+
+        def handler(query, variables):
+            pages.append(variables["page"])
+            UserImportJob.objects.filter(pk=job.pk).update(status=JobStatus.cancelled)
+            rows = [anilist_row(variables["page"], updated=1000 - variables["page"])]
+            return {"Page": {"pageInfo": {"hasNextPage": True}, "mediaList": rows}}
+
+        fetcher, _ = graphql_transport(handler)
+        result = AniListImporter(job, "remote-name", fetcher=fetcher).run()
+
+        self.assertEqual((result["outcome"], pages), ("cancelled", [1]))
+
     def test_fetcher_follows_pages_until_the_cursor(self):
         pages = [
             {

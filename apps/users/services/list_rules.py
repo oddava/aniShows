@@ -202,8 +202,15 @@ def normalize_entry(
         # satisfy the CHECK constraint, so a sent date is the cause here.
         if strict:
             raise ListRuleError("finished_at", "Finish date cannot be earlier than start date.")
-        # Imports: a source with crossed dates keeps the start and drops the finish order.
-        result["finished_at"] = started
+        # Imports never move a date the entry already has: an incoming date that
+        # contradicts a kept one is dropped. Two incoming dates that cross each other
+        # (a bad source row) keep the start, and the finish moves to it.
+        if "started_at" in result and "finished_at" not in result:
+            del result["started_at"]
+        elif "finished_at" in result and "started_at" not in result:
+            del result["finished_at"]
+        else:
+            result["finished_at"] = started
 
     result["status"] = status
     if episodes != current.episodes_watched or episodes_sent or instance is None:

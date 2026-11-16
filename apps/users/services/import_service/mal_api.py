@@ -109,6 +109,7 @@ class MyAnimeListAPIImporter(BaseImporter):
                 entries.extend(mal_api_entry(item) for item in data.get("data") or [])
                 if not (data.get("paging") or {}).get("next"):
                     break
+                self.flush(force=True)  # heartbeat; stops here if the job was cancelled
                 offset += self.PAGE_SIZE
                 time.sleep(self.PAGE_DELAY_SECONDS)
         finally:

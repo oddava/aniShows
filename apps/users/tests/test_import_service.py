@@ -130,7 +130,7 @@ class FakeFetcher:
         self.calls.append("collection")
         return self.rows, self.user_id
 
-    def fetch_recent_entries(self, username, *, since):
+    def fetch_recent_entries(self, username, *, since, on_page=None):
         self.calls.append(f"recent:{since}")
         return self.recent if self.recent is not None else self.rows
 
@@ -449,6 +449,28 @@ class ImportPipelineTests(ImportTestMixin, TestCase):
         self.assertEqual((local.status, local.score, local.episodes_watched), ("Watching", 7, 4))
         self.assertEqual((local.notes, local.started_at), ("from xml", date(2022, 1, 1)))
 
+    def test_xml_start_date_never_moves_a_stored_finish_date(self):
+        # Council round 2: local finish 2020-05-01, no start; the XML says it started in
+        # 2022. The contradicting incoming date is dropped, the stored one stays.
+        anime = make_anime(1, mal_id=55)
+        local = UserAnimeList.objects.create(
+            user=self.user,
+            anime=anime,
+            status=Status.completed,
+            episodes_watched=12,
+            finished_at=date(2020, 5, 1),
+        )
+        entry = ImportedEntry(
+            status=Status.completed, mal_id=55, title="X", progress=12, started=date(2022, 1, 1)
+        )
+        job = self.make_job(
+            source=UserImportJob.ImportSource.myanimelist_xml,
+            payload={"entries": [entry.to_payload()]},
+        )
+        MyAnimeListXMLImporter(job).run()
+        local.refresh_from_db()
+        self.assertEqual((local.started_at, local.finished_at), (None, date(2020, 5, 1)))
+
     def test_title_is_used_only_without_stable_ids(self):
         make_anime(1, anilist_id=101, title="Shared Title")
         make_anime(2, anilist_id=102, title="shared title")  # duplicates must not crash
@@ -753,6 +775,22 @@ class MyAnimeListAPIImporterTests(ImportTestMixin, TestCase):
             (entry.started_at, entry.finished_at, entry.total_rewatches),
             (date(2020, 1, 1), date(2020, 2, 1), 1),
         )
+
+    @patch("apps.users.services.import_service.mal_api.time.sleep")
+    def test_cancel_stops_the_list_download_between_pages(self, _sleep):
+        job = self.make_job(source=UserImportJob.ImportSource.myanimelist_api)
+        offsets = []
+
+        def handler(request):
+            offsets.append(int(request.url.params["offset"]))
+            UserImportJob.objects.filter(pk=job.pk).update(status=JobStatus.cancelled)
+            return httpx.Response(200, json={"data": [], "paging": {"next": "more"}})
+
+        result = MyAnimeListAPIImporter(
+            job, "someone", client_id="cid", http_client=self.client_for(handler)
+        ).run()
+
+        self.assertEqual((result["outcome"], offsets), ("cancelled", [0]))
 
     @patch("apps.users.services.import_service.mal_api.time.sleep")
     def test_rate_limit_retry_budget_fails_the_job(self, sleep):
