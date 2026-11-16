@@ -1,4 +1,5 @@
-import { UserPlus } from 'lucide-react';
+import Modal from '../Modal';
+import { UserPlus, X } from 'lucide-react';
 
 /** The grant-badge modal: user search, selected users and a reason. */
 export default function BadgeGrantModal({
@@ -15,25 +16,8 @@ export default function BadgeGrantModal({
     grantMutation,
 }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="w-full max-w-lg bg-dark-200 border border-dark-300 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between p-6 border-b border-dark-300 shrink-0">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        <UserPlus className="w-5 h-5 text-accent" />
-                        Grant: {selectedBadge.name}
-                    </h2>
-                    <button
-                        onClick={() => {
-                            setIsGrantModalOpen(false);
-                            setSelectedUsers([]);
-                        }}
-                        className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors"
-                    >
-                        ✕
-                    </button>
-                </div>
-                
-                <form onSubmit={handleGrant} className="p-6 space-y-4 overflow-y-auto">
+        <Modal isOpen onClose={() => { setIsGrantModalOpen(false); setSelectedUsers([]); }} title={<span className="flex items-center gap-2"><UserPlus className="w-5 h-5 text-accent" aria-hidden="true" />Grant: {selectedBadge.name}</span>} size="medium">
+                <form onSubmit={handleGrant} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Search Users</label>
                         <div className="relative">
@@ -84,9 +68,10 @@ export default function BadgeGrantModal({
                                         <button
                                             type="button"
                                             onClick={() => setSelectedUsers(selectedUsers.filter(su => su.id !== u.id))}
-                                            className="text-gray-400 hover:text-red-400"
+                                            aria-label={`Remove ${u.username}`}
+                                            className="inline-flex items-center justify-center w-6 h-6 text-gray-400 hover:text-red-400"
                                         >
-                                            ✕
+                                            <X size={14} aria-hidden="true" />
                                         </button>
                                     </div>
                                 ))}
@@ -125,7 +110,6 @@ export default function BadgeGrantModal({
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </Modal>
     );
 }

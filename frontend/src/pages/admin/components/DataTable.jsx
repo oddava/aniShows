@@ -1,5 +1,30 @@
-import { useState, useMemo } from 'react';
+import { useId } from 'react';
+import PropTypes from 'prop-types';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 
+import useMediaQuery from '../../../hooks/useMediaQuery';
+
+/** Below Tailwind's `sm` breakpoint the table renders as stacked cards. */
+export const PHONE_QUERY = '(max-width: 639px)';
+
+const CHECKBOX = 'w-4 h-4 rounded border-white/20 bg-white/5 text-violet-500 focus:ring-violet-500';
+
+const defaultRowLabel = (item) => item.name || item.title || item.username || `row ${item.id}`;
+
+/** `'-name'` becomes `{ field: 'name', direction: 'desc' }`. */
+const parseOrdering = (ordering) => {
+  if (!ordering) return { field: null, direction: null };
+  return ordering.startsWith('-')
+    ? { field: ordering.slice(1), direction: 'desc' }
+    : { field: ordering, direction: 'asc' };
+};
+
+/**
+ * Admin list table. Sorting is server-side: a sortable header is a button that
+ * calls `onSort(nextOrdering)` with a DRF `ordering` value ('username' /
+ * '-username'); the page refetches. Rows never act on click: pass `onView` for
+ * an explicit "View" button. On phones each row becomes a card.
+ */
 const DataTable = ({
   columns,
   data,
@@ -7,84 +32,138 @@ const DataTable = ({
   selectable = false,
   selectedRows = [],
   onSelectionChange,
-  onRowClick,
-  sortable = true,
-  sortColumn,
-  sortDirection,
+  ordering = '',
   onSort,
+  onView,
   emptyMessage = 'No data found',
   keyExtractor = (item) => item.id,
+  rowLabel = defaultRowLabel,
 }) => {
-  const [internalSortColumn, setInternalSortColumn] = useState(null);
-  const [internalSortDirection, setInternalSortDirection] = useState('asc');
+  const isPhone = useMediaQuery(PHONE_QUERY);
+  const sortSelectId = useId();
+  const sort = parseOrdering(ordering);
 
-  const currentSortColumn = sortColumn ?? internalSortColumn;
-  const currentSortDirection = sortDirection ?? internalSortDirection;
+  const sortFieldOf = (column) => column.sortKey || column.key;
+  const isSortable = (column) => Boolean(onSort && column.sortable);
 
-  const handleSort = (columnKey) => {
-    if (!sortable) return;
-    
-    const column = columns.find(col => col.key === columnKey);
-    if (!column?.sortable) return;
-
-    let newDirection = 'asc';
-    if (currentSortColumn === columnKey) {
-      newDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
-    }
-
-    if (onSort) {
-      onSort(columnKey, newDirection);
-    } else {
-      setInternalSortColumn(columnKey);
-      setInternalSortDirection(newDirection);
-    }
+  const handleSort = (column) => {
+    const field = sortFieldOf(column);
+    const nextDesc = sort.field === field && sort.direction === 'asc';
+    onSort(nextDesc ? `-${field}` : field);
   };
 
+  const allSelected = data.length > 0 && data.every((item) => selectedRows.includes(keyExtractor(item)));
+
   const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      onSelectionChange?.(data.map(keyExtractor));
-    } else {
-      onSelectionChange?.([]);
-    }
+    onSelectionChange?.(e.target.checked ? data.map(keyExtractor) : []);
   };
 
   const handleSelectRow = (id) => {
     if (!onSelectionChange) return;
-    
-    if (selectedRows.includes(id)) {
-      onSelectionChange(selectedRows.filter(rowId => rowId !== id));
-    } else {
-      onSelectionChange([...selectedRows, id]);
-    }
+    onSelectionChange(
+      selectedRows.includes(id) ? selectedRows.filter((rowId) => rowId !== id) : [...selectedRows, id],
+    );
   };
-
-  const sortedData = useMemo(() => {
-    if (!currentSortColumn || onSort) return data;
-    
-    return [...data].sort((a, b) => {
-      const aVal = a[currentSortColumn];
-      const bVal = b[currentSortColumn];
-      
-      if (aVal == null) return 1;
-      if (bVal == null) return -1;
-      
-      if (typeof aVal === 'string') {
-        return currentSortDirection === 'asc' 
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal);
-      }
-      
-      return currentSortDirection === 'asc' 
-        ? aVal - bVal 
-        : bVal - aVal;
-    });
-  }, [data, currentSortColumn, currentSortDirection, onSort]);
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-white/60">
-        <div className="w-12 h-12 border-3 border-violet-500/20 border-t-violet-500 rounded-full animate-spin mb-4"></div>
+      <div role="status" className="flex flex-col items-center justify-center py-12 text-white/60">
+        <div aria-hidden="true" className="w-10 h-10 border-2 border-violet-500/20 border-t-violet-500 rounded-full animate-spin mb-4" />
         <p>Loading data...</p>
+      </div>
+    );
+  }
+
+  const viewButton = (item) => (
+    <button
+      type="button"
+      onClick={() => onView(item)}
+      aria-label={`View ${rowLabel(item)}`}
+      className="px-3 py-1.5 min-h-[44px] sm:min-h-0 text-sm bg-white/10 text-white/80 rounded-lg hover:bg-white/20 transition-colors"
+    >
+      View
+    </button>
+  );
+
+  if (isPhone) {
+    const fields = columns.filter((column) => column.key !== 'actions');
+    const actions = columns.find((column) => column.key === 'actions');
+    // Cards have no header row to click, so sorting moves into a select.
+    const sortable = columns.filter(isSortable);
+    return (
+      <div>
+        {sortable.length > 0 && (
+          <div className="flex items-center gap-3 px-4 min-h-[44px] border-b border-white/5 text-sm">
+            <label htmlFor={sortSelectId} className="text-white/60 shrink-0">Sort by</label>
+            <select
+              id={sortSelectId}
+              value={ordering}
+              onChange={(e) => onSort(e.target.value)}
+              className="flex-1 min-h-[44px] bg-transparent text-white/85 focus:outline-none"
+            >
+              <option value="">Default</option>
+              {sortable.flatMap((column) => {
+                const field = sortFieldOf(column);
+                return [
+                  <option key={field} value={field}>{column.title} (ascending)</option>,
+                  <option key={`-${field}`} value={`-${field}`}>{column.title} (descending)</option>,
+                ];
+              })}
+            </select>
+          </div>
+        )}
+        {selectable && data.length > 0 && (
+          <label className="flex items-center gap-3 px-4 min-h-[44px] text-sm text-white/70 border-b border-white/5">
+            <input type="checkbox" checked={allSelected} onChange={handleSelectAll} className={CHECKBOX} />
+            Select all
+          </label>
+        )}
+        {data.length === 0 ? (
+          <p className="px-4 py-12 text-center text-white/40">{emptyMessage}</p>
+        ) : (
+          <ul className="divide-y divide-white/5">
+            {data.map((item) => {
+              const itemKey = keyExtractor(item);
+              const isSelected = selectedRows.includes(itemKey);
+              return (
+                <li
+                  key={itemKey}
+                  data-testid="admin-card"
+                  className={`px-4 py-4 space-y-2 ${isSelected ? 'bg-violet-500/10' : ''}`}
+                >
+                  {selectable && (
+                    <label className="flex items-center gap-3 min-h-[44px] text-sm text-white/70">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleSelectRow(itemKey)}
+                        aria-label={`Select ${rowLabel(item)}`}
+                        className={CHECKBOX}
+                      />
+                      Select
+                    </label>
+                  )}
+                  <dl className="space-y-1.5">
+                    {fields.map((column) => (
+                      <div key={column.key} className="flex justify-between gap-4 text-sm">
+                        <dt className="text-white/50 shrink-0">{column.title}</dt>
+                        <dd className="text-white/85 text-right min-w-0 break-words">
+                          {column.render ? column.render(item) : item[column.key]}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {(actions || onView) && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1 [&_a]:min-h-[44px] [&_button]:min-h-[44px] [&_a]:inline-flex [&_a]:items-center">
+                      {onView && viewButton(item)}
+                      {actions?.render?.(item)}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     );
   }
@@ -95,66 +174,72 @@ const DataTable = ({
         <thead>
           <tr className="bg-white/5 border-b border-white/5">
             {selectable && (
-              <th className="px-4 py-3 text-left w-10">
+              <th scope="col" className="px-4 py-3 text-left w-10">
                 <input
                   type="checkbox"
-                  checked={data.length > 0 && selectedRows.length === data.length}
+                  checked={allSelected}
                   onChange={handleSelectAll}
-                  className="w-4 h-4 rounded border-white/20 bg-white/5 text-violet-500 focus:ring-violet-500"
+                  aria-label="Select all rows"
+                  className={CHECKBOX}
                 />
               </th>
             )}
-            {columns.map((column) => (
-              <th
-                key={column.key}
-                className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/50 ${
-                  column.sortable !== false && sortable ? 'cursor-pointer hover:text-white/70' : ''
-                }`}
-                onClick={() => handleSort(column.key)}
-                style={{ width: column.width }}
-              >
-                <div className="flex items-center gap-1">
-                  {column.title}
-                  {currentSortColumn === column.key && (
-                    <span className="text-violet-400">
-                      {currentSortDirection === 'asc' ? ' ↑' : ' ↓'}
-                    </span>
-                  )}
-                </div>
-              </th>
-            ))}
+            {columns.map((column) => {
+              const sortable = isSortable(column);
+              const active = sortable && sort.field === sortFieldOf(column);
+              const ariaSort = active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : (sortable ? 'none' : undefined);
+              const SortIcon = !active ? ArrowUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown;
+              return (
+                <th
+                  key={column.key}
+                  scope="col"
+                  aria-sort={ariaSort}
+                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-white/50"
+                  style={{ width: column.width }}
+                >
+                  {sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(column)}
+                      className={`inline-flex items-center gap-1 uppercase tracking-wider hover:text-white/80 ${active ? 'text-violet-300' : ''}`}
+                    >
+                      {column.title}
+                      <SortIcon size={12} aria-hidden="true" />
+                    </button>
+                  ) : column.title}
+                </th>
+              );
+            })}
+            {onView && <th scope="col" className="px-4 py-3"><span className="sr-only">View</span></th>}
           </tr>
         </thead>
         <tbody>
-          {sortedData.length === 0 ? (
+          {data.length === 0 ? (
             <tr>
               <td
-                colSpan={columns.length + (selectable ? 1 : 0)}
+                colSpan={columns.length + (selectable ? 1 : 0) + (onView ? 1 : 0)}
                 className="px-4 py-12 text-center text-white/40"
               >
                 {emptyMessage}
               </td>
             </tr>
           ) : (
-            sortedData.map((item) => {
+            data.map((item) => {
               const itemKey = keyExtractor(item);
               const isSelected = selectedRows.includes(itemKey);
-              
               return (
                 <tr
                   key={itemKey}
-                  className={`border-b border-white/5 transition-colors ${
-                    onRowClick ? 'cursor-pointer' : ''
-                  } ${isSelected ? 'bg-violet-500/10' : 'hover:bg-violet-500/5'}`}
-                  onClick={() => onRowClick?.(item)}
+                  className={`border-b border-white/5 transition-colors ${isSelected ? 'bg-violet-500/10' : 'hover:bg-violet-500/5'}`}
                 >
                   {selectable && (
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-3">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => handleSelectRow(itemKey)}
-                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-violet-500 focus:ring-violet-500"
+                        aria-label={`Select ${rowLabel(item)}`}
+                        className={CHECKBOX}
                       />
                     </td>
                   )}
@@ -163,6 +248,7 @@ const DataTable = ({
                       {column.render ? column.render(item) : item[column.key]}
                     </td>
                   ))}
+                  {onView && <td className="px-4 py-3 text-right">{viewButton(item)}</td>}
                 </tr>
               );
             })
@@ -171,6 +257,28 @@ const DataTable = ({
       </table>
     </div>
   );
+};
+
+DataTable.propTypes = {
+  columns: PropTypes.arrayOf(PropTypes.shape({
+    key: PropTypes.string.isRequired,
+    title: PropTypes.node,
+    render: PropTypes.func,
+    sortable: PropTypes.bool,
+    sortKey: PropTypes.string,
+    width: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  })).isRequired,
+  data: PropTypes.array.isRequired,
+  loading: PropTypes.bool,
+  selectable: PropTypes.bool,
+  selectedRows: PropTypes.array,
+  onSelectionChange: PropTypes.func,
+  ordering: PropTypes.string,
+  onSort: PropTypes.func,
+  onView: PropTypes.func,
+  emptyMessage: PropTypes.node,
+  keyExtractor: PropTypes.func,
+  rowLabel: PropTypes.func,
 };
 
 export default DataTable;

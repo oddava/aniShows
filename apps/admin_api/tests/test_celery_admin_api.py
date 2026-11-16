@@ -1,135 +1,163 @@
+from contextlib import suppress
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from ...core.models import CeleryTaskResult, CeleryTaskSchedule
+from ...core.models import AuditLog, CeleryTaskResult
+from .helpers import bearer_client, make_user
 
-User = get_user_model()
+SYNC_TASK = "apps.animes.tasks.sync.sync_anime_catalog"
 
 
 class CeleryAdminApiTests(APITestCase):
     def setUp(self):
-        self.admin = User.objects.create_user(
-            username="celery-admin",
-            email="celery-admin@example.com",
-            password="password123",
-            is_staff=True,
-        )
-        self.superuser = User.objects.create_user(
-            username="celery-root",
-            email="celery-root@example.com",
-            password="password123",
-            is_staff=True,
-            is_superuser=True,
-        )
-        self.client.force_authenticate(user=self.admin)
+        self.staff = make_user("celery-admin", role="staff")
+        self.superuser = make_user("celery-root", role="superuser")
+        self.root = bearer_client(self.superuser)
 
     def test_task_result_list_uses_serialized_summary_fields(self):
         CeleryTaskResult.objects.create(
             task_id="task-1",
-            task_name="apps.animes.tasks.sync.sync_anime_catalog",
+            task_name=SYNC_TASK,
             status=CeleryTaskResult.TaskStatus.FAILURE,
             error_message="x" * 300,
-            triggered_by=self.admin,
+            triggered_by=self.staff,
         )
 
-        response = self.client.get("/api/v1/admin/celery/tasks/results/")
+        response = self.root.get("/api/v1/admin/celery/tasks/results/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         item = response.data["results"][0]
         self.assertEqual(item["task_name_short"], "sync_anime_catalog")
         self.assertEqual(item["status_display"], "Failure")
-        self.assertEqual(item["triggered_by"]["username"], self.admin.username)
+        self.assertEqual(item["triggered_by"]["username"], self.staff.username)
         self.assertEqual(len(item["error_message"]), 200)
 
-    @patch("apps.core.services.celery_admin_service.current_app.send_task")
-    def test_run_now_creates_task_result_via_service(self, mock_send_task):
-        self.client.force_authenticate(user=self.superuser)
-        mock_send_task.return_value = SimpleNamespace(id="queued-task-1")
-        schedule = CeleryTaskSchedule.objects.create(
-            name="Sync nightly",
-            task_name="apps.animes.tasks.sync.sync_anime_catalog",
-            schedule_type=CeleryTaskSchedule.ScheduleType.CRONTAB,
-            queue="default",
-            status=CeleryTaskSchedule.TaskStatus.ENABLED,
-            task_kwargs={"sync_type": "trending"},
-        )
-
-        response = self.client.post(f"/api/v1/admin/celery/tasks/schedules/{schedule.id}/run_now/")
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["task_id"], "queued-task-1")
-        self.assertTrue(CeleryTaskResult.objects.filter(task_id="queued-task-1").exists())
-        schedule.refresh_from_db()
-        self.assertEqual(schedule.total_run_count, 1)
-
-    @patch("apps.core.services.celery_admin_service.current_app.send_task")
-    def test_staff_cannot_run_schedule_now(self, mock_send_task):
-        schedule = CeleryTaskSchedule.objects.create(
-            name="Staff denied",
-            task_name="apps.animes.tasks.sync.sync_anime_catalog",
-            schedule_type=CeleryTaskSchedule.ScheduleType.CRONTAB,
-            queue="default",
-            status=CeleryTaskSchedule.TaskStatus.ENABLED,
-            task_kwargs={"sync_type": "trending"},
-        )
-
-        response = self.client.post(f"/api/v1/admin/celery/tasks/schedules/{schedule.id}/run_now/")
-
+    def test_staff_cannot_read_task_results_which_hold_task_payloads(self):
+        response = bearer_client(self.staff).get("/api/v1/admin/celery/tasks/results/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        mock_send_task.assert_not_called()
 
-    def test_staff_cannot_trigger_or_control_tasks_or_workers(self):
-        trigger_response = self.client.post(
+    def test_staff_cannot_trigger_or_control_tasks(self):
+        staff = bearer_client(self.staff)
+        trigger = staff.post(
             "/api/v1/admin/celery/tasks/trigger/",
-            {
-                "task": "apps.animes.tasks.sync.sync_anime_catalog",
-                "kwargs": {"sync_type": "trending"},
-            },
+            {"task": SYNC_TASK, "kwargs": {"sync_type": "trending"}},
             format="json",
         )
-        control_response = self.client.post(
+        control = staff.post(
             "/api/v1/admin/celery/tasks/control/",
             {"task_id": "task-1", "action": "revoke"},
             format="json",
         )
-        worker_response = self.client.post(
-            "/api/v1/admin/celery/workers/control/",
-            {"action": "ping"},
+
+        self.assertEqual(trigger.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(control.status_code, status.HTTP_403_FORBIDDEN)
+
+    @patch("apps.core.services.celery_admin_service.current_app.send_task")
+    def test_trigger_ignores_queue_and_follows_task_routes(self, mock_send_task):
+        mock_send_task.return_value = SimpleNamespace(id="queued-1")
+
+        response = self.root.post(
+            "/api/v1/admin/celery/tasks/trigger/",
+            {"task": SYNC_TASK, "kwargs": {"sync_type": "trending"}, "queue": "typo-queue"},
             format="json",
         )
 
-        self.assertEqual(trigger_response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(control_response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(worker_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertNotIn("queue", mock_send_task.call_args.kwargs)
+        row = CeleryTaskResult.objects.get(task_id=response.data["task_id"])
+        self.assertEqual(mock_send_task.call_args.kwargs["task_id"], row.task_id)
+        self.assertEqual(row.queue, "high_priority")  # root.celery task_routes
+        audit = AuditLog.objects.get(action=AuditLog.ActionType.TRIGGER)
+        self.assertEqual((audit.user, audit.entity_repr), (self.superuser, SYNC_TASK))
 
-    def test_schedule_model_rejects_non_allowlisted_task(self):
-        schedule = CeleryTaskSchedule(
-            name="Bad task",
-            task_name="apps.users.tasks.delete_everything",
-            schedule_type=CeleryTaskSchedule.ScheduleType.CRONTAB,
-            queue="",
+    @patch("apps.core.services.celery_admin_service.current_app.send_task")
+    def test_trigger_is_refused_while_the_same_task_is_in_flight(self, mock_send_task):
+        CeleryTaskResult.objects.create(task_id="import-1", task_name=SYNC_TASK, status="STARTED")
+
+        response = self.root.post(
+            "/api/v1/admin/celery/tasks/trigger/",
+            {"task": SYNC_TASK, "kwargs": {"sync_type": "trending"}},
+            format="json",
         )
 
-        with self.assertRaises(DjangoValidationError) as context:
-            schedule.full_clean()
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        mock_send_task.assert_not_called()
+        self.assertFalse(AuditLog.objects.exists())
 
-        self.assertIn("task_name", context.exception.message_dict)
+    @patch("apps.core.services.celery_admin_service.current_app.send_task")
+    def test_trigger_failure_does_not_echo_the_exception(self, mock_send_task):
+        mock_send_task.side_effect = RuntimeError("redis://:secret@broker:6379 refused")
 
-    def test_schedule_model_rejects_invalid_task_kwargs(self):
-        schedule = CeleryTaskSchedule(
-            name="Unsafe cleanup",
-            task_name="apps.users.tasks.cleanup_unverified_accounts",
-            schedule_type=CeleryTaskSchedule.ScheduleType.CRONTAB,
-            queue="",
-            task_kwargs={"days": 1},
+        response = self.root.post(
+            "/api/v1/admin/celery/tasks/trigger/",
+            {"task": SYNC_TASK, "kwargs": {"sync_type": "trending"}},
+            format="json",
         )
 
-        with self.assertRaises(DjangoValidationError) as context:
-            schedule.full_clean()
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertNotIn("secret", str(response.data))
+        self.assertFalse(AuditLog.objects.exists())
 
-        self.assertIn("task_kwargs", context.exception.message_dict)
+    @patch("apps.core.services.celery_admin_service.current_app.control.revoke")
+    def test_revoke_is_audited(self, mock_revoke):
+        CeleryTaskResult.objects.create(task_id="task-9", task_name=SYNC_TASK)
+
+        response = self.root.post(
+            "/api/v1/admin/celery/tasks/control/",
+            {"task_id": "task-9", "action": "revoke", "terminate": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_revoke.assert_called_once_with("task-9", terminate=True)
+        self.assertEqual(CeleryTaskResult.objects.get(task_id="task-9").status, "REVOKED")
+        self.assertEqual(AuditLog.objects.get().action, AuditLog.ActionType.CONTROL)
+
+    def test_removed_celery_routes_are_gone(self):
+        for url in (
+            "/api/v1/admin/celery/dashboard/",
+            "/api/v1/admin/celery/workers/",
+            "/api/v1/admin/celery/workers/control/",
+            "/api/v1/admin/celery/tasks/schedules/",
+            "/api/v1/admin/celery/tasks/results/stats/",
+        ):
+            with self.subTest(url=url):
+                get = self.root.get(url)
+                post = self.root.post(url, {"action": "shutdown"}, format="json")
+                self.assertIn(get.status_code, (404, 405))
+                self.assertIn(post.status_code, (404, 405))
+
+    def test_bulk_delete_rolls_back_when_the_audit_row_fails(self):
+        row = CeleryTaskResult.objects.create(task_id="keep-1", task_name=SYNC_TASK)
+        with (
+            patch("apps.core.views.celery_admin.record_admin_action", side_effect=RuntimeError),
+            suppress(RuntimeError),  # the test client re-raises unhandled view errors
+        ):
+            self.root.post(
+                "/api/v1/admin/celery/tasks/results/bulk_delete/", {"ids": [row.id]}, format="json"
+            )
+
+        self.assertTrue(CeleryTaskResult.objects.filter(pk=row.pk).exists())
+
+    def test_bulk_delete_validates_ids_and_is_audited(self):
+        rows = [
+            CeleryTaskResult.objects.create(task_id=f"t-{index}", task_name=SYNC_TASK)
+            for index in range(3)
+        ]
+
+        bad = self.root.post(
+            "/api/v1/admin/celery/tasks/results/bulk_delete/", {"ids": ["x"]}, format="json"
+        )
+        good = self.root.post(
+            "/api/v1/admin/celery/tasks/results/bulk_delete/",
+            {"ids": [rows[0].id, rows[1].id]},
+            format="json",
+        )
+
+        self.assertEqual(bad.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(good.status_code, status.HTTP_200_OK)
+        self.assertEqual(good.data["deleted"], 2)
+        self.assertEqual(AuditLog.objects.get().action, AuditLog.ActionType.BULK_ACTION)

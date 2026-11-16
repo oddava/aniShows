@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from django.db import transaction
 
-from ...core.models import AdminPanelSettings
+from ...core.models import AdminPanelSettings, AuditLog
 from ...core.services.admin_settings_service import (
     ADMIN_SETTINGS_DB_KEY,
     DEFAULT_ADMIN_SETTINGS,
@@ -11,38 +11,21 @@ from ...core.services.admin_settings_service import (
     get_admin_settings,
     merge_admin_settings,
 )
+from .audit import mark_nothing_to_audit, record_admin_action
 
-SETTINGS_VALIDATION_RULES = {
+SETTINGS_VALIDATION_RULES: dict[str, dict[str, dict]] = {
     "general": {
-        "siteName": {"type": "str", "max_length": 120},
-        "siteDescription": {"type": "str", "max_length": 500},
         "maintenanceMode": {"type": "bool"},
         "allowRegistration": {"type": "bool"},
-        "defaultLanguage": {"type": "str", "max_length": 10},
-        "timezone": {"type": "str", "max_length": 64},
     },
     "users": {
         "emailVerification": {"type": "bool"},
         "allowUsernameChange": {"type": "bool"},
         "minUsernameLength": {"type": "int", "min": 1, "max": 50},
         "maxUsernameLength": {"type": "int", "min": 1, "max": 100},
-        "defaultUserRole": {"type": "str", "max_length": 30},
-        "profileVisibility": {"type": "str", "max_length": 20},
     },
     "content": {
         "enableReviews": {"type": "bool"},
-        "requireApproval": {"type": "bool"},
-        "autoFetchMetadata": {"type": "bool"},
-        "maxUploadSize": {"type": "int", "min": 1, "max": 100},
-        "allowedImageTypes": {"type": "str", "max_length": 120},
-    },
-    "security": {
-        "sessionTimeout": {"type": "int", "min": 1, "max": 168},
-        "maxLoginAttempts": {"type": "int", "min": 1, "max": 20},
-        "requireStrongPassword": {"type": "bool"},
-        "twoFactorAuth": {"type": "bool"},
-        "ipBlocking": {"type": "bool"},
-        "apiRateLimit": {"type": "int", "min": 100, "max": 100000},
     },
 }
 
@@ -53,8 +36,11 @@ class AdminSettingsResult:
     status_code: int
 
 
-def validate_settings_payload(incoming: dict) -> tuple[dict, dict]:
-    merged = deepcopy(DEFAULT_ADMIN_SETTINGS)
+def validate_settings_payload(incoming: dict, current: dict | None = None) -> tuple[dict, dict]:
+    """Validate a partial nested payload and merge it onto ``current`` (defaults if None)."""
+    merged = (
+        merge_admin_settings(current) if current is not None else deepcopy(DEFAULT_ADMIN_SETTINGS)
+    )
     errors = {}
 
     for section, section_payload in incoming.items():
@@ -88,16 +74,6 @@ def validate_settings_payload(incoming: dict) -> tuple[dict, dict]:
                 if "max" in rule and value > rule["max"]:
                     errors[path] = f"Must be <= {rule['max']}."
                     continue
-            elif expected_type == "str":
-                if not isinstance(value, str):
-                    errors[path] = "Must be a string."
-                    continue
-                if not value.strip():
-                    errors[path] = "Cannot be blank."
-                    continue
-                if "max_length" in rule and len(value) > rule["max_length"]:
-                    errors[path] = f"Must be <= {rule['max_length']} characters."
-                    continue
 
             merged[section][field] = value
 
@@ -122,28 +98,53 @@ def get_admin_settings_payload(user):
     return get_admin_settings()
 
 
-def save_admin_settings_payload(incoming, user) -> AdminSettingsResult:
+def _flatten(settings_data: dict) -> dict:
+    return {
+        f"{section}.{field}": value
+        for section, fields in settings_data.items()
+        for field, value in fields.items()
+    }
+
+
+def save_admin_settings_payload(request, incoming) -> AdminSettingsResult:
+    """Validate, merge onto the stored settings, save, and audit the old->new diff."""
     if not isinstance(incoming, dict):
         return AdminSettingsResult(
             payload={"detail": "Invalid settings payload."},
             status_code=400,
         )
 
-    merged, errors = validate_settings_payload(incoming)
-    if errors:
-        return AdminSettingsResult(
-            payload={"detail": "Invalid settings payload.", "errors": errors},
-            status_code=400,
-        )
-
+    user = request.user
     with transaction.atomic():
         settings_obj, _ = AdminPanelSettings.objects.select_for_update().get_or_create(
             key=ADMIN_SETTINGS_DB_KEY,
             defaults={"data": deepcopy(DEFAULT_ADMIN_SETTINGS), "updated_by": user},
         )
+        current = merge_admin_settings(settings_obj.data)
+        merged, errors = validate_settings_payload(incoming, current)
+        if errors:
+            return AdminSettingsResult(
+                payload={"detail": "Invalid settings payload.", "errors": errors},
+                status_code=400,
+            )
         settings_obj.data = merged
         settings_obj.updated_by = user
         settings_obj.save(update_fields=["data", "updated_by", "updated_at"])
+
+        before, after = _flatten(current), _flatten(merged)
+        changed = sorted(key for key in after if before.get(key) != after[key])
+        if changed:
+            record_admin_action(
+                request,
+                action=AuditLog.ActionType.UPDATE,
+                entity_type="AdminPanelSettings",
+                entity_id=settings_obj.pk,
+                entity_repr="Admin settings",
+                previous={key: before.get(key) for key in changed},
+                new={key: after[key] for key in changed},
+            )
+        else:
+            mark_nothing_to_audit(request)
 
     cache_admin_settings(merged)
     return AdminSettingsResult(

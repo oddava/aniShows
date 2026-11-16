@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import PageLoader from './common/PageLoader';
 
 /**
  * Route guard component that protects admin routes.
@@ -10,31 +11,8 @@ const AdminRoute = ({ children }) => {
 
     if (loading) {
         return (
-            <div style={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#0a0a0a',
-                color: '#fff'
-            }}>
-                <div style={{ textAlign: 'center' }}>
-                    <div style={{
-                        width: '48px',
-                        height: '48px',
-                        border: '3px solid rgba(117, 105, 141, 0.18)',
-                        borderTopColor: 'var(--color-accent)',
-                        borderRadius: '50%',
-                        animation: 'spin 0.8s linear infinite',
-                        margin: '0 auto 1rem'
-                    }}></div>
-                    <p>Loading...</p>
-                </div>
-                <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
+            <div className="min-h-screen bg-[#0a0a0a]">
+                <PageLoader />
             </div>
         );
     }

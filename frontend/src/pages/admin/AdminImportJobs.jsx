@@ -1,12 +1,17 @@
 import { useState } from 'react';
+import { Play, RefreshCw } from 'lucide-react';
 import api from '../../api/client';
 import { adminKeys } from '../../api/queries/admin';
+import AdminPagination from './components/AdminPagination';
+import { useConfirm } from './components/ConfirmDialog';
 import DataTable from './components/DataTable';
 import Modal from './components/Modal';
 import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
 import CustomSelect from '../../components/common/CustomSelect';
-import { useAdminList, useAdminMutation } from './hooks/useAdminQuery';
+import ErrorState from '../../components/common/ErrorState';
+import { getAdminErrorMessage, useAdminList, useAdminMutation } from './hooks/useAdminQuery';
+import useAdminRole from './hooks/useAdminRole';
 import { formatDuration, getProgressPercent, getStatusBadge } from './components/importJobs/importJobFormat';
 import ImportJobDetails from './components/importJobs/ImportJobDetails';
 import TriggerImportJobForm from './components/importJobs/TriggerImportJobForm';
@@ -16,6 +21,8 @@ const hasActiveJobs = (data) => (data?.results || []).some((job) => ACTIVE_STATU
 
 const AdminImportJobs = () => {
   const FULL_CATALOG_LIMIT = 5000;
+  const { isSuperuser } = useAdminRole();
+  const [confirm, confirmDialog] = useConfirm();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedJob, setSelectedJob] = useState(null);
@@ -40,7 +47,7 @@ const AdminImportJobs = () => {
     { value: 'cancelled', label: 'Cancelled' },
   ];
 
-  const { items: jobs, totalPages, isFetching: loading, refetch } = useAdminList({
+  const { items: jobs, totalPages, isFetching: loading, refetch, error: loadError } = useAdminList({
     resource: 'import-jobs',
     params: {
       page,
@@ -48,9 +55,9 @@ const AdminImportJobs = () => {
     },
     page,
     setPage,
-    // Poll every 5 seconds while a job on this page is pending or processing.
+    // Poll every 5 seconds while a job on this page is pending or processing (foreground only).
     refetchInterval: (query) => (hasActiveJobs(query.state.data) ? 5000 : false),
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
     errorLog: 'Failed to fetch import jobs:',
     errorToast: 'Failed to load import jobs',
   });
@@ -66,9 +73,14 @@ const AdminImportJobs = () => {
   };
 
   const handleCancelJob = async (jobId) => {
-    if (!confirm('Are you sure you want to cancel this import job?')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Cancel this import job?',
+      message: 'The worker stops the job. Rows it already imported stay.',
+      confirmLabel: 'Cancel job',
+      cancelLabel: 'Keep running',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await cancelMutation.mutateAsync(jobId);
       toast.success('Import job cancelled');
@@ -203,17 +215,18 @@ const AdminImportJobs = () => {
     {
       key: 'actions',
       title: 'Actions',
-      sortable: false,
       render: (item) => (
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => openJobDetails(item)}
-            className="px-3 py-1.5 text-sm bg-violet-500/20 text-violet-400 rounded-lg hover:bg-violet-500/30 transition-colors"
+            className="px-3 py-1.5 text-sm bg-violet-500/20 text-violet-300 rounded-lg hover:bg-violet-500/30 transition-colors"
           >
             Details
           </button>
-          {['pending', 'processing'].includes(item.status) && (
+          {isSuperuser && ['pending', 'processing'].includes(item.status) && (
             <button
+              type="button"
               onClick={() => handleCancelJob(item.id)}
               className="px-3 py-1.5 text-sm bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
             >
@@ -227,20 +240,24 @@ const AdminImportJobs = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">Import Jobs Management</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="text-2xl font-bold text-white">Catalog imports</h1>
         <div className="flex items-center gap-3">
+          {isSuperuser && (
+            <button
+              type="button"
+              onClick={() => setIsTriggerModalOpen(true)}
+              className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2"
+            >
+              <Play size={16} aria-hidden="true" /> Trigger job
+            </button>
+          )}
           <button
-            onClick={() => setIsTriggerModalOpen(true)}
-            className="px-4 py-2 bg-green-600/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-600/30 transition-colors flex items-center gap-2"
-          >
-            <span>▶️</span> Trigger Job
-          </button>
-          <button
+            type="button"
             onClick={() => refetch()}
-            className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2"
+            className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors flex items-center gap-2"
           >
-            <span>🔄</span> Refresh
+            <RefreshCw size={16} aria-hidden="true" /> Refresh
           </button>
         </div>
       </div>
@@ -262,40 +279,25 @@ const AdminImportJobs = () => {
       </div>
 
       {/* Data Table */}
-      <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-        <DataTable
-          columns={columns}
-          data={jobs}
-          loading={loading}
-          selectable={false}
-          emptyMessage="No import jobs found"
+      {loadError ? (
+        <ErrorState
+          title="Couldn’t load import jobs"
+          message={getAdminErrorMessage(loadError, 'Failed to load import jobs')}
+          onRetry={() => refetch()}
         />
+      ) : (
+        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+          <DataTable
+            columns={columns}
+            data={jobs}
+            loading={loading}
+            selectable={false}
+            emptyMessage="No import jobs found"
+          />
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-white/10">
-            <span className="text-sm text-white/50">
-              Page {page} of {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                ← Previous
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next →
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+          <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      )}
 
       {/* Job Details Modal */}
       <Modal
@@ -310,13 +312,14 @@ const AdminImportJobs = () => {
             selectedOfflineEnrichment={selectedOfflineEnrichment}
             handleCancelJob={handleCancelJob}
             closeModal={closeModal}
+            canCancel={isSuperuser}
           />
         )}
       </Modal>
 
-      {/* Trigger Job Modal */}
+      {/* Trigger Job Modal (superusers only) */}
       <Modal
-        isOpen={isTriggerModalOpen}
+        isOpen={isSuperuser && isTriggerModalOpen}
         onClose={() => !isTriggering && setIsTriggerModalOpen(false)}
         title="Trigger New Job"
         size="medium"
@@ -342,6 +345,7 @@ const AdminImportJobs = () => {
           setTriggerEnrichment={setTriggerEnrichment}
         />
       </Modal>
+      {confirmDialog}
     </div>
   );
 };

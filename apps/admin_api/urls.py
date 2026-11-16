@@ -1,15 +1,10 @@
+"""``/api/v1/admin/`` routes. Every view is gated by ``permissions.ADMIN_ACTION_POLICY``."""
+
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from ..core.views.admin_import_jobs import AdminImportJobViewSet
-from ..core.views.celery_admin import (
-    CeleryAdminControlViewSet,
-    CeleryTaskResultViewSet,
-    CeleryTaskScheduleViewSet,
-)
-
-# Import the badge and import views from their respective apps for now
-# or we can move them later. We'll leave them in their original spots and route them here.
+from ..core.views.celery_admin import CeleryAdminControlViewSet, CeleryTaskResultViewSet
 from ..users.views import AdminBadgeViewSet
 from .views.anime import (
     AdminAnimeViewSet,
@@ -21,10 +16,16 @@ from .views.anime import (
 )
 from .views.dashboard import AdminDashboardView, AdminStatsExportView
 from .views.logs import AdminAuditLogViewSet, AdminSystemLogViewSet
+from .views.moderation import (
+    AdminModerationForumViewSet,
+    AdminModerationReviewViewSet,
+    AdminModerationSummaryView,
+)
 from .views.reports import AdminBulkOperationsView, AdminReportsView
 from .views.reviews import AdminReviewViewSet
 from .views.settings import AdminSettingsView
-from .views.users import AdminFavoritesViewSet, AdminUserListViewSet, AdminUserViewSet
+from .views.system import AdminSystemBeatRunView, AdminSystemView
+from .views.users import AdminFavoritesStatsViewSet, AdminUserViewSet
 
 # SimpleRouter: no browsable root view listing every admin endpoint.
 admin_router = SimpleRouter()
@@ -41,34 +42,37 @@ admin_router.register(
     AdminOfflineAnimeSyncStateViewSet,
     basename="admin-offline-sync-states",
 )
-admin_router.register(r"user-lists", AdminUserListViewSet, basename="admin-user-lists")
-admin_router.register(r"favorites", AdminFavoritesViewSet, basename="admin-favorites")
+admin_router.register(r"favorites", AdminFavoritesStatsViewSet, basename="admin-favorites")
 admin_router.register(r"import-jobs", AdminImportJobViewSet, basename="admin-import-jobs")
 admin_router.register(r"logs", AdminSystemLogViewSet, basename="admin-logs")
 admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit-logs")
-
-# Celery admin router
-celery_router = SimpleRouter()
-celery_router.register(
-    r"celery/tasks/results", CeleryTaskResultViewSet, basename="celery-task-results"
+admin_router.register(
+    r"moderation/reviews", AdminModerationReviewViewSet, basename="admin-moderation-reviews"
 )
-celery_router.register(
-    r"celery/tasks/schedules", CeleryTaskScheduleViewSet, basename="celery-task-schedules"
+admin_router.register(
+    r"moderation/forums", AdminModerationForumViewSet, basename="admin-moderation-forums"
+)
+admin_router.register(
+    r"celery/tasks/results", CeleryTaskResultViewSet, basename="celery-task-results"
 )
 
 urlpatterns = [
+    path(
+        "moderation/summary/",
+        AdminModerationSummaryView.as_view(),
+        name="admin-moderation-summary",
+    ),
     path("", include(admin_router.urls)),
-    path("", include(celery_router.urls)),
     path("dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
     path("stats/export/", AdminStatsExportView.as_view(), name="admin-stats-export"),
     path("bulk/", AdminBulkOperationsView.as_view(), name="admin-bulk"),
     path("reports/", AdminReportsView.as_view(), name="admin-reports"),
     path("settings/", AdminSettingsView.as_view(), name="admin-settings"),
-    # Specific Celery control endpoints
+    path("system/", AdminSystemView.as_view(), name="admin-system"),
     path(
-        "celery/dashboard/",
-        CeleryAdminControlViewSet.as_view({"get": "dashboard"}),
-        name="celery-dashboard",
+        "system/beat/<str:entry>/run/",
+        AdminSystemBeatRunView.as_view(),
+        name="admin-system-beat-run",
     ),
     path(
         "celery/tasks/trigger/",
@@ -79,15 +83,5 @@ urlpatterns = [
         "celery/tasks/control/",
         CeleryAdminControlViewSet.as_view({"post": "control_task"}),
         name="celery-task-control",
-    ),
-    path(
-        "celery/workers/",
-        CeleryAdminControlViewSet.as_view({"get": "worker_status"}),
-        name="celery-workers",
-    ),
-    path(
-        "celery/workers/control/",
-        CeleryAdminControlViewSet.as_view({"post": "worker_control"}),
-        name="celery-workers-control",
     ),
 ]

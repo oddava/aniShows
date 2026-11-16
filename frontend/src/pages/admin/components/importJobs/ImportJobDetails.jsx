@@ -1,7 +1,19 @@
 import { formatDuration, getProgressPercent, getStatusBadge } from './importJobFormat';
 
+const ENRICHMENT_GROUPS = [
+  ['Overall', 'overall'],
+  ['Metadata', 'metadata'],
+  ['Franchises', 'franchises'],
+];
+
+/** Progress groups that are present; a missing group (e.g. no franchises stage) is skipped, never a crash. */
+export const enrichmentRowsOf = (enrichment) => ENRICHMENT_GROUPS
+  .map(([label, key]) => ({ label, group: enrichment?.[key] }))
+  .filter(({ group }) => group && typeof group === 'object');
+
 /** The body of the job details modal. */
-export default function ImportJobDetails({ selectedJob, selectedOfflineEnrichment, handleCancelJob, closeModal }) {
+export default function ImportJobDetails({ selectedJob, selectedOfflineEnrichment, handleCancelJob, closeModal, canCancel = true }) {
+  const enrichmentRows = enrichmentRowsOf(selectedOfflineEnrichment);
   return (
     <div className="space-y-6">
       {/* Status Overview */}
@@ -62,32 +74,20 @@ export default function ImportJobDetails({ selectedJob, selectedOfflineEnrichmen
         </div>
       </div>
 
-      {selectedOfflineEnrichment && (
+      {enrichmentRows.length > 0 && (
         <div className="bg-white/5 border border-white/10 rounded-lg p-4">
           <h4 className="text-white font-medium mb-4">Enrichment Progress</h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-white/60">Overall</span>
-              <span className="text-white">
-                {selectedOfflineEnrichment.overall.completed} / {selectedOfflineEnrichment.overall.queued}
-                {selectedOfflineEnrichment.overall.completion_percent != null
-                  ? ` (${selectedOfflineEnrichment.overall.completion_percent}%)`
-                  : ''}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-white/60">Metadata</span>
-              <span className="text-white">
-                {selectedOfflineEnrichment.metadata.completed} / {selectedOfflineEnrichment.metadata.queued}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-white/60">Franchises</span>
-              <span className="text-white">
-                {selectedOfflineEnrichment.franchises.completed} / {selectedOfflineEnrichment.franchises.queued}
-              </span>
-            </div>
-          </div>
+          <dl className="space-y-2 text-sm">
+            {enrichmentRows.map(({ label, group }) => (
+              <div key={label} className="flex justify-between">
+                <dt className="text-white/60">{label}</dt>
+                <dd className="text-white">
+                  {group.completed ?? 0} / {group.queued ?? 0}
+                  {group.completion_percent != null ? ` (${group.completion_percent}%)` : ''}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
       )}
 
@@ -125,11 +125,12 @@ export default function ImportJobDetails({ selectedJob, selectedOfflineEnrichmen
 
       {/* Action Buttons */}
       <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
-        {['pending', 'processing'].includes(selectedJob.status) && (
+        {canCancel && ['pending', 'processing'].includes(selectedJob.status) && (
           <button
+            type="button"
             onClick={() => {
-              handleCancelJob(selectedJob.id);
               closeModal();
+              handleCancelJob(selectedJob.id);
             }}
             className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
           >
@@ -137,6 +138,7 @@ export default function ImportJobDetails({ selectedJob, selectedOfflineEnrichmen
           </button>
         )}
         <button
+          type="button"
           onClick={closeModal}
           className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
         >

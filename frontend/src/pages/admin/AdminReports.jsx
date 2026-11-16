@@ -126,7 +126,7 @@ const AdminReports = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-dark/60 backdrop-blur-xl border border-white/5 rounded-2xl p-1.5 overflow-x-auto">
+      <div className="flex gap-1 bg-white/5 border border-white/10 rounded-2xl p-1.5 overflow-x-auto">
         {TABS.map(({ key, label, icon: TabIcon }) => (
           <button
             key={key}

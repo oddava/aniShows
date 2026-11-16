@@ -9,9 +9,10 @@ from rest_framework.test import APITestCase
 
 from ...animes.models import Anime, Genre, Review, ReviewReport
 from ...core.middleware.logging_middleware import AdminAuditMiddleware
-from ...core.models import AdminPanelSettings
+from ...core.models import AdminPanelSettings, AuditLog
 from ...users.models import UserAnimeList, UserProfile
 from ..services.reports_service import generate_report
+from .helpers import bearer_client, make_user
 
 User = get_user_model()
 
@@ -19,55 +20,64 @@ User = get_user_model()
 class TestAdminSettingsAPI(APITestCase):
     def setUp(self):
         cache.clear()
-        self.admin = User.objects.create_user(
-            username="admin_user",
-            email="admin@example.com",
-            password="password123",
-            is_staff=True,
-        )
-        self.superuser = User.objects.create_user(
-            username="settings_superuser",
-            email="settings-superuser@example.com",
-            password="password123",
-            is_staff=True,
-            is_superuser=True,
-        )
-        self.client.force_authenticate(user=self.admin)
+        self.admin = make_user("admin_user", role="staff")
+        self.superuser = make_user("settings_superuser", role="superuser")
+        self.staff_client = bearer_client(self.admin)
+        self.root_client = bearer_client(self.superuser)
         self.url = "/api/v1/admin/settings/"
 
     def test_get_settings_initializes_persistent_record(self):
-        response = self.client.get(self.url)
+        response = self.staff_client.get(self.url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("general", response.data)
         self.assertEqual(AdminPanelSettings.objects.count(), 1)
+        self.assertEqual(
+            {section: sorted(fields) for section, fields in response.data.items()},
+            {
+                "general": ["allowRegistration", "maintenanceMode"],
+                "users": [
+                    "allowUsernameChange",
+                    "emailVerification",
+                    "maxUsernameLength",
+                    "minUsernameLength",
+                ],
+                "content": ["enableReviews"],
+            },
+        )
 
-    def test_put_settings_persists_to_database(self):
-        self.client.force_authenticate(user=self.superuser)
-        payload = {
-            "general": {"siteName": "aniShows Pro", "timezone": "America/New_York"},
-            "security": {"sessionTimeout": 12, "apiRateLimit": 5000},
-        }
-        response = self.client.put(self.url, payload, format="json")
+    def test_put_settings_merges_persists_and_audits_the_diff(self):
+        self.root_client.put(self.url, {"users": {"minUsernameLength": 4}}, format="json")
+        response = self.root_client.put(
+            self.url, {"general": {"allowRegistration": False}}, format="json"
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["settings"]["general"]["siteName"], "aniShows Pro")
 
         cache.clear()
-        get_response = self.client.get(self.url)
-        self.assertEqual(get_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(get_response.data["general"]["siteName"], "aniShows Pro")
-        self.assertEqual(get_response.data["security"]["sessionTimeout"], 12)
+        stored = self.staff_client.get(self.url).data
+        self.assertFalse(stored["general"]["allowRegistration"])
+        self.assertEqual(stored["users"]["minUsernameLength"], 4)  # earlier PUT kept
 
-    def test_put_settings_rejects_invalid_types(self):
-        self.client.force_authenticate(user=self.superuser)
-        payload = {"security": {"sessionTimeout": "abc"}}
-        response = self.client.put(self.url, payload, format="json")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("errors", response.data)
-        self.assertIn("security.sessionTimeout", response.data["errors"])
+        rows = list(AuditLog.objects.filter(entity_type="AdminPanelSettings").order_by("id"))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1].user, self.superuser)
+        self.assertEqual(
+            rows[1].changes, {"general.allowRegistration": {"old": True, "new": False}}
+        )
+
+    def test_put_settings_rejects_invalid_types_and_unknown_keys(self):
+        for payload, key in (
+            ({"users": {"minUsernameLength": "abc"}}, "users.minUsernameLength"),
+            ({"general": {"siteName": "Gone"}}, "general.siteName"),
+            ({"security": {"sessionTimeout": 12}}, "security"),
+        ):
+            with self.subTest(payload=payload):
+                response = self.root_client.put(self.url, payload, format="json")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn(key, response.data["errors"])
+        self.assertFalse(AuditLog.objects.exists())
 
     def test_staff_cannot_put_settings(self):
-        payload = {"general": {"siteName": "Blocked"}}
-        response = self.client.put(self.url, payload, format="json")
+        payload = {"general": {"allowRegistration": False}}
+        response = self.staff_client.put(self.url, payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
@@ -120,12 +130,14 @@ class TestReviewReportFlow(APITestCase):
         self.assertEqual(report_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(ReviewReport.objects.count(), 1)
 
-        self.client.force_authenticate(user=self.admin)
-        queue_response = self.client.get("/api/v1/admin/reviews/reports/?min_score=1")
+        self.client.force_authenticate(user=None)
+        self.client = bearer_client(self.admin)
+        queue_response = self.client.get("/api/v1/admin/reviews/reports/")
         self.assertEqual(queue_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(queue_response["Deprecation"], "true")
         self.assertEqual(queue_response.data["count"], 1)
-        self.assertEqual(queue_response.data["results"][0]["id"], self.review.id)
-        self.assertGreaterEqual(queue_response.data["results"][0]["open_user_reports"], 1)
+        self.assertEqual(queue_response.data["results"][0]["review_id"], self.review.id)
+        self.assertEqual(queue_response.data["results"][0]["report_total"], 1)
 
         resolve_response = self.client.post(
             f"/api/v1/admin/reviews/{self.review.id}/reports/resolve/",
@@ -139,7 +151,7 @@ class TestReviewReportFlow(APITestCase):
         self.assertEqual(report.resolved_by_id, self.admin.id)
         self.assertIsNotNone(report.resolved_at)
 
-        queue_after_resolution = self.client.get("/api/v1/admin/reviews/reports/?min_score=1")
+        queue_after_resolution = self.client.get("/api/v1/admin/reviews/reports/")
         self.assertEqual(queue_after_resolution.status_code, status.HTTP_200_OK)
         self.assertEqual(queue_after_resolution.data["count"], 0)
 
@@ -178,7 +190,12 @@ class TestBulkOperationSafety(APITestCase):
         self.client.force_authenticate(user=self.superuser)
         response = self.client.post(
             self.bulk_url,
-            {"operation": "delete", "entity_type": "genre", "entity_ids": [self.genre.id]},
+            {
+                "operation": "delete",
+                "entity_type": "genre",
+                "entity_ids": [self.genre.id],
+                "confirm": "1",
+            },
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -193,6 +210,7 @@ class TestBulkOperationSafety(APITestCase):
                 "entity_type": "genre",
                 "entity_ids": [self.genre.id],
                 "force": True,
+                "confirm": "1",
             },
             format="json",
         )
@@ -222,7 +240,12 @@ class TestBulkOperationSafety(APITestCase):
         self.client.force_authenticate(user=self.superuser)
         allowed = self.client.post(
             self.bulk_url,
-            {"operation": "delete", "entity_type": "anime", "entity_ids": [self.anime.id]},
+            {
+                "operation": "delete",
+                "entity_type": "anime",
+                "entity_ids": [self.anime.id],
+                "confirm": "1",
+            },
             format="json",
         )
         self.assertEqual(allowed.status_code, status.HTTP_200_OK)
@@ -250,29 +273,33 @@ class TestAdminUserDestructivePermissions(APITestCase):
             password="password123",
         )
 
-    def test_staff_can_view_users_but_cannot_toggle_or_delete(self):
-        self.client.force_authenticate(user=self.staff_admin)
+    def test_staff_can_view_and_suspend_users_but_not_promote_or_delete(self):
+        client = bearer_client(self.staff_admin)
 
-        list_response = self.client.get("/api/v1/admin/users/")
-        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
-
-        toggle_response = self.client.post(
-            f"/api/v1/admin/users/{self.target_user.id}/toggle_active/"
+        self.assertEqual(client.get("/api/v1/admin/users/").status_code, status.HTTP_200_OK)
+        suspend = client.post(
+            f"/api/v1/admin/users/{self.target_user.id}/suspend/",
+            {"reason": "Spam account"},
+            format="json",
         )
-        self.assertEqual(toggle_response.status_code, status.HTTP_403_FORBIDDEN)
-
-        delete_response = self.client.delete(f"/api/v1/admin/users/{self.target_user.id}/")
-        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(suspend.status_code, status.HTTP_200_OK)
+        promote = client.post(
+            f"/api/v1/admin/users/{self.target_user.id}/toggle_staff/",
+            {"is_staff": True},
+            format="json",
+        )
+        self.assertEqual(promote.status_code, status.HTTP_403_FORBIDDEN)
+        delete = client.delete(f"/api/v1/admin/users/{self.target_user.id}/")
+        self.assertEqual(delete.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(User.objects.filter(id=self.target_user.id).exists())
 
-    def test_superuser_can_toggle_user_active(self):
-        self.client.force_authenticate(user=self.superuser)
-
-        response = self.client.post(f"/api/v1/admin/users/{self.target_user.id}/toggle_active/")
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    def test_toggle_active_was_removed(self):
+        response = bearer_client(self.superuser).post(
+            f"/api/v1/admin/users/{self.target_user.id}/toggle_active/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.target_user.refresh_from_db()
-        self.assertFalse(self.target_user.is_active)
+        self.assertTrue(self.target_user.is_active)
 
 
 class TestAuditMiddlewareExtraction(TestCase):
@@ -351,15 +378,13 @@ class TestRuntimePolicyControls(APITestCase):
         public_response = self.client.get("/api/v1/genres/")
         self.assertEqual(public_response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        self.client.force_authenticate(user=self.admin)
-        admin_response = self.client.get("/api/v1/admin/settings/")
+        admin_response = bearer_client(self.admin).get("/api/v1/admin/settings/")
         self.assertEqual(admin_response.status_code, status.HTTP_200_OK)
 
     def test_maintenance_mode_allows_authenticated_profile_lookup(self):
         self._set_settings({"general": {"maintenanceMode": True}})
 
-        self.client.force_authenticate(user=self.admin)
-        profile_response = self.client.get("/api/v1/users/me/")
+        profile_response = bearer_client(self.admin).get("/api/v1/users/me/")
         self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
         self.assertEqual(profile_response.data["username"], self.admin.username)
 

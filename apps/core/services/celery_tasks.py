@@ -18,6 +18,28 @@ from ..models import AuditLog, SystemLog
 from .metadata_service import MetadataService
 from .notification_tasks_service import NotificationTaskService
 
+# Retention for admin records (G6 P0-5). Pruned at the end of the daily
+# ``cleanup_old_task_results`` run, oldest first, in id batches.
+SYSTEM_LOG_RETENTION_DAYS = 14  # INFO, WARNING (and DEBUG)
+SYSTEM_LOG_ERROR_RETENTION_DAYS = 30  # ERROR, CRITICAL
+AUDIT_LOG_RETENTION_DAYS = 365
+PRUNE_BATCH_SIZE = 5000
+# A worker that has not answered a ping for this long is reported unhealthy.
+WORKER_HEARTBEAT_TIMEOUT = timedelta(minutes=5)
+WORKER_PING_TIMEOUT_SECONDS = 2.0
+
+
+def _delete_in_batches(queryset, batch_size: int = PRUNE_BATCH_SIZE) -> int:
+    """Delete ``queryset`` by primary key, ``batch_size`` rows per statement."""
+    deleted = 0
+    while True:
+        ids = list(queryset.order_by("id").values_list("id", flat=True)[:batch_size])
+        if not ids:
+            return deleted
+        deleted += queryset.model.objects.filter(id__in=ids).delete()[0]
+        if len(ids) < batch_size:
+            return deleted
+
 
 class CoreTaskService:
     """Service methods used by Celery task wrappers in ``apps.core.tasks``."""
@@ -75,10 +97,66 @@ class CoreTaskService:
         return {"status": "skipped", "reason": "automatic_cleanup_enabled", "days": days}
 
     @staticmethod
+    def prune_admin_records(*, batch_size: int = PRUNE_BATCH_SIZE) -> dict:
+        """Apply the SystemLog/AuditLog retention rules; return the rows deleted per rule."""
+        now = timezone.now()
+        error_levels = [SystemLog.LogLevel.ERROR, SystemLog.LogLevel.CRITICAL]
+        result = {
+            "system_logs": _delete_in_batches(
+                SystemLog.objects.filter(
+                    timestamp__lt=now - timedelta(days=SYSTEM_LOG_RETENTION_DAYS)
+                ).exclude(level__in=error_levels),
+                batch_size,
+            ),
+            "system_log_errors": _delete_in_batches(
+                SystemLog.objects.filter(
+                    timestamp__lt=now - timedelta(days=SYSTEM_LOG_ERROR_RETENTION_DAYS),
+                    level__in=error_levels,
+                ),
+                batch_size,
+            ),
+            "audit_logs": _delete_in_batches(
+                AuditLog.objects.filter(
+                    timestamp__lt=now - timedelta(days=AUDIT_LOG_RETENTION_DAYS)
+                ),
+                batch_size,
+            ),
+        }
+        logger.info("Pruned admin records", extra=result)
+        return result
+
+    @staticmethod
+    def ping_workers() -> list[str]:
+        """Names of the workers that answer a broadcast ping."""
+        from celery import current_app
+
+        replies = current_app.control.ping(timeout=WORKER_PING_TIMEOUT_SECONDS) or []
+        names: list[str] = []
+        for reply in replies:
+            if isinstance(reply, dict):
+                names.extend(str(name) for name in reply)
+        return names
+
+    @staticmethod
     def health_check_workers() -> dict:
+        """Ping the workers, record who answered, and report who went quiet."""
         from ..models import CeleryWorkerStatus
 
-        timeout_threshold = timezone.now() - timedelta(minutes=5)
+        now = timezone.now()
+        for name in CoreTaskService.ping_workers():
+            CeleryWorkerStatus.objects.update_or_create(
+                worker_name=name,
+                defaults={
+                    "status": CeleryWorkerStatus.WorkerStatus.ONLINE,
+                    "hostname": name.split("@", 1)[-1],
+                    "last_heartbeat": now,
+                },
+            )
+
+        timeout_threshold = now - WORKER_HEARTBEAT_TIMEOUT
+        CeleryWorkerStatus.objects.filter(
+            status=CeleryWorkerStatus.WorkerStatus.ONLINE, last_heartbeat__lt=timeout_threshold
+        ).update(status=CeleryWorkerStatus.WorkerStatus.OFFLINE)
         workers = list(CeleryWorkerStatus.objects.all())
         status_report = {
             "total_workers": len(workers),

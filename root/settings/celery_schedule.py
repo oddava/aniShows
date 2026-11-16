@@ -182,13 +182,12 @@ def _notification_entries() -> dict:
 
 
 def _maintenance_entries() -> dict:
-    """G6 Admin: task results, worker health, queue metrics, forum view flush."""
+    """G6 Admin: task results (+ log retention), worker health, forum view flush.
+
+    ``collect-queue-metrics-minute`` was removed (D-7): the admin System page reads
+    queue sizes from the broker on demand, and no Prometheus server scrapes them.
+    """
     return {
-        "collect-queue-metrics-minute": {
-            "task": "apps.core.tasks.cleanup_tasks.collect_queue_metrics",
-            "schedule": crontab(minute="*"),
-            "options": {"queue": "low_priority"},
-        },
         "cleanup-task-results-daily": {
             "task": "apps.core.tasks.cleanup_tasks.cleanup_old_task_results",
             "schedule": crontab(hour=1, minute=0),  # Daily at 1:00 AM

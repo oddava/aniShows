@@ -1,430 +1,439 @@
-import { useState } from 'react';
-import { adminQueries } from '../../api/queries/admin';
-import { useAdminList, useAdminQuery } from './hooks/useAdminQuery';
-import CustomSelect from '../../components/common/CustomSelect';
+import { useId, useState } from 'react';
+import PropTypes from 'prop-types';
+import { useSearchParams } from 'react-router-dom';
+import { Search } from 'lucide-react';
 
-const EMPTY_STATS = {
-  by_level: {},
-  by_type: {},
-  total: 0,
-  recent_errors: 0,
-  error_rate: 0,
+import { adminQueries } from '../../api/queries/admin';
+import CustomSelect from '../../components/common/CustomSelect';
+import ErrorState from '../../components/common/ErrorState';
+import AdminPagination from './components/AdminPagination';
+import Modal from './components/Modal';
+import { getAdminErrorMessage, useAdminList, useAdminQuery } from './hooks/useAdminQuery';
+import useAdminRole from './hooks/useAdminRole';
+import useDebouncedValue from './hooks/useDebouncedValue';
+
+export const LIVE_INTERVAL_MS = 30000;
+
+const LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
+const LOG_TYPES = ['SYSTEM', 'REQUEST', 'AUTH', 'ADMIN', 'ERROR', 'SECURITY'];
+export const AUDIT_ACTIONS = [
+  'CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'EXPORT', 'BULK_ACTION',
+  'SUSPEND', 'RESTORE', 'RESOLVE', 'DISMISS', 'TRIGGER', 'CONTROL',
+];
+
+const EMPTY_STATS = { by_level: {}, total: 0 };
+const INPUT = 'w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-violet-500';
+const SELECT_TRIGGER = 'px-4 py-2.5 bg-white/10 rounded-lg focus-visible:ring-violet-500/50';
+
+const LEVEL_CLASSES = {
+  DEBUG: 'text-gray-400 border-gray-500/30',
+  INFO: 'text-blue-400 border-blue-500/30',
+  WARNING: 'text-yellow-400 border-yellow-500/30',
+  ERROR: 'text-red-400 border-red-500/30',
+  CRITICAL: 'text-purple-300 border-purple-500/30',
 };
 
-const AdminLogs = () => {
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({
-    level: '',
-    log_type: '',
-    search: '',
-    user: '',
-    start_date: '',
-    end_date: '',
-  });
-  const [selectedLog, setSelectedLog] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+const statusClass = (code) => (code < 400 ? 'text-green-400' : code < 500 ? 'text-yellow-400' : 'text-red-400');
+const formatTime = (value) => new Date(value).toLocaleString();
+const pretty = (value) => JSON.stringify(value ?? {}, null, 2);
+const isEmpty = (value) => !value || (typeof value === 'object' && Object.keys(value).length === 0);
 
-  // Both refresh every 30 seconds while the page is open ("Live").
+function SearchInput({ value, onChange, label }) {
+  return (
+    <div className="relative">
+      <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+      <input
+        type="search"
+        aria-label={label}
+        placeholder={`${label}...`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${INPUT} pl-9`}
+      />
+    </div>
+  );
+}
+
+SearchInput.propTypes = { value: PropTypes.string.isRequired, onChange: PropTypes.func.isRequired, label: PropTypes.string.isRequired };
+
+function JsonBlock({ title, value }) {
+  if (isEmpty(value)) return null;
+  return (
+    <div>
+      <h3 className="text-sm text-white/50 mb-1">{title}</h3>
+      <pre className="text-xs text-white/80 bg-white/5 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words">{pretty(value)}</pre>
+    </div>
+  );
+}
+
+JsonBlock.propTypes = { title: PropTypes.string.isRequired, value: PropTypes.any };
+
+function Field({ label, children }) {
+  if (children == null || children === '') return null;
+  return (
+    <div>
+      <dt className="text-sm text-white/50">{label}</dt>
+      <dd className="text-white break-words">{children}</dd>
+    </div>
+  );
+}
+
+Field.propTypes = { label: PropTypes.string.isRequired, children: PropTypes.node };
+
+const useFilters = (initial) => {
+  const [filters, setFilters] = useState(initial);
+  const [page, setPage] = useState(1);
+  const update = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    setPage(1);
+  };
+  const clear = () => {
+    setFilters(Object.fromEntries(Object.keys(initial).map((key) => [key, ''])));
+    setPage(1);
+  };
+  const active = Object.values(filters).some((v) => v !== '');
+  return { filters, update, clear, active, page, setPage };
+};
+
+const compact = (params) => Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v != null));
+
+/** Request/system logs. They hold IPs and user agents, so only superusers see them. */
+function RequestLogs() {
+  const { filters, update, clear, active, page, setPage } = useFilters({
+    level: '', log_type: '', search: '', user: '', start_date: '', end_date: '',
+  });
+  const search = useDebouncedValue(filters.search.trim());
+  const user = useDebouncedValue(filters.user.trim());
+  const [live, setLive] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const liveId = useId();
+
+  const polling = live ? { refetchInterval: LIVE_INTERVAL_MS, refetchIntervalInBackground: false } : {};
+  // The stats cover the same filters as the list (minus the page), so the counts match it.
+  const listFilters = compact({ ...filters, search, user });
   const logsQuery = useAdminList({
     resource: 'logs',
-    params: {
-      page,
-      ...(filters.level && { level: filters.level }),
-      ...(filters.log_type && { log_type: filters.log_type }),
-      ...(filters.search && { search: filters.search }),
-      ...(filters.user && { user: filters.user }),
-      ...(filters.start_date && { start_date: filters.start_date }),
-      ...(filters.end_date && { end_date: filters.end_date }),
-    },
+    params: { page, ...listFilters },
     page,
     setPage,
-    refetchInterval: 30000,
-    refetchIntervalInBackground: true,
+    ...polling,
     errorLog: 'Failed to fetch logs:',
     errorToast: 'Failed to load logs',
   });
   const statsQuery = useAdminQuery({
-    ...adminQueries.stats('logs'),
-    refetchInterval: 30000,
-    refetchIntervalInBackground: true,
+    ...adminQueries.stats('logs', listFilters),
+    ...polling,
     errorLog: 'Failed to fetch stats:',
   });
 
   const { items: logs, totalPages } = logsQuery;
   const stats = statsQuery.data || EMPTY_STATS;
-  // The spinner shows for the first load and for page/filter changes, not for the silent 30s refreshes.
-  const loading = logsQuery.isPending || logsQuery.isPlaceholderData || statsQuery.isPending;
-
-  const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-    setPage(1);
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      level: '',
-      log_type: '',
-      search: '',
-      user: '',
-      start_date: '',
-      end_date: '',
-    });
-    setPage(1);
-  };
-
-  const viewLogDetails = (log) => {
-    setSelectedLog(log);
-    setIsModalOpen(true);
-  };
-
-  const getLevelColor = (level) => {
-    switch (level) {
-      case 'DEBUG':
-        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-      case 'INFO':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'WARNING':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-      case 'ERROR':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
-      case 'CRITICAL':
-        return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-      default:
-        return 'bg-white/10 text-white/60 border-white/20';
-    }
-  };
-
-  const getTypeIcon = (type) => {
-    const icons = {
-      'SYSTEM': '⚙️',
-      'REQUEST': '🌐',
-      'AUTH': '🔐',
-      'ADMIN': '👑',
-      'ERROR': '❌',
-      'SECURITY': '🛡️',
-    };
-    return icons[type] || '📝';
-  };
-
-  const levels = ['', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
-  const logTypes = ['', 'SYSTEM', 'REQUEST', 'AUTH', 'ADMIN', 'ERROR', 'SECURITY'];
-
-  const hasActiveFilters = Object.values(filters).some(v => v !== '');
+  const loading = logsQuery.isPending || logsQuery.isPlaceholderData;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">System Logs</h1>
-        <div className="flex items-center gap-2 text-sm text-white/50">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          Live
-        </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-white/50">
+          {stats.window === '24h' ? 'Counts cover the last 24 hours.' : stats.window === 'filtered' ? 'Counts match the filters.' : ''}
+        </p>
+        <label htmlFor={liveId} className="flex items-center gap-2 text-sm text-white/70 min-h-[44px]">
+          <input
+            id={liveId}
+            type="checkbox"
+            checked={live}
+            onChange={(e) => setLive(e.target.checked)}
+            className="w-4 h-4 rounded border-white/20 bg-white/5 text-violet-500"
+          />
+          Live (every 30s)
+        </label>
+        <span className="sr-only" aria-live="polite">{live ? 'Live updates on' : 'Live updates off'}</span>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          {/* Search */}
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40">🔍</span>
-            <input
-              type="text"
-              placeholder="Search logs..."
-              value={filters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-violet-500 transition-colors"
-            />
-          </div>
-
-          {/* Level Filter */}
+      <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <SearchInput value={filters.search} onChange={(v) => update('search', v)} label="Search logs" />
           <CustomSelect
             value={filters.level}
-            onChange={(nextValue) => handleFilterChange('level', nextValue)}
-            options={[
-              { value: '', label: 'All Levels' },
-              ...levels.slice(1).map((level) => ({ value: level, label: level })),
-            ]}
-            triggerClassName="px-4 py-2.5 bg-white/10 rounded-lg focus-visible:ring-violet-500/50"
+            onChange={(v) => update('level', v)}
+            options={[{ value: '', label: 'All levels' }, ...LEVELS.map((l) => ({ value: l, label: l }))]}
+            triggerClassName={SELECT_TRIGGER}
             ariaLabel="Filter logs by level"
           />
-
-          {/* Type Filter */}
           <CustomSelect
             value={filters.log_type}
-            onChange={(nextValue) => handleFilterChange('log_type', nextValue)}
-            options={[
-              { value: '', label: 'All Types' },
-              ...logTypes.slice(1).map((type) => ({ value: type, label: type })),
-            ]}
-            triggerClassName="px-4 py-2.5 bg-white/10 rounded-lg focus-visible:ring-violet-500/50"
+            onChange={(v) => update('log_type', v)}
+            options={[{ value: '', label: 'All types' }, ...LOG_TYPES.map((t) => ({ value: t, label: t }))]}
+            triggerClassName={SELECT_TRIGGER}
             ariaLabel="Filter logs by type"
           />
-
-          {/* User Filter */}
           <input
             type="text"
+            inputMode="numeric"
+            aria-label="User ID"
             placeholder="User ID..."
             value={filters.user}
-            onChange={(e) => handleFilterChange('user', e.target.value)}
-            className="px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-violet-500"
+            onChange={(e) => update('user', e.target.value)}
+            className={INPUT}
           />
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Date Range */}
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={filters.start_date}
-              onChange={(e) => handleFilterChange('start_date', e.target.value)}
-              className="flex-1 px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-            />
-            <span className="flex items-center text-white/50">to</span>
-            <input
-              type="date"
-              value={filters.end_date}
-              onChange={(e) => handleFilterChange('end_date', e.target.value)}
-              className="flex-1 px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-            />
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <div className="flex items-center gap-2 flex-1">
+            <input type="date" aria-label="From date" value={filters.start_date} onChange={(e) => update('start_date', e.target.value)} className={INPUT} />
+            <span className="text-white/50">to</span>
+            <input type="date" aria-label="To date" value={filters.end_date} onChange={(e) => update('end_date', e.target.value)} className={INPUT} />
           </div>
-
-          {/* Clear Filters */}
-          {hasActiveFilters && (
-            <div className="flex justify-end">
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 text-white/60 hover:text-white transition-colors"
-              >
-                Clear Filters
-              </button>
-            </div>
+          {active && (
+            <button type="button" onClick={clear} className="px-4 py-2 min-h-[44px] text-white/70 hover:text-white">Clear filters</button>
           )}
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        {levels.slice(1).map((level) => (
-          <div key={level} className="bg-white/5 border border-white/10 rounded-xl p-4">
-            <div className={`text-xs font-medium uppercase tracking-wider mb-1 ${
-              level === 'DEBUG' ? 'text-gray-400' :
-              level === 'INFO' ? 'text-blue-400' :
-              level === 'WARNING' ? 'text-yellow-400' :
-              level === 'ERROR' ? 'text-red-400' :
-              'text-purple-400'
-            }`}>
-              {level}
-            </div>
-            <div className="text-2xl font-bold text-white">{stats.by_level[level] || 0}</div>
+      <dl className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {LEVELS.map((level) => (
+          <div key={level} className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col-reverse">
+            <dt className={`text-xs font-medium uppercase tracking-wider mt-1 ${(LEVEL_CLASSES[level] || '').split(' ')[0]}`}>{level}</dt>
+            <dd className="text-2xl font-bold text-white">{stats.by_level?.[level] || 0}</dd>
           </div>
         ))}
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-          <div className="text-xs font-medium text-white/50 uppercase tracking-wider mb-1">Total</div>
-          <div className="text-2xl font-bold text-white">{stats.total}</div>
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col-reverse">
+          <dt className="text-xs font-medium text-white/50 uppercase tracking-wider mt-1">Total</dt>
+          <dd className="text-2xl font-bold text-white">{stats.total || 0}</dd>
         </div>
-      </div>
+      </dl>
 
-      {/* Logs Table */}
       <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="p-12 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500 mx-auto mb-4"></div>
-            <p className="text-white/50">Loading logs...</p>
-          </div>
+        {logsQuery.error ? (
+          <ErrorState
+            title="Couldn’t load the logs"
+            message={getAdminErrorMessage(logsQuery.error, 'Failed to load logs')}
+            onRetry={() => logsQuery.refetch()}
+          />
+        ) : loading ? (
+          <p role="status" className="p-12 text-center text-white/50">Loading logs...</p>
         ) : logs.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="text-4xl mb-3">📄</div>
-            <p className="text-white/50">No logs found matching your criteria</p>
-          </div>
+          <p className="p-12 text-center text-white/50">No logs found matching your criteria</p>
         ) : (
-          <div className="divide-y divide-white/10">
+          <ul className="divide-y divide-white/10">
             {logs.map((log) => (
-              <div 
-                key={log.id} 
-                className="p-4 hover:bg-white/5 transition-colors cursor-pointer"
-                onClick={() => viewLogDetails(log)}
-              >
-                <div className="flex items-start gap-4">
-                  {/* Level Badge */}
-                  <div className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold border ${getLevelColor(log.level)}`}>
-                    {log.level}
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white/90 break-words">{log.message}</p>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-white/50">
-                      <span className="flex items-center gap-1">
-                        <span>{getTypeIcon(log.log_type)}</span>
-                        {log.log_type}
-                      </span>
-                      {(log.username || log.user) && (
-                        <span className="flex items-center gap-1">
-                          <span>👤</span>
-                          {log.username || `User #${log.user}`}
-                        </span>
-                      )}
-                      {log.method && (
-                        <span className="flex items-center gap-1">
-                          <span>🌐</span>
-                          {log.method} {log.path}
-                        </span>
-                      )}
-                      {log.status_code && (
-                        <span className={`px-2 py-0.5 rounded text-xs ${
-                          log.status_code < 400 ? 'bg-green-500/20 text-green-400' : 
-                          log.status_code < 500 ? 'bg-yellow-500/20 text-yellow-400' : 
-                          'bg-red-500/20 text-red-400'
-                        }`}>
-                          {log.status_code}
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <span>🕐</span>
-                        {new Date(log.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
+              <li key={log.id} className="p-4 flex items-start gap-4">
+                <span className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold border ${LEVEL_CLASSES[log.level] || 'text-white/60 border-white/20'}`}>
+                  {log.level}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white/90 break-words">{log.message}</p>
+                  <p className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-white/50">
+                    <span>{log.log_type}</span>
+                    {(log.username || log.user) && <span>{log.username || `User #${log.user}`}</span>}
+                    {log.method && <span className="font-mono break-all">{log.method} {log.path}</span>}
+                    {log.status_code && <span className={statusClass(log.status_code)}>{log.status_code}</span>}
+                    <span>{formatTime(log.timestamp)}</span>
+                  </p>
                 </div>
-              </div>
+                <button
+                  type="button"
+                  onClick={() => setSelected(log)}
+                  className="px-3 py-1.5 min-h-[44px] sm:min-h-0 text-sm bg-white/10 text-white/80 rounded-lg hover:bg-white/20 flex-shrink-0"
+                >
+                  Details
+                </button>
+              </li>
             ))}
+          </ul>
+        )}
+        {!loading && !logsQuery.error && <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />}
+      </div>
+
+      <Modal isOpen={selected !== null} onClose={() => setSelected(null)} title="Log details" size="large">
+        {selected && (
+          <div className="space-y-4">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Level">{selected.level}</Field>
+              <Field label="Time">{formatTime(selected.timestamp)}</Field>
+              <Field label="Type">{selected.log_type}</Field>
+              <Field label="User">{selected.user ? `${selected.username || 'Unknown'} (ID: ${selected.user})` : null}</Field>
+              <Field label="IP address">{selected.user_ip}</Field>
+              <Field label="Method">{selected.method}</Field>
+              <Field label="Path">{selected.path ? <span className="font-mono text-sm">{selected.path}</span> : null}</Field>
+              <Field label="Status">{selected.status_code}</Field>
+              <Field label="Duration">{selected.duration_ms != null ? `${selected.duration_ms}ms` : null}</Field>
+            </dl>
+            <Field label="Message">{selected.message}</Field>
+            <JsonBlock title="Details" value={selected.details} />
           </div>
         )}
+      </Modal>
+    </div>
+  );
+}
 
-        {/* Pagination */}
-        {!loading && totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-white/10 bg-white/5 flex items-center justify-between">
-            <span className="text-sm text-white/50">
-              Page {page} of {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                ← Previous
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next →
-              </button>
-            </div>
+/** Admin audit trail; staff can read it. */
+function AuditLogs({ initial }) {
+  const { filters, update, clear, active, page, setPage } = useFilters(initial);
+  const search = useDebouncedValue(filters.search.trim());
+  const user = useDebouncedValue(filters.user.trim());
+  const entityType = useDebouncedValue(filters.entity_type.trim());
+  const [selected, setSelected] = useState(null);
+
+  const auditQuery = useAdminList({
+    resource: 'audit-logs',
+    params: compact({ page, ...filters, search, user, entity_type: entityType }),
+    page,
+    setPage,
+    errorLog: 'Failed to fetch audit logs:',
+    errorToast: 'Failed to load audit logs',
+  });
+  const { items: entries, totalPages } = auditQuery;
+  const loading = auditQuery.isPending || auditQuery.isPlaceholderData;
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <SearchInput value={filters.search} onChange={(v) => update('search', v)} label="Search audit log" />
+          <CustomSelect
+            value={filters.action}
+            onChange={(v) => update('action', v)}
+            options={[{ value: '', label: 'All actions' }, ...AUDIT_ACTIONS.map((a) => ({ value: a, label: a.replace('_', ' ') }))]}
+            triggerClassName={SELECT_TRIGGER}
+            ariaLabel="Filter by action"
+          />
+          <input
+            type="text"
+            aria-label="Entity type"
+            placeholder="Entity type (e.g. User)..."
+            value={filters.entity_type}
+            onChange={(e) => update('entity_type', e.target.value)}
+            className={INPUT}
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            aria-label="Actor user ID"
+            placeholder="Actor user ID..."
+            value={filters.user}
+            onChange={(e) => update('user', e.target.value)}
+            className={INPUT}
+          />
+        </div>
+        {(filters.entity_id || active) && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {filters.entity_id ? (
+              <p className="text-sm text-white/70">
+                Showing entries for {filters.entity_type || 'entity'} #{filters.entity_id}
+              </p>
+            ) : <span />}
+            <button type="button" onClick={clear} className="px-4 py-2 min-h-[44px] text-white/70 hover:text-white">Clear filters</button>
           </div>
         )}
       </div>
 
-      {/* Auto-refresh indicator */}
-      <div className="mt-4 flex items-center justify-center gap-2 text-sm text-white/40">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-        Auto-refresh enabled (30s)
+      <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+        {auditQuery.error ? (
+          <ErrorState
+            title="Couldn’t load the audit log"
+            message={getAdminErrorMessage(auditQuery.error, 'Failed to load audit logs')}
+            onRetry={() => auditQuery.refetch()}
+          />
+        ) : loading ? (
+          <p role="status" className="p-12 text-center text-white/50">Loading audit log...</p>
+        ) : entries.length === 0 ? (
+          <p className="p-12 text-center text-white/50">No audit entries found</p>
+        ) : (
+          <ul className="divide-y divide-white/10">
+            {entries.map((entry) => (
+              <li key={entry.id} className="p-4 flex items-start gap-4">
+                <span className="flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-semibold border border-white/10 text-white/80">
+                  {entry.action}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white/90 break-words">
+                    {entry.entity_type}{entry.entity_id ? ` #${entry.entity_id}` : ''}
+                    {entry.entity_repr && <span className="text-white/60"> · {entry.entity_repr}</span>}
+                  </p>
+                  <p className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-white/50">
+                    <span>{entry.username || 'System'}</span>
+                    <span>{formatTime(entry.timestamp)}</span>
+                    {entry.metadata?.reason && <span className="text-white/70">Reason: {entry.metadata.reason}</span>}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelected(entry)}
+                  className="px-3 py-1.5 min-h-[44px] sm:min-h-0 text-sm bg-white/10 text-white/80 rounded-lg hover:bg-white/20 flex-shrink-0"
+                >
+                  Details
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {!loading && !auditQuery.error && <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />}
       </div>
 
-      {/* Log Details Modal */}
-      {isModalOpen && selectedLog && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          onClick={() => setIsModalOpen(false)}
-        >
-          <div 
-            className="w-full max-w-2xl bg-dark-100 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-              <h3 className="text-xl font-semibold text-white">Log Details</h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="flex items-center gap-4">
-                <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${getLevelColor(selectedLog.level)}`}>
-                  {selectedLog.level}
-                </span>
-                <span className="text-white/50">
-                  {new Date(selectedLog.timestamp).toLocaleString()}
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white/50 mb-1">Message</label>
-                <p className="text-white p-3 bg-white/5 rounded-lg">{selectedLog.message}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white/50 mb-1">Type</label>
-                  <p className="text-white">{getTypeIcon(selectedLog.log_type)} {selectedLog.log_type}</p>
-                </div>
-
-                {(selectedLog.username || selectedLog.user) && (
-                  <div>
-                    <label className="block text-sm font-medium text-white/50 mb-1">User</label>
-                    <p className="text-white">{selectedLog.username || 'Unknown'} (ID: {selectedLog.user})</p>
-                  </div>
-                )}
-
-                {selectedLog.user_ip && (
-                  <div>
-                    <label className="block text-sm font-medium text-white/50 mb-1">IP Address</label>
-                    <p className="text-white">{selectedLog.user_ip}</p>
-                  </div>
-                )}
-
-                {selectedLog.method && (
-                  <div>
-                    <label className="block text-sm font-medium text-white/50 mb-1">Method</label>
-                    <p className="text-white">{selectedLog.method}</p>
-                  </div>
-                )}
-
-                {selectedLog.path && (
-                  <div>
-                    <label className="block text-sm font-medium text-white/50 mb-1">Path</label>
-                    <p className="text-white font-mono text-sm">{selectedLog.path}</p>
-                  </div>
-                )}
-
-                {selectedLog.status_code && (
-                  <div>
-                    <label className="block text-sm font-medium text-white/50 mb-1">Status Code</label>
-                    <span className={`px-2 py-1 rounded text-sm ${
-                      selectedLog.status_code < 400 ? 'bg-green-500/20 text-green-400' : 
-                      selectedLog.status_code < 500 ? 'bg-yellow-500/20 text-yellow-400' : 
-                      'bg-red-500/20 text-red-400'
-                    }`}>
-                      {selectedLog.status_code}
-                    </span>
-                  </div>
-                )}
-
-                {selectedLog.duration_ms && (
-                  <div>
-                    <label className="block text-sm font-medium text-white/50 mb-1">Duration</label>
-                    <p className="text-white">{selectedLog.duration_ms}ms</p>
-                  </div>
-                )}
-              </div>
-
-              {selectedLog.details && Object.keys(selectedLog.details).length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-white/50 mb-1">Details</label>
-                  <pre className="text-white/80 text-sm p-3 bg-white/5 rounded-lg overflow-auto max-h-48">
-                    {JSON.stringify(selectedLog.details, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
+      <Modal isOpen={selected !== null} onClose={() => setSelected(null)} title="Audit entry" size="large">
+        {selected && (
+          <div className="space-y-4">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Action">{selected.action}</Field>
+              <Field label="Time">{formatTime(selected.timestamp)}</Field>
+              <Field label="Actor">{selected.username || 'System'}</Field>
+              <Field label="IP address">{selected.user_ip}</Field>
+              <Field label="Entity">{`${selected.entity_type}${selected.entity_id ? ` #${selected.entity_id}` : ''}`}</Field>
+              <Field label="Description">{selected.entity_repr}</Field>
+            </dl>
+            <JsonBlock title="Changes" value={selected.changes} />
+            <JsonBlock title="Metadata" value={selected.metadata} />
           </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+AuditLogs.propTypes = { initial: PropTypes.object.isRequired };
+
+const AdminLogs = () => {
+  const { isSuperuser } = useAdminRole();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requested = searchParams.get('tab');
+  const tab = !isSuperuser || requested === 'audit' ? 'audit' : 'requests';
+  const auditInitial = {
+    search: '',
+    action: searchParams.get('action') || '',
+    entity_type: searchParams.get('entity_type') || '',
+    entity_id: searchParams.get('entity_id') || '',
+    user: searchParams.get('user') || '',
+  };
+
+  const tabs = [
+    ...(isSuperuser ? [{ id: 'requests', label: 'Requests' }] : []),
+    { id: 'audit', label: 'Audit' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-white">Logs</h1>
+      {tabs.length > 1 && (
+        <div role="tablist" aria-label="Log type" className="flex gap-2 border-b border-white/10">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              onClick={() => setSearchParams(t.id === 'audit' ? { tab: 'audit' } : {})}
+              className={`px-4 py-2 min-h-[44px] text-sm font-medium border-b-2 -mb-px transition-colors ${tab === t.id
+                ? 'border-violet-500 text-white'
+                : 'border-transparent text-white/60 hover:text-white'}`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       )}
+      {tab === 'audit'
+        ? <AuditLogs key={searchParams.toString()} initial={auditInitial} />
+        : <RequestLogs />}
     </div>
   );
 };
