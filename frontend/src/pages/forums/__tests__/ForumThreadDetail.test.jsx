@@ -94,8 +94,13 @@ function renderPage(path = '/forums/thread/5') {
     );
 }
 
+// jsdom has no scrolling; focus mode scrolls to the focused post after its timer.
+const scrollIntoView = vi.fn();
+
 beforeEach(() => {
     vi.clearAllMocks();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.scrollTo = vi.fn();
     mockUser = null;
     forumsApi.getPosts.mockResolvedValue(POSTS);
 });
@@ -147,6 +152,8 @@ describe('ForumThreadDetail', () => {
         renderPage('/forums/thread/5?post=70');
 
         expect(await screen.findByText('Reply 72')).toBeInTheDocument();
+        await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+        expect(scrollIntoView.mock.contexts[0].id).toBe('post-70');
         expect(screen.getByText(/Page/)).toHaveTextContent('Page 1 of 2');
         await userEvent.click(screen.getByRole('button', { name: /Next/ }));
 

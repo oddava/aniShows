@@ -136,11 +136,59 @@ const lineStartSpoilerOffset = (line) => {
  * A line starting with `>!` would parse as a blockquote; when a `!<` follows it is a spoiler, so the
  * `>` is backslash-escaped (outside fenced code).
  */
+/**
+ * Deepest container nesting a line opens (`>`, a `-`/`*`/`+` bullet followed by a space, `1.`/`1)`),
+ * mirroring `apps/forums/services/nesting.py`. Thousands of markers on one line overflow the parser's
+ * stack (or make it quadratic), so the renderer shows such text as plain text. Linear in the length.
+ */
+export const MAX_CONTAINER_NESTING = 32;
+
+const lineContainerNesting = (source, start, end) => {
+    let count = 0;
+    let index = start;
+    for (;;) {
+        let spaces = 0;
+        while (index < end && source[index] === ' ' && spaces < 3) {
+            index += 1;
+            spaces += 1;
+        }
+        let markerEnd = -1;
+        const char = index < end ? source[index] : '';
+        if (char === '>') {
+            markerEnd = index + 1;
+        } else if (char === '-' || char === '*' || char === '+') {
+            const follower = index + 1 < end ? source[index + 1] : '';
+            if (follower === '' || follower === ' ' || follower === '\t') markerEnd = index + 1;
+        } else if (isDigit(char)) {
+            let digitsEnd = index;
+            while (digitsEnd < end && digitsEnd - index < 9 && isDigit(source[digitsEnd])) digitsEnd += 1;
+            if (digitsEnd < end && (source[digitsEnd] === '.' || source[digitsEnd] === ')')) markerEnd = digitsEnd + 1;
+        }
+        if (markerEnd === -1) return count;
+        count += 1;
+        index = markerEnd < end && (source[markerEnd] === ' ' || source[markerEnd] === '\t') ? markerEnd + 1 : markerEnd;
+    }
+};
+
+export const maxContainerNesting = (source = '') => {
+    let deepest = 0;
+    let start = 0;
+    while (start <= source.length) {
+        const newline = source.indexOf('\n', start);
+        const end = newline === -1 ? source.length : newline;
+        deepest = Math.max(deepest, lineContainerNesting(source, start, end));
+        start = end + 1;
+    }
+    return deepest;
+};
+
 export const escapeLineStartSpoilers = (source = '') => {
     if (!source.includes('>!')) return source;
     const fences = fencedCodeRanges(source);
     // A spoiler needs a `!<` somewhere after its `>!`: one lookup instead of a scan per line.
-    const lastClose = source.lastIndexOf('!<');
+    let lastClose = source.lastIndexOf('!<');
+    // A `!<` inside fenced code closes nothing: walk back to the last one outside fences.
+    while (lastClose !== -1 && inRanges(fences, lastClose)) lastClose = source.lastIndexOf('!<', lastClose - 1);
     let offset = 0;
     return source
         .split('\n')

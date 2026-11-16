@@ -3,10 +3,12 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkCommunity, {
+    MAX_CONTAINER_NESTING,
     MENTION_PATTERN,
     escapeLineStartSpoilers,
     extractYouTubeVideoId,
     fencedCodeRanges,
+    maxContainerNesting,
     remarkNoRawHtml,
     splitAlignedBlocks,
 } from '../remarkCommunity';
@@ -224,5 +226,39 @@ describe('hostile input stays fast', () => {
         const source = 'a >! '.repeat(20_000);
         const processor = unified().use(remarkParse).use(remarkNoRawHtml).use(remarkCommunity);
         expect(timed(() => processor.runSync(processor.parse(source)))).toBeLessThan(BUDGET_MS * 2);
+    });
+});
+
+describe('maxContainerNesting (mirrors apps/forums/services/nesting.py)', () => {
+    it.each([
+        ['plain', 0],
+        ['> quote', 1],
+        ['> > - 1. item', 4],
+        ['>>>> x', 4],
+        ['-----', 0],
+        ['- - -', 3],
+        ['   > three spaces indent', 1],
+        ['    > four spaces is code', 0],
+        ['a\n> b\n> > c', 2],
+    ])('%j nests %i containers', (text, depth) => {
+        expect(maxContainerNesting(text)).toBe(depth);
+    });
+
+    it('is linear on hostile lines', () => {
+        const started = performance.now();
+        expect(maxContainerNesting(`${'> '.repeat(10_000)}\n${'- '.repeat(10_000)}`)).toBe(10_000);
+        expect(performance.now() - started).toBeLessThan(200);
+        expect(MAX_CONTAINER_NESTING).toBe(32);
+    });
+});
+
+describe('escapeLineStartSpoilers and fenced code', () => {
+    it('ignores a !< inside fenced code when deciding a line-start >! is a spoiler', () => {
+        const source = '>! note\n\n```\n!<\n```';
+        expect(escapeLineStartSpoilers(source)).toBe(source);
+    });
+
+    it('still escapes when a real closer follows outside the fence', () => {
+        expect(escapeLineStartSpoilers('>! hidden !<\n```\n!<\n```').startsWith(String.raw`\>!`)).toBe(true);
     });
 });

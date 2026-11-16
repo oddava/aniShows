@@ -6,7 +6,9 @@ import rehypeRaw from "rehype-raw";
 import DOMPurify from "dompurify";
 import AccessibleSpoiler from "./Spoiler";
 import remarkCommunity, {
+    MAX_CONTAINER_NESTING,
     escapeLineStartSpoilers,
+    maxContainerNesting,
     remarkNoRawHtml,
     splitAlignedBlocks,
 } from "../forums/remarkCommunity";
@@ -462,15 +464,48 @@ const CommunityMarkdown = ({ source }) =>
         );
     });
 
+/** Community text the markdown parser couldn't handle, shown as typed. */
+const PlainTextFallback = ({ source }) => (
+    <p className="mb-4 last:mb-0 text-gray-200 leading-relaxed whitespace-pre-wrap break-words">{source}</p>
+);
+
+/**
+ * One hostile post must not take down the page: if rendering its markdown throws, that post
+ * falls back to plain text and the rest of the thread keeps working. Keyed by the source,
+ * so edited text gets a fresh attempt.
+ */
+class CommunityMarkdownBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { failed: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { failed: true };
+    }
+
+    render() {
+        return this.state.failed ? <PlainTextFallback source={this.props.source} /> : this.props.children;
+    }
+}
+
 const MarkdownRenderer = ({ content, className = "", mode = "legacy" }) => {
     if (mode === "markdown") {
+        // Forum text is stored as typed (forums 0010 unescaped the old bleach-encoded rows),
+        // so it is shown as typed: no entity decoding here or in the parser.
+        const source = content || "";
         return (
             <div className={`markdown-preview max-w-none ${className}`}>
-                <Suspense fallback={<div className="prose prose-invert"><p>Loading...</p></div>}>
-                    {/* Forum text is stored as typed (forums 0010 unescaped the old bleach-encoded
-                        rows), so it is shown as typed: no entity decoding here or in the parser. */}
-                    <CommunityMarkdown source={content || ""} />
-                </Suspense>
+                {maxContainerNesting(source) > MAX_CONTAINER_NESTING ? (
+                    // Deep nesting overflows or stalls the parser (the server refuses it now).
+                    <PlainTextFallback source={source} />
+                ) : (
+                    <CommunityMarkdownBoundary key={source} source={source}>
+                        <Suspense fallback={<div className="prose prose-invert"><p>Loading...</p></div>}>
+                            <CommunityMarkdown source={source} />
+                        </Suspense>
+                    </CommunityMarkdownBoundary>
+                )}
             </div>
         );
     }

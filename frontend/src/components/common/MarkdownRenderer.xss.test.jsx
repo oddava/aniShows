@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import MarkdownRenderer from './MarkdownRenderer';
+
+// ReactMarkdown is lazy-loaded: pay its cold import once here (it can take seconds on a busy
+// machine), not inside the first test's 5 s render wait.
+beforeAll(async () => {
+    await import('react-markdown');
+}, 60_000);
 
 const PAYLOADS = [
     '[click](javascript:alert(1))',
@@ -346,5 +352,22 @@ describe('MarkdownRenderer markdown mode rendering', () => {
             expect(container.querySelector('div.text-center')).toBeNull();
             expect(container.querySelector('pre code').textContent).toBe('<p align="center">x</p>\n');
         });
+    });
+});
+
+describe('MarkdownRenderer markdown mode on deeply nested text', () => {
+    it.each([
+        ['quotes', `${'> '.repeat(3000)}a`],
+        ['bullets', `${'- '.repeat(2000)}a`],
+    ])('shows %s nested past the cap as plain text instead of crashing', async (_name, source) => {
+        const started = performance.now();
+        const { container } = render(
+            <MemoryRouter>
+                <MarkdownRenderer mode="markdown" content={source} />
+            </MemoryRouter>,
+        );
+        expect(container.querySelector('blockquote, ul')).toBeNull();
+        expect(container.textContent).toBe(source);
+        expect(performance.now() - started).toBeLessThan(2000);
     });
 });
