@@ -12,7 +12,6 @@ from ...animes.services.anilist import AniListService
 from ...shared.logger import logger
 from ..models import UserImportJob
 from .import_service import ImportService
-from .user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
 
@@ -426,48 +425,3 @@ class UserTaskService:
             "stale_after_minutes": stale_after_minutes,
             "batch_size": batch_size,
         }
-
-    @staticmethod
-    def warm_profile_cache(usernames: list[str] | None = None) -> dict:
-        from django.core.cache import cache
-        from django.db.models import Count
-
-        from ..serializers.accounts import PublicUserSerializer
-        from .cache import get_public_profile_cache_key
-
-        selected_usernames = usernames
-        if not selected_usernames:
-            popular_users = (
-                User.objects.annotate(
-                    total_activity=Count("followers", distinct=True)
-                    + Count("following", distinct=True)
-                    + Count("anime_lists", distinct=True)
-                )
-                .order_by("-total_activity")
-                .values_list("username", flat=True)[:50]
-            )
-            selected_usernames = list(popular_users)
-
-        requested_usernames = [username for username in selected_usernames or [] if username]
-        if not requested_usernames:
-            return {"warmed_count": 0}
-
-        users = get_annotated_user_queryset(lightweight=False).filter(
-            username__in=requested_usernames
-        )
-        users_by_username = {user.username: user for user in users}
-        ordered_users = [
-            users_by_username[username]
-            for username in requested_usernames
-            if username in users_by_username
-        ]
-        serialized_users = PublicUserSerializer(ordered_users, many=True).data
-
-        warmed_count = 0
-        for user, data in zip(ordered_users, serialized_users, strict=False):
-            cache_key = get_public_profile_cache_key(user.username, viewer_id="anonymous")
-            cache.set(cache_key, data, timeout=1800)
-            warmed_count += 1
-
-        logger.info("Warmed public profile cache", extra={"warmed_count": warmed_count})
-        return {"warmed_count": warmed_count}

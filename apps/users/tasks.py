@@ -178,9 +178,3 @@ def update_all_user_stats(self):
         )
         logger.info("Queued stale user stats refreshes", extra=result)
         return result
-
-
-@observed_shared_task(retry_policy="standard")
-def warm_profile_cache(self, usernames: list | None = None):
-    with retry_on_error(self, "Profile cache warmup failed", extra={"usernames": usernames}):
-        return UserTaskService.warm_profile_cache(usernames=usernames)
