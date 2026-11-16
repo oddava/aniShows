@@ -1,6 +1,8 @@
 import json
+from collections.abc import Iterable
 from datetime import timedelta
 
+from botocore.exceptions import BotoCoreError, ClientError
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
@@ -9,11 +11,40 @@ from rest_framework.exceptions import ValidationError
 
 from ...core.services.admin_settings_service import is_username_change_allowed
 from ...core.services.social_links_service import SocialLinksService
+from ...shared.logger import logger
 from ..models import UserProfile
 from .cache import invalidate_user_caches
 from .username_sanitizer import validate_username
 
 User = get_user_model()
+
+# What deleting a stored file can raise: S3 (botocore) or the local filesystem.
+STORAGE_ERRORS: tuple[type[Exception], ...] = (BotoCoreError, ClientError, OSError)
+
+PROFILE_MEDIA_FIELDS = ("avatar", "banner")
+
+
+def delete_files_on_commit(files: Iterable) -> None:
+    """Delete stored files once the current transaction commits.
+
+    ``files`` are ``FieldFile``s (or anything with ``storage`` and ``name``);
+    empty ones are skipped. Failures are logged, never raised: a leftover
+    object in the bucket must not fail the request that orphaned it (A10).
+    """
+    pending = [(file.storage, file.name) for file in files if file and file.name]
+    if not pending:
+        return
+
+    def delete():
+        for storage, name in pending:
+            try:
+                storage.delete(name)
+            except STORAGE_ERRORS:
+                logger.warning(
+                    "Could not delete stored profile media", extra={"name": name}, exc_info=True
+                )
+
+    transaction.on_commit(delete)
 
 
 def update_user_profile(user, validated_data, ip_address: str | None = None) -> None:
@@ -21,6 +52,9 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
         user = User.objects.select_for_update().get(pk=user.pk)
         profile, _ = UserProfile.objects.select_for_update().get_or_create(user=user)
         previous_username = user.username
+        # FieldFile copies of the current images; deleted after commit if replaced.
+        previous_media = {field: getattr(profile, field) for field in PROFILE_MEDIA_FIELDS}
+        previous_names = {field: file.name for field, file in previous_media.items()}
 
         _handle_username_change(user, validated_data, profile=profile)
 
@@ -57,6 +91,14 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
 
         if update_fields:
             profile.save(update_fields=update_fields)
+
+        delete_files_on_commit(
+            previous_media[field]
+            for field in PROFILE_MEDIA_FIELDS
+            if field in update_fields
+            and previous_names[field]
+            and getattr(profile, field).name != previous_names[field]
+        )
 
         def invalidate():
             invalidate_user_caches(user.id, user.username)

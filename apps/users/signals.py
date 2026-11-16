@@ -115,6 +115,18 @@ def handle_unfollow(sender, instance, **kwargs):
     )
 
 
+@receiver(post_delete, sender=UserProfile)
+def delete_profile_media(sender, instance, **kwargs):
+    """Remove the avatar and banner from storage once the profile is gone (A10).
+
+    Covers account deletion, the unverified-account purge and admin deletes,
+    which all cascade from the user to the profile.
+    """
+    from .services.profile_update_service import PROFILE_MEDIA_FIELDS, delete_files_on_commit
+
+    delete_files_on_commit(getattr(instance, field) for field in PROFILE_MEDIA_FIELDS)
+
+
 @receiver(post_save, sender=UserProfile)
 def handle_profile_update(sender, instance, created, **kwargs):
     """Invalidate cache when profile is updated (avatar, banner, bio, etc.)."""
