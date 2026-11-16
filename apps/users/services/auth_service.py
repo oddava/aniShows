@@ -98,10 +98,16 @@ def lock_user_sessions(user_id) -> None:
     User.objects.select_for_update().filter(pk=user_id).exists()
 
 
-def revoke_other_sessions(user, keep_jti: str) -> int:
-    """Blacklist every live refresh token of ``user`` except ``keep_jti``; return how many."""
+def revoke_other_sessions(user, keep_jti: str) -> int | None:
+    """Blacklist every live refresh token of ``user`` except ``keep_jti``; return how many.
+
+    Returns None, revoking nothing, when ``keep_jti`` is no longer live once the
+    lock is held (it rotated meanwhile): the caller asks the device to retry.
+    """
     with transaction.atomic():
         lock_user_sessions(user.pk)
+        if not live_refresh_tokens(user).filter(jti=keep_jti).exists():
+            return None
         others = list(live_refresh_tokens(user).exclude(jti=keep_jti))
         BlacklistedToken.objects.bulk_create(
             [BlacklistedToken(token=token) for token in others], ignore_conflicts=True

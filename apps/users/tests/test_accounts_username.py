@@ -148,9 +148,10 @@ class OAuthPopulateUserTests(TestCase):
         sociallogin = SocialLogin(user=User(), account=SocialAccount(provider="google"))
         return MySocialAccountAdapter().populate_user(None, sociallogin, data)
 
-    def test_name_comes_from_first_name_or_email_through_the_rules(self):
-        user = self._populate({"email": "mary.jane@example.com", "first_name": "Mary Jane"})
-        self.assertEqual(user.username, "mary.jane")  # "Mary Jane" has a space: skipped
+    def test_name_comes_from_the_first_name_never_the_email(self):
+        user = self._populate({"email": "mary.secret@example.com", "first_name": "Mary Jane"})
+        self.assertEqual(user.username, "MaryJane")
+        self.assertNotIn("secret", user.username)
 
     def test_taken_name_ignoring_case_gets_a_suffix(self):
         User.objects.create_user(username="Mary", email="m@example.com", password="x")

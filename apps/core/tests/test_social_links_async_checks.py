@@ -133,3 +133,14 @@ class WhoisTimeoutTests(TestCase):
         self.assertFalse(valid)
         self.assertIn("too new", message)
         age.assert_called_once()
+
+
+class WhoisSignatureTests(TestCase):
+    def test_whois_is_called_with_a_supported_timeout_keyword(self):
+        # autospec raises TypeError if python-whois stops accepting `timeout=`.
+        with patch(
+            "apps.core.services.url_validator.whois.whois", autospec=True, return_value=None
+        ) as lookup:
+            URLValidator()._get_domain_age("example.org")
+        lookup.assert_called_once()
+        self.assertEqual(lookup.call_args.kwargs, {"timeout": 3})

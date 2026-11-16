@@ -1,4 +1,5 @@
 import contextlib
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from django.contrib.auth import get_user_model
@@ -122,12 +123,12 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         if rejected is not None:
             return rejected
 
-        identifier = _login_identifier(request.data)
-        # One counter per account, however it is named (username, email, case):
-        # resolve to the canonical username when the account exists.
-        identifier_throttle = (
-            throttling.LoginIdentifierThrottle(_throttle_key(identifier)) if identifier else None
-        )
+        # Keyed on the identifier as typed (lowercased), not the resolved
+        # account: an account-wide lock would show through any other spelling
+        # and confirm which email belongs to a known username. So a username and
+        # its email have separate counters (at most 2x10 guesses per window).
+        identifier = _login_identifier(request_body(request))
+        identifier_throttle = throttling.LoginIdentifierThrottle(identifier) if identifier else None
         if identifier_throttle is not None:
             wait = identifier_throttle.wait()
             if wait is not None:
@@ -144,19 +145,23 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         return move_refresh_to_cookie(response)
 
 
-def _login_identifier(data) -> tuple[str, str] | None:
-    """``(field, value)`` for the username or email a login attempt names, if usable."""
+def request_body(request) -> Mapping:
+    """``request.data`` when it is an object, else ``{}`` (a JSON array or string body).
+
+    Views read fields with ``.get()``; a non-object body must be a 400 from the
+    usual missing-field checks, not an AttributeError (500).
+    """
+    data = request.data
+    return data if isinstance(data, Mapping) else {}
+
+
+def _login_identifier(data: Mapping) -> str | None:
+    """The username or email a login attempt names, if it is a usable string."""
     for field in ("username", "email"):
-        value = data.get(field) if hasattr(data, "get") else None
+        value = data.get(field)
         if isinstance(value, str) and value.strip():
-            return field, value
+            return value
     return None
-
-
-def _throttle_key(identifier: tuple[str, str]) -> str:
-    field, value = identifier
-    resolved = AuthService().normalize_login_identifier(**{field: value})
-    return resolved or value
 
 
 class RegisterView(generics.CreateAPIView):
@@ -239,8 +244,9 @@ class AuthViewSet(ViewSet):
         if rejected is not None:
             return rejected
 
-        uidb64 = kwargs.get("uid") or request.data.get("uid")
-        token = kwargs.get("token") or request.data.get("token")
+        body = request_body(request)
+        uidb64 = kwargs.get("uid") or body.get("uid")
+        token = kwargs.get("token") or body.get("token")
 
         try:
             result = verify_email_flow(uidb64, token, request, self.auth_service)
@@ -257,7 +263,9 @@ class AuthViewSet(ViewSet):
     def resend_verification(self, request):
         """Resend verification email."""
         try:
-            result = resend_verification_flow(request.data.get("email"), self.email_service)
+            result = resend_verification_flow(
+                request_body(request).get("email"), self.email_service
+            )
         except AuthFlowError as exc:
             return error_response(
                 exc.message,
@@ -271,7 +279,7 @@ class AuthViewSet(ViewSet):
     def password_reset(self, request):
         """Request a password reset link."""
         try:
-            result = password_reset_flow(request.data.get("email"), self.email_service)
+            result = password_reset_flow(request_body(request).get("email"), self.email_service)
         except AuthFlowError as exc:
             return error_response(
                 exc.message,
@@ -286,9 +294,9 @@ class AuthViewSet(ViewSet):
         """Confirm password reset with the new password."""
         try:
             result = password_reset_confirm_flow(
-                request.data.get("uid"),
-                request.data.get("token"),
-                request.data.get("password"),
+                request_body(request).get("uid"),
+                request_body(request).get("token"),
+                request_body(request).get("password"),
             )
         except AuthFlowError as exc:
             return error_response(
@@ -495,6 +503,14 @@ class RevokeOtherSessionsView(_CookieSessionView):
         if error is not None:
             return error
         revoked = revoke_other_sessions(user, keep_jti=token[jwt_settings.JTI_CLAIM])
+        if revoked is None:
+            # This device's token rotated (another tab) between the check and
+            # the lock; keeping it would sign this device out instead.
+            return error_response(
+                "This session just changed. Please try again.",
+                code="session_changed",
+                status_code=status.HTTP_409_CONFLICT,
+            )
         logger.info("Signed out other devices", extra={"user_id": user.pk, "revoked": revoked})
         return Response({"revoked": revoked, "active": live_refresh_tokens(user).count()})
 

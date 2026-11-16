@@ -18,6 +18,7 @@ from ..services.account_management_service import (
 )
 from ..services.auth_service import issue_refresh_token, require_recent_auth, token_auth_time
 from ..services.email_service import EmailService
+from .auth import request_body
 
 User = get_user_model()
 
@@ -67,7 +68,7 @@ class AccountManagementViewSet(ViewSet):
         """Allow users to delete their own account."""
         require_recent_auth(request)
         user = request.user
-        password = request.data.get("password")
+        password = request_body(request).get("password")
 
         logger.info("Account deletion attempt initiated")
 
@@ -82,8 +83,9 @@ class AccountManagementViewSet(ViewSet):
     def change_email(self, request):
         """Request email change - sends verification to new email."""
         require_recent_auth(request)
-        new_email = request.data.get("new_email")
-        password = request.data.get("password")
+        body = request_body(request)
+        new_email = body.get("new_email")
+        password = body.get("password")
         user = request.user
 
         email_service = EmailService()
@@ -121,9 +123,10 @@ class AccountManagementViewSet(ViewSet):
         ``new_email`` is still read for links in the old 3-segment form (one
         release); it must match the pending address.
         """
-        uidb64 = request.data.get("uid")
-        token = request.data.get("token")
-        new_email_encoded = request.data.get("new_email")
+        body = request_body(request)
+        uidb64 = body.get("uid")
+        token = body.get("token")
+        new_email_encoded = body.get("new_email")
 
         result = confirm_email_change(uidb64, token, new_email_encoded)
         return api_response(

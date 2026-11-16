@@ -212,27 +212,33 @@ class ScopedThrottleTests(APITestCase):
         self.assertEqual(settings.LOGIN_IDENTIFIER_WINDOW_SECONDS, 900)
 
 
-class LoginLockPerAccountTests(APITestCase):
+class LoginLockKeyTests(APITestCase):
+    """The lock is keyed on the identifier as typed, not the resolved account."""
+
     def setUp(self):
         User.objects.create_user(username="Twin", email="twin@example.com", password="right-pass-1")
 
-    def test_username_and_email_share_one_counter(self):
-        for attempt in range(10):
-            field, value = ("username", "twin") if attempt % 2 else ("email", "TWIN@example.com")
-            self.client.post(
-                reverse("token_obtain_pair"),
-                {field: value, "password": "wrong"},
-                format="json",
-                REMOTE_ADDR=f"10.9.0.{attempt}",
-                **XHR,
-            )
-        response = self.client.post(
+    def _fail(self, field, value, ip):
+        return self.client.post(
             reverse("token_obtain_pair"),
-            {"username": "Twin", "password": "wrong"},
+            {field: value, "password": "wrong"},
             format="json",
+            REMOTE_ADDR=ip,
             **XHR,
         )
-        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_a_locked_username_does_not_reveal_its_email(self):
+        for attempt in range(10):
+            self._fail("username", "twin", f"10.9.0.{attempt}")
+        self.assertEqual(
+            self._fail("username", "TWIN", "10.9.1.1").status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+        # The real email and an unknown one look the same: no oracle.
+        real = self._fail("email", "twin@example.com", "10.9.1.2")
+        unknown = self._fail("email", "nobody@example.com", "10.9.1.3")
+        self.assertEqual(real.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(real.data, unknown.data)
 
 
 class SocialLinksOrderTests(APITestCase):

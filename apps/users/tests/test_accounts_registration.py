@@ -126,3 +126,30 @@ class VerifyEmailBodyRouteTests(APITestCase):
             reverse("verify_email_body"), {"uid": 5, "token": ["x"]}, format="json", **XHR
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class NonObjectBodyTests(APITestCase):
+    """A JSON array body is a 400 everywhere, never an AttributeError 500."""
+
+    def test_auth_flow_endpoints_reject_array_bodies(self):
+        user = User.objects.create_user(
+            username="arr", email="arr@example.com", password="pw-1234567"
+        )
+        cases = [
+            ("post", reverse("verify_email_body"), XHR),
+            ("post", reverse("resend_verification"), {}),
+            ("post", reverse("password_reset"), {}),
+            ("post", reverse("password_reset_confirm"), {}),
+            ("post", reverse("confirm_email_change"), {}),
+            ("post", reverse("token_obtain_pair"), XHR),
+        ]
+        for method, url, headers in cases:
+            with self.subTest(url=url):
+                response = getattr(self.client, method)(url, ["x"], format="json", **headers)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.client.force_authenticate(user)
+        for method, name in (("post", "change_email"), ("delete", "delete_account")):
+            with self.subTest(name=name):
+                response = getattr(self.client, method)(reverse(name), ["x"], format="json")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

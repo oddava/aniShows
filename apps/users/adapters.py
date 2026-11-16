@@ -1,3 +1,4 @@
+import re
 import uuid
 from urllib.parse import urlparse
 
@@ -72,6 +73,13 @@ def _random_suffix() -> str:
     return uuid.uuid4().hex[:4]
 
 
+def _name_candidate(name: str | None) -> str | None:
+    """A display name squeezed into username characters ("Mary Jane" -> "MaryJane")."""
+    if not name:
+        return None
+    return re.sub(r"[^\w.@+-]", "", name) or None
+
+
 def unique_oauth_username(*candidates: str | None) -> str:
     """A valid username, free ignoring case, from the first candidate that passes the rules.
 
@@ -111,12 +119,14 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
         # Always set it here: Google sends no username, and allauth's own
         # generator (populate_username in save_user) would skip G1's rules. It
         # keeps a username that is already set.
-        email = data.get("email") or user.email or ""
+        # Never from the email address: that would publish a private local part.
         user.username = unique_oauth_username(
             user.username,
             data.get("username"),
-            data.get("first_name"),
-            email.split("@", 1)[0] if "@" in email else None,
+            _name_candidate(data.get("first_name")),
+            _name_candidate(
+                " ".join(filter(None, (data.get("first_name"), data.get("last_name"))))
+            ),
         )
         return user
 

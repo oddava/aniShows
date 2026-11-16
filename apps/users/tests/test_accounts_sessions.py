@@ -162,3 +162,45 @@ class SessionLockOrderTests(APITestCase):
             auth_service.revoke_all_sessions(self.user)
         view_lock.assert_called_once_with(self.user.pk)
         self.assertEqual(lock.call_count, 2)
+
+
+class SessionLockSqlOrderTests(APITestCase):
+    """The users row is locked before the token row in a refresh (the race fix)."""
+
+    def test_refresh_locks_the_user_row_first(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        user = User.objects.create_user(username="sqlorder", email="so@example.com", password="x")
+        client = APIClient()
+        client.cookies[REFRESH_COOKIE_NAME] = str(issue_refresh_token(user))
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(client.post(reverse("token_refresh"), **XHR).status_code, 200)
+        locks = [q["sql"] for q in queries.captured_queries if "FOR UPDATE" in q["sql"]]
+        self.assertGreaterEqual(len(locks), 2)
+        self.assertIn('"users_customuser"', locks[0])
+        self.assertIn("outstandingtoken", locks[1])
+
+
+class RevokeOthersRaceTests(APITestCase):
+    def test_a_rotated_cookie_gets_409_and_revokes_nothing(self):
+        from unittest.mock import patch
+
+        user = User.objects.create_user(username="rotated", email="r@example.com", password="x")
+        other = issue_refresh_token(user)
+        client = APIClient()
+        client.cookies[REFRESH_COOKIE_NAME] = str(issue_refresh_token(user))
+        # Another tab rotates this device's token after the view validated it.
+        with patch("apps.users.views.auth.revoke_other_sessions", return_value=None):
+            response = client.post(reverse("auth_sessions_revoke_others"), **XHR)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "session_changed")
+        self.assertFalse(BlacklistedToken.objects.filter(token__jti=other["jti"]).exists())
+
+    def test_service_returns_none_when_the_kept_token_is_gone(self):
+        from ..services.auth_service import revoke_other_sessions
+
+        user = User.objects.create_user(username="gone", email="g@example.com", password="x")
+        issue_refresh_token(user)
+        self.assertIsNone(revoke_other_sessions(user, keep_jti="not-live"))
+        self.assertEqual(BlacklistedToken.objects.count(), 0)
