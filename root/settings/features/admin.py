@@ -37,7 +37,9 @@ ADMIN_SPA_URL = "/admin"
 def _tune_jazzmin(config: dict) -> None:
     def icon_key(key: str) -> str:
         app, _, model = key.partition(".")
-        return f"anime.{model}" if app == "animes" and model else "anime" if key == "animes" else key
+        if app != "animes":
+            return key
+        return f"anime.{model}" if model else "anime"
 
     dropped = {"core.CeleryTaskSchedule"}
     icons = {
