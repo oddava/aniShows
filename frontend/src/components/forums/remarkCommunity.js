@@ -88,7 +88,49 @@ export const fencedCodeRanges = (source = '') => {
     return ranges;
 };
 
-const inRanges = (ranges, index) => ranges.some(([start, end]) => index >= start && index < end);
+/** Whether `index` falls in one of the sorted, non-overlapping `ranges` (binary search). */
+const inRanges = (ranges, index) => {
+    let low = 0;
+    let high = ranges.length - 1;
+    while (low <= high) {
+        const mid = (low + high) >> 1;
+        const [start, end] = ranges[mid];
+        if (index < start) high = mid - 1;
+        else if (index >= end) low = mid + 1;
+        else return true;
+    }
+    return false;
+};
+
+const isDigit = (char) => char !== undefined && char >= '0' && char <= '9';
+const BULLET_MARKERS = new Set(['>', '-', '*', '+']);
+
+/**
+ * Offset of a `>!` that follows only container markers (`>`, `-`, `*`, `+`, `1.`/`1)`, each with up to
+ * three leading spaces and one trailing space) at the start of `line`, or -1. One forward scan where
+ * every step consumes at least one character, so hostile lines stay linear (no regex backtracking).
+ */
+const lineStartSpoilerOffset = (line) => {
+    let index = 0;
+    for (;;) {
+        let spaces = 0;
+        while (line[index] === ' ' && spaces < 3) {
+            index += 1;
+            spaces += 1;
+        }
+        if (line[index] === '>' && line[index + 1] === '!') return index;
+        let markerEnd = -1;
+        if (BULLET_MARKERS.has(line[index])) {
+            markerEnd = index + 1;
+        } else if (isDigit(line[index])) {
+            let end = index;
+            while (end - index < 9 && isDigit(line[end])) end += 1;
+            if (line[end] === '.' || line[end] === ')') markerEnd = end + 1;
+        }
+        if (markerEnd === -1) return -1;
+        index = line[markerEnd] === ' ' ? markerEnd + 1 : markerEnd;
+    }
+};
 
 /**
  * A line starting with `>!` would parse as a blockquote; when a `!<` follows it is a spoiler, so the
@@ -97,17 +139,17 @@ const inRanges = (ranges, index) => ranges.some(([start, end]) => index >= start
 export const escapeLineStartSpoilers = (source = '') => {
     if (!source.includes('>!')) return source;
     const fences = fencedCodeRanges(source);
-    const linePrefix = /^((?: {0,3}(?:>|[-*+]|\d{1,9}[.)]) ?)*? {0,3})>!/;
+    // A spoiler needs a `!<` somewhere after its `>!`: one lookup instead of a scan per line.
+    const lastClose = source.lastIndexOf('!<');
     let offset = 0;
     return source
         .split('\n')
         .map((line) => {
             const lineStart = offset;
             offset += line.length + 1;
-            const match = linePrefix.exec(line);
-            if (!match || inRanges(fences, lineStart)) return line;
-            const markerAt = match[1].length;
-            if (!source.slice(lineStart + markerAt + 2).includes('!<')) return line;
+            const markerAt = lineStartSpoilerOffset(line);
+            if (markerAt === -1 || inRanges(fences, lineStart)) return line;
+            if (lastClose < lineStart + markerAt + 2) return line;
             return `${line.slice(0, markerAt)}\\${line.slice(markerAt)}`;
         })
         .join('\n');
@@ -121,15 +163,22 @@ export const splitAlignedBlocks = (source = '') => {
     const segments = [];
     const fences = fencedCodeRanges(source);
     const opener = /<(p|div)\s+align=["'](left|center|right)["']\s*>/gi;
+    // Once a tag has no closer after some opener, no later opener of that tag can find one;
+    // remembering it keeps unclosed openers from rescanning the rest of the text each time.
+    const unclosed = new Set();
     let cursor = 0;
     let match;
     while ((match = opener.exec(source))) {
-        if (inRanges(fences, match.index)) continue;
-        const closer = new RegExp(`</${match[1]}\\s*>`, 'gi');
+        const tag = match[1].toLowerCase();
+        if (unclosed.has(tag) || inRanges(fences, match.index)) continue;
+        const closer = new RegExp(`</${tag}\\s*>`, 'gi');
         closer.lastIndex = match.index + match[0].length;
         let close = closer.exec(source);
         while (close && inRanges(fences, close.index)) close = closer.exec(source);
-        if (!close) continue;
+        if (!close) {
+            unclosed.add(tag);
+            continue;
+        }
         if (match.index > cursor) segments.push({ content: source.slice(cursor, match.index) });
         segments.push({
             align: match[2].toLowerCase(),
@@ -144,6 +193,11 @@ export const splitAlignedBlocks = (source = '') => {
 
 /* ------------------------------------------------------------------ mdast transforms */
 
+/**
+ * Where `close` ends the spoiler opened in `children[startIndex]` at `from`: `{ index, at }`, `null` when a
+ * line break (or an empty `||||`) stops it, or `false` when no `close` follows at all (then no later
+ * opener in these children can close either, so the caller stops: keeps hostile input linear).
+ */
 const findClose = (children, startIndex, from, close, allowNewline) => {
     for (let j = startIndex; j < children.length; j += 1) {
         const node = children[j];
@@ -161,7 +215,7 @@ const findClose = (children, startIndex, from, close, allowNewline) => {
             return null;
         }
     }
-    return null;
+    return false;
 };
 
 /** Wrap `open … close` (possibly spanning sibling inline nodes) in spoiler nodes. */
@@ -174,6 +228,7 @@ const wrapSpoilers = (parent, open, close, allowNewline) => {
         while (openAt !== -1) {
             const from = openAt + open.length;
             const found = findClose(children, i, from, close, allowNewline);
+            if (found === false) return;
             if (found) {
                 const end = children[found.index];
                 const before = start.value.slice(0, openAt);
@@ -328,8 +383,8 @@ export default function remarkCommunity() {
 }
 
 /**
- * remark plugin: no raw HTML (`<b>` stays literal text) and no second entity decode (`&amp;` stays
- * literal text; the renderer decodes stored content exactly once before parsing).
+ * remark plugin: no raw HTML (`<b>` stays literal text) and no entity decoding (`&amp;` stays
+ * literal text): forum text is stored and shown exactly as typed.
  */
 export function remarkNoRawHtml() {
     const data = this.data();

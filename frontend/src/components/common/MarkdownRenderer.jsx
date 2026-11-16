@@ -467,8 +467,9 @@ const MarkdownRenderer = ({ content, className = "", mode = "legacy" }) => {
         return (
             <div className={`markdown-preview max-w-none ${className}`}>
                 <Suspense fallback={<div className="prose prose-invert"><p>Loading...</p></div>}>
-                    {/* Stored forum rows are entity-encoded at write time: decode exactly once. */}
-                    <CommunityMarkdown source={decodeHtmlEntities(content || "")} />
+                    {/* Forum text is stored as typed (forums 0010 unescaped the old bleach-encoded
+                        rows), so it is shown as typed: no entity decoding here or in the parser. */}
+                    <CommunityMarkdown source={content || ""} />
                 </Suspense>
             </div>
         );

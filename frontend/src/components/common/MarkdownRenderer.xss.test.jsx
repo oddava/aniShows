@@ -119,9 +119,10 @@ describe('MarkdownRenderer markdown mode rendering', () => {
         expect(quote.className).toContain('border-l-4 border-accent/40');
     });
 
-    it('renders an entity-encoded legacy quote ("&gt; quote") as a blockquote', async () => {
-        const container = await md('&gt; stored quote');
-        expect(container.querySelector('blockquote')?.textContent.trim()).toBe('stored quote');
+    it('shows a typed "&gt; quote" as text, not a blockquote (text is shown as typed)', async () => {
+        const container = await md('&gt; typed entity');
+        expect(container.querySelector('blockquote')).toBeNull();
+        expect(container.textContent).toBe('&gt; typed entity');
     });
 
     it('keeps < and & literal inside fenced code', async () => {
@@ -136,19 +137,14 @@ describe('MarkdownRenderer markdown mode rendering', () => {
         expect(container.querySelector('b')).toBeNull();
     });
 
-    it('decodes entity-encoded code (bleach-escaped rows) exactly once', async () => {
-        const container = await md('```\nif (a &lt; b &amp;&amp; c) {}\n```');
-        expect(container.querySelector('pre code').textContent).toBe('if (a < b && c) {}\n');
+    it('keeps typed entities literal inside code', async () => {
+        const container = await md('```\nif (a &lt; b) {}\n```');
+        expect(container.querySelector('pre code').textContent).toBe('if (a &lt; b) {}\n');
     });
 
-    it('shows & in text as &', async () => {
-        const container = await md('Tom & Jerry, Tom &amp; Jerry');
-        expect(container.textContent).toBe('Tom & Jerry, Tom & Jerry');
-    });
-
-    it('decodes once only: &amp;lt; shows as the literal text &lt;', async () => {
-        const container = await md('5 &amp;lt; 6');
-        expect(container.textContent).toBe('5 &lt; 6');
+    it('shows & and typed entities exactly as typed (no decoding)', async () => {
+        const container = await md('Tom & Jerry, AT&amp;T, 5 &amp;lt; 6');
+        expect(container.textContent).toBe('Tom & Jerry, AT&amp;T, 5 &amp;lt; 6');
     });
 
     it('shows raw <b>x</b> literally', async () => {
@@ -160,7 +156,7 @@ describe('MarkdownRenderer markdown mode rendering', () => {
     it('shows entity-encoded HTML literally, not as markup', async () => {
         const container = await md('&lt;img src=x onerror=alert(1)&gt;');
         expect(container.querySelector('img')).toBeNull();
-        expect(container.textContent).toBe('<img src=x onerror=alert(1)>');
+        expect(container.textContent).toBe('&lt;img src=x onerror=alert(1)&gt;');
     });
 
     it('renders basic markdown with the legacy classes', async () => {
@@ -304,10 +300,10 @@ describe('MarkdownRenderer markdown mode rendering', () => {
             expect(container.textContent).not.toContain('inline');
         });
 
-        it('decodes an entity-encoded &gt;!x!&lt; spoiler', async () => {
-            const container = await md('&gt;!stored!&lt;');
-            expect(screen.getByRole('button', { name: 'Spoiler, activate to reveal' })).toBeInTheDocument();
-            expect(container.textContent).not.toContain('stored');
+        it('does not turn a typed &gt;!x!&lt; into a spoiler', async () => {
+            const container = await md('&gt;!typed!&lt;');
+            expect(screen.queryByRole('button', { name: 'Spoiler, activate to reveal' })).toBeNull();
+            expect(container.textContent).toBe('&gt;!typed!&lt;');
         });
 
         it('keeps formatting inside a spoiler', async () => {
@@ -338,10 +334,11 @@ describe('MarkdownRenderer markdown mode rendering', () => {
             expect(block.textContent).toContain('<i>x</i>');
         });
 
-        it('handles entity-encoded alignment rows and right/left', async () => {
-            const container = await md('&lt;p align="right"&gt;to the right&lt;/p&gt;\n\n<div align=\'left\'>left</div>');
+        it('handles right/left alignment and leaves typed entities alone', async () => {
+            const container = await md('<p align="right">to the right</p>\n\n<div align=\'left\'>left</div>\n\n&lt;p align="center"&gt;x&lt;/p&gt;');
             expect(container.querySelector('div.text-right').textContent).toBe('to the right');
             expect(container.querySelector('div.text-left').textContent).toBe('left');
+            expect(container.querySelector('div.text-center')).toBeNull();
         });
 
         it('ignores alignment tags inside fenced code', async () => {

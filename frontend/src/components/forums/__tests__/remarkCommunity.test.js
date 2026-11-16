@@ -185,3 +185,44 @@ describe('remarkCommunity', () => {
         expect(collect(tree, 'image')).toHaveLength(0);
     });
 });
+
+// Forum text is hostile and every viewer's browser runs these helpers, so each must stay
+// linear: these inputs took seconds to minutes with the earlier regex / rescanning code.
+describe('hostile input stays fast', () => {
+    const BUDGET_MS = 1500;
+    const timed = (fn) => {
+        const started = performance.now();
+        fn();
+        return performance.now() - started;
+    };
+
+    it('scans a line of 40 container markers before >! in linear time', () => {
+        const source = `>!a!<\n${'> '.repeat(40)}x`;
+        expect(timed(() => escapeLineStartSpoilers(source))).toBeLessThan(BUDGET_MS);
+    });
+
+    it('handles 100k lines starting with >! and one closer at the end', () => {
+        const source = `${'>!x\n'.repeat(100_000)}!<`;
+        let escaped;
+        expect(timed(() => { escaped = escapeLineStartSpoilers(source); })).toBeLessThan(BUDGET_MS);
+        expect(escaped.startsWith(String.raw`\>!x`)).toBe(true);
+    });
+
+    it('handles 50k unclosed alignment openers', () => {
+        const source = '<p align="left">'.repeat(50_000);
+        let segments;
+        expect(timed(() => { segments = splitAlignedBlocks(source); })).toBeLessThan(BUDGET_MS);
+        expect(segments).toEqual([{ content: source }]);
+    });
+
+    it('handles many code fences without a quadratic range lookup', () => {
+        const source = '```\nx\n```\n>!y\n'.repeat(20_000);
+        expect(timed(() => escapeLineStartSpoilers(`${source}!<`))).toBeLessThan(BUDGET_MS);
+    });
+
+    it('wraps spoilers in a paragraph of 20k unclosed >! openers quickly', () => {
+        const source = 'a >! '.repeat(20_000);
+        const processor = unified().use(remarkParse).use(remarkNoRawHtml).use(remarkCommunity);
+        expect(timed(() => processor.runSync(processor.parse(source)))).toBeLessThan(BUDGET_MS * 2);
+    });
+});
