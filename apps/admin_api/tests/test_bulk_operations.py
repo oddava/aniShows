@@ -18,7 +18,7 @@ class BulkOperationTests(TestCase):
         patcher = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.client = bearer_client(make_user("bulk-root", role="superuser"))
+        self.api = bearer_client(make_user("bulk-root", role="superuser"))
         self.anime = [
             Anime.objects.create(
                 title=f"Bulk {index}",
@@ -34,7 +34,7 @@ class BulkOperationTests(TestCase):
         UserFavorite.objects.create(user=fan, anime=self.anime[0])
 
     def _post(self, **payload):
-        return self.client.post(
+        return self.api.post(
             URL,
             {"operation": "delete", "entity_type": "anime", **payload},
             format="json",
@@ -80,8 +80,27 @@ class BulkOperationTests(TestCase):
         self.assertEqual(Anime.objects.count(), 0)
         self.assertEqual(AuditLog.objects.get().action, AuditLog.ActionType.BULK_ACTION)
 
+    def test_user_ban_dry_run_previews_without_changing_anyone(self):
+        member = make_user("dry-member")
+        response = self.api.post(
+            URL,
+            {
+                "operation": "ban",
+                "entity_type": "user",
+                "entity_ids": [member.id],
+                "reason": "Spam ring",
+                "dry_run": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual((response.status_code, response.data["matched"]), (200, 1))
+        member.refresh_from_db()
+        self.assertTrue(member.is_active)
+        self.assertFalse(AuditLog.objects.exists())
+
     def test_anime_update_status_is_gone(self):
-        response = self.client.post(
+        response = self.api.post(
             URL,
             {
                 "operation": "update_status",
@@ -108,7 +127,7 @@ class BulkOperationTests(TestCase):
     def test_reviews_are_deleted_through_the_model(self):
         review = Review.objects.get()
         with patch.object(Review, "delete", autospec=True, side_effect=Review.delete) as delete:
-            response = self.client.post(
+            response = self.api.post(
                 URL,
                 {
                     "operation": "delete",

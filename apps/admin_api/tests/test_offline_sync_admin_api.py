@@ -94,6 +94,19 @@ class OfflineSyncAdminAPITests(TestCase):
         self.assertTrue(state.quarantined)
         self.assertEqual(state.quarantine_reason, "operator_skipped")
 
+    def test_mark_skipped_rejects_a_non_string_reason(self):
+        client = APIClient()
+        client.force_authenticate(self.superuser)
+        state = self._state(self._anime("Bad Reason"))
+
+        response = client.post(
+            f"/api/v1/admin/offline-sync-states/{state.id}/mark_skipped/",
+            {"reason": 42},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_set_ids_and_retry_updates_identity_then_resets(self):
         self.client.force_authenticate(self.superuser)
         state = self._state(self._anime("Set IDs"))

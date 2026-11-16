@@ -209,7 +209,10 @@ class AdminOfflineAnimeSyncStateViewSet(
     @method_decorator(transaction.atomic)
     def mark_skipped(self, request, pk=None):
         state = self.get_object()
-        reason = (request.data.get("reason") or "marked_skipped").strip()[:120]
+        raw_reason = request.data.get("reason") or "marked_skipped"
+        if not isinstance(raw_reason, str):
+            return Response({"detail": "reason must be a string."}, status=400)
+        reason = raw_reason.strip()[:120] or "marked_skipped"
         OfflineSyncService().mark_skipped(state, reason=reason)
         state.refresh_from_db()
         return self._audited(state, "mark_skipped", reason=reason)

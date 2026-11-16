@@ -200,7 +200,7 @@ def perform_bulk_operation(request, data) -> BulkOperationResult:
     with transaction.atomic():
         queryset = _target_queryset(entity, ids, request.user)
         locked_users: list = []
-        if entity == "user":
+        if entity == "user" and not dry_run:
             # Lock first, so the exclusions and the count reflect the rows really changed.
             locked_users = list(queryset.select_for_update().order_by("pk"))
             matched = len(locked_users)
