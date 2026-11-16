@@ -21,7 +21,7 @@ from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.viewsets import ViewSet
 
 from ...core.api_errors import error_response
-from ...shared.errors import ENQUEUE_ERRORS
+from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ...shared.logger import logger
 from ...users.serializers.recommendations import UserRecommendationSerializer
 from ..services.recommendations import (
@@ -83,7 +83,10 @@ def _queue_refresh(user_id: int) -> bool:
         logger.warning("Could not queue recommendations for user %s", user_id, exc_info=True)
         # The helper marks the user pending before it enqueues; nothing was queued,
         # so a retry must not be debounced into a 202 for nothing.
-        cache.delete(RECO_PENDING_KEY.format(user_id=user_id))
+        try:
+            cache.delete(RECO_PENDING_KEY.format(user_id=user_id))
+        except CACHE_ERRORS:  # the cache itself is what failed: nothing to clear
+            pass
         return False
     return True
 

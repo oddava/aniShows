@@ -229,6 +229,19 @@ class RecommendationTaskTests(RecommendationBatchTestBase):
 
         retry.assert_called_once()
 
+    def test_single_user_mode_does_not_retry_the_time_limit(self):
+        member = self._member()
+        with (
+            patch.object(
+                RecommendationService, "generate_for_user", side_effect=SoftTimeLimitExceeded()
+            ),
+            patch.object(generate_recommendations, "retry") as retry,
+        ):
+            result = generate_recommendations.apply(kwargs={"user_id": member.id})
+
+        self.assertTrue(result.failed())
+        retry.assert_not_called()
+
     def test_stores_at_least_the_shelf_minimum(self):
         member = self._member()
         with patch.object(RecommendationService, "generate_for_user", return_value=[]) as gen:

@@ -11,6 +11,7 @@ One task, two modes:
 
 from typing import Any
 
+from celery.exceptions import SoftTimeLimitExceeded
 from django.contrib.auth import get_user_model
 
 from ...shared.celery import observed_shared_task
@@ -83,6 +84,8 @@ class RecommendationTask(BaseTask):
 
         try:
             recs = RecommendationService().generate_for_user(user, limit=limit)
+        except SoftTimeLimitExceeded:
+            raise  # out of time: a retry would only hit the limit again
         except Exception as exc:
             logger.exception("Error generating recommendations for user %s", user_id)
             raise self.retry(exc=exc) from exc

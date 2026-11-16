@@ -102,6 +102,20 @@ class RecommendationsRefreshTests(RecommendationsViewTestBase):
         self.assertEqual(retried.status_code, 202)
         self.assertEqual(self.enqueue.call_count, 2)
 
+    def test_a_refresh_with_the_cache_down_is_a_503_not_a_500(self):
+        from redis.exceptions import ConnectionError as RedisConnectionError
+
+        with (
+            patch(
+                "apps.animes.views.recommendations.schedule_recommendations_debounced",
+                side_effect=RedisConnectionError("cache down"),
+            ),
+            patch.object(cache, "delete", side_effect=RedisConnectionError("cache down")),
+        ):
+            response = self.client.post(REFRESH_URL)
+
+        self.assertEqual(response.status_code, 503)
+
     def test_refresh_never_generates_in_the_request(self):
         with patch.object(RecommendationService, "generate_for_user") as generate:
             self.client.post(REFRESH_URL)
