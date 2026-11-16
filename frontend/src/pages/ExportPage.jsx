@@ -73,8 +73,11 @@ const ExportPage = () => {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
-            
-            setSuccess('Export downloaded successfully!');
+
+            const skipped = Number(response.headers?.['x-export-skipped']) || 0;
+            setSuccess(skipped > 0
+                ? `Export downloaded. ${skipped} ${skipped === 1 ? 'entry' : 'entries'} without a MyAnimeList ID ${skipped === 1 ? 'was' : 'were'} left out.`
+                : 'Export downloaded successfully!');
         } catch (err) {
             setError(getApiErrorMessage(err, 'Failed to export data'));
         } finally {

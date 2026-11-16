@@ -352,7 +352,7 @@ function ListRow({ item, episodesWatched, children }) {
 function ListProgress({ episodesWatched, total }) {
     if (total <= 0) {
         return (
-            <span className="hidden sm:inline shrink-0 px-2 text-[11px] text-gray-400">
+            <span className="shrink-0 px-2 text-[11px] text-gray-400">
                 {episodesWatched}/? eps
             </span>
         );
@@ -360,8 +360,8 @@ function ListProgress({ episodesWatched, total }) {
 
     const ratio = Math.min(episodesWatched / total, 1);
     return (
-        <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 px-2">
-            <div className="w-32 h-2 bg-dark-200 rounded-full overflow-hidden">
+        <div className="flex flex-col items-end gap-1 shrink-0 px-2">
+            <div className="hidden sm:block w-32 h-2 bg-dark-200 rounded-full overflow-hidden">
                 <div
                     className={`h-full ${ratio >= 1 ? 'bg-green-500' : 'bg-accent-dark'}`}
                     style={{ width: `${ratio * 100}%` }}

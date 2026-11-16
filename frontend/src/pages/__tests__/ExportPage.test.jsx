@@ -45,4 +45,15 @@ describe('ExportPage', () => {
         renderPage();
         expect(screen.getByText(/without a MyAnimeList ID are left out of the XML/)).toBeInTheDocument();
     });
+
+    it('reports how many entries the XML download left out', async () => {
+        window.URL.createObjectURL = vi.fn(() => 'blob:x');
+        window.URL.revokeObjectURL = vi.fn();
+        api.exportData.mockResolvedValue({ data: '<myanimelist/>', headers: { 'x-export-skipped': '2' } });
+        renderPage();
+
+        fireEvent.click(screen.getByRole('button', { name: /Download XML/i }));
+
+        expect(await screen.findByText(/2 entries without a MyAnimeList ID were left out/)).toBeInTheDocument();
+    });
 });

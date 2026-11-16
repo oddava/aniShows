@@ -90,7 +90,9 @@ const knownTotal = (anime) => {
  * `entry` is the `user_list_status` / list-row shape. Every write is optimistic, rolls
  * back with an error toast carrying the server's message, and then adopts the entry
  * the server returns (its normaliser may change status, progress or dates). Each
- * action resolves to the saved entry, or `null` when nothing was saved.
+ * action resolves to the saved entry, or `null` when nothing was saved. One write
+ * runs at a time: an action called while `isPending` is ignored (resolves `null`),
+ * so callers should disable their controls while it is true.
  *
  * Only the caches a list write can change are refreshed: lists (incl. the summary),
  * the watching shelf, the own profile, own activity, this anime's detail queries, and

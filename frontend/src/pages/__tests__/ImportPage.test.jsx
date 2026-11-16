@@ -119,6 +119,9 @@ describe('ImportPage jobs', () => {
         api.getImportJobs.mockResolvedValue({
             data: [job({ status: 'processing', status_display: 'Processing', processed_entries: 30, progress_percentage: 33 })],
         });
+        api.getImportJobStatus.mockResolvedValue({
+            data: job({ status: 'processing', status_display: 'Processing', processed_entries: 30, progress_percentage: 33 }),
+        });
         api.cancelImportJob.mockResolvedValue({ data: {} });
         renderPage();
 
@@ -126,6 +129,18 @@ describe('ImportPage jobs', () => {
         expect(within(card).getByRole('progressbar', { name: 'Import progress' })).toHaveAttribute('aria-valuenow', '33');
         fireEvent.click(within(card).getByRole('button', { name: 'Cancel' }));
         await waitFor(() => expect(api.cancelImportJob).toHaveBeenCalledWith(1));
+    });
+
+    it('follows a job that was already running when the page opened', async () => {
+        api.getImportJobs.mockResolvedValue({
+            data: [job({ status: 'processing', status_display: 'Processing', progress_percentage: 10 })],
+        });
+        api.getImportJobStatus.mockResolvedValue({ data: job() });
+        const { invalidate } = renderPage();
+
+        await waitFor(() => expect(api.getImportJobStatus).toHaveBeenCalledWith(1));
+        await waitFor(() => expect(invalidatedKeys(invalidate)).toContain(JSON.stringify(['lists'])));
+        expect(await screen.findByText(/Import completed!/)).toBeInTheDocument();
     });
 
     it('accepts a .xml.gz file and uploads it', async () => {

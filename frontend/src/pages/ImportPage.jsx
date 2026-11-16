@@ -187,6 +187,13 @@ const ImportPage = () => {
         setPolledJobIds((ids) => (ids.includes(jobId) ? ids : [...ids, jobId]));
     }, []);
 
+    // Jobs that were already running when the page opened (started before a reload,
+    // from another tab, or the daily AniList sync) are polled the same way, so their
+    // cards, Cancel and the Sync/Run again buttons follow them to the end.
+    useEffect(() => {
+        (jobsQuery.data ?? EMPTY_JOBS).filter(isActiveJob).forEach((job) => pollJobStatus(job.id));
+    }, [jobsQuery.data, pollJobStatus]);
+
     const cancelMutation = useMutation({
         mutationFn: (jobId) => importExportApi.cancelImportJob(jobId),
         // The list and any polled copy of the job.
