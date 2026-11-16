@@ -1,26 +1,35 @@
-"""Notification models (G4 Notifications): in-app rows and web-push subscriptions."""
+"""Notification models (G4 Notifications): in-app rows, web-push devices, preferences."""
 
 from django.db.models import (
     CASCADE,
+    SET_NULL,
     BooleanField,
     CharField,
     DateTimeField,
     ForeignKey,
     JSONField,
     Model,
+    OneToOneField,
+    PositiveIntegerField,
+    Q,
     TextChoices,
     TextField,
+    UniqueConstraint,
     URLField,
 )
 from django.db.models.indexes import Index
-from django.utils import timezone
 
 from ...shared.models import CreatedAtMixin
 
 __all__ = [
     "Notification",
+    "NotificationPreference",
     "PushSubscription",
 ]
+
+# Longest push endpoint we accept (the subscribe serializer enforces the same).
+PUSH_ENDPOINT_MAX_LENGTH = 2048
+NOTIFICATION_KEY_MAX_LENGTH = 160
 
 
 class Notification(CreatedAtMixin, Model):
@@ -41,6 +50,14 @@ class Notification(CreatedAtMixin, Model):
         HIGH = "high", "High"
 
     user = ForeignKey("users.CustomUser", CASCADE, related_name="notifications")
+    actor = ForeignKey(
+        "users.CustomUser",
+        SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Who caused the notification (the latest one for aggregates).",
+    )
     notification_type = CharField(max_length=20, choices=NotificationType.choices)
 
     title = CharField(max_length=200)
@@ -51,8 +68,14 @@ class Notification(CreatedAtMixin, Model):
         help_text="Additional data (anime_id, review_id, etc.)",
     )
 
+    # Idempotency: one row per (user, dedupe_key), ever. Aggregation: at most one
+    # unread row per (user, group_key). Both are enforced by partial unique indexes.
+    dedupe_key = CharField(max_length=NOTIFICATION_KEY_MAX_LENGTH, null=True, blank=True)
+    group_key = CharField(max_length=NOTIFICATION_KEY_MAX_LENGTH, null=True, blank=True)
+
     is_read = BooleanField(default=False, db_index=True)
     read_at = DateTimeField(null=True, blank=True)
+    # True once the channel is done: delivered, or not wanted for this row.
     is_email_sent = BooleanField(default=False)
     is_push_sent = BooleanField(default=False)
 
@@ -68,18 +91,28 @@ class Notification(CreatedAtMixin, Model):
                 name="core_notif_user_type_read_idx",
             ),
             Index(fields=["notification_type", "-created_at"]),
-            Index(fields=["is_email_sent", "created_at"]),
-            Index(fields=["is_push_sent", "created_at"]),
+            # The delivery sweeper only ever looks at rows with work left.
+            Index(
+                fields=["created_at"],
+                name="core_notif_pending_idx",
+                condition=Q(is_push_sent=False) | Q(is_email_sent=False),
+            ),
+        ]
+        constraints = [
+            UniqueConstraint(
+                fields=["user", "dedupe_key"],
+                condition=Q(dedupe_key__isnull=False),
+                name="core_notif_user_dedupe_uniq",
+            ),
+            UniqueConstraint(
+                fields=["user", "group_key"],
+                condition=Q(group_key__isnull=False, is_read=False),
+                name="core_notif_user_group_unread_uniq",
+            ),
         ]
 
     def __str__(self):
         return f"{self.user.username} - {self.title}"
-
-    def mark_as_read(self):
-        if not self.is_read:
-            self.is_read = True
-            self.read_at = timezone.now()
-            self.save(update_fields=["is_read", "read_at"])
 
 
 class PushSubscription(CreatedAtMixin, Model):
@@ -88,7 +121,8 @@ class PushSubscription(CreatedAtMixin, Model):
         MOBILE = "mobile", "Mobile"
 
     user = ForeignKey("users.CustomUser", CASCADE, related_name="push_subscriptions")
-    endpoint = URLField()
+    # A browser endpoint belongs to exactly one account: the last one that subscribed.
+    endpoint = URLField(max_length=PUSH_ENDPOINT_MAX_LENGTH)
     p256dh = CharField(max_length=255)
     auth = CharField(max_length=255)
 
@@ -97,12 +131,18 @@ class PushSubscription(CreatedAtMixin, Model):
 
     is_active = BooleanField(default=True)
     last_used = DateTimeField(null=True, blank=True)
+    # Consecutive failed sends and when the current run of failures began; both
+    # reset on success and on re-subscribe.
+    failure_count = PositiveIntegerField(default=0)
+    failing_since = DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
         indexes = [
             Index(fields=["user", "is_active"]),
-            Index(fields=["endpoint"]),
+        ]
+        constraints = [
+            UniqueConstraint(fields=["endpoint"], name="core_pushsub_endpoint_uniq"),
         ]
 
     def __str__(self):
@@ -111,3 +151,23 @@ class PushSubscription(CreatedAtMixin, Model):
     def deactivate(self):
         self.is_active = False
         self.save(update_fields=["is_active"])
+
+
+class NotificationPreference(Model):
+    """Per-user notification choices, ``{category: {channel: bool}}``.
+
+    Read through ``apps.core.services.notification_preferences``: unknown keys are
+    dropped and defaults are merged on read, so a missing row means defaults.
+    """
+
+    user = OneToOneField(
+        "users.CustomUser",
+        CASCADE,
+        primary_key=True,
+        related_name="notification_preference",
+    )
+    preferences = JSONField(default=dict, blank=True)
+    updated_at = DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Notification preferences of user {self.user_id}"

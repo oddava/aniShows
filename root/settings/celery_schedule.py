@@ -164,7 +164,7 @@ def _notification_entries() -> dict:
     return {
         "check-new-episodes": {
             "task": "apps.core.tasks.notifications.check_new_episodes",
-            "schedule": crontab(hour="*/6", minute=0),  # Every 6 hours
+            "schedule": crontab(minute=50),  # Hourly at :50 (D-7)
             "options": {"queue": "default"},
         },
         "send-pending-notifications": {

@@ -47,3 +47,43 @@ class NotificationConsumerTests(TransactionTestCase):
 
         self.assertEqual(reply["type"], "notification_read")
         self.assertEqual(reply["unread_count"], 0)
+
+
+class NotificationConsumerAuthTests(TransactionTestCase):
+    def test_anonymous_sockets_are_accepted_then_closed_with_4401(self):
+        from django.contrib.auth.models import AnonymousUser
+
+        async def scenario():
+            communicator = WebsocketCommunicator(
+                NotificationConsumer.as_asgi(), "/ws/notifications/"
+            )
+            communicator.scope["user"] = AnonymousUser()
+            connected, _ = await communicator.connect()
+            output = await communicator.receive_output()
+            return connected, output
+
+        connected, output = async_to_sync(scenario)()
+        self.assertTrue(connected)
+        self.assertEqual(output, {"type": "websocket.close", "code": 4401})
+
+    def test_ping_gets_pong_and_rejoins_a_stale_group(self):
+        from unittest.mock import patch
+
+        user = User.objects.create_user(username="pinger", email="pi@example.com", password="x")
+
+        async def scenario():
+            communicator = WebsocketCommunicator(
+                NotificationConsumer.as_asgi(), "/ws/notifications/"
+            )
+            communicator.scope["user"] = user
+            await communicator.connect()
+            first = await communicator.receive_json_from()
+            with patch("apps.core.consumers.time.monotonic", return_value=10**9):
+                await communicator.send_json_to({"type": "ping"})
+                pong = await communicator.receive_json_from()
+            await communicator.disconnect()
+            return first, pong
+
+        first, pong = async_to_sync(scenario)()
+        self.assertEqual(first, {"type": "unread_count", "count": 0})
+        self.assertEqual(pong, {"type": "pong"})

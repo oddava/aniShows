@@ -4,12 +4,18 @@ WebSocket consumers for the core app.
 Provides real-time notification delivery.
 """
 
+import time
+
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from ..shared.logger import logger
 from ..shared.parsing import positive_int
 from .services.notification_service import NotificationService
+
+# The channel layer forgets group members after ``group_expiry`` (24 h). Re-joining
+# on a client ping at most hourly keeps long-lived sockets in the group.
+GROUP_REFRESH_SECONDS = 60 * 60
 
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
@@ -33,6 +39,9 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.user = self.scope.get("user")
 
         if not self.user or self.user.is_anonymous:
+            # Accept first: a close before accept rejects the handshake (the client
+            # sees 1006), and the client only stops retrying on 4401.
+            await self.accept()
             await self.close(code=4401)
             return
 
@@ -40,7 +49,7 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         self.group_name = f"notifications_user_{self.user_id}"
 
         # Join personal notification group
-        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self._join_group()
 
         await self.accept()
 
@@ -101,7 +110,13 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
             )
 
         elif msg_type == "ping":
+            if time.monotonic() - self._group_joined_at >= GROUP_REFRESH_SECONDS:
+                await self._join_group()
             await self.send_json({"type": "pong"})
+
+    async def _join_group(self):
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        self._group_joined_at = time.monotonic()
 
     # ------------------------------------------------------------------
     # Channel layer event handlers (called when group_send dispatches)
