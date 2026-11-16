@@ -4,14 +4,15 @@ Lists, activity, stats, favorites, followers/following and ``?user=`` filters as
 this module instead of reading ``UserProfile.is_private`` themselves. Contributions
 stay visible in their own context (an anime page, a thread).
 
-Prep-commit stub: the rule is exactly today's inline check (see
-``list_service.get_user_anime_list_queryset`` and ``follow_service.ensure_profile_visible``):
-a private profile is visible to its owner only. Nothing calls it yet. G1 owns the
-implementation (case-insensitive lookup, A13); consumers only call it.
+The rule (spec 1 Q2 default): a private profile is visible to its owner only;
+staff use the admin APIs. Usernames are matched ignoring case (A13), as the
+``users_customuser_username_ci_unique`` constraint guarantees one match.
 """
 
 from django.contrib.auth import get_user_model
 from django.http import Http404
+
+from .user_queryset import filter_username_ci
 
 User = get_user_model()
 
@@ -31,11 +32,12 @@ def can_view_profile(target_user, viewer) -> bool:
 def get_visible_user_or_404(username, viewer):
     """Return the user named ``username`` if ``viewer`` may see them, else raise ``Http404``.
 
-    Exact-case lookup, as the list and activity views do today; G1 switches it to
-    ``username__iexact``.
+    The match ignores case; the returned user carries the canonical ``username``.
     """
     try:
-        target_user = User.objects.select_related("userprofile").get(username=username)
+        target_user = filter_username_ci(
+            User.objects.select_related("userprofile"), str(username)
+        ).get()
     except User.DoesNotExist as exc:
         raise Http404 from exc
     if not can_view_profile(target_user, viewer):

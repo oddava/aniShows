@@ -11,6 +11,7 @@ from django.views import View
 from ..shared.media_urls import field_media_url
 from .models import UserProfile, UserStats
 from .services.avatar_service import get_user_avatar_url
+from .services.user_queryset import filter_username_ci
 
 User = get_user_model()
 
@@ -31,11 +32,9 @@ class ProfileSharePreviewView(View):
 
     def get(self, request, username: str, section: str | None = None) -> HttpResponse:
         should_redirect = not self._is_share_crawler(request)
-        user = (
-            User.objects.select_related("userprofile", "stats")
-            .filter(username__iexact=username)
-            .first()
-        )
+        user = filter_username_ci(
+            User.objects.select_related("userprofile", "stats"), username
+        ).first()
 
         if not user:
             return self._not_found_response(request, username, section, should_redirect)

@@ -36,6 +36,7 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
 
     # Delete public profile caches if username provided
     if username:
+        username = username.lower()
         # Increment cache version to invalidate all public profile cache keys.
         # We no longer use cache.delete_pattern as it blocks the Redis event loop.
         # Instead, we rely on versioned keys which will naturally expire.
@@ -102,13 +103,14 @@ def get_user_heatmap_cache_key(user_id):
 
 def get_public_profile_cache_key(username, viewer_id="anonymous"):
     """Get the cache key for a public profile, including the current version."""
+    username = username.lower()  # /users/Bob/ and /users/bob/ are one profile (A13)
     version = get_profile_cache_version(username)
     return f"public_profile:{username}:v{version}:viewer:{viewer_id}"
 
 
 def get_profile_cache_version(username):
     """Get the current cache version for a user's profile."""
-    version_key = f"profile_cache_version:{username}"
+    version_key = f"profile_cache_version:{username.lower()}"
     version = cache.get(version_key)
     if version is None:
         cache.set(version_key, 0, timeout=3600)

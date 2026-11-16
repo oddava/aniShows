@@ -20,7 +20,8 @@ def invalidate_profile_cache(username):
     """Invalidate all cached versions of a user's public profile."""
     from django.conf import settings
 
-    version_key = settings.PROFILE_CACHE_VERSION_KEY_TEMPLATE.format(username=username)
+    # Lowercased like services/cache.py's keys (usernames are case-insensitive).
+    version_key = settings.PROFILE_CACHE_VERSION_KEY_TEMPLATE.format(username=username.lower())
     try:
         cache.incr(version_key)
         logger.debug(f"Invalidated profile cache for user: {username}")

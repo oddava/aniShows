@@ -15,7 +15,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from ...core.services.admin_settings_service import is_email_verification_required
 from ..models import UserProfile
 from ..tokens import email_verification_token_generator
-from .user_queryset import get_annotated_user_queryset
+from .user_queryset import filter_username_ci, get_annotated_user_queryset
 
 User = get_user_model()
 
@@ -107,7 +107,7 @@ class AuthService:
                 return user.username if user else normalized_username
 
             user = (
-                User.objects.filter(username__iexact=normalized_username).only("username").first()
+                filter_username_ci(User.objects.all(), normalized_username).only("username").first()
             )
             return user.username if user else normalized_username
 
@@ -119,7 +119,7 @@ class AuthService:
         return None
 
     def username_exists(self, username: str, *, exclude_pk: int | None = None) -> bool:
-        queryset = User.objects.filter(username__iexact=username)
+        queryset = filter_username_ci(User.objects.all(), username)
         if exclude_pk is not None:
             queryset = queryset.exclude(pk=exclude_pk)
         return queryset.exists()

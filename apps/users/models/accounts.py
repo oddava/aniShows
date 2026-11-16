@@ -45,6 +45,9 @@ class CustomUser(AbstractUser):
                 condition=~Q(email=""),
                 name="users_customuser_email_ci_unique",
             ),
+            # "Bob" and "bob" are the same name (A13); lookups go through
+            # user_queryset.filter_username_ci, which this index serves.
+            UniqueConstraint(Lower("username"), name="users_customuser_username_ci_unique"),
         ]
 
 

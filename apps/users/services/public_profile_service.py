@@ -11,7 +11,7 @@ from ..serializers.accounts import PublicUserSerializer
 from .avatar_service import get_user_avatar_url
 from .cache import get_public_profile_cache_key
 from .profile_service import build_profile_user_queryset, get_featured_badges
-from .user_queryset import get_annotated_user_queryset
+from .user_queryset import filter_username_ci, get_annotated_user_queryset
 
 User = get_user_model()
 
@@ -56,7 +56,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                     UserFollow.objects.filter(follower=viewer, following=OuterRef("pk"))
                 )
             )
-        user = stats_queryset.get(username=username)
+        user = filter_username_ci(stats_queryset, username).get()
         is_private = user.userprofile.is_private if user.userprofile else False
         if is_private and not is_own_profile:
             raise PublicProfileError("Profile not found", 404)
@@ -121,8 +121,8 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     except Exception as exc:
         logger.warning("Stats table lookup failed for %s: %s", username, exc, exc_info=True)
 
-    queryset = get_annotated_user_queryset(viewer if is_authenticated else None).filter(
-        username=username
+    queryset = filter_username_ci(
+        get_annotated_user_queryset(viewer if is_authenticated else None), username
     )
     user = queryset.first()
     if user is None:

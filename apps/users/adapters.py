@@ -4,9 +4,13 @@ from urllib.parse import urlparse
 import httpx
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.base import ContentFile
 
+from ..core.services.admin_settings_service import username_length_limits
 from ..shared.logger import logger
+from .services.user_queryset import filter_username_ci
+from .services.username_sanitizer import validate_username
 
 User = get_user_model()
 
@@ -59,23 +63,37 @@ def _download_google_avatar(url: str) -> bytes | None:
     return b"".join(chunks)
 
 
+def _random_suffix() -> str:
+    return uuid.uuid4().hex[:4]
+
+
+def unique_oauth_username(candidate: str) -> str:
+    """A valid username, free ignoring case, derived from a provider's ``candidate``."""
+    _min_length, max_length = username_length_limits()
+    try:
+        base = validate_username(candidate)
+    except DjangoValidationError:
+        base = f"user{_random_suffix()}"
+
+    username = base
+    while filter_username_ci(User.objects.all(), username).exists():
+        suffix = f"_{_random_suffix()}"
+        username = f"{base[: max_length - len(suffix)]}{suffix}"
+    return username
+
+
 class MySocialAccountAdapter(DefaultSocialAccountAdapter):
     def populate_user(self, request, sociallogin, data):
         """
         Hook that populates the user instance with data from the social provider.
-        We override this to ensure the username is unique.
+
+        The provider's name goes through the same rules as sign-up
+        (``validate_username``: length limits, characters, reserved names) and
+        is made unique ignoring case (A13).
         """
         user = super().populate_user(request, sociallogin, data)
-
-        username = user.username
-        if not username:
-            return user
-
-        params = {"username": username}
-        if User.objects.filter(**params).exists():
-            random_suffix = str(uuid.uuid4())[:4]
-            user.username = f"{username}_{random_suffix}"
-
+        if user.username:
+            user.username = unique_oauth_username(user.username)
         return user
 
     def save_user(self, request, sociallogin, form=None):

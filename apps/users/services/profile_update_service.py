@@ -14,6 +14,7 @@ from ...core.services.social_links_service import SocialLinksService
 from ...shared.logger import logger
 from ..models import UserProfile
 from .cache import invalidate_user_caches
+from .user_queryset import filter_username_ci
 from .username_sanitizer import validate_username
 
 User = get_user_model()
@@ -177,7 +178,7 @@ def _handle_username_change(user, validated_data, *, profile=None) -> None:
                 {"username": f"You can change your username again in {days_left} days."}
             )
 
-    if User.objects.filter(username__iexact=normalized_username).exclude(pk=user.pk).exists():
+    if filter_username_ci(User.objects.exclude(pk=user.pk), normalized_username).exists():
         raise ValidationError({"username": "This username is already taken."})
 
     user.username = normalized_username
