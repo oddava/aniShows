@@ -42,6 +42,9 @@ export const adminKeys = {
     stats: (resource) => ['admin', resource, 'stats'],
     dashboard: () => ['admin', 'dashboard'],
     settings: () => ['admin', 'settings'],
+    moderation: () => ['admin', 'moderation'],
+    moderationSummary: () => ['admin', 'moderation', 'summary'],
+    system: () => ['admin', 'system'],
     reportsAll: () => ['admin', 'reports'],
     /** Index 2 is the tab; AdminReports relies on that to keep placeholders per tab. */
     report: (tab, days) => ['admin', 'reports', tab, days],
@@ -70,4 +73,19 @@ export const adminQueries = {
         queryKey: adminKeys.settings(),
         queryFn: ({ signal }) => api.get('/admin/settings/', { signal }).then(data),
     }),
+    /** Open moderation counts for the nav badge and the queue header. */
+    moderationSummary: () => queryOptions({
+        queryKey: adminKeys.moderationSummary(),
+        queryFn: ({ signal }) => api.get('/admin/moderation/summary/', { signal }).then(data),
+    }),
+    /** The System page snapshot; `refresh` bypasses the server's 60s cache. */
+    system: ({ refresh = false } = {}) => queryOptions({
+        queryKey: adminKeys.system(),
+        queryFn: ({ signal }) => api
+            .get('/admin/system/', { signal, ...(refresh && { params: { refresh: 1 } }) })
+            .then(data),
+    }),
 };
+
+/** Moderation badge polling: every 60s, only while the tab is in the foreground. */
+export const MODERATION_SUMMARY_POLL_MS = 60000;
