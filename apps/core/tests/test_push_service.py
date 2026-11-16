@@ -4,7 +4,7 @@ import json
 from datetime import timedelta
 from unittest.mock import patch
 
-import requests  # type: ignore[import-untyped]
+import requests  # type: ignore[import-untyped, unused-ignore]
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse

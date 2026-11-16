@@ -8,7 +8,7 @@ from datetime import timedelta
 from email.utils import parseaddr
 from typing import Any
 
-import requests  # type: ignore[import-untyped]
+import requests  # type: ignore[import-untyped, unused-ignore]
 from django.conf import settings
 from django.db.models import F, Value
 from django.db.models.functions import Coalesce
@@ -200,8 +200,11 @@ class PushService:
             subscription.pk,
             row["failure_count"],
         )
-        if row["failure_count"] >= MAX_TRANSIENT_FAILURES and row["failing_since"] < now - (
-            FAILURE_GRACE
+        failing_since = row["failing_since"]
+        if (
+            row["failure_count"] >= MAX_TRANSIENT_FAILURES
+            and failing_since is not None
+            and failing_since < now - FAILURE_GRACE
         ):
             cls._deactivate(subscription)
             return PushResult.GONE
