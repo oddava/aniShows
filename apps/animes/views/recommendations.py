@@ -7,6 +7,7 @@ per user, keyed by the adult-content setting it was built for: 1 h when fresh, 1
 otherwise (stale, fallback or empty), and the task drops the key once it has written.
 """
 
+import contextlib
 from datetime import UTC, timedelta
 
 from django.core.cache import cache
@@ -83,10 +84,8 @@ def _queue_refresh(user_id: int) -> bool:
         logger.warning("Could not queue recommendations for user %s", user_id, exc_info=True)
         # The helper marks the user pending before it enqueues; nothing was queued,
         # so a retry must not be debounced into a 202 for nothing.
-        try:
+        with contextlib.suppress(*CACHE_ERRORS):  # the cache itself may be what failed
             cache.delete(RECO_PENDING_KEY.format(user_id=user_id))
-        except CACHE_ERRORS:  # the cache itself is what failed: nothing to clear
-            pass
         return False
     return True
 
