@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 import { adminBadgeApi } from '../../api/client';
 import { Search, Plus, Edit2, Trash2, UserPlus } from 'lucide-react';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -73,7 +74,7 @@ export default function AdminBadges() {
             queryClient.invalidateQueries({ queryKey: adminBadgeKeys.all });
         },
         onError: (error) => {
-            alert(error.response?.data?.detail || 'Failed to delete badge');
+            toast.error(error.response?.data?.detail || 'Failed to delete badge');
         }
     });
 
@@ -87,7 +88,7 @@ export default function AdminBadges() {
             setSelectedBadge(null);
         },
         onError: (error) => {
-            alert(error.response?.data?.detail || 'Failed to grant badge');
+            toast.error(error.response?.data?.detail || 'Failed to grant badge');
         }
     });
 

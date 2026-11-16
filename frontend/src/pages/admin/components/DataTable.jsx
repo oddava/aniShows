@@ -10,7 +10,7 @@ const CHECKBOX = 'w-4 h-4 rounded border-white/20 bg-white/5 text-violet-500 foc
 
 const defaultRowLabel = (item) => item.name || item.title || item.username || `row ${item.id}`;
 
-/** `'-name'` → `{ field: 'name', direction: 'desc' }`. */
+/** `'-name'` becomes `{ field: 'name', direction: 'desc' }`. */
 const parseOrdering = (ordering) => {
   if (!ordering) return { field: null, direction: null };
   return ordering.startsWith('-')
