@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-import requests
+import requests  # type: ignore[import-untyped]
 from django.db.models import Q
 from django.utils import timezone
 

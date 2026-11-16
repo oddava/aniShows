@@ -21,6 +21,13 @@ from ..services.notification_service import (
 )
 
 User = get_user_model()
+
+
+def _written(notification: Notification | None) -> Notification:
+    assert notification is not None
+    return notification
+
+
 TYPES = Notification.NotificationType
 
 
@@ -55,7 +62,7 @@ class NotifyContractTests(TestCase):
         self.assertEqual(_row(via_notify), _row(via_shim))
 
     def test_new_follower_matches_shim(self):
-        got = notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.actor.pk)
+        got = _written(notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.actor.pk))
         expected = NotificationService.create_new_follower_notification(
             user=self.twin, follower=User.objects.get(pk=self.actor.pk)
         )
@@ -63,11 +70,13 @@ class NotifyContractTests(TestCase):
         self.assertEqual(got.dedupe_key, f"follow:{self.actor.pk}")
 
     def test_forum_reply_matches_shim(self):
-        got = notify(
-            self.recipient.pk,
-            TYPES.FORUM_REPLY,
-            actor=self.actor,
-            data={"thread_id": self.thread.pk, "post_id": self.post.pk},
+        got = _written(
+            notify(
+                self.recipient.pk,
+                TYPES.FORUM_REPLY,
+                actor=self.actor,
+                data={"thread_id": self.thread.pk, "post_id": self.post.pk},
+            )
         )
         expected = NotificationService.create_forum_reply_notification(
             user=self.twin, thread=self.thread, post=self.post
@@ -76,11 +85,13 @@ class NotifyContractTests(TestCase):
         self.assertEqual(got.message, "actor replied to your thread Thread")
 
     def test_forum_mention_on_thread_matches_shim(self):
-        got = notify(
-            self.recipient,
-            TYPES.FORUM_MENTION,
-            actor=self.actor,
-            data={"thread_id": self.thread.pk},
+        got = _written(
+            notify(
+                self.recipient,
+                TYPES.FORUM_MENTION,
+                actor=self.actor,
+                data={"thread_id": self.thread.pk},
+            )
         )
         expected = NotificationService.create_forum_mention_notification(
             user=self.twin, author=self.actor, instance=self.thread, is_thread=True
@@ -90,8 +101,10 @@ class NotifyContractTests(TestCase):
 
     def test_badge_awarded_matches_shim(self):
         badge = Badge.objects.create(name="Early Bird", description="First in")
-        got = notify(
-            self.recipient, TYPES.BADGE_AWARDED, actor=self.actor, data={"badge_id": badge.pk}
+        got = _written(
+            notify(
+                self.recipient, TYPES.BADGE_AWARDED, actor=self.actor, data={"badge_id": badge.pk}
+            )
         )
         expected = NotificationService.create_badge_awarded_notification(
             user=self.twin, badge=badge, granted_by=self.actor
@@ -100,7 +113,9 @@ class NotifyContractTests(TestCase):
 
     def test_staff_can_award_themselves_a_badge(self):
         badge = Badge.objects.create(name="Self", description="d")
-        got = notify(self.actor, TYPES.BADGE_AWARDED, actor=self.actor, data={"badge_id": badge.pk})
+        got = _written(
+            notify(self.actor, TYPES.BADGE_AWARDED, actor=self.actor, data={"badge_id": badge.pk})
+        )
         self.assertIsNotNone(got)
 
     def test_self_notification_is_suppressed(self):
@@ -116,11 +131,15 @@ class NotifyContractTests(TestCase):
         self.assertIsNone(notify(self.recipient, "not-a-type", data={}))
 
     def test_system_notification_takes_its_copy_from_data(self):
-        got = notify(self.recipient, TYPES.SYSTEM, data={"message": "Maintenance tonight"})
+        got = _written(
+            notify(self.recipient, TYPES.SYSTEM, data={"message": "Maintenance tonight"})
+        )
         self.assertEqual(got.message, "Maintenance tonight")
 
     def test_explicit_keys_win_over_the_defaults(self):
-        got = notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.actor, dedupe_key="custom")
+        got = _written(
+            notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.actor, dedupe_key="custom")
+        )
         self.assertEqual(got.dedupe_key, "custom")
 
     def test_notify_many_counts_written_rows(self):

@@ -1,8 +1,9 @@
+import base64
 import ipaddress
 import json
 from unittest.mock import patch
 
-import requests
+import requests  # type: ignore[import-untyped]
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -149,3 +150,27 @@ class PushTransportTests(TestCase):
     @override_settings(VAPID_PUBLIC_KEY="", VAPID_PRIVATE_KEY="")
     def test_not_configured_without_keys(self):
         self.assertFalse(PushService.is_configured())
+
+
+class GenerateVapidKeysTests(TestCase):
+    def test_prints_a_usable_key_pair(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        from py_vapid import Vapid
+
+        def b64urldecode(value: str) -> bytes:
+            return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+        out = StringIO()
+        call_command("generate_vapid_keys", stdout=out)
+        lines = dict(
+            line.split("=", 1) for line in out.getvalue().splitlines() if line.startswith("VAPID_")
+        )
+        public = b64urldecode(lines["VAPID_PUBLIC_KEY"])
+        self.assertEqual(len(public), 65)  # uncompressed P-256 point
+        self.assertEqual(public[0], 4)
+        private = lines["VAPID_PRIVATE_KEY"]
+        self.assertEqual(len(b64urldecode(private)), 32)
+        # pywebpush reads the private key in exactly this form.
+        self.assertIsNotNone(Vapid.from_string(private).private_key)

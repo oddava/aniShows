@@ -17,6 +17,7 @@ Document every override in the group's spec.
 """
 
 import os
+from typing import cast as _cast
 
 from ..base import REST_FRAMEWORK
 
@@ -34,4 +35,5 @@ NEW_USER_EMAIL_EPISODES = True
 PLAN_TO_WATCH_ALERTS = "all"
 
 # One-click email unsubscribe (anonymous, token-authenticated) is throttled per IP.
-REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["notification_email_unsubscribe"] = "30/hour"
+_throttle_rates = _cast("dict[str, str]", REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"])
+_throttle_rates["notification_email_unsubscribe"] = "30/hour"

@@ -7,7 +7,7 @@ import json
 from email.utils import parseaddr
 from typing import Any
 
-import requests
+import requests  # type: ignore[import-untyped]
 from django.conf import settings
 from django.db.models import F
 from django.utils import timezone

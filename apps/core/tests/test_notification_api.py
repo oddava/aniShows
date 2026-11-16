@@ -1,4 +1,5 @@
 import ipaddress
+from typing import cast
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -208,6 +209,5 @@ class EmailUnsubscribeApiTests(APITestCase):
         self.assertEqual(EmailUnsubscribeView.throttle_scope, "notification_email_unsubscribe")
         from django.conf import settings
 
-        self.assertIn(
-            "notification_email_unsubscribe", settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
-        )
+        rates = cast("dict[str, str]", settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"])
+        self.assertIn("notification_email_unsubscribe", rates)

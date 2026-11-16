@@ -20,6 +20,13 @@ from ..services.notification_service import (
 )
 
 User = get_user_model()
+
+
+def _written(notification: Notification | None) -> Notification:
+    assert notification is not None
+    return notification
+
+
 TYPES = Notification.NotificationType
 VAPID = {"VAPID_PUBLIC_KEY": "pub", "VAPID_PRIVATE_KEY": "priv"}
 ENQUEUE = "apps.core.services.notification_delivery.enqueue_delivery"
@@ -38,8 +45,10 @@ class NotifyApiTests(TestCase):
         )
 
     def _like(self, actor):
-        return notify(
-            self.recipient, TYPES.REVIEW_LIKE, actor=actor, data={"review_id": self.review.pk}
+        return _written(
+            notify(
+                self.recipient, TYPES.REVIEW_LIKE, actor=actor, data={"review_id": self.review.pk}
+            )
         )
 
     def test_inactive_recipient_is_suppressed(self):
@@ -147,7 +156,7 @@ class NotifyApiTests(TestCase):
         self.assertEqual(written, NOTIFY_MANY_MAX_RECIPIENTS)
 
     def test_push_is_marked_done_when_nothing_can_deliver_it(self):
-        notification = notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.actor)
+        notification = _written(notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.actor))
         self.assertTrue(notification.is_push_sent)
         self.assertTrue(notification.is_email_sent)
 
@@ -157,7 +166,7 @@ class NotifyApiTests(TestCase):
             user=self.recipient, endpoint="https://push.example.com/x", p256dh="k", auth="a"
         )
         with patch(ENQUEUE) as enqueue, self.captureOnCommitCallbacks(execute=True):
-            notification = notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.actor)
+            notification = _written(notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.actor))
         self.assertFalse(notification.is_push_sent)
         enqueue.assert_called_once_with([notification.pk])
 
@@ -172,8 +181,12 @@ class NotifyApiTests(TestCase):
         enqueue.assert_not_called()
 
     def test_episode_email_is_pending_only_for_verified_addresses(self):
-        unverified = notify(
-            self.recipient, TYPES.NEW_EPISODE, data={"anime_id": self.anime.pk, "episode_number": 1}
+        unverified = _written(
+            notify(
+                self.recipient,
+                TYPES.NEW_EPISODE,
+                data={"anime_id": self.anime.pk, "episode_number": 1},
+            )
         )
         self.assertTrue(unverified.is_email_sent)
 
@@ -181,17 +194,21 @@ class NotifyApiTests(TestCase):
         profile.email_verified = True
         profile.save(update_fields=["email_verified"])
         with patch(ENQUEUE):
-            verified = notify(
-                self.actor.pk,
-                TYPES.NEW_EPISODE,
-                data={"anime_id": self.anime.pk, "episode_number": 1},
+            verified = _written(
+                notify(
+                    self.actor.pk,
+                    TYPES.NEW_EPISODE,
+                    data={"anime_id": self.anime.pk, "episode_number": 1},
+                )
             )
         self.assertFalse(verified.is_email_sent)
 
     def test_new_episode_rolls_an_unread_row_forward(self):
         data = {"anime_id": self.anime.pk, "episode_number": 6}
-        first = notify(self.recipient, TYPES.NEW_EPISODE, data=data)
-        rolled = notify(self.recipient, TYPES.NEW_EPISODE, data={**data, "episode_number": 7})
+        first = _written(notify(self.recipient, TYPES.NEW_EPISODE, data=data))
+        rolled = _written(
+            notify(self.recipient, TYPES.NEW_EPISODE, data={**data, "episode_number": 7})
+        )
         self.assertEqual(first.pk, rolled.pk)
         rolled.refresh_from_db()
         self.assertEqual(rolled.dedupe_key, f"new_episode:{self.anime.pk}:7")

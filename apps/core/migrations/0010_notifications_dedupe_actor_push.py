@@ -68,9 +68,9 @@ def backfill_notification_keys(apps, schema_editor):
     Notification = apps.get_model("core", "Notification")
     User = apps.get_model("users", "CustomUser")
 
-    first_dedupe = {}  # (user_id, key) -> earliest id
-    newest_unread_group = {}  # (user_id, key) -> newest unread id
-    actor_by_id = {}
+    first_dedupe: dict[tuple[int, str], int] = {}  # (user_id, key) -> earliest id
+    newest_unread_group: dict[tuple[int, str], int] = {}  # (user_id, key) -> newest unread
+    actor_by_id: dict[int, int] = {}
     last_id = 0
     while True:
         rows = list(
@@ -90,7 +90,7 @@ def backfill_notification_keys(apps, schema_editor):
             if actor_id is not None:
                 actor_by_id[row_id] = actor_id
 
-    updates = {}
+    updates: dict[int, dict[str, object]] = {}
     for (_user_id, key), row_id in first_dedupe.items():
         updates.setdefault(row_id, {})["dedupe_key"] = key
     for (_user_id, key), row_id in newest_unread_group.items():
