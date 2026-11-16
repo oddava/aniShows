@@ -160,12 +160,8 @@ export function AuthProvider({ children }) {
     }, [startSession]);
 
     const register = useCallback(async (username, email, password) => {
-        const response = await authApi.register({
-            username,
-            email,
-            password,
-            password_confirm: password
-        });
+        // The API never read a password_confirm field; the form checks the match.
+        const response = await authApi.register({ username, email, password });
 
         return response.data;
     }, []);
