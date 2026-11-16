@@ -144,6 +144,18 @@ def test_equivalent_parameters_share_a_key():
     assert _key("exclude_ids=3,1,2,1") == _key("exclude_ids=1,2,3")
     # Too short to search: the filter ignores it, so the key does too.
     assert _key("q=a") == _key("")
+    # Numbers as the filters and the paginator parse them.
+    assert _key("page=1") == _key("page=01") == _key("")
+    assert _key("page=2") == _key("page=002")
+    assert _key("page_size=200") == _key("page_size=201") == _key("page_size=999999")
+    assert _key("page_size=0") == _key("page_size=abc") == _key("")
+    assert _key("min_rating=7") == _key("min_rating=7.0")
+    assert _key("min_episodes=12") == _key("min_episodes=%2012")
+    assert _key("year=2026&season=fall") == _key("year=02026&season=fall")
+    # Values that don't parse are all ignored the same way (but still count as set).
+    assert _key("min_rating=abc") == _key("min_rating=xyz") != _key("")
+    assert _key("studio=nope") == _key("studio=x") != _key("")
+    assert _key("page=abc") == _key("page=0") != _key("")
 
 
 def test_different_requests_get_different_keys():

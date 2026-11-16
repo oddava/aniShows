@@ -167,7 +167,7 @@ EXTRA_ENDPOINTS = {
 # P2-6); characters/staff 4 (anime, COUNT, page); character_detail 4 (character,
 # roles, favourite count) and +1 signed in (adult-content setting); staff_detail 5
 # (staff, voice roles, credits, favourite count), +1 signed in; user_recommendations
-# 5 (G2 agent B's view, measured on its uncommitted code; re-pin if it changes);
+# 5 (measured cold, signed in; the view never generates in the request, P1-3);
 # genres and studios 2 (one query each).
 EXTRA_BUDGETS = {
     "top_rated": 4,

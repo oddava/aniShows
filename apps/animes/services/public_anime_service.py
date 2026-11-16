@@ -13,6 +13,8 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from ...shared.logger import logger
+from ...shared.pagination import NoCountPagination
+from ...shared.parsing import positive_int
 from ...shared.public_cache import (
     get_or_build_public_payload,
     invalidate_public_cache_keys,
@@ -343,11 +345,12 @@ class AnimePublicPayloadService:
     )
 
     # A save that changes only these fields changes only the detail payload (no
-    # card shows them), so it drops that one key instead of every collection (B2).
+    # card or shelf shows them), so it drops that one key instead of every
+    # collection (B2). ``synopsis`` is left out on purpose, although the spec lists
+    # it: the trending/top-rated shelves and the Home hero show it (SHELF_FIELDS).
     DETAIL_ONLY_FIELDS = frozenset(
         {
             "status_distribution",
-            "synopsis",
             "external_links",
             "trailer_url",
             "theme_songs",
@@ -380,6 +383,22 @@ class AnimePublicPayloadService:
     LIST_CACHE_CASELESS_PARAMS = frozenset({"q", "shelf", "sort"})
     # Comma-separated sets whose order and case do not matter.
     LIST_CACHE_SET_PARAMS = ("tags", "type", "status")
+    # Numbers the filters parse with this type: "7" and "7.0" are the same filter, and
+    # every value that does not parse behaves alike (ignored, but still truthy for the
+    # sort variants), so all of those share one marker.
+    LIST_CACHE_NUMERIC_PARAMS: dict[str, type[int] | type[float]] = {
+        "studio": int,
+        "year": int,
+        "min_year": int,
+        "max_year": int,
+        "min_rating": float,
+        "max_rating": float,
+        "min_episodes": int,
+        "max_episodes": int,
+        "min_duration": int,
+        "max_duration": int,
+    }
+    UNPARSED_PARAM = "~"
 
     @classmethod
     def detail_cache_key(cls, slug: str) -> str:
@@ -416,6 +435,12 @@ class AnimePublicPayloadService:
                 value = value.strip().lower()
             if name == "q" and len(value) < MIN_SEARCH_LENGTH:
                 value = ""  # the search filter ignores it too
+            if value and name in cls.LIST_CACHE_NUMERIC_PARAMS:
+                value = cls._canonical_number(value, cls.LIST_CACHE_NUMERIC_PARAMS[name])
+            elif name == "page":
+                value = cls._canonical_page(value)
+            elif name == "page_size":
+                value = cls._canonical_page_size(value)
             if value:
                 params[name] = value
         for name in cls.LIST_CACHE_SET_PARAMS:
@@ -431,6 +456,29 @@ class AnimePublicPayloadService:
         if exclude_ids:
             params["exclude_ids"] = sorted(set(exclude_ids))
         return params
+
+    @classmethod
+    def _canonical_number(cls, value: str, number_type: type[int] | type[float]) -> str:
+        try:
+            return str(number_type(value))
+        except (TypeError, ValueError):
+            return cls.UNPARSED_PARAM
+
+    @classmethod
+    def _canonical_page(cls, value: str) -> str:
+        """Page 1 is the default; anything that is not a page number is a 404 (not cached)."""
+        number = positive_int(value)
+        if number is None:
+            return cls.UNPARSED_PARAM if value else ""
+        return "" if number == 1 else str(number)
+
+    @staticmethod
+    def _canonical_page_size(value: str) -> str:
+        """As ``NoCountPagination`` reads it: clamped to its maximum; invalid means default."""
+        number = positive_int(value)
+        if number is None:
+            return ""
+        return str(min(number, NoCountPagination.max_page_size))
 
     @classmethod
     def list_cache_key(cls, query_params, *, can_view_adult_content: bool) -> str:

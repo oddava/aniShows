@@ -96,16 +96,17 @@ def test_a_detail_only_save_drops_just_the_detail(anime, django_capture_on_commi
     detail_key = AnimePublicPayloadService.detail_cache_key(anime.slug)
     assert cache.get(detail_key) is not None
 
-    anime.synopsis = "A new synopsis."
+    anime.trailer_url = "https://www.youtube.com/watch?v=frieren"
     with django_capture_on_commit_callbacks(execute=True):
-        anime.save(update_fields=["synopsis"])
+        anime.save(update_fields=["trailer_url"])
 
     assert cache.get(detail_key) is None
     assert cache.get(NAMESPACE_KEY) == namespace
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("update_fields", [None, ["title"], ["title", "synopsis"]])
+# ``synopsis`` is on the shelves (SHELF_FIELDS), so it is a card field here.
+@pytest.mark.parametrize("update_fields", [None, ["title"], ["title", "synopsis"], ["synopsis"]])
 def test_a_card_field_save_bumps_the_namespace_on_commit(
     anime, django_capture_on_commit_callbacks, update_fields
 ):
