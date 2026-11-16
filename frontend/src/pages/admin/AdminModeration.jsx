@@ -176,7 +176,10 @@ function ReviewQueue() {
         }[outcome]),
     });
 
-    const canAct = signals || status === 'open' || status === 'in_review';
+    // Resolving closes open reports, so it only applies to rows that have some.
+    // Unreported signal rows are handled on the Reviews page (delete there).
+    const statusOpen = status === 'open' || status === 'in_review';
+    const canAct = (row) => statusOpen && row.report_total > 0;
 
     return (
         <div className="space-y-4">
@@ -249,7 +252,7 @@ function ReviewQueue() {
                                         {row.report_total || 0} report{row.report_total === 1 ? '' : 's'} from {row.reporter_count || 0} user{row.reporter_count === 1 ? '' : 's'}
                                         {row.first_reported_at && ` · first ${formatDate(row.first_reported_at)} · last ${formatDate(row.last_reported_at)}`}
                                     </p>
-                                    {canAct && (
+                                    {canAct(row) ? (
                                         <div className="flex flex-wrap gap-2">
                                             {Object.entries(REVIEW_OUTCOMES).map(([outcome, meta]) => {
                                                 const Icon = meta.icon;
@@ -267,7 +270,14 @@ function ReviewQueue() {
                                                 );
                                             })}
                                         </div>
-                                    )}
+                                    ) : signals && !row.report_total ? (
+                                        <Link
+                                            to="/admin/reviews"
+                                            className="inline-flex items-center min-h-[44px] sm:min-h-0 text-sm text-violet-300 hover:text-violet-200"
+                                        >
+                                            Not reported: manage it on the Reviews page
+                                        </Link>
+                                    ) : null}
                                 </li>
                             ))}
                         </ul>

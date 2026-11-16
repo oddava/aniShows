@@ -135,6 +135,42 @@ describe('AdminModeration', () => {
         await waitFor(() => expect(listCalls().at(-1)[0]).toBe('/admin/moderation/reviews/?page=1&status=open&signals=1'));
     });
 
+    it('offers resolve actions only for rows with open reports', async () => {
+        getMock.mockImplementation((url) => {
+            if (url.startsWith('/admin/moderation/summary/')) return Promise.resolve({ data: summary });
+            if (url.startsWith('/admin/moderation/reviews/')) {
+                return Promise.resolve({
+                    data: {
+                        results: [
+                            row,
+                            {
+                                ...row,
+                                review_id: 8,
+                                snippet: 'Bad but unreported',
+                                report_counts: {},
+                                report_total: 0,
+                                reporter_count: 0,
+                                first_reported_at: null,
+                                last_reported_at: null,
+                                signals: ['low_rating'],
+                            },
+                        ],
+                        count: 2,
+                    },
+                });
+            }
+            return Promise.reject(new Error(`unexpected ${url}`));
+        });
+        renderPage();
+        fireEvent.click(await screen.findByRole('checkbox', { name: /quality signals/ }, { timeout: 5000 }));
+
+        const unreported = (await screen.findByText('Bad but unreported', {}, { timeout: 5000 })).closest('li');
+        expect(within(unreported).queryByRole('button', { name: /Dismiss/ })).toBeNull();
+        expect(within(unreported).getByRole('link', { name: /Reviews page/ })).toHaveAttribute('href', '/admin/reviews');
+        const reported = screen.getByText('This ending spoils everything').closest('li');
+        expect(within(reported).getByRole('button', { name: /Dismiss/ })).toBeInTheDocument();
+    });
+
     it('adds a Forums tab once forum reports exist', async () => {
         summary = { ...summary, forums: { open: 4 } };
         renderPage();
