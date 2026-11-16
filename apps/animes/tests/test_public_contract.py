@@ -18,7 +18,12 @@ from pathlib import Path
 import pytest
 from rest_framework.test import APIClient
 
-from apps.animes.tests.catalog_fixtures import PUBLIC_ENDPOINTS, build_catalog, build_viewer
+from apps.animes.tests.catalog_fixtures import (
+    PUBLIC_ENDPOINTS,
+    build_catalog,
+    build_viewer,
+    freeze_schedule_now,
+)
 
 SNAPSHOT_PATH = Path(__file__).parent / "snapshots" / "public_contract.json"
 UPDATE = os.getenv("UPDATE_CONTRACT_SNAPSHOTS") == "1"
@@ -69,6 +74,8 @@ def shape_of(value):
 @pytest.fixture(autouse=True)
 def _no_side_effect_tasks(monkeypatch):
     monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    # The fixtures air in 2030 and the schedule ships only the coming week (B7).
+    freeze_schedule_now(monkeypatch)
 
 
 @pytest.mark.django_db

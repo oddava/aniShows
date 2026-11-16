@@ -2,7 +2,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -97,6 +97,13 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         "Saturday",
     )
     SCHEDULE_DAY_LOOKUP = {day.lower(): day for day in SCHEDULE_DAY_NAMES}
+    # The schedule ships what airs from a day ago to 8 days ahead (B7): a stale
+    # ``next_airing_date`` or a show on hiatus would land on the wrong date.
+    SCHEDULE_WINDOW_BEFORE = timedelta(days=1)
+    SCHEDULE_WINDOW_AFTER = timedelta(days=8)
+    # AniList's recommendations for one title, kept a day (B18): they change slowly,
+    # and every cold key would otherwise cost an interactive AniList call.
+    ANILIST_RECOMMENDATIONS_TTL = 24 * 60 * 60
 
     def build_queryset(self, request, *, action: str, include_user_context: bool = True):
         is_list = action == "list"
@@ -138,12 +145,25 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
 
         return self._apply_list_filters(queryset, request)
 
-    def schedule_queryset(self, user, *, include_user_context: bool = True):
+    @staticmethod
+    def schedule_now() -> datetime:
+        """The instant the schedule window and its cache key are computed from."""
+        return timezone.now()
+
+    def schedule_queryset(
+        self, user, *, include_user_context: bool = True, now: datetime | None = None
+    ):
+        now = now or self.schedule_now()
         queryset = (
             Anime.public_queryset()
             .filter(status=Anime.AnimeStatus.airing)
             .filter(
-                Q(broadcast_day__in=self.SCHEDULE_DAY_NAMES) | Q(next_airing_date__isnull=False)
+                Q(
+                    next_airing_date__gte=now - self.SCHEDULE_WINDOW_BEFORE,
+                    next_airing_date__lte=now + self.SCHEDULE_WINDOW_AFTER,
+                )
+                # No date yet: placed by its weekly slot ("Time TBA" on the frontend).
+                | Q(next_airing_date__isnull=True, broadcast_day__in=self.SCHEDULE_DAY_NAMES)
             )
             .only(*self.LIST_FIELDS)
             .prefetch_related(self._genre_prefetch(), Anime.studios_prefetch())
@@ -330,32 +350,60 @@ class AnimePublicPayloadService:
         return f"anime_detail_base:{cls.PUBLIC_CACHE_VERSION}:{slug}"
 
     @classmethod
-    def schedule_cache_key(cls, day_key: str, can_view_adult_content: bool) -> str:
-        """``day_key`` is a lowercase day name, or ``"all"`` for the whole week."""
+    def detail_cache_keys(cls, slug: str) -> tuple[str, ...]:
+        """Every key that holds ``slug``'s detail payload (the legacy keys are gone)."""
+        return (cls.detail_cache_key(slug),)
+
+    @classmethod
+    def schedule_cache_key(
+        cls, day_key: str, can_view_adult_content: bool, *, now: datetime | None = None
+    ) -> str:
+        """``day_key`` is a lowercase day name, or ``"all"`` for the whole week.
+
+        The UTC date stamp rolls the airing window over daily. Like every
+        shelf, the key also carries the collection namespace when stored, so
+        an anime save invalidates it through the namespace bump.
+        """
+        stamp = (now or AnimeQueryService.schedule_now()).astimezone(UTC).strftime("%Y%m%d")
         return (
             f"anime_schedule:{cls.PUBLIC_CACHE_VERSION}:day:{day_key}"
-            f":adult:{int(can_view_adult_content)}"
+            f":adult:{int(can_view_adult_content)}:d:{stamp}"
         )
 
     @classmethod
-    def schedule_cache_keys(cls) -> tuple[str, ...]:
-        day_keys = ("all", *(day.lower() for day in AnimeQueryService.SCHEDULE_DAY_NAMES))
-        return tuple(
-            cls.schedule_cache_key(day_key, flag) for day_key in day_keys for flag in (False, True)
+    def list_cache_key_params(cls, query_params) -> dict[str, str | list]:
+        """The known list parameters, normalised so equivalent requests share a key."""
+        params: dict[str, str | list] = {}
+        for name in cls.LIST_CACHE_SCALAR_PARAMS:
+            value = query_params.get(name) or ""
+            if name in cls.LIST_CACHE_CASELESS_PARAMS:
+                value = value.strip().lower()
+            if name == "q" and len(value) < MIN_SEARCH_LENGTH:
+                value = ""  # the search filter ignores it too
+            if value:
+                params[name] = value
+        for name in cls.LIST_CACHE_SET_PARAMS:
+            raw = query_params.get(name)
+            if raw:  # present, even if every part is blank: it still counts as a filter
+                params[name] = sorted({part.strip().lower() for part in raw.split(",")} - {""})
+        genres = sorted(
+            set(AnimeQueryService._parse_multi_value_params(query_params.getlist("genre")))
         )
+        if genres:
+            params["genre"] = genres
+        exclude_ids = AnimeQueryService.parse_exclude_ids(query_params.get("exclude_ids"))
+        if exclude_ids:
+            params["exclude_ids"] = sorted(set(exclude_ids))
+        return params
 
     @classmethod
-    def detail_cache_keys(cls, slug: str) -> tuple[str, ...]:
-        return (
-            cls.detail_cache_key(slug),
-            # Read through older keys so stale detail caches can self-heal after deploys.
-            f"anime_detail_base:{slug}",
-            f"anime_detail_base:v6:{slug}",
-            f"anime_detail_base:v5:{slug}",
-            f"anime_detail_base:v4:{slug}",
-            f"anime_detail_base:v3:{slug}",
-            f"anime_detail_base:v2:{slug}",
+    def list_cache_key(cls, query_params, *, can_view_adult_content: bool) -> str:
+        """The list payload's key (before the collection namespace), viewer-independent."""
+        param_string = json.dumps(
+            sorted(cls.list_cache_key_params(query_params).items()), separators=(",", ":")
         )
+        digest = hashlib.sha256(param_string.encode()).hexdigest()
+        return f"anime_list:{cls.PUBLIC_CACHE_VERSION}:adult:{int(can_view_adult_content)}:{digest}"
 
     @staticmethod
     def sanitize_public_user_fields(payload):

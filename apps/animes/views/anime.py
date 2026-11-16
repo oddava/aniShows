@@ -169,11 +169,16 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         # setting, built without the viewer, then enriched per user.
         can_view_adult_content = self.query_service.can_view_adult_content(request.user)
         day_key = requested_day.lower() if requested_day else "all"
-        cache_key = self.payload_service.schedule_cache_key(day_key, can_view_adult_content)
+        now = self.query_service.schedule_now()  # the key's day stamp and the airing window
+        cache_key = self.payload_service.schedule_cache_key(
+            day_key, can_view_adult_content, now=now
+        )
 
         def build_payload():
             anime_list = list(
-                self.query_service.schedule_queryset(request.user, include_user_context=False)
+                self.query_service.schedule_queryset(
+                    request.user, include_user_context=False, now=now
+                )
             )
             serializer = AnimeListSerializer(anime_list, many=True, context={"request": request})
             schedule_days = {day.lower(): [] for day in self.query_service.SCHEDULE_DAY_NAMES}

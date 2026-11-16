@@ -13,9 +13,20 @@ import pytest
 from django.core.cache import cache
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.animes.tests.catalog_fixtures import PUBLIC_ENDPOINTS, build_catalog, build_viewer
+from apps.animes.models import Character, Staff, UserRecommendation
+from apps.animes.tests.catalog_fixtures import (
+    DETAIL_SLUG,
+    PUBLIC_ENDPOINTS,
+    SHARED_CHARACTER_NAME,
+    SHARED_STAFF_NAME,
+    build_catalog,
+    build_shared_people,
+    build_viewer,
+    freeze_schedule_now,
+)
 
 # Signed-in variants of the anonymous endpoints. A signed-in viewer adds per-user
 # work (list status, favourites, the adult-content preference), so these get
@@ -73,6 +84,12 @@ def _cold_query_count(client: APIClient, url: str) -> tuple[int, str]:
 @pytest.fixture(autouse=True)
 def _no_side_effect_tasks(monkeypatch):
     monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    # The fixtures air in 2030; the schedule only ships the coming week (B7).
+    freeze_schedule_now(monkeypatch)
+    monkeypatch.setattr(
+        "apps.animes.services.public_anime_service.AniListService.get_recommendations_for_anime",
+        lambda *a, **k: [],
+    )
 
 
 @pytest.mark.django_db
