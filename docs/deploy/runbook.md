@@ -5,9 +5,11 @@ Everything runs from the repo root on the server. `deploy-prod.sh` is the only d
 proxy chain: [tunnel.md](tunnel.md). Backups: [../backups.md](../backups.md). Every variable:
 `.env.production.example`.
 
-Short form used below: `PROD="docker compose -f docker-compose.prod.yml"`. In public mode, add
-`-f infra/compose/public-ports.yml`, plus any `COMPOSE_EXTRA_FILES`, and export the
-`COMPOSE_PROFILES` that the deploy log prints on its "Mode:" line.
+**Manual compose commands: always `scripts/deploy/compose.sh …`** (short form below: `PROD`).
+It reads `.env` exactly as the deploy does and adds the mode's override files, profiles and the
+derived `CADDY_*` values. A bare `docker compose -f docker-compose.prod.yml up …` that touches
+Caddy recreates it with public-mode defaults: behind the tunnel that is a redirect loop and one
+client IP for everyone. Prefer `--no-deps` for single services.
 
 ## What a deploy does
 
@@ -30,6 +32,10 @@ Short form used below: `PROD="docker compose -f docker-compose.prod.yml"`. In pu
 
 The whole run is logged to `backups-data/deploy-logs/deploy-<ts>.log`.
 
+**Backup health.** Every scheduled run logs to `$PROD logs backup`. The container turns
+*unhealthy* (`$PROD ps`) when no daily/manual backup has succeeded for 26 h
+(`BACKUP_MAX_AGE_HOURS`). Point your uptime/alerting at that, or check it after each deploy.
+
 ## First deploy (new host)
 
 1. Docker Engine ≥ 25 with Compose ≥ 2.20 (`depends_on.required: false`): `docker compose version`.
@@ -40,12 +46,18 @@ The whole run is logged to `backups-data/deploy-logs/deploy-<ts>.log`.
    - external/shared: set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`,
      `DB_SSLMODE=require` (or `verify-full` + `DB_SSLROOTCERT` mounted into the containers), and
      size the connection budget (below). Create the role and database first:
-     `CREATE ROLE anishows LOGIN PASSWORD '…' CONNECTION LIMIT 40; CREATE DATABASE anishows OWNER anishows;`
+     `CREATE ROLE anishows LOGIN PASSWORD '…' CONNECTION LIMIT 60; CREATE DATABASE anishows_db OWNER anishows;`
+     For `verify-full`, put the server's CA on the host and set `DB_CA_FILE`, `DB_SSLROOTCERT=/etc/anishows/db-ca.pem`
+     and `COMPOSE_EXTRA_FILES="infra/compose/db-ca.yml"` (it mounts the CA into web, celery, beat and backup).
      The app needs the `pg_trgm` extension (its migrations create it). On a managed server
      without superuser, run `CREATE EXTENSION pg_trgm;` as an admin first.
 4. Pick the edge (tunnel.md): `CADDY_MODE=tunnel` + `TUNNEL_TOKEN`, or a shared/host cloudflared.
-   In the Cloudflare dashboard, set SSL/TLS to **Full** (not Flexible: Flexible plus Caddy in public
-   mode loops), and enable "Always Use HTTPS".
+   In the Cloudflare dashboard, set SSL/TLS to **Full (strict)** and enable "Always Use HTTPS".
+   **Public mode behind Cloudflare's proxy** (orange cloud, no tunnel) needs Caddy to trust
+   Cloudflare's edge, or every visitor shares the PoP's IP (one throttle bucket per PoP, D-9 useless):
+   set `CADDY_TRUSTED_PROXIES` to Cloudflare's ranges (https://www.cloudflare.com/ips/, space-separated,
+   plus `127.0.0.1/8 ::1/128`) and block 80/443 from other sources at the firewall. Simpler: use
+   DNS-only records in public mode, or the tunnel.
 5. `docker login ghcr.io` (a PAT with `read:packages`), then `./deploy-prod.sh`.
 6. Create the first admin: `$PROD exec web python manage.py createsuperuser`.
 7. Run the R-a checks in tunnel.md (no loop, per-client throttles), then `make prod-verify-backup`
@@ -62,7 +74,8 @@ A failure after the migration step prints a recipe with the concrete names. In g
 
 1. **Web roll failed:** nothing to do. The old replicas keep serving (the new one is removed).
 2. **New code is bad, schema is fine:** re-deploy the previous image. The deploy prints its id:
-   `docker tag <id> ghcr.io/oddava/anishows-backend:rollback && BACKEND_TAG=rollback SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh`
+   `docker tag <id> ghcr.io/oddava/anishows-backend:rollback && BACKEND_TAG=rollback SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh`
+   (`SKIP_PULL=1`: the `rollback` tag exists only on this host.)
    (or `BACKEND_TAG=sha-<previous>`).
 3. **The old code cannot run on the new schema:** undo this deploy's migrations with the *new*
    image (it has the migration files; every fan-out migration is reversible by policy), then do step 2:
@@ -85,11 +98,11 @@ database. Run it after the first backup, and monthly.
 |---|---|
 | `DJANGO_SECRET_KEY` | Change in `.env`, `./deploy-prod.sh`. Logs everyone out and invalidates reset/verify links and JWTs. |
 | `DB_PASSWORD` (bundled) | `$PROD exec db psql -U <user> -c "ALTER ROLE <user> PASSWORD '…'"`, then `.env`, deploy. |
-| `REDIS_PASSWORD` | `.env`, then `$PROD up -d redis` and deploy (the cache and queued tasks are lost). |
-| `AWS_SECRET_ACCESS_KEY` (MinIO root) | `.env`, `$PROD up -d minio`, deploy. |
+| `REDIS_PASSWORD` | `.env`, then `$PROD up -d --no-deps redis` and deploy (the cache and queued tasks are lost). |
+| `AWS_SECRET_ACCESS_KEY` (MinIO root) | `.env`, `$PROD up -d --no-deps minio`, deploy. |
 | `METRICS_PASSWORD` | `.env`, deploy; update the Prometheus scrape config. |
-| `TUNNEL_TOKEN` | Cloudflare dashboard → tunnel → refresh token, `.env`, `$PROD up -d cloudflared`. |
-| `RCLONE_CONFIG_*` | `.env`, `$PROD up -d backup` (the cron env file is rebuilt at start). |
+| `TUNNEL_TOKEN` | Cloudflare dashboard → tunnel → refresh token, `.env`, `$PROD up -d --no-deps cloudflared`. |
+| `RCLONE_CONFIG_*` | `.env`, `$PROD up -d --no-deps backup` (the cron env file is rebuilt at start). |
 
 ## Footprint on a shared 8 GB / 4-core host
 
@@ -124,8 +137,10 @@ connections ≤ DB_POOL_MAX_SIZE × (GUNICORN_WORKERS × (SCALE_WEB + 1) + CELER
               (+1 replica during a roll; +2 for the celery parent and beat)
 ```
 
-Default shared-host profile: 5 × (2 × 3 + 1 + 2) = 45. Add a few for migrations, backups and
-`manage.py` runs, and cap our share on the server: `ALTER ROLE anishows CONNECTION LIMIT 60`.
+With the template (`DB_POOL_MAX_SIZE=5`, `GUNICORN_WORKERS=2`, `SCALE_WEB=2`, `CELERY_CONCURRENCY=2`):
+5 × (2 × 3 + 2 + 2) = 50, plus about 10 for migrations, backups and `manage.py` runs, so cap our
+share on the server at 60: `ALTER ROLE anishows CONNECTION LIMIT 60`. The shared-host profile
+(`CELERY_CONCURRENCY=1`) needs 45 + 10.
 `core.W002` (`check --deploy`) warns when an external host runs without the pool. With the bundled
 db the same budget applies against Postgres' `max_connections` (100).
 

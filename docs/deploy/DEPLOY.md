@@ -22,7 +22,7 @@ override files from `.env`:
 
 | `.env` | Effect |
 |---|---|
-| `CADDY_MODE=tunnel` | Caddy on `:80` (plain HTTP, no ACME), trusts the Docker network for `CF-Connecting-IP` |
+| `CADDY_MODE=tunnel` | Caddy on `:80` (plain HTTP, no ACME); trusts `CF-Connecting-IP` only from the `edge` network (`EDGE_SUBNET`, default `10.250.250.240/29`, cloudflared + Caddy only; change it if it overlaps a host network) |
 | `TUNNEL_TOKEN=…` | `tunnel` profile: our own cloudflared (pinned `2026.10.0@sha256:9b49…`), healthchecked with `cloudflared tunnel ready` |
 | `TUNNEL_EXTERNAL=1` + `COMPOSE_EXTRA_FILES="infra/compose/shared-tunnel-network.yml"` + `TUNNEL_NETWORK=<net>` | reuse an existing cloudflared container: Caddy joins `<net>` as `anishows-caddy` |
 | `TUNNEL_EXTERNAL=1` + `COMPOSE_EXTRA_FILES="infra/compose/loopback-port.yml"` | cloudflared on the host: Caddy on `127.0.0.1:${CADDY_LOOPBACK_PORT:-8080}` |
@@ -44,8 +44,12 @@ git clone <repo> aniShows && cd aniShows
 cp .env.production.example .env && chmod 600 .env && $EDITOR .env
 docker login ghcr.io
 ./deploy-prod.sh            # refuses placeholder secrets / bad ALLOWED_HOSTS before touching anything
-docker compose -f docker-compose.prod.yml exec web python manage.py createsuperuser
+scripts/deploy/compose.sh exec web python manage.py createsuperuser
 ```
+
+**Every manual compose command goes through `scripts/deploy/compose.sh`** (same `.env` parsing,
+profiles, override files and derived `CADDY_*` as the deploy). A bare `docker compose -f
+docker-compose.prod.yml up` that recreates Caddy would bring it up in public mode.
 
 Then run the four checks in [tunnel.md](tunnel.md#verify-on-the-box-risk-r-a-header-behaviour-is-from-documentation)
 (no redirect loop, `https` seen by Django, per-client throttles, `client_ip` in Caddy's log).
@@ -72,7 +76,10 @@ switch over.
   `RCLONE_CONFIG_*`, `BACKUP_REMOTE_KEEP_DAYS`.
 - **Push (G4):** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.
 
-`.env` is parsed by `deploy-prod.sh` (not sourced) with Compose's rules: quote values with spaces.
+`.env` is parsed by `scripts/deploy/env.sh` (not sourced) with Compose's rules: quote values with
+spaces; a `$` must be inside single quotes (it is refused otherwise, since Compose would interpolate it).
+Optional overrides: `infra/compose/db-ca.yml` (CA for `DB_SSLMODE=verify-full`), `loopback-port.yml`,
+`shared-tunnel-network.yml`.
 
 ## Day 2
 

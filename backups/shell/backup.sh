@@ -29,6 +29,12 @@ MEDIA_RSYNC_PASSES="${BACKUP_MEDIA_RSYNC_PASSES:-2}"
 # docs/backups.md); unset = local only. Copies older than
 # BACKUP_REMOTE_KEEP_DAYS are deleted from the remote.
 REMOTE="${BACKUP_REMOTE:-}"
+LOCK_WAIT_SECONDS="${BACKUP_LOCK_WAIT_SECONDS:-0}"
+LOCK_STALE_SECONDS="${BACKUP_LOCK_STALE_SECONDS:-21600}"
+# Written after every successful scheduled/manual backup; healthcheck.sh reads it.
+SUCCESS_MARKER="$BACKUP_DIR/.last-success"
+# libpq treats an empty PGSSLROOTCERT as a path; unset means its default.
+[ -n "${PGSSLROOTCERT:-}" ] || unset PGSSLROOTCERT
 REMOTE_KEEP_DAYS="${BACKUP_REMOTE_KEEP_DAYS:-30}"
 
 CURRENT_BACKUP_DIR=""
@@ -61,23 +67,41 @@ acquire_lock() {
         return
     fi
 
-    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-        if ! reclaim_stale_lock; then
+    # BACKUP_LOCK_WAIT_SECONDS > 0 waits for a running backup to finish
+    # (deploy-prod.sh's pre-migrate dump vs the nightly) instead of failing.
+    local waited=0
+    while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+        if reclaim_stale_lock; then
+            break
+        fi
+        if [ "$waited" -ge "$LOCK_WAIT_SECONDS" ]; then
             echo "Error: Another backup/restore operation is currently running (lock: $LOCK_DIR)." >&2
             exit 1
         fi
-    fi
+        [ "$waited" -eq 0 ] && log "Waiting up to ${LOCK_WAIT_SECONDS}s for the running backup/restore to finish..."
+        sleep 10
+        waited=$((waited + 10))
+    done
     LOCK_ACQUIRED=1
     printf '%s %s\n' "$$" "$(hostname 2>/dev/null || echo unknown)" >"$LOCK_DIR/owner"
 }
 
 # A killed run (OOM, SIGKILL on redeploy) never removes its lock. Take it over
-# when its owner is gone: another container, or a process no longer running.
+# when its owner is gone: a process of this container that no longer runs, or
+# (since another container's processes cannot be checked: the backup daemon
+# vs a `compose run` of the deploy) a lock older than BACKUP_LOCK_STALE_SECONDS.
 reclaim_stale_lock() {
-    local owner_pid owner_host
+    local owner_pid owner_host lock_age
     read -r owner_pid owner_host <"$LOCK_DIR/owner" 2>/dev/null || return 1
-    if [ "$owner_host" = "$(hostname 2>/dev/null || echo unknown)" ] && kill -0 "$owner_pid" 2>/dev/null; then
-        return 1
+    if [ "$owner_host" = "$(hostname 2>/dev/null || echo unknown)" ]; then
+        if kill -0 "$owner_pid" 2>/dev/null; then
+            return 1
+        fi
+    else
+        lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCK_DIR" 2>/dev/null || date +%s) ))
+        if [ "$lock_age" -lt "$LOCK_STALE_SECONDS" ]; then
+            return 1
+        fi
     fi
     echo "Warning: removing stale lock left by PID $owner_pid on $owner_host." >&2
     rm -rf "$LOCK_DIR"
@@ -244,8 +268,20 @@ upload_offsite() {
         return 1
     fi
     log "Off-site copy verified. Removing remote copies older than ${REMOTE_KEEP_DAYS} days..."
-    rclone delete --min-age "${REMOTE_KEEP_DAYS}d" "$REMOTE" || log "Warning: remote retention cleanup failed."
-    rclone rmdirs --leave-root "$REMOTE" >/dev/null 2>&1 || true
+    # Only our own timestamped backup directories, never other data that
+    # shares the bucket or path.
+    # By the date in the name, and only directories this script created: other
+    # data that shares the bucket or path is never touched.
+    local cutoff dir old
+    cutoff="$(date -u -d "@$(( $(date +%s) - REMOTE_KEEP_DAYS * 86400 ))" +%Y%m%d)"
+    rclone lsf --dirs-only --max-depth 1 "$REMOTE" 2>/dev/null | while IFS= read -r dir; do
+        old="${dir%/}"
+        [[ "$old" =~ ^([0-9]{8})_[0-9]{6}-[a-z-]+$ ]] || continue
+        if [[ "${BASH_REMATCH[1]}" < "$cutoff" ]]; then
+            rclone purge "$REMOTE/$old" && log "Removed off-site copy $old" \
+                || log "Warning: could not remove off-site copy $old"
+        fi
+    done
 }
 
 main() {
@@ -269,6 +305,8 @@ main() {
     assert_numeric_positive "$KEEP" "BACKUP_KEEP"
     assert_numeric_positive "$KEEP_PRE_MIGRATE" "BACKUP_KEEP_PRE_MIGRATE"
     assert_numeric_positive "$REMOTE_KEEP_DAYS" "BACKUP_REMOTE_KEEP_DAYS"
+    assert_numeric_positive "$LOCK_STALE_SECONDS" "BACKUP_LOCK_STALE_SECONDS"
+    [[ "$LOCK_WAIT_SECONDS" =~ ^[0-9]+$ ]] || { echo "Error: BACKUP_LOCK_WAIT_SECONDS must be a number." >&2; exit 1; }
 
     mkdir -p "$BACKUP_DIR"
     acquire_lock
@@ -296,6 +334,9 @@ main() {
     fi
     prune_previous_backups
     upload_offsite
+    case "$TYPE" in
+        manual|daily|weekly) date -u +%s >"$SUCCESS_MARKER" ;;
+    esac
 }
 
 main "$@"

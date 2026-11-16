@@ -37,36 +37,11 @@ ok()   { echo -e "${GREEN}    $*${NC}"; }
 warn() { echo -e "${YELLOW}    $*${NC}"; }
 die()  { echo -e "${RED}    $*${NC}"; exit 1; }
 
-# -----------------------------------------------------------------------------
-# .env: parsed, never sourced (a sourced file runs code, and a value with a
-# space such as ADMIN_ALLOW_CIDRS would break it). Compose's rules: KEY=VALUE,
-# optional quotes, "# comment" after an unquoted value, the shell env wins.
-# -----------------------------------------------------------------------------
-load_env_file() {
-    local file="$1" line key val
-    [ -f "$file" ] || return 0
-    while IFS= read -r line || [ -n "$line" ]; do
-        line="${line%$'\r'}"
-        [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
-        if ! [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
-            warn "ignoring a malformed line in $file"
-            continue
-        fi
-        key="${BASH_REMATCH[2]}"
-        val="${BASH_REMATCH[3]}"
-        if [[ "$val" =~ ^\"(.*)\"[[:space:]]*(#.*)?$ ]]; then
-            val="${BASH_REMATCH[1]}"
-        elif [[ "$val" =~ ^\'(.*)\'[[:space:]]*(#.*)?$ ]]; then
-            val="${BASH_REMATCH[1]}"
-        else
-            val="${val%%[[:space:]]#*}"
-            val="${val%"${val##*[![:space:]]}"}"
-        fi
-        if [ -z "${!key+x}" ]; then
-            export "$key=$val"
-        fi
-    done <"$file"
-}
+# .env parsing and everything CADDY_MODE decides (profiles, override files,
+# Caddy's site address / trusted peers / HSTS) live in scripts/deploy/env.sh,
+# shared with scripts/deploy/compose.sh so manual commands match the deploy.
+# shellcheck source=scripts/deploy/env.sh
+source scripts/deploy/env.sh
 load_env_file .env
 
 command -v docker >/dev/null || die "docker is not installed"
@@ -82,68 +57,15 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 echo "Deploy log: $LOG_FILE"
 
 # -----------------------------------------------------------------------------
-# Mode, profiles and compose files
+# Mode, profiles and compose files (scripts/deploy/env.sh)
 # -----------------------------------------------------------------------------
-CADDY_MODE="${CADDY_MODE:-public}"
-case "$CADDY_MODE" in
-    public|tunnel) ;;
-    *) die "CADDY_MODE must be 'public' or 'tunnel' (got '$CADDY_MODE')" ;;
-esac
-export CADDY_MODE
-
-DOMAIN="${DOMAIN_NAME:-localhost}"
-DOMAIN="${DOMAIN#http://}"; DOMAIN="${DOMAIN#https://}"
-DOMAIN="${DOMAIN%%,*}"; DOMAIN="${DOMAIN%% *}"; DOMAIN="${DOMAIN%%/*}"; DOMAIN="${DOMAIN%%:*}"
-[ -z "$DOMAIN" ] && DOMAIN=localhost
-
-DB_HOST="${DB_HOST:-db}"
-export DB_HOST
-
-case "${ANALYTICS_ENABLED:-auto}" in
-    auto) if [ -n "${UMAMI_DOMAIN:-}" ]; then ANALYTICS=1; else ANALYTICS=0; fi ;;
-    1|true|yes|on) ANALYTICS=1 ;;
-    *) ANALYTICS=0 ;;
-esac
-
-profiles=()
-[ "$DB_HOST" = db ] && profiles+=(bundled-db)
-[ "$ANALYTICS" = 1 ] && profiles+=(analytics)
-TUNNEL_IN_STACK=0
-if [ "$CADDY_MODE" = tunnel ] && [ "${TUNNEL_EXTERNAL:-0}" != 1 ]; then
-    [ -n "${TUNNEL_TOKEN:-}" ] || die "CADDY_MODE=tunnel needs TUNNEL_TOKEN (or TUNNEL_EXTERNAL=1 when cloudflared runs outside this stack)"
-    profiles+=(tunnel)
-    TUNNEL_IN_STACK=1
+resolve_deploy_mode
+if [ "$TUNNEL_IN_STACK" = 1 ] && is_placeholder_value "${TUNNEL_TOKEN:-}"; then
+    die "CADDY_MODE=tunnel needs a real TUNNEL_TOKEN (or TUNNEL_EXTERNAL=1 when cloudflared runs outside this stack)"
 fi
-COMPOSE_PROFILES="$(IFS=,; echo "${profiles[*]-}")"
-export COMPOSE_PROFILES
-
-COMPOSE=(docker compose -f docker-compose.prod.yml)
-[ "$CADDY_MODE" = public ] && COMPOSE+=(-f infra/compose/public-ports.yml)
-for extra in ${COMPOSE_EXTRA_FILES:-}; do
-    [ -f "$extra" ] || die "COMPOSE_EXTRA_FILES: $extra not found"
-    COMPOSE+=(-f "$extra")
-done
-
-# Caddy's site addresses, trusted peers and HSTS follow the mode unless set.
-if [ "$CADDY_MODE" = tunnel ]; then
-    : "${CADDY_SITE_ADDRESS:=:80}"
-    : "${CADDY_TRUSTED_PROXIES:=private_ranges}"
-    if [ "$ANALYTICS" = 1 ]; then : "${CADDY_UMAMI_SITE_ADDRESS:=http://${UMAMI_DOMAIN:-umami.invalid}}"; fi
-else
-    : "${CADDY_SITE_ADDRESS:=$DOMAIN}"
-    : "${CADDY_TRUSTED_PROXIES:=127.0.0.1/8 ::1/128}"
-    if [ "$ANALYTICS" = 1 ]; then : "${CADDY_UMAMI_SITE_ADDRESS:=${UMAMI_DOMAIN:-http://umami.invalid}}"; fi
+if [ "$CADDY_MODE" = public ] && [ "$DOMAIN" != localhost ] && is_placeholder_value "${CADDY_ACME_EMAIL:-x}"; then
+    die "Public mode needs a real CADDY_ACME_EMAIL for certificate registration"
 fi
-: "${CADDY_UMAMI_SITE_ADDRESS:=http://umami.invalid}"
-
-is_true() { case "${1,,}" in 1|true|yes|on) return 0 ;; *) return 1 ;; esac; }
-hsts_seconds="${SECURE_HSTS_SECONDS:-31536000}"
-[[ "$hsts_seconds" =~ ^[0-9]+$ ]] || die "SECURE_HSTS_SECONDS must be a whole number of seconds"
-hsts="max-age=${hsts_seconds}"
-is_true "${SECURE_HSTS_INCLUDE_SUBDOMAINS:-True}" && hsts+="; includeSubDomains"
-is_true "${SECURE_HSTS_PRELOAD:-True}" && hsts+="; preload"
-: "${CADDY_HSTS_HEADER:=$hsts}"
-export CADDY_SITE_ADDRESS CADDY_TRUSTED_PROXIES CADDY_UMAMI_SITE_ADDRESS CADDY_HSTS_HEADER
 
 PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
 FRONTEND_IMAGE="ghcr.io/oddava/anishows-frontend:${FRONTEND_TAG:-latest}"
@@ -219,22 +141,15 @@ roll_web() {
 # the templates ship placeholders. A server running on them is open (the
 # secret key signs sessions, password resets and JWTs; the Umami secret signs
 # dashboard logins). ALLOW_INSECURE_DEFAULTS=1 overrides this for one run.
-is_placeholder() {
-    case "${1,,}" in
-        ""|1|postgres|minioadmin|redispassword123|umami|admin|password|secret) return 0 ;;
-        change_me*|change-me*|changeme*|replace*|django-insecure*|"<"*) return 0 ;;
-        *) return 1 ;;
-    esac
-}
 insecure=()
 secret_vars=(DB_PASSWORD REDIS_PASSWORD AWS_SECRET_ACCESS_KEY)
 [ "$ANALYTICS" = 1 ] && secret_vars+=(UMAMI_DB_PASSWORD UMAMI_APP_SECRET)
 for var in "${secret_vars[@]}"; do
-    is_placeholder "${!var:-}" && insecure+=("$var")
+    is_placeholder_value "${!var:-}" && insecure+=("$var")
 done
 
 secret_key="${DJANGO_SECRET_KEY:-}"
-if is_placeholder "$secret_key" || [ "${#secret_key}" -lt 50 ]; then
+if is_placeholder_value "$secret_key" || [ "${#secret_key}" -lt 50 ]; then
     insecure+=("DJANGO_SECRET_KEY (placeholder or shorter than 50 characters)")
 fi
 
@@ -243,7 +158,7 @@ fi
 metrics_password="${METRICS_PASSWORD:-}"
 if [ -z "$metrics_password" ]; then
     warn "METRICS_PASSWORD is empty: /metrics stays disabled."
-elif is_placeholder "$metrics_password" || [ "${#metrics_password}" -lt 12 ]; then
+elif is_placeholder_value "$metrics_password" || [ "${#metrics_password}" -lt 12 ]; then
     insecure+=("METRICS_PASSWORD (placeholder or shorter than 12 characters)")
 fi
 
@@ -338,8 +253,11 @@ else
         warn "SKIP_PRE_MIGRATE_BACKUP=1: migrating without a fresh backup"
     else
         step "Pre-migrate backup (database only)"
+        # Local only (an off-site hiccup must not block a deploy; the nightly
+        # backup goes off-site), and it waits out a running nightly backup.
         "${COMPOSE[@]}" run --rm --no-deps -T \
-            -e BACKUP_INCLUDE_MEDIA=0 -e BACKUP_OUTPUT_PATH_FILE=/backups/.last-pre-migrate \
+            -e BACKUP_INCLUDE_MEDIA=0 -e BACKUP_REMOTE= -e BACKUP_LOCK_WAIT_SECONDS=1800 \
+            -e BACKUP_OUTPUT_PATH_FILE=/backups/.last-pre-migrate \
             --entrypoint /app/shell/backup.sh backup pre-migrate \
             || die "pre-migrate backup failed; nothing was migrated"
         PRE_MIGRATE_BACKUP="$(cat backups-data/.last-pre-migrate 2>/dev/null || echo "backups-data/<latest>-pre-migrate")"
@@ -347,24 +265,26 @@ else
     fi
 fi
 
-# From here on, a failure leaves a changed schema: print how to roll back.
-MIGRATED=0
+# From here on, a failure may leave a changed schema: print how to roll back.
+# MIGRATE_STARTED, not "succeeded": a plan of several migrations can apply some
+# and then fail, which is when steps 2 and 3 matter most.
+MIGRATE_STARTED=0
 print_rollback() {
-    echo -e "\n${RED}==> Deploy failed after the migration step. Rollback recipe:${NC}"
+    echo -e "\n${RED}==> Deploy failed at or after the migration step. Rollback recipe:${NC}"
     echo "    The old web replicas keep serving if the rolling restart failed."
     if [ -n "$PREVIOUS_WEB_IMAGE" ]; then
-        echo "    1. Previous backend image: ${PREVIOUS_WEB_IMAGE}"
+        echo "    1. Previous backend image (local, so no pull): ${PREVIOUS_WEB_IMAGE}"
         echo "       docker tag ${PREVIOUS_WEB_IMAGE} ghcr.io/oddava/anishows-backend:rollback"
-        echo "       BACKEND_TAG=rollback SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh"
+        echo "       BACKEND_TAG=rollback SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh"
     else
         echo "    1. Re-deploy the previous release: BACKEND_TAG=sha-<previous> ./deploy-prod.sh"
     fi
-    if [ "$MIGRATED" = 1 ]; then
+    if [ "$MIGRATE_STARTED" = 1 ]; then
         echo "    2. If the old code cannot run on the new schema, first undo the migrations in"
         echo "       ${PLAN_FILE} with the NEW image (it has the files; all are reversible):"
-        echo "       ${COMPOSE[*]} run --rm --no-deps web python manage.py migrate <app> <previous_migration>"
+        echo "       scripts/deploy/compose.sh run --rm --no-deps web python manage.py migrate <app> <previous_migration>"
         echo "    3. Last resort, restore the database from the pre-migrate backup:"
-        echo "       ${COMPOSE[*]} exec backup /app/shell/restore.sh $(basename "${PRE_MIGRATE_BACKUP:-<name>}") --yes --skip-media"
+        echo "       scripts/deploy/compose.sh stop web celery beat && scripts/deploy/compose.sh exec backup /app/shell/restore.sh $(basename "${PRE_MIGRATE_BACKUP:-<name>}") --yes --skip-media"
     fi
     echo "    Runbook: docs/deploy/runbook.md (Rollback). Log: ${LOG_FILE}"
 }
@@ -378,8 +298,8 @@ trap on_exit EXIT
 ROLLBACK_HINTS=1
 
 step "Migrations"
+MIGRATE_STARTED=1
 "${COMPOSE[@]}" run --rm --no-deps web python manage.py migrate --noinput
-MIGRATED=1
 ok "migrations applied"
 
 step "Workers and backups"
@@ -484,15 +404,33 @@ if [ -n "$asset" ]; then
 fi
 ok "frontend served"
 
+# The health paths are exempt from SECURE_SSL_REDIRECT and "/" is served by
+# Caddy alone, so neither can show Django's scheme loop. This route can: it
+# must answer without a redirect (2xx/4xx, or 503 in maintenance mode).
+NON_EXEMPT_ROUTE="/api/v1/genres/"
+acceptable_status() { [[ "$1" =~ ^(2[0-9][0-9]|4[0-9][0-9]|503)$ ]]; }
+if [ "$CADDY_MODE" = tunnel ]; then
+    # wget -S prints the first response's status line before following.
+    status="$("${COMPOSE[@]}" exec -T caddy wget -S -q -O /dev/null -T 10 \
+        --header "Host: ${DOMAIN}" --header "X-Forwarded-Proto: https" \
+        "http://127.0.0.1${NON_EXEMPT_ROUTE}" 2>&1 | grep -m1 -oE 'HTTP/[0-9.]+ [0-9]{3}' | grep -oE '[0-9]{3}$' || true)"
+    acceptable_status "$status" \
+        || die "Django answered ${NON_EXEMPT_ROUTE} with '${status:-no response}' for an https request: the X-Forwarded-Proto chain is broken (docs/deploy/tunnel.md)"
+    ok "scheme chain (https seen by Django)"
+fi
+
 if [ -n "${PUBLIC_BASE_URL:-}" ]; then
     step "Smoke tests (public: ${PUBLIC_BASE_URL})"
     public="${PUBLIC_BASE_URL%/}"
-    # No redirect at all for the health path (a loop shows up as a 301 here).
-    code="$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 3 "${public}/api/v1/health/")" \
-        || die "public URL unreachable"
-    [ "$code" = 200 ] || die "public liveness returned HTTP ${code} (a 301/308 means a redirect loop; see docs/deploy/tunnel.md)"
+    public_status() { curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 3 "${public}$1"; }
+    code="$(public_status /api/v1/health/)" || die "public URL unreachable"
+    [ "$code" = 200 ] || die "public liveness returned HTTP ${code} (see docs/deploy/tunnel.md)"
+    # No redirect followed: a 301/308 here is the redirect loop (R2).
+    code="$(public_status "$NON_EXEMPT_ROUTE")" || die "public URL unreachable"
+    acceptable_status "$code" \
+        || die "public ${NON_EXEMPT_ROUTE} returned HTTP ${code}: a 301/308 means Django does not see https (redirect loop; docs/deploy/tunnel.md)"
     curl -fsS -o /dev/null --max-redirs 3 -L "${public}/" || die "public homepage failed (or redirects in a loop)"
-    ok "public URL serves the API and the SPA"
+    ok "public URL serves the API (no redirect) and the SPA"
 fi
 
 ROLLBACK_HINTS=0

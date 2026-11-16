@@ -16,8 +16,9 @@
 	servers {
 		# Peers whose client-IP headers Caddy believes. Public mode: loopback
 		# only, so a client can never choose its own address. Tunnel mode:
-		# the compose network (cloudflared), which sets CF-Connecting-IP to the
-		# address Cloudflare saw. {client_ip} below resolves through this.
+		# the edge network (cloudflared + Caddy only) and loopback; cloudflared
+		# sets CF-Connecting-IP to the address Cloudflare saw. {client_ip}
+		# below resolves through this. The value comes from scripts/deploy/env.sh.
 		trusted_proxies static {$CADDY_TRUSTED_PROXIES:127.0.0.1/8 ::1/128}
 		client_ip_headers CF-Connecting-IP
 	}
@@ -54,13 +55,32 @@
 
 # Operator-only routes (owner decision D-9): /metrics, readiness and the
 # Django admin. ADMIN_ALLOW_CIDRS is a space-separated CIDR list; the default
-# lets everyone through, so nothing changes until it is set. Loopback always
-# passes (deploy smoke tests run inside the container). {client_ip} is the
-# real client in both modes (see trusted_proxies above). Imported inside each
+# lets everyone through, so nothing changes until it is set. {client_ip} is
+# the real client in both modes (see trusted_proxies above). Requests from
+# Caddy's own loopback (deploy smoke tests) always pass; that is matched on
+# the TCP peer (remote_ip), so no header can claim it. Imported inside each
 # handle block: a top-level respond would sort after handle and never run.
 (operator_gate) {
-	@operator_denied_{args[0]} not client_ip {$ADMIN_ALLOW_CIDRS:0.0.0.0/0 ::/0} 127.0.0.1/8 ::1/128
+	@operator_denied_{args[0]} {
+		not client_ip {$ADMIN_ALLOW_CIDRS:0.0.0.0/0 ::/0}
+		not remote_ip 127.0.0.1/8 ::1/128
+	}
 	respond @operator_denied_{args[0]} 403
+}
+
+# Access logs: rotated (10 MiB x 5) and without the secret in account-link
+# URIs (reset/verify/email-change tokens). Credentials headers are redacted by
+# Caddy itself.
+(access_log) {
+	log {
+		output file /var/log/caddy/{args[0]} {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format filter {
+			request>uri regexp "(?i)/(reset-password|password-reset-confirm|verify-email|confirm-email-change|email-change|activate)/[^?#]*" "/$1/<redacted>"
+		}
+	}
 }
 
 (api_proxy) {
@@ -292,9 +312,7 @@
 		header Content-Security-Policy "default-src 'self'; script-src 'self' {$UMAMI_PUBLIC_ORIGIN}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: {$UMAMI_PUBLIC_ORIGIN} https://fonts.googleapis.com https://fonts.gstatic.com wss:; media-src 'self' https:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com;"
 	}
 
-	log {
-		output file /var/log/caddy/access.log
-	}
+	import access_log access.log
 }
 
 # The application. Public mode: the domain (ACME + HTTP->HTTPS redirect).
@@ -315,9 +333,7 @@
 		header_up X-Forwarded-For {client_ip}
 	}
 
-	log {
-		output file /var/log/caddy/umami-access.log
-	}
+	import access_log umami-access.log
 }
 
 # Extra sites for this mode only (infra/caddy/sites-<mode>.d/*.caddy, mounted

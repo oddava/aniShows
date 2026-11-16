@@ -10,6 +10,8 @@ DB_PORT="${POSTGRES_PORT:-5432}"
 DB_NAME="${POSTGRES_DB:?POSTGRES_DB is required}"
 DB_USER="${POSTGRES_USER:?POSTGRES_USER is required}"
 DB_PASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+# libpq treats an empty PGSSLROOTCERT as a path; unset means its default.
+[ -n "${PGSSLROOTCERT:-}" ] || unset PGSSLROOTCERT
 DB_ADMIN_DB="${POSTGRES_ADMIN_DB:-postgres}"
 RUN_TS="$(date +%Y%m%d_%H%M%S)"
 

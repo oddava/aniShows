@@ -230,38 +230,19 @@ jobs:
             echo '${GHCR_PAT}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             echo '====================================='
-            echo '🎯 DEPLOYING FRONTEND (commit: ${SHORT_SHA})'
+            echo '🎯 DEPLOYING commit ${SHORT_SHA}'
             echo '====================================='
-            
-            echo '📦 Pulling frontend image by SHA tag...'
-            docker pull ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA}
-            
-            echo '🏷️  Tagging as latest so docker compose uses the correct image...'
-            docker tag ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA} ghcr.io/oddava/anishows-frontend:latest
-            
-            # Backend first: deploy-prod.sh refuses placeholder secrets and runs
-            # migrations, and the new SPA must not go live if it stops.
-            echo '🐳 Running deployment script for remaining services...'
-            bash ./deploy-prod.sh
 
-            # Copy over the old build instead of wiping it: open tabs still load
-            # their old hashed chunks, and index.html (copied last) never points
-            # at assets that are not there yet. Chunks unused for a week go.
-            echo '📋 Copying new frontend files from image...'
-            docker run --rm -v anishows_frontend_dist:/srv/frontend ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA} sh -c 'mkdir -p /srv/frontend/assets && cp -r /app/dist/assets/. /srv/frontend/assets/ && cp -r /app/dist/. /srv/frontend/ && find /srv/frontend/assets -type f -mtime +7 -delete && echo DONE'
+            # deploy-prod.sh does everything: refusals, migration plan and
+            # pre-migrate backup, migrate, rolling web, the frontend files (after
+            # the backend, copied over the old build), Caddy/cloudflared, and the
+            # smoke tests (through Caddy and PUBLIC_BASE_URL). No localhost:80
+            # check here: tunnel mode publishes no host port.
+            BACKEND_TAG=sha-${SHORT_SHA} FRONTEND_TAG=sha-${SHORT_SHA} bash ./deploy-prod.sh
 
-            echo '🔍 Verifying deployed files...'
-            docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c 'ls -la /srv/frontend/ && echo --- && ls /srv/frontend/assets/ | head -10 && echo --- && md5sum /srv/frontend/index.html'
-
-            echo 'Verifying deployment health...'
-            sleep 5
-            
-            echo 'Testing website accessibility...'
-            curl -sf --retry 3 --retry-delay 5 http://localhost:80/api/v1/health/ || { echo 'Health check FAILED'; exit 1; }
-            
             echo '📊 Checking container status...'
-            docker compose -f docker-compose.prod.yml ps
-            
+            bash scripts/deploy/compose.sh ps
+
             echo '✅ Deployment completed successfully!'
           "
 

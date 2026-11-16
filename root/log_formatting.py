@@ -83,9 +83,11 @@ class JsonFormatter(logging.Formatter):
             "request_id": getattr(record, "request_id", None) or get_request_id() or "-",
         }
         for key, value in record.__dict__.items():
-            if key in _RESERVED_ATTRS or key.startswith("_") or key in payload:
+            if key in _RESERVED_ATTRS or key.startswith("_"):
                 continue
-            payload[key] = value
+            if key in payload:  # never overwrite the envelope (extra={"level": ...})
+                key = f"extra_{key}"
+            payload[key] = redact_url(value) if isinstance(value, str) else value
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
         elif record.exc_text:
@@ -95,10 +97,26 @@ class JsonFormatter(logging.Formatter):
 
         # default=str: datetimes, Decimals, model instances, ... never raise.
         # json.dumps escapes newlines, so a traceback stays on one line.
-        line = json.dumps(payload, default=str, ensure_ascii=False)
+        try:
+            line = json.dumps(payload, default=str, ensure_ascii=False)
+        except (TypeError, ValueError):
+            # e.g. a dict extra with non-string keys or a circular value:
+            # keep the line, with each unserialisable field as its repr.
+            line = json.dumps(self._safe(payload), default=str, ensure_ascii=False)
         if len(line.encode("utf-8")) > MAX_LINE_BYTES:
             line = self._truncated(payload)
         return line
+
+    @staticmethod
+    def _safe(payload: dict[str, Any]) -> dict[str, Any]:
+        safe: dict[str, Any] = {}
+        for key, value in payload.items():
+            try:
+                json.dumps(value, default=str)
+                safe[key] = value
+            except (TypeError, ValueError):
+                safe[key] = repr(value)
+        return safe
 
     @staticmethod
     def _truncated(payload: dict[str, Any]) -> str:

@@ -86,6 +86,32 @@ class JsonFormatterTests(SimpleTestCase):
         self.assertTrue(line["truncated"])
         self.assertEqual(line["level"], "ERROR")
 
+    def test_extras_never_overwrite_the_envelope(self):
+        logger, stream = _logger_with_stream("anishows.test.collide")
+        logger.info("hi", extra={"level": "fake", "logger": "x", "ts": 0})
+        (line,) = _lines(stream)
+        self.assertEqual((line["level"], line["logger"]), ("INFO", "anishows.test.collide"))
+        self.assertEqual(
+            (line["extra_level"], line["extra_logger"], line["extra_ts"]), ("fake", "x", 0)
+        )
+
+    def test_unserialisable_extras_keep_the_line(self):
+        logger, stream = _logger_with_stream("anishows.test.keys")
+        circular: list = []
+        circular.append(circular)
+        logger.warning("odd", extra={"mapping": {1: "a", (2, 3): "b"}, "loop": circular})
+        (line,) = _lines(stream)
+        self.assertEqual(line["message"], "odd")
+        self.assertIn("(2, 3)", line["mapping"])
+        self.assertIsInstance(line["loop"], str)
+
+    def test_tokens_in_string_extras_are_redacted(self):
+        logger, stream = _logger_with_stream("anishows.test.extra-redact")
+        logger.info("request", extra={"path": "/verify-email/MQ/tok/", "status": 200})
+        (line,) = _lines(stream)
+        self.assertEqual(line["path"], "/verify-email/<redacted>")
+        self.assertEqual(line["status"], 200)
+
     def test_tokens_in_logged_urls_are_redacted(self):
         logger, stream = _logger_with_stream("anishows.test.redact")
         logger.info("GET /reset-password/MQ/abc-123/ 200")

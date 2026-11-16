@@ -40,15 +40,10 @@ RUN uv sync --frozen --extra dev
 
 FROM ${PYTHON_IMAGE} AS runtime
 
-# The commit this image was built from (CI: --build-arg GIT_SHA=...): Sentry's
-# release and what a deploy can check is serving.
-ARG GIT_SHA=""
-ENV GIT_SHA=${GIT_SHA} \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 # deploy-prod.sh prunes only images carrying this label (shared host).
-LABEL app.anishows.component="backend" \
-      org.opencontainers.image.revision="${GIT_SHA}"
+LABEL app.anishows.component="backend"
 
 RUN useradd -m -u 1000 aniuser
 
@@ -95,6 +90,13 @@ EXPOSE 8000 8001
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health/ || exit 1
+
+# The commit this image was built from (CI: --build-arg GIT_SHA=...): Sentry's
+# release and the readiness cache key. Last, so a new commit reuses every
+# cached layer above.
+ARG GIT_SHA=""
+ENV GIT_SHA=${GIT_SHA}
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
 
 CMD ["bash", "/app/scripts/run_with_migration_check.sh", "gunicorn", "root.asgi:application", "-c", "gunicorn.conf.py"]
 

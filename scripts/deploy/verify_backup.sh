@@ -9,17 +9,20 @@
 #   scripts/deploy/verify_backup.sh                 # newest backup in backups-data/
 #   scripts/deploy/verify_backup.sh 20261116_030000 # or a timestamp / directory name
 #
-# Env: COMPOSE_PROJECT_NAME, COMPOSE_FILES
-# (default docker-compose.prod.yml), VERIFY_PG_IMAGE (default postgres:18-alpine).
+# Env: COMPOSE_PROJECT_NAME, VERIFY_PG_IMAGE (default postgres:18-alpine; use
+# the major version of the server you would restore to, e.g. postgres:16-alpine
+# for an external Postgres 16: pg_dump 18 output may need a recent server).
 
 set -euo pipefail
 
+# shellcheck source=scripts/deploy/env.sh
+source scripts/deploy/env.sh
+load_env_file .env
 PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
 NETWORK="${VERIFY_NETWORK:-${PROJECT}_default}"
 PG_IMAGE="${VERIFY_PG_IMAGE:-postgres:18-alpine}"
-read -r -a compose_files <<<"${COMPOSE_FILES:-docker-compose.prod.yml}"
-COMPOSE=(docker compose)
-for file in "${compose_files[@]}"; do COMPOSE+=(-f "$file"); done
+# The stack's compose files and profiles, as the deploy uses them.
+COMPOSE=(bash scripts/deploy/compose.sh)
 
 die() { echo "Error: $*" >&2; exit 1; }
 log() { echo "[verify-backup] $*"; }

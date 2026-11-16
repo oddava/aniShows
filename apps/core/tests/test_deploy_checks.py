@@ -16,6 +16,7 @@ from apps.core import checks
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEPLOY_SCRIPT = REPO_ROOT / "deploy-prod.sh"
+DEPLOY_LIB = REPO_ROOT / "scripts" / "deploy"
 GOOD_KEY = "k" * 20 + "0123456789abcdefghijklmnopqrstuvwxyzABCDEF"
 
 
@@ -115,50 +116,80 @@ SAFE_ENV = {
     "ANALYTICS_ENABLED": "0",
 }
 
-# A stand-in `docker`: records each call, succeeds for `compose ... config`,
-# and stops the script at the first pull (exit 97), i.e. after every refusal.
-FAKE_DOCKER = """#!/usr/bin/env bash
+# A stand-in `docker`: records each call (and, for compose, the CADDY_* values
+# it was given). FAKE_STOP_AT_PULL=1 stops the script at the first pull
+# (exit 97), i.e. right after every refusal. Without it the run goes on: one
+# running web container (whose image is "sha256:previous"), every container
+# healthy, a non-empty migration plan; FAKE_FAIL_MIGRATE=1 fails `migrate`.
+# The rolling restart then finds no new container and fails: a failure after
+# the migration step.
+FAKE_DOCKER = r"""#!/usr/bin/env bash
 echo "$*" >> "$FAKE_DOCKER_LOG"
-case " $* " in
-  *" pull "*) exit 97 ;;
+if [ "${1:-}" = compose ]; then
+  echo "env: mode=${CADDY_MODE:-} site=${CADDY_SITE_ADDRESS:-} trusted=${CADDY_TRUSTED_PROXIES:-} hsts=${CADDY_HSTS_HEADER:-} profiles=${COMPOSE_PROFILES:-}" >> "$FAKE_DOCKER_LOG"
+fi
+args=" $* "
+case "$args" in
+  *" pull "*) [ "${FAKE_STOP_AT_PULL:-0}" = 1 ] && exit 97 ;;
+esac
+case "$args" in
+  *"{{.Image}}"*) echo "sha256:previous" ;;
+  *" inspect --format "*) echo healthy ;;
+  *" ps -q "*) echo "c0ffee000001" ;;
+  *"migrate --plan"*) printf 'Planned operations:\nusers.0038_accounts_example\n' ;;
+  *"migrate --noinput"*) [ "${FAKE_FAIL_MIGRATE:-0}" = 1 ] && exit 1 ;;
 esac
 exit 0
 """
 
 
+def _run_in_temp_repo(
+    script: str,
+    env_lines: dict[str, str],
+    shell_env: dict[str, str] | None = None,
+    args: tuple[str, ...] = (),
+):
+    """Run a copy of a deploy script (with scripts/deploy) in a temp dir with a fake docker."""
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        shutil.copy(DEPLOY_SCRIPT, work / "deploy-prod.sh")
+        shutil.copytree(DEPLOY_LIB, work / "scripts" / "deploy")
+        (work / "docker-compose.prod.yml").write_text("services: {}\n", encoding="utf-8")
+        (work / ".env").write_text(
+            "\n".join(f"{key}={value}" for key, value in env_lines.items()) + "\n",
+            encoding="utf-8",
+        )
+        bin_dir = work / "bin"
+        bin_dir.mkdir()
+        docker = bin_dir / "docker"
+        docker.write_text(FAKE_DOCKER, encoding="utf-8")
+        docker.chmod(0o755)
+        log = work / "docker.log"
+        env = {
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+            "HOME": tmp,
+            "FAKE_DOCKER_LOG": str(log),
+            **(shell_env or {}),
+        }
+        result = subprocess.run(  # noqa: S603 - our own script in a temp copy
+            ["bash", script, *args],  # noqa: S607
+            cwd=work,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        calls = log.read_text(encoding="utf-8") if log.exists() else ""
+    return result, calls
+
+
 @unittest.skipUnless(shutil.which("bash"), "bash is required")
 class DeployScriptRefusalTests(SimpleTestCase):
     def _run(self, env_lines: dict[str, str], shell_env: dict[str, str] | None = None):
-        with tempfile.TemporaryDirectory() as tmp:
-            work = Path(tmp)
-            shutil.copy(DEPLOY_SCRIPT, work / "deploy-prod.sh")
-            (work / ".env").write_text(
-                "\n".join(f"{key}={value}" for key, value in env_lines.items()) + "\n",
-                encoding="utf-8",
-            )
-            bin_dir = work / "bin"
-            bin_dir.mkdir()
-            docker = bin_dir / "docker"
-            docker.write_text(FAKE_DOCKER, encoding="utf-8")
-            docker.chmod(0o755)
-            log = work / "docker.log"
-            env = {
-                "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
-                "HOME": tmp,
-                "FAKE_DOCKER_LOG": str(log),
-                **(shell_env or {}),
-            }
-            result = subprocess.run(
-                ["bash", "deploy-prod.sh"],  # noqa: S607
-                cwd=work,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=60,
-                check=False,
-            )
-            calls = log.read_text(encoding="utf-8") if log.exists() else ""
-        return result, calls
+        return _run_in_temp_repo(
+            "deploy-prod.sh", env_lines, {"FAKE_STOP_AT_PULL": "1", **(shell_env or {})}
+        )
 
     def test_safe_config_passes_every_refusal(self):
         result, calls = self._run(SAFE_ENV)
@@ -210,7 +241,7 @@ class DeployScriptRefusalTests(SimpleTestCase):
         env = {key: value for key, value in SAFE_ENV.items() if key != "TUNNEL_TOKEN"}
         result, _ = self._run(env)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("needs TUNNEL_TOKEN", result.stdout)
+        self.assertIn("needs a real TUNNEL_TOKEN", result.stdout)
         result, _ = self._run({**env, "TUNNEL_EXTERNAL": "1"})
         self.assertEqual(result.returncode, 97, result.stdout)
         self.assertRegex(result.stdout, r"(?m)profiles: bundled-db$")
@@ -233,3 +264,97 @@ class DeployScriptRefusalTests(SimpleTestCase):
         )
         self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
         self.assertNotIn("malformed", result.stdout)
+
+
+@unittest.skipUnless(shutil.which("bash"), "bash is required")
+class DeployScriptFailureRecipeTests(SimpleTestCase):
+    """What the operator reads when a deploy fails after the schema changed."""
+
+    def _run(self, **shell_env):
+        return _run_in_temp_repo(
+            "deploy-prod.sh",
+            SAFE_ENV,
+            {"SKIP_ANILIST_SMOKE": "1", "SKIP_PULL": "1", **shell_env},
+        )
+
+    def test_failure_after_migrate_prints_a_working_rollback(self):
+        result, calls = self._run()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        out = result.stdout
+        self.assertIn("pre-migrate", calls, "a non-empty plan takes a backup first")
+        self.assertIn("-e BACKUP_REMOTE=", calls, "the pre-migrate dump stays local")
+        self.assertIn("Rollback recipe", out)
+        # The previous image is local: the recipe must not try to pull it.
+        self.assertIn("docker tag sha256:previous ghcr.io/oddava/anishows-backend:rollback", out)
+        self.assertIn("BACKEND_TAG=rollback SKIP_PULL=1", out)
+        self.assertIn("python manage.py migrate <app> <previous_migration>", out)
+        self.assertIn("restore.sh", out)
+
+    def test_a_partial_migrate_still_lists_the_schema_steps(self):
+        result, _ = self._run(FAKE_FAIL_MIGRATE="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Rollback recipe", result.stdout)
+        self.assertIn("undo the migrations", result.stdout)
+        self.assertIn("restore.sh", result.stdout)
+
+    def test_no_recipe_when_nothing_changed(self):
+        result, _ = _run_in_temp_repo(
+            "deploy-prod.sh", {**SAFE_ENV, "DJANGO_SECRET_KEY": "x"}, {"FAKE_STOP_AT_PULL": "1"}
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("Rollback recipe", result.stdout)
+
+    def test_placeholder_tunnel_token_is_refused_before_anything_runs(self):
+        result, calls = _run_in_temp_repo(
+            "deploy-prod.sh", {**SAFE_ENV, "TUNNEL_TOKEN": "<from the Cloudflare dashboard>"}
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("needs a real TUNNEL_TOKEN", result.stdout)
+        self.assertEqual(calls, "")
+
+
+@unittest.skipUnless(shutil.which("bash"), "bash is required")
+class ComposeWrapperTests(SimpleTestCase):
+    """scripts/deploy/compose.sh gives manual commands the deploy's mode."""
+
+    def _env_line(self, env_lines: dict[str, str]) -> str:
+        result, calls = _run_in_temp_repo("scripts/deploy/compose.sh", env_lines, args=("ps",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (line,) = [entry for entry in calls.splitlines() if entry.startswith("env: ")]
+        return line
+
+    def test_tunnel_mode_without_the_deploy_script(self):
+        line = self._env_line(SAFE_ENV)
+        self.assertIn("mode=tunnel site=:80 ", line)
+        self.assertIn("trusted=10.250.250.240/29 127.0.0.1/8 ::1/128 ", line)
+        self.assertIn("hsts=max-age=31536000; includeSubDomains; preload ", line)
+        self.assertTrue(line.endswith("profiles=bundled-db,tunnel"), line)
+
+    def test_external_cloudflared_trusts_private_ranges(self):
+        line = self._env_line({**SAFE_ENV, "TUNNEL_EXTERNAL": "1"})
+        self.assertIn("trusted=private_ranges ", line)
+        self.assertTrue(line.endswith("profiles=bundled-db"), line)
+
+    def test_public_mode_keeps_every_listed_host(self):
+        line = self._env_line(
+            {
+                **SAFE_ENV,
+                "CADDY_MODE": "public",
+                "DOMAIN_NAME": "'anishows.com, www.anishows.com'",
+                "SECURE_HSTS_PRELOAD": "False",
+            }
+        )
+        self.assertIn("mode=public site=anishows.com, www.anishows.com ", line)
+        self.assertIn("trusted=127.0.0.1/8 ::1/128 ", line)
+        self.assertIn("hsts=max-age=31536000; includeSubDomains profiles", line)
+
+    def test_dollar_in_an_unquoted_value_is_refused(self):
+        result, _ = _run_in_temp_repo(
+            "scripts/deploy/compose.sh", {**SAFE_ENV, "DB_PASSWORD": "ab$cd"}, args=("ps",)
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DB_PASSWORD contains '$'", result.stderr)
+        result, _ = _run_in_temp_repo(
+            "scripts/deploy/compose.sh", {**SAFE_ENV, "DB_PASSWORD": "'ab$cd'"}, args=("ps",)
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)

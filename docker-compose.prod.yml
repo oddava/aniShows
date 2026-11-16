@@ -193,15 +193,21 @@ services:
     restart: always
     logging: *logging
     # No host ports here: infra/compose/public-ports.yml adds 80/443 for
-    # public mode; tunnel mode reaches Caddy over the compose network only.
-    env_file: .env
+    # public mode; tunnel mode reaches Caddy over the edge network only.
+    # No env_file: the edge container gets only what the Caddyfile reads.
+    # Use scripts/deploy/compose.sh (or deploy-prod.sh): it derives the
+    # CADDY_* values from CADDY_MODE. The defaults below are public mode.
     environment:
       CADDY_MODE: ${CADDY_MODE:-public}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-admin@anishows.local}
+      UMAMI_PUBLIC_ORIGIN: ${UMAMI_PUBLIC_ORIGIN:-}
+      WEB_UPSTREAMS: ${WEB_UPSTREAMS:-web:8000}
       # Public: the domain (ACME). Tunnel: ":80" (plain HTTP, no ACME).
       CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:-${DOMAIN_NAME:-localhost}}
       CADDY_UMAMI_SITE_ADDRESS: ${CADDY_UMAMI_SITE_ADDRESS:-${UMAMI_DOMAIN:-http://umami.invalid}}
-      # Peers allowed to set the client IP (CF-Connecting-IP). Tunnel mode:
-      # "private_ranges" (cloudflared on a Docker network). Public: loopback.
+      # Peers allowed to set the client IP (CF-Connecting-IP). Tunnel mode
+      # with the in-stack cloudflared: the edge subnet (only cloudflared and
+      # Caddy are on it) + loopback. Public mode: loopback only.
       CADDY_TRUSTED_PROXIES: ${CADDY_TRUSTED_PROXIES:-127.0.0.1/8 ::1/128}
       CADDY_HSTS_HEADER: ${CADDY_HSTS_HEADER:-max-age=31536000; includeSubDomains; preload}
       # D-9 gate for /metrics, readiness, /django-admin (space-separated CIDRs).
@@ -213,6 +219,9 @@ services:
       - frontend_dist:/srv/frontend
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      default: {}
+      edge: {}
     healthcheck:
       # The admin API answers once the config is loaded.
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
@@ -237,6 +246,10 @@ services:
     # (http://caddy:80) live in the Cloudflare dashboard; the token is the
     # only secret. See infra/cloudflared/ for a locally managed config.
     command: ["tunnel", "--no-autoupdate", "--metrics", "127.0.0.1:20241", "run"]
+    # Only on the edge network: it reaches caddy:80 and nothing else of ours,
+    # and its address is the only non-loopback peer Caddy trusts.
+    networks:
+      - edge
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     healthcheck:
@@ -308,6 +321,8 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-1}
       PGSSLMODE: ${DB_SSLMODE:-prefer}
+      # verify-full: the CA path inside the container (infra/compose/db-ca.yml).
+      PGSSLROOTCERT: ${DB_SSLROOTCERT:-}
     depends_on:
       db:
         condition: service_started
@@ -317,10 +332,26 @@ services:
     volumes:
       - ./backups-data:/backups
       - minio_data:/minio_data
+    healthcheck:
+      # Unhealthy when no scheduled/manual backup succeeded in 26 h (after a
+      # first day of grace), so a failing nightly shows in `compose ps`.
+      test: ["CMD", "bash", "/app/shell/healthcheck.sh"]
+      interval: 5m
+      timeout: 10s
+      retries: 1
     deploy:
       resources:
         limits:
           memory: ${BACKUP_MEMORY_LIMIT:-256M}
+
+networks:
+  default: {}
+  # Caddy <-> cloudflared only. A fixed subnet, so Caddy can trust exactly it;
+  # change EDGE_SUBNET if it overlaps a network on the host.
+  edge:
+    ipam:
+      config:
+        - subnet: ${EDGE_SUBNET:-10.250.250.240/29}
 
 volumes:
   db_data:

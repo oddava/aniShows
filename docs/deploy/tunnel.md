@@ -8,9 +8,10 @@ aniShows runs in one of two edge modes, chosen by `CADDY_MODE` in `.env`:
 | Host ports | 80, 443 (`infra/compose/public-ports.yml`) | none |
 | TLS / ACME | Caddy (Let's Encrypt / ZeroSSL) | Cloudflare edge; Caddy serves plain HTTP on `:80` |
 | `CADDY_SITE_ADDRESS` | the domain | `:80` |
-| `CADDY_TRUSTED_PROXIES` | `127.0.0.1/8 ::1/128` | `private_ranges` |
+| `CADDY_TRUSTED_PROXIES` | `127.0.0.1/8 ::1/128` | `EDGE_SUBNET` + loopback (in-stack cloudflared) |
 
-`deploy-prod.sh` derives the `CADDY_*` values from `CADDY_MODE`, unless they are set explicitly.
+`scripts/deploy/env.sh` derives the `CADDY_*` values from `CADDY_MODE` (unless set explicitly) for
+both `deploy-prod.sh` and `scripts/deploy/compose.sh`. Use the wrapper for manual compose commands.
 Caddy stays in both modes. It holds the routing, the read-only MinIO media proxy, the SPA fallback,
 the CSP, crawler share previews and the D-9 operator gate, and cloudflared can do none of those.
 
@@ -25,8 +26,10 @@ browser ──https──▶ Cloudflare edge ──tunnel──▶ cloudflared �
 1. **Cloudflare** sets `CF-Connecting-IP` to the visitor's address and `X-Forwarded-Proto` to the
    scheme the visitor used. It overwrites any `CF-Connecting-IP` the visitor sends.
 2. **Caddy** trusts client-IP headers only from `CADDY_TRUSTED_PROXIES` (global `servers` options).
-   Behind the tunnel its peer is cloudflared on a private Docker address, so `{client_ip}` becomes
-   `CF-Connecting-IP`. In public mode only loopback is trusted, so `{client_ip}` is the TCP peer.
+   cloudflared runs on a dedicated `edge` network (`EDGE_SUBNET`, default `10.250.250.240/29`) that only
+   it and Caddy join, and only that subnet (plus Caddy's own loopback) is trusted. So `{client_ip}` is
+   `CF-Connecting-IP` for tunnel traffic, and no other container (web, celery, other projects) can
+   forge it. In public mode only loopback is trusted, so `{client_ip}` is the TCP peer.
    Every `reverse_proxy` to Django imports the `(django)` snippet:
    `header_up X-Forwarded-For {client_ip}`. This **replaces** the header with a single entry.
    `X-Forwarded-Proto` is Caddy's default: from a trusted peer it passes through (Cloudflare's
@@ -49,14 +52,18 @@ skipped. One hop, one entry, set by Caddy, has no such case.
 
 | Header sent by a visitor | Effect |
 |---|---|
+| any header, from another container on our default network | none: it is not on the edge network, so not a trusted peer |
 | `X-Forwarded-For: 1.2.3.4` | none: Caddy replaces XFF with `{client_ip}` |
 | `CF-Connecting-IP: 1.2.3.4` | none: Cloudflare overwrites it at the edge; in public mode Caddy ignores it (untrusted peer) |
 | `X-Forwarded-Proto: https` (public mode) | none: an untrusted peer's value is replaced by Caddy's scheme |
 | `Host: localhost` | not routed: Cloudflare routes by hostname; public-mode Caddy serves only its domain |
 
-Containers on the same Docker network count as trusted peers in tunnel mode (`private_ranges`).
-With a shared cloudflared (`infra/compose/shared-tunnel-network.yml`), narrow
-`CADDY_TRUSTED_PROXIES` to that network's subnet if other projects' containers share it.
+With the in-stack cloudflared, only the edge subnet is trusted. With a shared or host cloudflared
+(`TUNNEL_EXTERNAL=1`) the default is `private_ranges`; narrow `CADDY_TRUSTED_PROXIES` to the
+cloudflared container's fixed address (give it one with `ipv4_address` in its own compose) or, for
+a host service, the Docker gateway (`docker network inspect <project>_default`). Any trusted peer can
+choose the client IP (throttles, D-9). The D-9 gate's loopback exemption is matched on the TCP peer
+(`remote_ip`), so no header can claim it.
 
 ## Ways to run cloudflared
 

@@ -360,15 +360,17 @@ restore-media-only:             ## Restore media only (Usage: make restore-media
 
 # ============================================================================
 # Production stack (docker-compose.prod.yml; run on the server from the repo
-# root, see docs/deploy/runbook.md). deploy-prod.sh is the deploy itself.
+# root, see docs/deploy/runbook.md). deploy-prod.sh is the deploy itself;
+# scripts/deploy/compose.sh runs compose in the mode .env selects.
 # ============================================================================
 
-PROD_COMPOSE = docker compose -f docker-compose.prod.yml
+PROD_COMPOSE = bash scripts/deploy/compose.sh
+PROD_COMPOSE_RAW = docker compose -f docker-compose.prod.yml
 
 prod-config:                    ## Validate docker-compose.prod.yml for every profile and override combination
 	@set -e; for profiles in "" bundled-db analytics tunnel "bundled-db,analytics,tunnel"; do \
-		COMPOSE_PROFILES="$$profiles" $(PROD_COMPOSE) config -q; \
-		COMPOSE_PROFILES="$$profiles" $(PROD_COMPOSE) -f infra/compose/public-ports.yml config -q; \
+		COMPOSE_PROFILES="$$profiles" $(PROD_COMPOSE_RAW) config -q; \
+		COMPOSE_PROFILES="$$profiles" $(PROD_COMPOSE_RAW) -f infra/compose/public-ports.yml config -q; \
 		echo "ok: profiles=[$$profiles]"; \
 	done
 

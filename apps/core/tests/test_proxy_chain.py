@@ -144,8 +144,21 @@ class CaddyfileKeepsItsSideTests(SimpleTestCase):
                     self.text, rf"handle {re.escape(path)} \{{\n\t\timport operator_gate {arg}\n"
                 )
         gate = self._snippet("operator_gate")
-        self.assertIn("{$ADMIN_ALLOW_CIDRS:0.0.0.0/0 ::/0}", gate)
+        self.assertIn("not client_ip {$ADMIN_ALLOW_CIDRS:0.0.0.0/0 ::/0}\n", gate)
+        # Loopback passes by TCP peer only: a trusted proxy's CF-Connecting-IP
+        # of 127.0.0.1 must not open the gate.
+        self.assertIn("not remote_ip 127.0.0.1/8 ::1/128", gate)
+        self.assertNotRegex(gate, r"client_ip[^\n]*127\.0\.0\.1")
         self.assertIn("respond @operator_denied_{args[0]} 403", gate)
+
+    def test_access_logs_rotate_and_hide_account_tokens(self):
+        log = self._snippet("access_log")
+        self.assertIn("roll_size 10MiB", log)
+        self.assertIn("roll_keep 5", log)
+        self.assertIn("request>uri regexp", log)
+        self.assertIn("reset-password", log)
+        self.assertEqual(self.text.count("import access_log "), 2)
+        self.assertNotIn("output file /var/log/caddy/access.log", self.text)
 
     def test_liveness_stays_the_upstream_health_check(self):
         self.assertNotIn("health_uri /api/v1/health/ready/", self.text)
