@@ -1,3 +1,8 @@
+import NotificationPreferenceMatrix from '../notifications/NotificationPreferenceMatrix';
+import PushDeviceCard from '../notifications/PushDeviceCard';
+import useWebPush from '../notifications/useWebPush';
+
+// Legacy: remove after C-G1-4.
 const EMAIL_NOTIFICATION_OPTIONS = [
     {
         key: 'email_new_episodes',
@@ -6,6 +11,7 @@ const EMAIL_NOTIFICATION_OPTIONS = [
     },
 ];
 
+// Legacy: remove after C-G1-4.
 const PUSH_NOTIFICATION_OPTIONS = [
     {
         key: 'push_new_episodes',
@@ -25,10 +31,48 @@ const PUSH_NOTIFICATION_OPTIONS = [
 ];
 
 /**
- * The Notifications tab. `notifications` is the state from
- * useNotificationPreferences.
+ * The Notifications tab: push on this device, then the preferences matrix
+ * (category x channel, from the server's schema). `notifications` is the state
+ * from useNotificationPreferences.
  */
+function NotificationSettings({ notifications }) {
+    const push = useWebPush({ userId: notifications.userId });
+    const pushAvailable = push.isConfigLoading || push.configEnabled;
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+            <PushDeviceCard push={push} />
+            <NotificationPreferenceMatrix
+                schema={notifications.schema}
+                preferences={notifications.preferences}
+                savingKeys={notifications.savingKeys}
+                onToggle={notifications.handleTogglePreference}
+                push={{ available: pushAvailable, ready: push.subscribed }}
+                isLoading={notifications.isLoadingPreferences}
+                loadError={notifications.preferencesLoadError}
+                onRetry={notifications.retryPreferences}
+                statusMessage={notifications.preferencesMessage}
+                status={notifications.preferencesStatus}
+            />
+        </div>
+    );
+}
+
 export default function NotificationsTab({ notifications }) {
+    // The real hook always returns `schema` (null while loading). Only the
+    // legacy flat state, as G1's SettingsTabs test renders it, lacks the key.
+    if (notifications && Object.prototype.hasOwnProperty.call(notifications, 'schema')) {
+        return <NotificationSettings notifications={notifications} />;
+    }
+    return <LegacyNotificationsTab notifications={notifications} />;
+}
+
+/*
+ * The four flat switches the tab had before the preferences matrix.
+ * Legacy: remove after C-G1-4 (G1 drops the NotificationsTab block from
+ * SettingsTabs.test.jsx, the only thing that still renders this).
+ */
+function LegacyNotificationsTab({ notifications }) {
     const {
         preferences,
         isLoadingPreferences,
