@@ -7,20 +7,18 @@ from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from ...admin_api.permissions import AdminPolicyMixin
+from ...admin_api.services.audit import record_admin_action
 from ...shared.logger import logger
-from ..models import CeleryTaskResult
-from ..permissions import IsAdminUser
+from ..models import AuditLog, CeleryTaskResult
 from ..services.admin_import_jobs_service import (
     BUSINESS_FAILURE_STATUSES,
     IMPORT_TASKS,
     OFFLINE_RECONCILE_TASK,
+    ImportTriggerError,
     cancel_import_job,
     format_task_result,
-    trigger_anilist_import,
-    trigger_catalog_import,
-    trigger_metadata_enrichment,
-    trigger_offline_import,
-    trigger_trending_refresh,
+    trigger_import_job,
 )
 
 __all__ = ["OFFLINE_RECONCILE_TASK", "AdminImportJobFilter", "AdminImportJobViewSet"]
@@ -54,19 +52,13 @@ class AdminImportJobFilter(FilterSet):
         return queryset
 
 
-class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
-    """Import job monitoring for admins."""
+class AdminImportJobViewSet(AdminPolicyMixin, ListModelMixin, RetrieveModelMixin, GenericViewSet):
+    """Import job monitoring for staff; trigger and cancel are superuser-only."""
 
-    permission_classes = [IsAdminUser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_class = AdminImportJobFilter
     ordering_fields = ["date_created", "date_completed"]
     ordering = ["-date_created"]
-
-    @staticmethod
-    def _format_task_result(result):
-        """Backward-compatible wrapper kept for existing tests/callers."""
-        return format_task_result(result)
 
     def get_queryset(self):
         return CeleryTaskResult.objects.filter(task_name__in=IMPORT_TASKS)
@@ -89,49 +81,48 @@ class AdminImportJobViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
-        """Cancel a pending import job."""
+        """Cancel a pending or running import job."""
         job = self.get_object()
-        result = cancel_import_job(job)
+        try:
+            result = cancel_import_job(job)
+        except Exception:
+            logger.exception("Admin import job cancel failed", extra={"job_id": job.id})
+            return Response(
+                {"detail": "Failed to cancel the job."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        if result.status_code < 400:
+            record_admin_action(
+                request,
+                action=AuditLog.ActionType.CONTROL,
+                entity_type="ImportJob",
+                entity_id=job.id,
+                entity_repr=f"Cancel {job.task_name}"[:200],
+                metadata={"task_id": job.task_id, "operation": "cancel"},
+            )
         return Response(result.payload, status=result.status_code)
 
     @action(detail=False, methods=["post"])
     def trigger(self, request):
-        """Trigger a new import job."""
-        source = request.data.get("source") or "offline_catalog"
-        sync_type = request.data.get("sync_type", "trending")
-
+        """Queue a new import job from one of the four canonical sources."""
         try:
-            if source in {"trending", "internal_activity"}:
-                result = trigger_trending_refresh(request.data, request.user)
-                return Response(result.payload, status=result.status_code)
-            if source in {"anime_catalog", "catalog_sync"}:
-                result = trigger_catalog_import(request.data, request.user)
-                return Response(result.payload, status=result.status_code)
-            if source == "metadata_enrichment":
-                result = trigger_metadata_enrichment(request.data, request.user)
-                return Response(result.payload, status=result.status_code)
-            if source in {"offline_catalog", "anime_offline_database"}:
-                result = trigger_offline_import(request.data, request.user)
-                return Response(result.payload, status=result.status_code)
-            if source in {"anilist_sync", "anilist"}:
-                result = trigger_anilist_import(
-                    {**request.data, "sync_type": sync_type},
-                    request.user,
-                )
-                return Response(result.payload, status=result.status_code)
-
-            return Response(
-                {
-                    "detail": (
-                        "Invalid source. Allowed: trending, anime_catalog, "
-                        "metadata_enrichment, offline_catalog"
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as exc:
+            result = trigger_import_job(request.data, request.user)
+        except ImportTriggerError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
             logger.exception("Admin import job trigger failed")
             return Response(
-                {"detail": f"Failed to trigger task: {str(exc)}"},
+                {"detail": "Failed to trigger the job."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+        if result.status_code < 400:
+            job = CeleryTaskResult.objects.get(pk=result.payload["job_id"])
+            record_admin_action(
+                request,
+                action=AuditLog.ActionType.TRIGGER,
+                entity_type="ImportJob",
+                entity_id=job.id,
+                entity_repr=f"{request.data.get('source')}: {job.task_name}"[:200],
+                metadata={"source": request.data.get("source"), "task_kwargs": job.task_kwargs},
+            )
+        return Response(result.payload, status=result.status_code)
