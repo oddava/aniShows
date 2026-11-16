@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.db.models import Min, Model
 from django.http import Http404
 from rest_framework.exceptions import PermissionDenied
 
@@ -22,6 +23,38 @@ User = get_user_model()
 class FavoriteActionResult:
     payload: dict
     status_code: int
+
+
+@dataclass(frozen=True, slots=True)
+class _FavoriteKind:
+    """One favoritable catalog model and the table that links users to it."""
+
+    model: type[Model]
+    favorite_model: type[Model]
+    field_name: str
+    not_found_message: str
+    trigger_stats_update: bool = False
+
+
+ANIME_FAVORITES = _FavoriteKind(
+    model=Anime,
+    favorite_model=UserFavorite,
+    field_name="anime",
+    not_found_message="Anime not found",
+    trigger_stats_update=True,
+)
+CHARACTER_FAVORITES = _FavoriteKind(
+    model=Character,
+    favorite_model=UserFavoriteCharacter,
+    field_name="character",
+    not_found_message="Character not found",
+)
+STAFF_FAVORITES = _FavoriteKind(
+    model=Staff,
+    favorite_model=UserFavoriteStaff,
+    field_name="staff",
+    not_found_message="Staff member not found",
+)
 
 
 def _get_target_user(request_user, username=None):
@@ -52,6 +85,7 @@ def get_favorite_queryset(request_user, username=None):
         UserFavorite.objects.filter(user=target_user)
         .select_related("anime")
         .prefetch_related("anime__genres", Anime.studios_prefetch("anime__"))
+        .order_by("order", "-added_at", "id")
     )
 
 
@@ -77,117 +111,103 @@ def delete_favorite(instance, user):
     instance.delete()
 
 
-def _toggle_model_favorite(
-    *,
-    user,
-    object_id,
-    model,
-    favorite_model,
-    field_name,
-    not_found_message,
-    trigger_stats_update=False,
-):
-    if not object_id:
-        return FavoriteActionResult(payload={"error": f"{field_name}_id required"}, status_code=400)
+def _new_favorite_fields(user, kind: _FavoriteKind) -> dict:
+    """A new anime favorite goes first without renumbering the rest: min(order) - 1."""
+    if kind.favorite_model is not UserFavorite:
+        return {}
+    lowest = UserFavorite.objects.filter(user=user).aggregate(lowest=Min("order"))["lowest"]
+    return {"order": 0 if lowest is None else lowest - 1}
 
+
+def _add_favorite(user, kind: _FavoriteKind, lookup: dict) -> None:
     try:
         with transaction.atomic():
-            locked_user = User.objects.select_for_update().get(pk=user.pk)
-            instance = model.objects.select_for_update().get(id=object_id)
-
-            favorite = (
-                favorite_model.objects.select_for_update()
-                .filter(
-                    user=locked_user,
-                    **{field_name: instance},
-                )
-                .first()
+            kind.favorite_model._default_manager.create(
+                **lookup, **_new_favorite_fields(user, kind)
             )
-            if favorite:
-                favorite.delete()
-                is_favorite = False
-                message = "Removed from favorites"
-                status_code = 200
-            else:
-                favorite_model.objects.create(user=locked_user, **{field_name: instance})
-                is_favorite = True
-                message = "Added to favorites"
-                status_code = 200
+    except IntegrityError:
+        # A parallel toggle by the same user added it first (unique pair): same outcome.
+        pass
 
-            favorite_count = favorite_model.objects.filter(**{field_name: instance}).count()
-            transaction.on_commit(
-                lambda: invalidate_user_caches(
-                    locked_user.id,
-                    locked_user.username,
-                    trigger_stats_update=trigger_stats_update,
-                )
-            )
-    except model.DoesNotExist:
-        return FavoriteActionResult(payload={"error": not_found_message}, status_code=404)
 
+def _toggle(user, object_id: int, kind: _FavoriteKind) -> FavoriteActionResult:
+    """Add or remove a favorite without row locks; the unique pair keeps it consistent."""
+    if not kind.model._default_manager.filter(pk=object_id).exists():
+        return FavoriteActionResult(
+            payload={"detail": kind.not_found_message, "code": "not_found"},
+            status_code=404,
+        )
+
+    target = {f"{kind.field_name}_id": object_id}
+    lookup = {"user": user, **target}
+    removed, _ = kind.favorite_model._default_manager.filter(**lookup).delete()
+    if not removed:
+        _add_favorite(user, kind, lookup)
+
+    favorite_count = kind.favorite_model._default_manager.filter(**target).count()
+    transaction.on_commit(
+        lambda: invalidate_user_caches(
+            user.id, user.username, trigger_stats_update=kind.trigger_stats_update
+        )
+    )
     return FavoriteActionResult(
         payload={
-            "is_favorite": is_favorite,
+            "is_favorite": not removed,
             "favorite_count": favorite_count,
-            "message": message,
+            "message": "Removed from favorites" if removed else "Added to favorites",
         },
-        status_code=status_code,
+        status_code=200,
     )
 
 
-def toggle_favorite(user, anime_id):
-    return _toggle_model_favorite(
-        user=user,
-        object_id=anime_id,
-        model=Anime,
-        favorite_model=UserFavorite,
-        field_name="anime",
-        not_found_message="Anime not found",
-        trigger_stats_update=True,
-    )
+def toggle_favorite(user, anime_id: int) -> FavoriteActionResult:
+    return _toggle(user, anime_id, ANIME_FAVORITES)
 
 
-def toggle_character_favorite(user, character_id):
-    return _toggle_model_favorite(
-        user=user,
-        object_id=character_id,
-        model=Character,
-        favorite_model=UserFavoriteCharacter,
-        field_name="character",
-        not_found_message="Character not found",
-    )
+def toggle_character_favorite(user, character_id: int) -> FavoriteActionResult:
+    return _toggle(user, character_id, CHARACTER_FAVORITES)
 
 
-def toggle_staff_favorite(user, staff_id):
-    return _toggle_model_favorite(
-        user=user,
-        object_id=staff_id,
-        model=Staff,
-        favorite_model=UserFavoriteStaff,
-        field_name="staff",
-        not_found_message="Staff member not found",
-    )
+def toggle_staff_favorite(user, staff_id: int) -> FavoriteActionResult:
+    return _toggle(user, staff_id, STAFF_FAVORITES)
 
 
-def reorder_favorites(user, items):
-    if not items:
-        return FavoriteActionResult(payload={"error": "items required"}, status_code=400)
+def reorder_favorites(user, ids: list[int]) -> FavoriteActionResult:
+    """Put ``ids`` first as 0..n-1; the user's other favorites follow in their current order.
 
-    item_ids = [item["id"] for item in items if "id" in item]
-    favorites = UserFavorite.objects.filter(id__in=item_ids, user=user)
-    favorites_by_id = {favorite.id: favorite for favorite in favorites}
+    Every favorite of the user is renumbered in one transaction (rows locked), so
+    the result is a strict total order even when only one page was reordered.
+    """
+    with transaction.atomic():
+        current = list(
+            UserFavorite.objects.select_for_update()
+            .filter(user=user)
+            .order_by("order", "-added_at", "id")
+            .values_list("id", "order")
+        )
+        current_order = dict(current)
+        if not set(ids).issubset(current_order):
+            return FavoriteActionResult(
+                payload={
+                    "detail": "Some favorites were not found.",
+                    "code": "invalid_favorites",
+                },
+                status_code=400,
+            )
 
-    to_update = []
-    for item in items:
-        favorite = favorites_by_id.get(item.get("id"))
-        if favorite:
-            favorite.order = item.get("order", 0)
-            to_update.append(favorite)
-
-    if to_update:
-        UserFavorite.objects.bulk_update(to_update, ["order"])
+        listed = set(ids)
+        final_ids = [
+            *ids,
+            *(favorite_id for favorite_id, _ in current if favorite_id not in listed),
+        ]
+        changed = [
+            UserFavorite(id=favorite_id, order=position)
+            for position, favorite_id in enumerate(final_ids)
+            if current_order[favorite_id] != position
+        ]
+        UserFavorite.objects.bulk_update(changed, ["order"], batch_size=500)
 
     return FavoriteActionResult(
-        payload={"message": "Order saved successfully"},
+        payload={"message": "Order saved successfully", "count": len(final_ids)},
         status_code=200,
     )

@@ -1,6 +1,8 @@
 from django.core.cache import cache
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.fields import IntegerField
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import (
@@ -13,7 +15,7 @@ from rest_framework.permissions import (
 )
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
-from rest_framework.throttling import BaseThrottle
+from rest_framework.throttling import BaseThrottle, UserRateThrottle
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from ..core.utils import get_client_ip
@@ -37,9 +39,11 @@ from .cache_utils import (
     get_thread_detail_cache_key,
     get_thread_list_cache_key,
 )
-from .models import Tag
+from .models import Tag, Thread
+from .pagination import ForumPostPagination
 from .serializers import (
     CategorySerializer,
+    ModerationReasonSerializer,
     PostSerializer,
     TagSerializer,
     ThreadListSerializer,
@@ -53,7 +57,10 @@ from .services import (
     create_thread,
     delete_post,
     delete_thread,
+    get_post_subtree,
     get_threaded_posts_page,
+    moderation,
+    subscriptions,
     toggle_post_like,
     toggle_thread_like,
     toggle_thread_pin,
@@ -65,11 +72,26 @@ from .services import (
 from .services.interactions import hash_viewer_identifier
 
 
+class CommunityActionRateThrottle(UserRateThrottle):
+    """Thread subscriptions and staff moderation actions."""
+
+    scope = "community_action"
+
+
 class IsOwnerOrReadOnly(BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.method in SAFE_METHODS:
             return True
-        return obj.author == request.user
+        return obj.author_id == request.user.id
+
+
+class IsThreadOwnerOrStaffMover(IsOwnerOrReadOnly):
+    """Staff may also update any thread (the serializer lets them change only its category)."""
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in ("PUT", "PATCH") and request.user.is_staff:
+            return True
+        return super().has_object_permission(request, view, obj)
 
 
 class ThreadListQuerySerializer(Serializer):
@@ -78,6 +100,31 @@ class ThreadListQuerySerializer(Serializer):
 
 class PostListQuerySerializer(Serializer):
     page = IntegerField(required=False, default=1, min_value=1)
+    thread__id = IntegerField(required=False, min_value=1)
+    # Shadows ``Field.root`` for the type checker only: DRF pops declared fields
+    # off the class, so the serializer's ``root`` property is untouched.
+    root = IntegerField(required=False, min_value=1)  # type: ignore[assignment]
+
+
+def _moderation_reason(request) -> str:
+    serializer = ModerationReasonSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    return serializer.validated_data["reason"]
+
+
+def _result_response(result) -> Response:
+    return Response(result.payload, status=result.status_code)
+
+
+def _staff_action(url_path: str | None = None):
+    """A detail POST action for staff, throttled with the community scope."""
+    return action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[IsAdminUser],
+        throttle_classes=[CommunityActionRateThrottle],
+        url_path=url_path,
+    )
 
 
 class TagViewSet(ReadOnlyModelViewSet):
@@ -137,7 +184,11 @@ class CategoryViewSet(ReadOnlyModelViewSet):
 
 
 class ThreadViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly, VerifiedEmailForWrites]
+    permission_classes = [
+        IsAuthenticatedOrReadOnly,
+        IsThreadOwnerOrStaffMover,
+        VerifiedEmailForWrites,
+    ]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["category__slug", "author__username", "tags__slug"]
     search_fields = ["title", "content"]
@@ -160,13 +211,15 @@ class ThreadViewSet(ModelViewSet):
         return list(super().get_throttles())
 
     def get_queryset(self):
-        return build_thread_queryset(self.request.user)
+        # Removed threads stay out of every list; staff can still open them.
+        user = self.request.user
+        return build_thread_queryset(user, include_removed=user.is_staff and self.action != "list")
 
     def perform_create(self, serializer):
         create_thread(serializer, self.request.user)
 
     def perform_update(self, serializer):
-        update_thread(serializer)
+        update_thread(serializer, request=self.request)
 
     def perform_destroy(self, instance):
         delete_thread(instance)
@@ -259,14 +312,42 @@ class ThreadViewSet(ModelViewSet):
         result = unlike_thread(thread, request.user)
         return Response(result.payload, status=result.status_code)
 
+    @_staff_action(url_path="toggle_lock")
+    def toggle_lock(self, request, pk=None):
+        return _result_response(moderation.toggle_thread_lock(self.get_object(), request=request))
+
+    @_staff_action()
+    def remove(self, request, pk=None):
+        thread = self.get_object()
+        reason = _moderation_reason(request)
+        return _result_response(moderation.remove_thread(thread, request=request, reason=reason))
+
+    @_staff_action()
+    def restore(self, request, pk=None):
+        return _result_response(moderation.restore_thread(self.get_object(), request=request))
+
+    @action(
+        detail=True,
+        methods=["post", "delete"],
+        permission_classes=[IsAuthenticated],
+        throttle_classes=[CommunityActionRateThrottle],
+    )
+    def subscription(self, request, pk=None):
+        thread = self.get_object()
+        if request.method == "DELETE":
+            subscriptions.unsubscribe(request.user, thread)
+            return Response({"is_subscribed": False})
+        subscriptions.subscribe(request.user, thread)
+        return Response({"is_subscribed": True})
+
 
 class PostViewSet(ModelViewSet):
     serializer_class = PostSerializer
+    pagination_class = ForumPostPagination
     permission_classes = [IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly, VerifiedEmailForWrites]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_fields = ["thread__id"]
     ordering_fields = ["created_at"]
-    # Explicit: Meta.ordering is dropped from the reply-count GROUP BY query.
     ordering = [CACHEABLE_POST_ORDERING]
 
     def get_throttles(self) -> list[BaseThrottle]:
@@ -275,19 +356,30 @@ class PostViewSet(ModelViewSet):
         return list(super().get_throttles())
 
     def get_queryset(self):
-        return build_post_queryset(self.request.user)
+        user = self.request.user
+        return build_post_queryset(user, include_removed_threads=user.is_staff)
+
+    def _ensure_thread_visible(self, thread_id: int) -> None:
+        threads = Thread.objects.filter(pk=thread_id)
+        if not self.request.user.is_staff:
+            threads = threads.filter(is_removed=False)
+        if not threads.exists():
+            raise NotFound("Thread not found.")
 
     def list(self, request, *args, **kwargs):
-        """Cache post list for thread and handle threaded pagination"""
-        thread_id = request.query_params.get("thread__id")
+        """A page of a thread's top-level posts with their replies, or one ``?root=`` subtree."""
         query_serializer = PostListQuerySerializer(data=request.query_params)
         query_serializer.is_valid(raise_exception=True)
+        thread_id = query_serializer.validated_data.get("thread__id")
+        root_id = query_serializer.validated_data.get("root")
         page = query_serializer.validated_data["page"]
+        if thread_id is None:
+            if root_id is not None:
+                raise ValidationError({"root": "root requires thread__id."})
+            return super().list(request, *args, **kwargs)
 
         cacheable = (
-            thread_id
-            and thread_id.isdigit()
-            and not request.user.is_authenticated
+            not request.user.is_authenticated
             and set(request.query_params) <= CACHEABLE_POST_LIST_PARAMS
             and request.query_params.get("ordering", CACHEABLE_POST_ORDERING)
             == CACHEABLE_POST_ORDERING
@@ -297,31 +389,22 @@ class PostViewSet(ModelViewSet):
             if cached is not None:
                 return Response(cached)
 
-        # Base queryset
+        self._ensure_thread_visible(thread_id)
         queryset = self.filter_queryset(self.get_queryset())
 
-        if thread_id:
-            top_level_queryset = queryset.filter(parent__isnull=True)
+        if root_id is not None:
+            # ``count``/``next`` page the root's direct children; the root rides on every page.
+            root = get_object_or_404(queryset, pk=root_id)
+            children = self.paginate_queryset(queryset.filter(parent_id=root.id))
+            posts = get_post_subtree(queryset, thread_id, root, list(children or []))
+            return self.get_paginated_response(self.get_serializer(posts, many=True).data)
 
-            page_obj = self.paginate_queryset(top_level_queryset)
-            if page_obj is not None:
-                final_posts = get_threaded_posts_page(queryset, thread_id, list(page_obj))
-
-                serializer = self.get_serializer(final_posts, many=True)
-                response = self.get_paginated_response(serializer.data)
-
-                if cacheable:
-                    cache_post_list(thread_id, page, response.data)
-
-                return response
-
-        page_obj = self.paginate_queryset(queryset)
-        if page_obj is not None:
-            serializer = self.get_serializer(page_obj, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        top_level_posts = self.paginate_queryset(queryset.filter(parent__isnull=True))
+        posts = get_threaded_posts_page(queryset, thread_id, list(top_level_posts or []))
+        response = self.get_paginated_response(self.get_serializer(posts, many=True).data)
+        if cacheable:
+            cache_post_list(thread_id, page, response.data)
+        return response
 
     def perform_create(self, serializer):
         create_post(serializer, self.request.user)
@@ -330,7 +413,7 @@ class PostViewSet(ModelViewSet):
         update_post(serializer)
 
     def perform_destroy(self, instance):
-        delete_post(instance)
+        delete_post(instance, actor=self.request.user)
 
     @action(
         detail=True,
@@ -340,6 +423,8 @@ class PostViewSet(ModelViewSet):
     )
     def like(self, request, pk=None):
         post = self.get_object()
+        if post.is_removed:
+            raise ValidationError({"post": "This reply was removed."})
         result = toggle_post_like(post, request.user)
         return Response(result.payload, status=result.status_code)
 
@@ -353,3 +438,13 @@ class PostViewSet(ModelViewSet):
         post = self.get_object()
         result = unlike_post(post, request.user)
         return Response(result.payload, status=result.status_code)
+
+    @_staff_action()
+    def remove(self, request, pk=None):
+        post = self.get_object()
+        reason = _moderation_reason(request)
+        return _result_response(moderation.remove_post(post, request=request, reason=reason))
+
+    @_staff_action()
+    def restore(self, request, pk=None):
+        return _result_response(moderation.restore_post(self.get_object(), request=request))

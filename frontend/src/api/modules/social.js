@@ -3,6 +3,7 @@ import api from '../httpClient';
 
 export const followApi = {
     toggle: (username) => api.post('/follows/toggle/', { username }),
+    // `params` may carry `page`, `page_size` and `search` (username, ≥ 2 chars).
     getFollowers: (username, params) => api.get(`/follows/followers/${username}/`, { params }),
     getFollowing: (username, params) => api.get(`/follows/following/${username}/`, { params }),
     getMutuals: (username, params) => api.get(`/follows/mutuals/${username}/`, { params }),

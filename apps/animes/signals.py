@@ -289,3 +289,21 @@ def handle_user_favorite_change(sender, instance, **kwargs):
 @receiver([post_save, post_delete], sender=Review)
 def handle_review_change(sender, instance, **kwargs):
     handle_review_change_service(instance)
+
+
+# --- G5 Community: review stats cache (spec 5 P1-7) ---------------------------
+
+from .services.reviews import invalidate_review_stats
+
+
+def _review_anime_slug(review: Review) -> str | None:
+    if Review.anime.is_cached(review):
+        return review.anime.slug
+    return Anime.objects.filter(pk=review.anime_id).values_list("slug", flat=True).first()
+
+
+@receiver([post_save, post_delete], sender=Review)
+def invalidate_review_stats_cache(sender, instance, **kwargs):
+    anime_slug = _review_anime_slug(instance)
+    if anime_slug:
+        transaction.on_commit(lambda: invalidate_review_stats(anime_slug))

@@ -9,4 +9,5 @@ export const reviewApi = {
     delete: (id) => api.delete(`/reviews/${id}/`),
     vote: (id, voteType) => api.post(`/reviews/${id}/votes/`, { vote_type: voteType }),
     react: (id, reactionType) => api.post(`/reviews/${id}/reactions/`, { reaction_type: reactionType }),
+    report: (id, { reason, description = '' } = {}) => api.post(`/reviews/${id}/report/`, { reason, description }),
 };

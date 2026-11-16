@@ -1,21 +1,23 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { PostSkeleton } from './ForumSkeletons';
 import ThreadedPost from './ThreadedPost';
-import { forumKeys } from '../../api/queries/forums';
+import ErrorState from '../common/ErrorState';
 import buildPostTree from './buildPostTree';
 
 /**
  * The replies under a thread: the header with count, focus and collapse
  * controls, the loading and error states, and the threaded post tree.
- * `mutations` is the object from useThreadMutations.
+ * `mutations` is the object from useThreadMutations. `postsData` is the
+ * current page, or the `?root=` subtree in focus mode; `onRetryPosts`
+ * refetches whichever is shown.
  */
 export default function ThreadReplies({
     id,
-    page,
     thread,
     user,
     isOwner,
-    queryClient,
+    isStaff = false,
+    onRetryPosts,
     postsData,
     postsError,
     showPostsLoading,
@@ -38,12 +40,14 @@ export default function ThreadReplies({
         unlikePostMutation,
         updatePostMutation,
         deletePostMutation,
+        removePostMutation,
+        restorePostMutation,
     } = mutations;
 
     return (
         <div className="lg:w-[85%] mx-auto relative">
             {/* Replies Header */}
-            {postsData?.count > 0 && (
+            {(postsData?.count > 0 || focusedPostId) && (
                 <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
                     <div className="flex items-center gap-4">
                         <h3 className="text-sm font-bold text-gray-400">
@@ -102,15 +106,25 @@ export default function ThreadReplies({
                     ))}
                 </div>
             ) : postsError ? (
-                <div className="py-12 text-center text-gray-500">
-                    <p>Failed to load replies. Please try again.</p>
-                    <button
-                        onClick={() => queryClient.invalidateQueries({ queryKey: forumKeys.posts(id, page) })}
-                        className="mt-4 text-accent hover:underline"
-                    >
-                        Retry
-                    </button>
-                </div>
+                postsError?.response?.status === 404 && focusedPostId ? (
+                    <div className="py-12 text-center text-gray-500">
+                        <p>This reply is no longer in the thread.</p>
+                        <button
+                            onClick={() => {
+                                setFocusedPostId(null);
+                                setSearchParams({});
+                            }}
+                            className="mt-4 text-accent hover:underline"
+                        >
+                            View full discussion
+                        </button>
+                    </div>
+                ) : (
+                    <ErrorState
+                        title="Couldn't load replies"
+                        onRetry={onRetryPosts}
+                    />
+                )
             ) : !repliesCollapsed ? (
                 <div className="space-y-6">
                     {buildPostTree(postsData?.results, focusedPostId).map((post) => (
@@ -121,17 +135,20 @@ export default function ThreadReplies({
                             maxDepth={8}
                             user={user}
                             isOwner={isOwner}
+                            isStaff={isStaff}
+                            threadLocked={Boolean(thread.is_locked || thread.is_removed)}
                             onEdit={(postId, content) => updatePostMutation.mutate({ postId, data: { content } })}
                             onDelete={(postId) => deletePostMutation.mutate(postId)}
-                            onLike={(postId) => {
-                                const post = postsData?.results?.find(p => p.id === postId);
-                                if (post?.is_liked_by_user) {
+                            onLike={(postId, isLiked) => {
+                                if (isLiked) {
                                     unlikePostMutation.mutate(postId);
                                 } else {
                                     likePostMutation.mutate(postId);
                                 }
                             }}
                             onReply={setReplyTo}
+                            onRemove={(postId, reason) => removePostMutation.mutate({ postId, reason })}
+                            onRestore={(postId) => restorePostMutation.mutate(postId)}
                             editingPostId={editingPostId}
                             editPostContent={editPostContent}
                             setEditingPostId={setEditingPostId}
@@ -141,7 +158,7 @@ export default function ThreadReplies({
                             createPostMutation={createPostMutation}
                             threadId={id}
                             focusedPostId={focusedPostId}
-                            threadAuthorUsername={thread.author.username}
+                            threadAuthorUsername={thread.author?.username}
                         />
                     ))}
                 </div>

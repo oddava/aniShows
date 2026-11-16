@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
+    Bell,
     ChevronRight,
     ShieldAlert,
     Lock,
@@ -10,31 +11,31 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import Pagination from '../../components/common/Pagination';
-import { preloadForumChunks } from '../../App';
+import ErrorState from '../../components/common/ErrorState';
+import { preloadForumChunks } from '../../app/routes/community';
 import { ThreadDetailSkeleton } from '../../components/forums/ForumSkeletons';
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import { useForumWebSocket } from '../../hooks/useForumWebSocket';
 import ThreadOriginalPost from '../../components/forums/ThreadOriginalPost';
 import ThreadReplies from '../../components/forums/ThreadReplies';
 import useThreadMutations from '../../components/forums/useThreadMutations';
+import { getTotalPages, isTopLevelPost } from '../../components/forums/buildPostTree';
+import { patchCachedPosts } from '../../components/forums/postsCache';
 import { forumKeys, forumQueries } from '../../api/queries/forums';
 
-// Breadcrumb skeleton component - static, no animations
-const BreadcrumbSkeleton = () => (
-    <div className="flex items-center gap-2 text-xs font-bold text-gray-500 mb-4 lg:w-[85%] mx-auto">
-        <div className="h-3 bg-gray-800/40 rounded w-12"></div>
-        <ChevronRight size={12} className="text-gray-700" />
-        <div className="h-3 bg-gray-800/40 rounded w-20"></div>
-        <ChevronRight size={12} className="text-gray-700" />
-        <div className="h-3 bg-gray-800/40 rounded w-32"></div>
-    </div>
-);
+const parsePostParam = (value) => {
+    const parsed = parseInt(value || '', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
 
 const ForumThreadDetail = () => {
     const { id } = useParams();
     const [searchParams, setSearchParams] = useSearchParams();
-    const page = parseInt(searchParams.get('page') || '1');
+    const page = parseInt(searchParams.get('page') || '1', 10) || 1;
+    // "Continue this thread": ?post=<id> focuses that post's subtree (fetched with ?root=)
+    const focusedPostId = parsePostParam(searchParams.get('post'));
     const { user } = useAuth();
+    const isStaff = Boolean(user?.is_staff || user?.is_superuser);
     const queryClient = useQueryClient();
 
     const [replyContent, setReplyContent] = useState('');
@@ -45,17 +46,10 @@ const ForumThreadDetail = () => {
     const [showReplyForm, setShowReplyForm] = useState(false);
     const [replyTo, setReplyTo] = useState(null);
     const [repliesCollapsed, setRepliesCollapsed] = useState(false);
-    const [focusedPostId, setFocusedPostId] = useState(null);
 
-    // Get post ID from URL query params for "Continue this thread"
-    useEffect(() => {
-        const postId = searchParams.get('post');
-        if (postId) {
-            setFocusedPostId(parseInt(postId));
-        } else {
-            setFocusedPostId(null);
-        }
-    }, [searchParams]);
+    const setFocusedPostId = useCallback((postId) => {
+        setSearchParams(postId ? { post: String(postId) } : {});
+    }, [setSearchParams]);
 
     useEffect(() => {
         preloadForumChunks();
@@ -77,25 +71,35 @@ const ForumThreadDetail = () => {
         data: thread,
         isLoading: isThreadLoading,
         isPlaceholderData: isThreadPlaceholder,
-        error: threadError
+        error: threadError,
+        refetch: refetchThread,
     } = useQuery({
         ...forumQueries.thread(id),
         staleTime: 5 * 60 * 1000, // 5 minutes
         placeholderData: keepPreviousData, // Critical: keeps showing previous thread during load
     });
 
-    // Fetch posts - enabled when thread loads, but uses placeholderData for smooth pagination
-    const {
-        data: postsData,
-        isLoading: isPostsLoading,
-        isPlaceholderData: isPostsPlaceholder,
-        error: postsError
-    } = useQuery({
+    // One page of top-level posts and their replies
+    const pageQuery = useQuery({
         ...forumQueries.posts(id, page),
         staleTime: 5 * 60 * 1000,
         placeholderData: keepPreviousData, // Keeps previous posts during page change
-        enabled: !!thread,
+        enabled: !!thread && !focusedPostId,
     });
+
+    // Focus mode: the focused post and its subtree, wherever it sits
+    const subtreeQuery = useQuery({
+        ...forumQueries.postSubtree(id, focusedPostId, page),
+        staleTime: 60 * 1000,
+        placeholderData: keepPreviousData,
+        enabled: !!thread && !!focusedPostId,
+    });
+
+    const activePosts = focusedPostId ? subtreeQuery : pageQuery;
+    const postsData = activePosts.data;
+    const isPostsLoading = activePosts.isLoading;
+    const isPostsPlaceholder = activePosts.isPlaceholderData;
+    const postsError = activePosts.error;
 
     // Only show loading UI after 500ms delay AND when we're actually loading new data
     // If we have cached/previous data (isPlaceholderData), user never sees loading
@@ -110,18 +114,32 @@ const ForumThreadDetail = () => {
             queryClient.invalidateQueries({ queryKey: forumKeys.thread(id) });
         },
         onPostLiked: ({ post_id, like_count }) => {
-            // Update the post's like count in the cache without a network request
-            queryClient.setQueryData(forumKeys.posts(id, page), old => {
-                if (!old?.results) return old;
-                return {
-                    ...old,
-                    results: old.results.map(post =>
-                        post.id === post_id
-                            ? { ...post, like_count }
-                            : post
-                    ),
-                };
+            patchCachedPosts(queryClient, id, post_id, { like_count });
+        },
+        onPostUpdated: (post) => {
+            patchCachedPosts(queryClient, id, post.id, {
+                content: post.content,
+                edited_at: post.edited_at ?? null,
             });
+        },
+        onPostRestored: () => {
+            // The restored post's author and content come back from the server.
+            queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
+        },
+        onPostRemoved: ({ post_id, removal }) => {
+            if (isStaff) {
+                // Staff keep the content and see the reason; refetch to get them
+                patchCachedPosts(queryClient, id, post_id, { is_removed: true, removal });
+                queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
+            } else {
+                patchCachedPosts(queryClient, id, post_id, {
+                    is_removed: true,
+                    removal,
+                    content: '',
+                    author: null,
+                    can_reply: false,
+                });
+            }
         },
         onThreadLiked: ({ like_count }) => {
             // Update the thread's like count in the cache without a network request
@@ -134,22 +152,23 @@ const ForumThreadDetail = () => {
 
     // Handle scrolling to focused post after posts load
     useEffect(() => {
-        if (focusedPostId && postsData?.results && !isPostsLoading) {
-            const postId = String(focusedPostId);
-            const checkAndScroll = () => {
-                const element = document.getElementById(`post-${postId}`);
-                if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            };
-            // Try scrolling after posts render
-            setTimeout(checkAndScroll, 100);
-            // Retry once more after a longer delay
-            setTimeout(checkAndScroll, 500);
-        }
+        if (!focusedPostId || !postsData?.results || isPostsLoading) return undefined;
+        const checkAndScroll = () => {
+            const element = document.getElementById(`post-${focusedPostId}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+        // Try scrolling after posts render, and once more after a longer delay
+        const first = setTimeout(checkAndScroll, 100);
+        const second = setTimeout(checkAndScroll, 500);
+        return () => {
+            clearTimeout(first);
+            clearTimeout(second);
+        };
     }, [focusedPostId, postsData, isPostsLoading]);
 
-    // Replies, thread edits, pins and likes
+    // Replies, thread edits, pins, likes, follow and moderation
     const mutations = useThreadMutations({
         id,
         page,
@@ -160,7 +179,7 @@ const ForumThreadDetail = () => {
         setEditingThread,
         setEditingPostId,
     });
-    const { createPostMutation } = mutations;
+    const { createPostMutation, toggleSubscriptionMutation } = mutations;
 
     const handleReplySubmit = (e) => {
         e.preventDefault();
@@ -168,23 +187,32 @@ const ForumThreadDetail = () => {
         createPostMutation.mutate({ content: replyContent });
     };
 
-    const isOwner = (username) => user?.username === username;
+    const isOwner = (username) => Boolean(username) && user?.username === username;
 
     const setPage = (newPage) => {
-        setSearchParams({ page: newPage });
+        // In focus mode the pages are the focused post's direct replies: keep ?post=.
+        setSearchParams(focusedPostId ? { post: String(focusedPostId), page: newPage } : { page: newPage });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-
-
-    // Error state
-    if (threadError) {
+    // Error states: a missing (or removed) thread, or a failed load with retry
+    if (threadError && !thread) {
+        if (threadError.response?.status === 404) {
+            return (
+                <div className="container mx-auto px-4 py-32 text-center">
+                    <ShieldAlert className="w-16 h-16 mx-auto mb-4 text-red-500/50" />
+                    <h2 className="text-2xl font-bold text-white mb-2">Thread not found</h2>
+                    <p className="text-gray-500 mb-8">This thread may have been deleted or moved.</p>
+                    <Link to="/forums" className="btn-primary px-8 py-3 rounded-xl font-bold">Back to Forums</Link>
+                </div>
+            );
+        }
         return (
-            <div className="container mx-auto px-4 py-32 text-center">
-                <ShieldAlert className="w-16 h-16 mx-auto mb-4 text-red-500/50" />
-                <h2 className="text-2xl font-bold text-white mb-2">Thread not found</h2>
-                <p className="text-gray-500 mb-8">This thread may have been deleted or moved.</p>
-                <Link to="/forums" className="btn-primary px-8 py-3 rounded-xl font-bold">Back to Forums</Link>
+            <div className="container mx-auto px-4 py-32 max-w-2xl">
+                <ErrorState
+                    title="Couldn't load this thread"
+                    onRetry={() => refetchThread()}
+                />
             </div>
         );
     }
@@ -205,11 +233,16 @@ const ForumThreadDetail = () => {
         return <div className="min-h-screen"></div>;
     }
 
+    const totalPages = focusedPostId
+        ? getTotalPages(postsData, page, (post) => post.parent === focusedPostId)
+        : getTotalPages(postsData, page, isTopLevelPost);
+    const isSubscribed = Boolean(thread.is_subscribed);
+
     return (
         <>
             <Helmet>
                 <title>{thread.title} | aniShows Forums</title>
-                <meta name="description" content={thread.content.substring(0, 150)} />
+                <meta name="description" content={(thread.content || thread.excerpt || '').substring(0, 150)} />
             </Helmet>
             <div className="container mx-auto px-4 pt-8 pb-24 max-w-6xl min-h-screen">
                 {/* Breadcrumbs */}
@@ -248,8 +281,34 @@ const ForumThreadDetail = () => {
                             </span>
                         ))}
                     </div>
-                    <h1 className="text-xl md:text-2xl font-bold text-gray-300 tracking-tight leading-tight">{thread.title}</h1>
+                    <div className="flex items-start justify-between gap-3">
+                        <h1 className="text-xl md:text-2xl font-bold text-gray-300 tracking-tight leading-tight">{thread.title}</h1>
+                        {user && (
+                            <button
+                                type="button"
+                                onClick={() => toggleSubscriptionMutation.mutate(!isSubscribed)}
+                                disabled={toggleSubscriptionMutation.isPending}
+                                aria-pressed={isSubscribed}
+                                aria-label={isSubscribed ? 'Unfollow thread' : 'Follow thread'}
+                                title={isSubscribed ? 'Unfollow thread' : 'Follow thread'}
+                                className={`shrink-0 flex items-center gap-1.5 text-xs font-medium transition-colors px-2 py-1 rounded-lg hover:bg-white/5 ${isSubscribed
+                                    ? 'text-accent'
+                                    : 'text-gray-500 hover:text-gray-300'
+                                    }`}
+                            >
+                                <Bell size={14} className={isSubscribed ? 'fill-current' : ''} />
+                                <span className="hidden sm:inline">{isSubscribed ? 'Following' : 'Follow'}</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
+
+                {/* Removed thread (only staff can still open it) */}
+                {thread.is_removed && (
+                    <div className="lg:w-[85%] mx-auto mb-4 py-3 px-4 border border-red-500/20 rounded-2xl bg-red-500/[0.04] text-sm text-red-400/80">
+                        This thread was removed by a moderator{thread.removal_reason ? `: ${thread.removal_reason}` : '.'} Only staff can see it.
+                    </div>
+                )}
 
                 {/* Original Post */}
                 {page === 1 && (
@@ -273,11 +332,11 @@ const ForumThreadDetail = () => {
                 {/* Locked / Auth Guest States */}
                 {!showReplyForm && (
                     <div className="lg:w-[85%] mx-auto mb-8">
-                        {thread.is_locked ? (
+                        {thread.is_locked && !isStaff ? (
                             <div className="py-6 text-center border border-gray-800/50 rounded-2xl bg-dark-100/30 text-gray-500">
                                 <div className="flex items-center justify-center gap-2 text-sm font-medium">
                                     <Lock size={14} className="opacity-50" />
-                                    This thread is locked
+                                    This thread is locked.
                                 </div>
                             </div>
                         ) : !user && (
@@ -294,11 +353,11 @@ const ForumThreadDetail = () => {
                 {/* Replies Section */}
                 <ThreadReplies
                     id={id}
-                    page={page}
                     thread={thread}
                     user={user}
                     isOwner={isOwner}
-                    queryClient={queryClient}
+                    isStaff={isStaff}
+                    onRetryPosts={() => activePosts.refetch()}
                     postsData={postsData}
                     postsError={postsError}
                     showPostsLoading={showPostsLoading}
@@ -316,11 +375,11 @@ const ForumThreadDetail = () => {
                     mutations={mutations}
                 />
 
-                {postsData?.count > 20 && (
+                {totalPages > 1 && (
                     <div className="mt-10 flex justify-center lg:w-[85%] mx-auto">
                         <Pagination
                             currentPage={page}
-                            totalPages={Math.ceil(postsData.count / 20)}
+                            totalPages={totalPages}
                             onPageChange={setPage}
                         />
                     </div>

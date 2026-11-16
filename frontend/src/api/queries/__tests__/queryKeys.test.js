@@ -21,6 +21,7 @@ import {
     favoriteKeys,
     followKeys,
     friendKeys,
+    friendsWatchingKeys,
     insightsKeys,
     insightsQueries,
     listKeys,
@@ -31,6 +32,7 @@ import {
     profileQueries,
     recommendationKeys,
     reviewKeys,
+    socialQueries,
     staffFavoriteKeys,
     summaryToGenreRows,
     userKeys,
@@ -65,6 +67,7 @@ vi.mock('../../client', () => ({
     badgeApi: {},
     characterFavoriteApi: {},
     favoriteApi: {},
+    followApi: {},
     recommendationsApi: {},
     reviewApi: {},
     staffFavoriteApi: {},
@@ -110,9 +113,15 @@ describe('query keys keep the shapes the app used before the factory', () => {
         [userKeys.profileLegacy, ['userProfile']],
         [followKeys.all, ['follows']],
         [followKeys.list('kiyo', 'followers'), ['follows', 'kiyo', 'followers']],
+        [followKeys.search('kiyo', 'followers', 'ab'), ['follows', 'kiyo', 'followers', { search: 'ab' }]],
         [friendKeys.list('kiyo'), ['friends-infinite', 'kiyo']],
+        [friendsWatchingKeys.all, ['friendsWatching']],
+        [friendsWatchingKeys.byAnime(5, 9), ['friendsWatching', 5, 9]],
+        [friendsWatchingKeys.byAnime(5), ['friendsWatching', 5, null]],
+        [socialQueries.friendsWatching(5, 9).queryKey, ['friendsWatching', 5, 9]],
         [favoriteKeys.byUser('kiyo'), ['favorites', 'kiyo']],
         [favoriteKeys.overview('kiyo'), ['favorites-overview', 'kiyo']],
+        [favoriteKeys.allForReorder('kiyo'), ['favorites', 'kiyo', 'all']],
         [characterFavoriteKeys.byUser('kiyo'), ['character-favorites', 'kiyo']],
         [characterFavoriteKeys.overview('kiyo'), ['character-favorites', 'kiyo', 'overview']],
         [staffFavoriteKeys.byUser('kiyo'), ['staff-favorites', 'kiyo']],
@@ -145,10 +154,11 @@ describe('query keys keep the shapes the app used before the factory', () => {
         [forumKeys.activeThreads(1), ['forumActiveThreads', 1]],
         [forumKeys.newThreads(1), ['forumNewThreads', 1]],
         [forumKeys.search('aot', 1), ['forumSearch', 'aot', 1]],
-        [forumKeys.railFeed, ['forumRailFeed']],
         [forumKeys.thread('9'), ['forumThread', '9']],
         [forumKeys.postsAll('9'), ['forumPosts', '9']],
         [forumKeys.posts('9', 3), ['forumPosts', '9', 3]],
+        [forumKeys.postSubtree('9', 41), ['forumPosts', '9', 'root', 41, 1]],
+        [forumKeys.postSubtree('9', 41, 3), ['forumPosts', '9', 'root', 41, 3]],
         [adminBadgeKeys.all, ['adminBadges']],
         [adminBadgeKeys.list(1, ''), ['adminBadges', 1, '']],
         [adminBadgeKeys.holdersAll(4), ['adminBadgeHolders', 4]],
@@ -245,6 +255,18 @@ describe('prefix invalidation still reaches the same cache entries', () => {
         expect(invalidated(reviewKeys.forAnime('frieren', 'helpful', null))).toBe(true);
         expect(invalidated(reviewKeys.stats('frieren'))).toBe(false);
         expect(invalidated(followKeys.list('kiyo', 'following'))).toBe(true);
+    });
+
+    it('review stats are invalidated per anime, apart from the review lists', async () => {
+        seed(reviewKeys.stats('frieren'));
+        seed(reviewKeys.stats('bocchi'));
+        seed(reviewKeys.forAnime('frieren', 'helpful', null));
+
+        await client.invalidateQueries({ queryKey: reviewKeys.stats('frieren') });
+
+        expect(invalidated(reviewKeys.stats('frieren'))).toBe(true);
+        expect(invalidated(reviewKeys.stats('bocchi'))).toBe(false);
+        expect(invalidated(reviewKeys.forAnime('frieren', 'helpful', null))).toBe(false);
     });
 
     it('forum prefixes cover every page', async () => {

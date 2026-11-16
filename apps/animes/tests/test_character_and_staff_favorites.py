@@ -128,6 +128,36 @@ class CharacterAndStaffFavoriteTests(APITestCase):
         self.assertTrue(response.data["is_favorite"])
         self.assertEqual(response.data["favorite_count"], 1)
 
+    def test_toggle_rejects_non_integer_ids(self):
+        self.client.force_authenticate(user=self.user)
+
+        for url_name, field in (
+            ("character-favorites-toggle", "character_id"),
+            ("staff-favorites-toggle", "staff_id"),
+        ):
+            with self.subTest(field=field):
+                response = self.client.post(reverse(url_name), {field: "abc"}, format="json")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn(field, response.data["errors"])
+
+    def test_toggle_unknown_ids_are_404_with_the_envelope(self):
+        self.client.force_authenticate(user=self.user)
+
+        character = self.client.post(
+            reverse("character-favorites-toggle"),
+            {"character_id": self.character.id + 1000},
+            format="json",
+        )
+        staff = self.client.post(
+            reverse("staff-favorites-toggle"), {"staff_id": self.staff.id + 1000}, format="json"
+        )
+
+        self.assertEqual(character.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(character.data, {"detail": "Character not found", "code": "not_found"})
+        self.assertEqual(staff.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(staff.data["code"], "not_found")
+
     def test_private_user_character_favorites_are_hidden(self):
         UserFavoriteCharacter.objects.create(user=self.private_user, character=self.character)
 

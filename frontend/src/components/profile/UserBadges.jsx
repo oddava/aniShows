@@ -19,11 +19,13 @@ const COLOR_MAP = {
 };
 
 export default function UserBadges({ user }) {
-    if (!user || !user.badges || user.badges.length === 0) return null;
+    // Retired badges (is_active false) are never shown, even if a stale payload carries one.
+    const badges = (user?.badges || []).filter((badge) => badge && badge.is_active !== false);
+    if (badges.length === 0) return null;
 
     return (
         <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-            {user.badges.map((badge, index) => {
+            {badges.map((badge, index) => {
                 const Icon = ICON_MAP[badge.icon] || Award;
                 const colorClasses = COLOR_MAP[badge.color] || COLOR_MAP['blue'];
 

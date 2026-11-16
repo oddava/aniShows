@@ -4,7 +4,8 @@ import api from '../httpClient';
 export const favoriteApi = {
     getAll: (params) => api.get('/favorites/', { params }),
     toggle: (animeId) => api.post('/favorites/toggle/', { anime_id: animeId }),
-    reorder: (orderedItems) => api.post('/favorites/reorder/', { items: orderedItems }),
+    /** Saves the full order: `ids` are favorite ids, first = shown first. */
+    reorder: (ids) => api.post('/favorites/reorder/', { ids }),
 };
 
 export const characterFavoriteApi = {
