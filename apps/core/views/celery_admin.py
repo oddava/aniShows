@@ -6,6 +6,7 @@ results hold task payloads) and every mutation is audited. Error responses never
 echo exception text.
 """
 
+from django.db import transaction
 from django_filters import CharFilter, DateFilter, FilterSet
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
@@ -63,6 +64,11 @@ class CeleryTaskResultViewSet(
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        with transaction.atomic():
+            self._audit_and_delete(request, instance)
+        return Response({"message": "Task result deleted successfully."})
+
+    def _audit_and_delete(self, request, instance):
         record_admin_action(
             request,
             action=AuditLog.ActionType.DELETE,
@@ -72,7 +78,6 @@ class CeleryTaskResultViewSet(
             metadata={"task_id": instance.task_id, "status": instance.status},
         )
         self.perform_destroy(instance)
-        return Response({"message": "Task result deleted successfully."})
 
     @action(detail=False, methods=["post"])
     def bulk_delete(self, request):

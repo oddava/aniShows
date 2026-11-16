@@ -44,10 +44,13 @@ class LoggingRulesTests(SimpleTestCase):
             with self.subTest(method=method, path=path, status=status):
                 self.assertTrue(_decide(method, path, status))
 
-    def test_admin_reads_and_401_404_are_only_sampled(self):
+    def test_admin_reads_are_never_logged(self):
+        for path, status in (("/api/v1/admin/users/", 200), ("/api/v1/admin/system/", 404)):
+            with self.subTest(path=path, status=status):
+                self.assertFalse(_decide("GET", path, status, sample_rate=1.0))
+
+    def test_401_404_and_public_reads_are_only_sampled(self):
         for method, path, status in (
-            ("GET", "/api/v1/admin/users/", 200),
-            ("GET", "/api/v1/admin/dashboard/", 200),
             ("GET", "/api/v1/users/me/", 401),
             ("GET", "/wp-login.php", 404),
             ("GET", "/api/v1/auth/me/", 200),

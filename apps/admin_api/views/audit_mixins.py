@@ -6,6 +6,7 @@ import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from django.db import transaction
 from django.db.models import Model
 
 from ...core.models import AuditLog
@@ -58,6 +59,7 @@ class AuditedModelViewSetMixin(_ViewBase):
             new=new,
         )
 
+    @transaction.atomic
     def perform_create(self, serializer):
         instance = serializer.save()
         self._audit(
@@ -66,6 +68,7 @@ class AuditedModelViewSetMixin(_ViewBase):
             new=field_snapshot(instance, serializer.validated_data),
         )
 
+    @transaction.atomic
     def perform_update(self, serializer):
         fields = list(serializer.validated_data)
         previous = field_snapshot(serializer.instance, fields)
@@ -78,13 +81,14 @@ class AuditedModelViewSetMixin(_ViewBase):
         )
 
     def audit_destroy(self, instance, extra: dict | None = None):
-        """Write the delete row; call it before the row is gone (the pk is kept)."""
+        """Write the delete row before the row is gone; call it inside the delete's transaction."""
         self._audit(
             AuditLog.ActionType.DELETE,
             instance,
             previous={"repr": str(instance), **(extra or {})},
         )
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         self.audit_destroy(instance)
         instance.delete()

@@ -201,12 +201,16 @@ def resolve_review(request, review_id, outcome, notes=None, *, legacy: bool = Fa
     if outcome not in allowed:
         raise ModerationError(f"outcome must be one of: {', '.join(allowed)}.", 400)
     notes = _clean_notes(notes)
+    try:
+        review_pk = int(review_id)
+    except (TypeError, ValueError):
+        raise ModerationError("Review not found.", 404) from None
 
     with transaction.atomic():
         review = (
-            Review.objects.select_for_update()
+            Review.objects.select_for_update(of=("self",))
             .select_related("user", "anime")
-            .filter(pk=review_id)
+            .filter(pk=review_pk)
             .first()
         )
         if review is None:
@@ -252,7 +256,7 @@ def resolve_review(request, review_id, outcome, notes=None, *, legacy: bool = Fa
                 else AuditLog.ActionType.RESOLVE
             ),
             entity_type="Review",
-            entity_id=review_id,
+            entity_id=review_pk,
             entity_repr=f"{snapshot['author']} on {snapshot['anime']}",
             previous=snapshot if new_state else None,
             new={**snapshot, **new_state} if new_state else None,
@@ -265,7 +269,7 @@ def resolve_review(request, review_id, outcome, notes=None, *, legacy: bool = Fa
         )
 
     return {
-        "review_id": int(review_id),
+        "review_id": review_pk,
         "outcome": outcome,
         "reports_updated": updated,
         "review_deleted": outcome == OUTCOME_REMOVE,

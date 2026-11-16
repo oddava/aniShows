@@ -77,10 +77,12 @@ class AdminBadgeViewSet(AdminPolicyMixin, ModelViewSet):
             **kwargs,
         )
 
+    @transaction.atomic
     def perform_create(self, serializer):
         badge = serializer.save(created_by=self.request.user)
         self._audit(AuditLog.ActionType.CREATE, badge, new=_badge_snapshot(badge))
 
+    @transaction.atomic
     def perform_update(self, serializer):
         previous = _badge_snapshot(serializer.instance)
         badge = serializer.save()
@@ -88,6 +90,7 @@ class AdminBadgeViewSet(AdminPolicyMixin, ModelViewSet):
             AuditLog.ActionType.UPDATE, badge, previous=previous, new=_badge_snapshot(badge)
         )
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         self._audit(AuditLog.ActionType.DELETE, instance, previous=_badge_snapshot(instance))
         instance.delete()

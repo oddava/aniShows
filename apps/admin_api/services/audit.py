@@ -14,6 +14,7 @@ from typing import Any
 from ...core.models import AuditLog
 from ...core.utils import get_client_ip
 
+ENTITY_ID_MAX_LENGTH = 50
 ENTITY_REPR_MAX_LENGTH = 200
 AUDITED_FLAG = "_admin_audited"
 
@@ -57,7 +58,7 @@ def record_admin_action(
         user_ip=get_client_ip(request),
         action=action,
         entity_type=entity_type,
-        entity_id=str(entity_id) if entity_id is not None else "",
+        entity_id=(str(entity_id) if entity_id is not None else "")[:ENTITY_ID_MAX_LENGTH],
         entity_repr=str(entity_repr)[:ENTITY_REPR_MAX_LENGTH],
         previous_state=previous or {},
         new_state=new or {},

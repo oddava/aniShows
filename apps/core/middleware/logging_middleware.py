@@ -26,9 +26,9 @@ def _authenticated_user(request):
 class LoggingMiddleware:
     """Queue one ``SystemLog`` row for the requests worth keeping.
 
-    Always logged: mutating admin requests, auth POSTs, 5xx, 403 and 429. Everything
-    else (401/404 included, which token refreshes and bots dominate) is sampled at
-    ``REQUEST_LOG_SUCCESS_SAMPLE_RATE``. Health, metrics, static/media and the logs
+    Always logged: mutating admin requests, auth POSTs, 5xx, 403 and 429. Other admin
+    requests are never logged. Everything else (401/404 included, which token
+    refreshes and bots dominate) is sampled at ``REQUEST_LOG_SUCCESS_SAMPLE_RATE``. Health, metrics, static/media and the logs
     endpoint itself are never logged. The user is read after the view, so JWT
     requests are attributed.
     """
@@ -127,6 +127,9 @@ class LoggingMiddleware:
     def _should_log_request(self, method: str, path: str, status_code: int) -> bool:
         if self._is_always_logged(method, path, status_code):
             return True
+        if path.startswith(ADMIN_API_PREFIX):
+            # Admin reads (an open admin tab polls) are never sampled in.
+            return False
         if not self.request_logging_enabled:
             return False
         return random.random() < self.success_sample_rate

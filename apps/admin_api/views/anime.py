@@ -1,3 +1,5 @@
+from django.db import transaction
+from django.utils.decorators import method_decorator
 from django_filters import CharFilter, FilterSet
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
@@ -98,9 +100,10 @@ class AdminGenreViewSet(AdminPolicyMixin, AuditedModelViewSetMixin, ModelViewSet
         query_serializer.is_valid(raise_exception=True)
 
         force = query_serializer.validated_data["force"]
-        if genre.anime_count == 0 or force:
-            self.audit_destroy(genre, {"anime_count": genre.anime_count, "force": force})
-        result = delete_genre(genre, force)
+        with transaction.atomic():
+            if genre.anime_count == 0 or force:
+                self.audit_destroy(genre, {"anime_count": genre.anime_count, "force": force})
+            result = delete_genre(genre, force)
         return Response(result.payload, status=result.status_code)
 
 
@@ -121,9 +124,10 @@ class AdminStudioViewSet(AdminPolicyMixin, AuditedModelViewSetMixin, ModelViewSe
         query_serializer.is_valid(raise_exception=True)
 
         force = query_serializer.validated_data["force"]
-        if studio.anime_count == 0 or force:
-            self.audit_destroy(studio, {"anime_count": studio.anime_count, "force": force})
-        result = delete_studio(studio, force)
+        with transaction.atomic():
+            if studio.anime_count == 0 or force:
+                self.audit_destroy(studio, {"anime_count": studio.anime_count, "force": force})
+            result = delete_studio(studio, force)
         return Response(result.payload, status=result.status_code)
 
 
@@ -194,6 +198,7 @@ class AdminOfflineAnimeSyncStateViewSet(
         return Response(self.get_serializer(state).data)
 
     @action(detail=True, methods=["post"])
+    @method_decorator(transaction.atomic)
     def retry(self, request, pk=None):
         state = self.get_object()
         OfflineSyncService().reset_for_retry(state)
@@ -201,6 +206,7 @@ class AdminOfflineAnimeSyncStateViewSet(
         return self._audited(state, "retry")
 
     @action(detail=True, methods=["post"])
+    @method_decorator(transaction.atomic)
     def mark_skipped(self, request, pk=None):
         state = self.get_object()
         reason = (request.data.get("reason") or "marked_skipped").strip()[:120]
@@ -209,6 +215,7 @@ class AdminOfflineAnimeSyncStateViewSet(
         return self._audited(state, "mark_skipped", reason=reason)
 
     @action(detail=True, methods=["post"])
+    @method_decorator(transaction.atomic)
     def set_ids_and_retry(self, request, pk=None):
         state = self.get_object()
         anilist_id = self._parse_int_or_none(request.data.get("anilist_id"))
@@ -221,6 +228,7 @@ class AdminOfflineAnimeSyncStateViewSet(
         )
 
     @action(detail=True, methods=["post"])
+    @method_decorator(transaction.atomic)
     def merge_target(self, request, pk=None):
         state = self.get_object()
         target_anime_id = self._parse_int_or_none(request.data.get("target_anime_id"))

@@ -189,6 +189,15 @@ class ModerationResolveTests(TestCase):
     def test_bad_input(self):
         self.assertEqual(self._resolve("ban_everyone").status_code, 400)
         self.assertEqual(self._resolve("dismiss", notes="x" * 1001).status_code, 400)
+        for bad_id in ("abc", "1e3"):
+            for url in (
+                f"/api/v1/admin/moderation/reviews/{bad_id}/resolve/",
+                f"/api/v1/admin/reviews/{bad_id}/reports/resolve/",
+            ):
+                with self.subTest(url=url):
+                    self.assertEqual(
+                        self.api.post(url, {"outcome": "dismiss"}, format="json").status_code, 404
+                    )
         missing = self.api.post(
             "/api/v1/admin/moderation/reviews/999999/resolve/",
             {"outcome": "dismiss"},

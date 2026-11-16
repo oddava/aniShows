@@ -360,6 +360,9 @@ class ReadOnlyAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(CeleryTaskResult)
 class CeleryTaskResultAdmin(ReadOnlyAdmin):
@@ -377,6 +380,3 @@ class AdminPanelSettingsAdmin(ReadOnlyAdmin):
 
     list_display = ["key", "updated_by", "updated_at"]
     readonly_fields = ["key", "data", "updated_by", "created_at", "updated_at"]
-
-    def has_delete_permission(self, request, obj=None):
-        return False

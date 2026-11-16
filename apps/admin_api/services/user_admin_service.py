@@ -72,6 +72,7 @@ def set_user_active(target_user, *, active: bool) -> bool:
     return changed
 
 
+@transaction.atomic
 def _set_active_and_audit(request, target_user, *, active: bool, raw_reason) -> dict:
     actor = request.user
     check_can_moderate(target_user, actor)
@@ -114,6 +115,7 @@ def restore_user(request, target_user, reason) -> AdminUserActionResult:
     )
 
 
+@transaction.atomic
 def set_user_staff(request, target_user, is_staff) -> AdminUserActionResult:
     actor = request.user
     if not actor.is_superuser:
@@ -179,12 +181,12 @@ def delete_user_account(request, target_user) -> AdminUserActionResult:
 
 
 def moderation_history(user_id: int) -> list[dict]:
-    """The last audit rows about this user, bulk ban/unban rows that named them included."""
+    """The last audit rows about this user, including bulk ban/unban rows that changed them."""
     rows = (
         AuditLog.objects.filter(entity_type="User")
         .filter(
             Q(entity_id=str(user_id))
-            | Q(action=AuditLog.ActionType.BULK_ACTION, metadata__ids__contains=[user_id])
+            | Q(action=AuditLog.ActionType.BULK_ACTION, metadata__changed_ids__contains=[user_id])
         )
         .select_related("user")
         .order_by("-timestamp")[:MODERATION_HISTORY_LIMIT]
@@ -193,6 +195,7 @@ def moderation_history(user_id: int) -> list[dict]:
         {
             "id": row.id,
             "action": row.action,
+            "entity_type": row.entity_type,
             "timestamp": row.timestamp.isoformat(),
             "actor": row.user.username if row.user else None,
             "reason": (row.metadata or {}).get("reason", ""),

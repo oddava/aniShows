@@ -1,8 +1,10 @@
 """Admin mutations made with a real Bearer token are audited exactly once (G6 P0-1)."""
 
+from contextlib import suppress
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.db import DatabaseError
 from django.test import RequestFactory, TestCase
 
 from ...animes.models import Anime, Genre, Review, ReviewReport
@@ -119,6 +121,17 @@ class AdminAuditTrailTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(AuditLog.objects.exists())
+
+    def test_failed_delete_leaves_no_audit_row(self):
+        genre = Genre.objects.create(name="Doomed", slug="doomed")
+        with (
+            patch.object(Genre, "delete", side_effect=DatabaseError("boom")),
+            suppress(DatabaseError),  # the test client re-raises unhandled view errors
+        ):
+            self._client(self.root).delete(f"/api/v1/admin/genres/{genre.id}/")
+
+        self.assertFalse(AuditLog.objects.exists())
+        self.assertTrue(Genre.objects.filter(pk=genre.pk).exists())
 
     def test_bulk_operation_writes_one_row(self):
         other = Anime.objects.create(

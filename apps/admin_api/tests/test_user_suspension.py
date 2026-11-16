@@ -112,3 +112,5 @@ class UserSuspensionTests(TestCase):
             [(entry["action"], entry["reason"]) for entry in history],
             [("BULK_ACTION", "Spam ring")],
         )
+        skipped = self.staff_client.get(f"/api/v1/admin/users/{other_staff.id}/").data
+        self.assertEqual(skipped["moderation_history"], [])

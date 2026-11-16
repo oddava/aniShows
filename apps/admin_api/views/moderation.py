@@ -1,5 +1,6 @@
 """Moderation queue endpoints (G6 P1-1): staff resolve, dismiss or remove reported content."""
 
+from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -87,9 +88,15 @@ class AdminModerationForumViewSet(AdminPolicyMixin, GenericViewSet):
         if not isinstance(notes, str) or len(notes) > 1000:
             return Response({"detail": "notes must be a string of at most 1000 characters."}, 400)
         try:
-            result = module.resolve_reports(pk, outcome, request.user, notes.strip())
+            with transaction.atomic():
+                result = module.resolve_reports(pk, outcome, request.user, notes.strip())
+                self._audit(request, pk, outcome, notes.strip())
         except ValueError:
             return Response({"detail": "Invalid outcome."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(result if isinstance(result, dict) else {"outcome": outcome})
+
+    @staticmethod
+    def _audit(request, pk, outcome, notes):
         record_admin_action(
             request,
             action=(
@@ -100,9 +107,8 @@ class AdminModerationForumViewSet(AdminPolicyMixin, GenericViewSet):
             entity_type="ForumPost",
             entity_id=pk,
             entity_repr=f"Forum report {outcome}",
-            metadata={"outcome": outcome, "notes": notes.strip()},
+            metadata={"outcome": outcome, "notes": notes},
         )
-        return Response(result if isinstance(result, dict) else {"outcome": outcome})
 
 
 class AdminModerationSummaryView(AdminPolicyMixin, APIView):

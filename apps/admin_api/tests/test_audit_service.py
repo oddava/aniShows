@@ -33,3 +33,13 @@ class RecordAdminActionTests(TestCase):
         self.assertEqual(entry.metadata, {"source": "test", "reason": "Spam"})
         self.assertEqual(entry.changes, {"is_active": {"old": True, "new": False}})
         self.assertTrue(getattr(request, "_admin_audited", False))
+
+    def test_long_entity_ids_are_capped_to_the_column(self):
+        request = RequestFactory().post("/api/v1/admin/x/")
+        request.user = User.objects.create_user("mod2", "mod2@example.com", "pw-123456")
+
+        entry = record_admin_action(
+            request, action=AuditLog.ActionType.UPDATE, entity_type="ForumPost", entity_id="9" * 80
+        )
+
+        self.assertEqual(entry.entity_id, "9" * 50)

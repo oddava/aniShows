@@ -593,3 +593,13 @@ class ReviewReportAdmin(admin.ModelAdmin):
     list_select_related = ["review__user", "review__anime", "reporter", "resolved_by"]
     raw_id_fields = ["review", "reporter", "resolved_by"]
     readonly_fields = ["review", "reporter", "reason", "description", "created_at", "updated_at"]
+
+    # Resolving here would skip the audit trail; the SPA queue audits every outcome.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
