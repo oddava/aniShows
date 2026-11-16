@@ -309,7 +309,7 @@ const RichTextEditor = ({
                     style={{ maxHeight: syncedPreviewMaxHeight ? `${syncedPreviewMaxHeight}px` : '600px' }}
                 >
                     {value ? (
-                        <MarkdownRenderer content={value} className={`text-[15px] ${previewClassName}`} />
+                        <MarkdownRenderer mode="markdown" content={value} className={`text-[15px] ${previewClassName}`} />
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-gray-500 italic text-sm py-12">
                             Live preview...

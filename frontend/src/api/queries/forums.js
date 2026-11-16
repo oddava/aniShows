@@ -16,10 +16,11 @@ export const forumKeys = {
     activeThreads: (page) => ['forumActiveThreads', page],
     newThreads: (page) => ['forumNewThreads', page],
     search: (query, page) => ['forumSearch', query, page],
-    railFeed: ['forumRailFeed'],
     thread: (id) => ['forumThread', id],
     postsAll: (threadId) => ['forumPosts', threadId],
     posts: (threadId, page) => ['forumPosts', threadId, page],
+    // Under `postsAll(threadId)`, so every posts invalidation also covers it.
+    postSubtree: (threadId, rootId) => ['forumPosts', threadId, 'root', rootId],
 };
 
 // forumsApi methods already unwrap `response.data`.
@@ -56,10 +57,6 @@ export const forumQueries = {
         queryKey: forumKeys.search(query, page),
         queryFn: () => forumsApi.getThreads({ search: query, page }),
     }),
-    railFeed: () => queryOptions({
-        queryKey: forumKeys.railFeed,
-        queryFn: () => forumsApi.getGlobalFeed(1),
-    }),
     thread: (id) => queryOptions({
         queryKey: forumKeys.thread(id),
         queryFn: () => forumsApi.getThread(id),
@@ -67,5 +64,9 @@ export const forumQueries = {
     posts: (threadId, page) => queryOptions({
         queryKey: forumKeys.posts(threadId, page),
         queryFn: () => forumsApi.getPosts(threadId, page),
+    }),
+    postSubtree: (threadId, rootId) => queryOptions({
+        queryKey: forumKeys.postSubtree(threadId, rootId),
+        queryFn: () => forumsApi.getPostSubtree(threadId, rootId),
     }),
 };

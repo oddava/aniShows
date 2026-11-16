@@ -6,15 +6,18 @@ import { Pin, Lock, Plus, ChevronRight, ArrowLeft, MessageSquare, Eye } from 'lu
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import Pagination from '../../components/common/Pagination';
-import { preloadForumChunks } from '../../App';
+import ErrorState from '../../components/common/ErrorState';
+import { preloadForumChunks } from '../../app/routes/community';
+import { getTotalPages } from '../../components/forums/buildPostTree';
 import { ThreadListSkeleton } from '../../components/forums/ForumSkeletons';
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
 import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
 import { forumQueries } from '../../api/queries/forums';
 
-const getThreadPreview = (content) => {
-    const plainText = content?.replace(/[#*`]/g, '').replace(/\s+/g, ' ').trim() || '';
+// List items carry a server-made `excerpt` (markup and spoilers stripped); `content` is a fallback.
+const getThreadPreview = (thread) => {
+    const plainText = (thread?.excerpt ?? thread?.content)?.replace(/[#*`]/g, '').replace(/\s+/g, ' ').trim() || '';
     if (!plainText) {
         return 'No content yet.';
     }
@@ -93,7 +96,7 @@ const ThreadCard = memo(({ thread }) => {
                 </div>
 
                 <p className="forums-body-text line-clamp-2">
-                    {getThreadPreview(thread.content)}
+                    {getThreadPreview(thread)}
                 </p>
 
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -183,7 +186,8 @@ const ForumThreadList = () => {
         isLoading: isThreadsLoading,
         isPlaceholderData: isThreadsPlaceholder,
         isFetching,
-        error: threadsError
+        error: threadsError,
+        refetch: refetchThreads,
     } = useQuery({
         ...forumQueries.threads(slug, selectedTag, page),
         staleTime: 5 * 60 * 1000,
@@ -198,7 +202,7 @@ const ForumThreadList = () => {
         300
     );
 
-    const totalPages = typeof threadsData?.count !== 'undefined' ? Math.max(1, Math.ceil(threadsData.count / 20)) : 0;
+    const totalPages = typeof threadsData?.count !== 'undefined' ? Math.max(1, getTotalPages(threadsData, page)) : 0;
 
     // AniList-style loading pattern:
     // 1. If loading for 500ms+ with no cached data, show skeleton
@@ -307,17 +311,11 @@ const ForumThreadList = () => {
                 <div className="forums-thread-list relative min-h-[400px]">
                     {showThreadsLoading ? (
                         <ThreadListSkeleton />
-                    ) : threadsError ? (
-                        <div className="forums-surface py-16 text-center">
-                            <h3 className="forums-section-title">Failed to load threads</h3>
-                            <p className="forums-meta-text mb-4 mt-2">Please try again later.</p>
-                            <button
-                                onClick={() => window.location.reload()}
-                                className="text-sm font-semibold text-[var(--forums-accent-text)] hover:underline"
-                            >
-                                Retry
-                            </button>
-                        </div>
+                    ) : threadsError && !threadsData ? (
+                        <ErrorState
+                            title="Failed to load threads"
+                            onRetry={() => refetchThreads()}
+                        />
                     ) : (
                         <>
                             {showThreadsRefreshing && (
