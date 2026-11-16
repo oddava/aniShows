@@ -38,13 +38,6 @@
       "schedule": "<crontab: 0 1 * * * (m/h/dM/MY/d)>",
       "task": "apps.core.tasks.cleanup_tasks.cleanup_old_task_results"
     },
-    "collect-queue-metrics-minute": {
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: * * * * * (m/h/dM/MY/d)>",
-      "task": "apps.core.tasks.cleanup_tasks.collect_queue_metrics"
-    },
     "derive-airing-hourly": {
       "kwargs": {
         "limit": 500,
