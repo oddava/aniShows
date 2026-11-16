@@ -15,8 +15,8 @@ import logger from '../../utils/logger';
 export const SERVICE_WORKER_URL = '/service-worker.js';
 export const PUSH_DEVICE_STORAGE_KEY = 'anishows.pushDevice';
 export const DETACH_TIMEOUT_MS = 1500;
-// Re-post this device at most daily: it re-activates a server row the backend dropped
-// after repeated push failures (or that was removed from another device).
+// Refresh this device's server row at most daily: it re-activates a row the backend
+// dropped after repeated failures. A row the user removed is gone and stays gone.
 export const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 const readStoredDevice = () => {
@@ -180,7 +180,7 @@ const fetchPublicKey = async () => {
     return data.public_key;
 };
 
-const postSubscription = async (subscription, userId) => {
+const postSubscription = async (subscription, userId, { refresh = false } = {}) => {
     const json = subscription.toJSON ? subscription.toJSON() : subscription;
     const { data } = await notificationApi.subscribe({
         endpoint: json.endpoint,
@@ -188,6 +188,7 @@ const postSubscription = async (subscription, userId) => {
         auth: json.keys?.auth,
         device_type: 'browser',
         device_info: { label: deviceLabel() },
+        ...(refresh ? { refresh: true } : {}),
     });
     const device = {
         endpoint: json.endpoint,
@@ -326,8 +327,19 @@ export async function syncOnLoad({ userId } = {}) {
         }
 
         if (subscription) {
-            const fresh = Date.now() - (Number(stored.syncedAt) || 0) < SYNC_INTERVAL_MS;
-            if (subscription.endpoint === stored.endpoint && stored.id != null && fresh) return stored;
+            if (subscription.endpoint === stored.endpoint && stored.id != null) {
+                const fresh = Date.now() - (Number(stored.syncedAt) || 0) < SYNC_INTERVAL_MS;
+                if (fresh) return stored;
+                try {
+                    return await postSubscription(subscription, userId ?? stored.userId, { refresh: true });
+                } catch (error) {
+                    if (error?.response?.status !== 404) throw error;
+                    // Removed from another device: respect it; the user can turn push on again.
+                    clearStoredDevice();
+                    await subscription.unsubscribe().catch(() => {});
+                    return null;
+                }
+            }
             return await postSubscription(subscription, userId ?? stored.userId);
         }
 

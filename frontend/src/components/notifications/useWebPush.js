@@ -113,7 +113,10 @@ export default function useWebPush({ userId } = {}) {
     const otherDevices = devices.filter((item) => device.id == null || item.id !== device.id);
     // The server is the truth: a row removed elsewhere (or dropped after failures)
     // means this device gets nothing, whatever the browser still holds.
+    // While the list is loading, refetching (e.g. right after enabling) or failed,
+    // the answer is unknown: keep the browser's view instead of flashing "off".
     const onServer = devicesQuery.data == null || device.id == null
+        || devicesQuery.isFetching || devicesQuery.isError
         || devices.some((item) => item.id === device.id);
 
     return {

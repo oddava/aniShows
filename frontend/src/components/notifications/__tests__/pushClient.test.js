@@ -186,14 +186,26 @@ describe('syncOnLoad()', () => {
         expect(stored().syncedAt).toEqual(expect.any(Number));
     });
 
-    it('re-posts an unchanged subscription once a day, so a dropped server row comes back', async () => {
+    it('refreshes an unchanged subscription once a day, so a dropped server row comes back', async () => {
         installPushBrowser({ permission: 'granted', subscription: fakeSubscription('https://push.example/a') });
         store({ endpoint: 'https://push.example/a', id: 3, userId: 7, syncedAt: Date.now() - 25 * 60 * 60 * 1000 });
         api.subscribe.mockResolvedValue({ data: { id: 3 } });
 
         await syncOnLoad({ userId: 7 });
 
-        expect(api.subscribe).toHaveBeenCalledWith(expect.objectContaining({ endpoint: 'https://push.example/a' }));
+        expect(api.subscribe).toHaveBeenCalledWith(expect.objectContaining({ endpoint: 'https://push.example/a', refresh: true }));
+    });
+
+    it('respects a removal made on another device', async () => {
+        const subscription = fakeSubscription('https://push.example/a');
+        installPushBrowser({ permission: 'granted', subscription });
+        store({ endpoint: 'https://push.example/a', id: 3, userId: 7, syncedAt: 0 });
+        api.subscribe.mockRejectedValue({ response: { status: 404 } });
+
+        await expect(syncOnLoad({ userId: 7 })).resolves.toBeNull();
+
+        expect(stored()).toBeNull();
+        expect(subscription.unsubscribe).toHaveBeenCalled();
     });
 
     it('does nothing when the endpoint is unchanged or permission is not granted', async () => {
