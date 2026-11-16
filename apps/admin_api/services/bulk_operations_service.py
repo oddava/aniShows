@@ -199,7 +199,13 @@ def perform_bulk_operation(request, data) -> BulkOperationResult:
 
     with transaction.atomic():
         queryset = _target_queryset(entity, ids, request.user)
-        matched = queryset.count()
+        locked_users: list = []
+        if entity == "user":
+            # Lock first, so the exclusions and the count reflect the rows really changed.
+            locked_users = list(queryset.select_for_update().order_by("pk"))
+            matched = len(locked_users)
+        else:
+            matched = queryset.count()
         base = {"operation": operation, "entity_type": entity, "matched": matched}
 
         if dry_run:
@@ -241,8 +247,7 @@ def perform_bulk_operation(request, data) -> BulkOperationResult:
             }
         else:  # ban / unban
             active = operation == "unban"
-            locked = queryset.select_for_update().order_by("pk")
-            changed = [user.pk for user in locked if set_user_active(user, active=active)]
+            changed = [user.pk for user in locked_users if set_user_active(user, active=active)]
             metadata["changed_ids"] = changed
             verb = "Unbanned" if active else "Banned"
             payload = {**base, "updated": len(changed), "message": f"{verb} {len(changed)} users."}

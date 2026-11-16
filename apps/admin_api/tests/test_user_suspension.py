@@ -1,11 +1,15 @@
 """Suspend and restore with a reason (G6 P1-2)."""
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase
+from django.db import DatabaseError, connection
+from django.test import RequestFactory, TestCase, TransactionTestCase
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.models import AuditLog
+from ..services import user_admin_service
 from ..services.user_admin_service import AdminUserActionError, suspend_user
 from .helpers import bearer_client, make_user
 
@@ -147,3 +151,41 @@ class SuspensionUsesCurrentStateTests(TestCase):
 
         self.assertFalse(result.payload["changed"])
         self.assertFalse(AuditLog.objects.exists())
+
+
+class SuspensionIsAtomicTests(TransactionTestCase):
+    """Lock, checks, change, session revoke and audit row are one transaction (round 3)."""
+
+    def _request(self, actor):
+        request = RequestFactory().post("/api/v1/admin/users/x/suspend/")
+        request.user = actor
+        return request
+
+    def test_a_failed_audit_row_rolls_the_suspension_back(self):
+        moderator = make_user("mod-rollback", role="staff")
+        target = make_user("keep-me")
+        refresh = RefreshToken.for_user(target)
+        with (
+            patch.object(user_admin_service, "record_admin_action", side_effect=DatabaseError),
+            self.assertRaises(DatabaseError),
+        ):
+            suspend_user(self._request(moderator), target, "Spam account")
+
+        self.assertTrue(User.objects.get(pk=target.pk).is_active)
+        outstanding = OutstandingToken.objects.get(jti=refresh["jti"])
+        self.assertFalse(BlacklistedToken.objects.filter(token=outstanding).exists())
+
+    def test_checks_run_while_the_row_lock_is_held(self):
+        moderator = make_user("mod-atomic", role="staff")
+        target = make_user("locked-target")
+        seen = {}
+        real_check = user_admin_service.check_can_moderate
+
+        def check(target_user, actor):
+            seen["atomic"] = connection.in_atomic_block
+            real_check(target_user, actor)
+
+        with patch.object(user_admin_service, "check_can_moderate", side_effect=check):
+            suspend_user(self._request(moderator), target, "Spam account")
+
+        self.assertEqual(seen, {"atomic": True})

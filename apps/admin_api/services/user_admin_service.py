@@ -72,16 +72,18 @@ def set_user_active(target_user, *, active: bool) -> bool:
     return changed
 
 
-@transaction.atomic
 def _lock_user(target_user):
     """Re-read the target under a row lock, so checks and changes see its current state.
 
     Without it a staff moderator could suspend an account a superuser promoted a moment
-    earlier, and two concurrent suspends would both report (and audit) a change.
+    earlier, and two concurrent suspends would both report (and audit) a change. Call it
+    inside the caller's transaction: the lock lasts until that transaction ends (outside
+    one, ``select_for_update`` raises ``TransactionManagementError``).
     """
     return type(target_user)._default_manager.select_for_update().get(pk=target_user.pk)
 
 
+@transaction.atomic
 def _set_active_and_audit(request, target_user, *, active: bool, raw_reason) -> dict:
     actor = request.user
     target_user = _lock_user(target_user)

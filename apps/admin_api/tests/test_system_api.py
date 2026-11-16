@@ -1,6 +1,5 @@
 """The admin System page (G6 P1-3). Broker, workers and AniList are mocked."""
 
-from contextlib import suppress
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -239,9 +238,8 @@ class BeatRunTests(TestCase):
 
     def test_untracked_claim_is_released_when_the_send_fails(self):
         self.send_task.side_effect = OSError("broker down")
-        with suppress(OSError):  # the test client re-raises unhandled view errors
-            response = self._run("flush-forum-view-counts-minute")
-            self.assertEqual(response.status_code, 500)
+        response = self._run("flush-forum-view-counts-minute")
+        self.assertEqual(response.status_code, 500)  # the view answers a generic 500
 
         self.send_task.side_effect = None
         self.assertEqual(self._run("flush-forum-view-counts-minute").status_code, 202)
