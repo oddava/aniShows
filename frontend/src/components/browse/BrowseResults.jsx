@@ -19,6 +19,7 @@ export default function BrowseResults({
   currentSearch,
   hasActiveFilters,
   clearAllFilters,
+  searchWithoutFilters,
   isLoading,
   isTabSwitching,
   isError,
@@ -51,6 +52,7 @@ export default function BrowseResults({
         ) : allAnime.length === 0 ? (
           <EmptyState
             onClearFilters={clearAllFilters}
+            onSearchWithoutFilters={searchWithoutFilters}
             hasActiveFilters={hasActiveFilters}
             searchQuery={currentSearch}
           />
@@ -99,6 +101,7 @@ export default function BrowseResults({
         ) : allAnime.length === 0 ? (
           <EmptyState
             onClearFilters={clearAllFilters}
+            onSearchWithoutFilters={searchWithoutFilters}
             hasActiveFilters={hasActiveFilters}
             searchQuery={currentSearch}
           />
@@ -148,6 +151,7 @@ export default function BrowseResults({
         <div className="col-span-full">
           <EmptyState
             onClearFilters={clearAllFilters}
+            onSearchWithoutFilters={searchWithoutFilters}
             hasActiveFilters={hasActiveFilters}
             searchQuery={currentSearch}
           />

@@ -86,6 +86,7 @@ export default function Browse() {
     hasActiveFilters,
     localFilters,
     clearAllFilters,
+    searchWithoutFilters,
     updateParam,
     setSort,
     clearSeasonAndYear,
@@ -369,6 +370,7 @@ export default function Browse() {
                     currentSearch={currentSearch}
                     hasActiveFilters={hasActiveFilters}
                     clearAllFilters={clearAllFilters}
+                    searchWithoutFilters={searchWithoutFilters}
                     isLoading={isLoading}
                     isTabSwitching={isTabSwitching}
                     isError={isError}

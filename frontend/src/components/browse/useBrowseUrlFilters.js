@@ -187,6 +187,17 @@ export default function useBrowseUrlFilters() {
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
 
+  // The empty state's "Search all anime for …": keep the query (and an explicit
+  // sort), drop every filter.
+  const searchWithoutFilters = useCallback(() => {
+    const newParams = new URLSearchParams();
+    const q = searchParams.get('q');
+    const sort = searchParams.get('sort');
+    if (q) newParams.set('q', q);
+    if (sort) newParams.set('sort', sort);
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
   // "Best match" is what a search sorts by anyway, so choosing it drops `sort`.
   const setSort = useCallback((value) => {
     const newParams = new URLSearchParams(searchParams);
@@ -373,6 +384,7 @@ export default function useBrowseUrlFilters() {
     hasActiveFilters,
     localFilters,
     clearAllFilters,
+    searchWithoutFilters,
     updateParam,
     setSort,
     clearSeasonAndYear,
