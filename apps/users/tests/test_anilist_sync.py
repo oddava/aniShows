@@ -379,9 +379,7 @@ class DailySyncTests(TestCase):
         with (
             patch(f"{base}.cleanup_unverified_accounts.delay", return_value=Mock(id="a")),
             patch(f"{base}.cleanup_old_import_jobs.delay", return_value=Mock(id="b")),
-            patch(
-                f"{base}.flush_expired_auth_tokens.delay", return_value=Mock(id="d")
-            ) as flush,
+            patch(f"{base}.flush_expired_auth_tokens.delay", return_value=Mock(id="d")) as flush,
             patch(
                 f"{base}.sync_linked_anilist_lists.apply_async", return_value=Mock(id="c")
             ) as sync,

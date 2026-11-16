@@ -99,7 +99,9 @@ class ModerationQueueTests(TestCase):
         self.assertEqual(summary["by_reason"], {"spam": 2, "other": 1})
         self.assertIsNone(summary["forums"])
 
-    def test_forum_endpoints_are_404_until_g5_ships_its_module(self):
+    def test_forum_endpoints_are_404_until_g5_ships_forum_reports(self):
+        # apps.forums.services.moderation exists (G5's lock/remove helpers) but
+        # does not implement list_open_reports/resolve_reports/open_count.
         self.assertEqual(self.api.get("/api/v1/admin/moderation/forums/").status_code, 404)
         response = self.api.post(
             "/api/v1/admin/moderation/forums/5/resolve/", {"outcome": "dismiss"}, format="json"

@@ -276,14 +276,22 @@ def resolve_review(request, review_id, outcome, notes=None, *, legacy: bool = Fa
     }
 
 
+# The forum-report contract G5 may implement (G6 spec, "R-G5"). The module path
+# also hosts G5's lock/remove helpers, so its presence alone proves nothing.
+FORUM_MODERATION_CONTRACT = ("list_open_reports", "resolve_reports", "open_count")
+
+
 def forum_moderation() -> ModuleType | None:
-    """G5's forum moderation module, if it has shipped."""
+    """G5's forum moderation module, if it implements the forum-report contract."""
     try:
         if importlib.util.find_spec(FORUM_MODERATION_MODULE) is None:
             return None
     except ModuleNotFoundError:
         return None
-    return importlib.import_module(FORUM_MODERATION_MODULE)
+    module = importlib.import_module(FORUM_MODERATION_MODULE)
+    if not all(callable(getattr(module, name, None)) for name in FORUM_MODERATION_CONTRACT):
+        return None
+    return module
 
 
 def moderation_summary() -> dict:

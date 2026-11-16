@@ -188,7 +188,13 @@
     "season": "str",
     "season_year": "int",
     "site_rank": "int",
-    "site_status_distribution": "null",
+    "site_status_distribution": {
+      "completed": "int",
+      "dropped": "int",
+      "on_hold": "int",
+      "plan_to_watch": "int",
+      "watching": "int"
+    },
     "slug": "str",
     "source_material": "str",
     "staff_count": "int",
@@ -323,7 +329,13 @@
     "season": "str",
     "season_year": "int",
     "site_rank": "int",
-    "site_status_distribution": "null",
+    "site_status_distribution": {
+      "completed": "int",
+      "dropped": "int",
+      "on_hold": "int",
+      "plan_to_watch": "int",
+      "watching": "int"
+    },
     "slug": "str",
     "source_material": "str",
     "staff_count": "int",

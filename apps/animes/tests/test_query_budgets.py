@@ -55,9 +55,10 @@ BUDGETS = {
     "trending": 4,
     "browse_rows": 8,
     "schedule": 4,
-    "detail": 8,
+    # +1 for G3's cached site_status_counts aggregate (site_status_distribution, D-3).
+    "detail": 9,
     "public_profile": 4,
-    "detail_authenticated": 11,
+    "detail_authenticated": 12,
     "search_signed_in": 8,
     "trending_signed_in": 7,
     "browse_rows_signed_in": 11,

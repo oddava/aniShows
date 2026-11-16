@@ -1,8 +1,9 @@
 """What an Anime (or list) save invalidates, and when (B2, P0-2).
 
-A list change recounts ``status_distribution`` and saves only that field: it
-drops the anime's detail payload, never the collection namespace, so every
-cached list, shelf and schedule survives. A card-field save bumps the
+A list change never saves the Anime row (G3, D-3): ``status_distribution``
+stays the catalog provider's, and only the per-anime site counts cache
+(``site_status_distribution``, added per request) is dropped. The collection
+namespace and the detail payload both survive. A card-field save bumps the
 namespace. Both happen on commit. A reader waiting for another builder gives
 up after at most 3 s and builds the payload itself.
 """
@@ -73,21 +74,22 @@ def test_a_list_save_keeps_every_collection_cached(anime, django_capture_on_comm
         username="lister", email="lister@example.com", password="x"
     )
 
-    # The list-change side effects recount status_distribution and save it
-    # (``update_fields=["status_distribution"]``) on commit.
+    # The list-change side effects drop only the site status counts, on commit.
     with django_capture_on_commit_callbacks(execute=True) as callbacks:
         UserAnimeList.objects.create(
             user=user, anime=anime, status=UserAnimeList.UserAnimeStatus.watching
         )
     assert callbacks, "the list change did not schedule its side effects"
     anime.refresh_from_db()
-    assert anime.status_distribution.get("watching") == 1, "the recount did not run"
+    assert not anime.status_distribution, "a list write touched the Anime row"
 
     assert cache.get(NAMESPACE_KEY) == namespace
     assert all(cache.get(key) is not None for key in list_keys)
     assert APIClient().get(LIST_URL)["X-Cache-Status"] == "hit"
-    # Only the anime's own detail payload is rebuilt.
-    assert cache.get(AnimePublicPayloadService.detail_cache_key(anime.slug)) is None
+    # The detail payload is not rebuilt; the site counts are fresh per request.
+    assert cache.get(AnimePublicPayloadService.detail_cache_key(anime.slug)) is not None
+    detail = APIClient().get(reverse("anime-detail", args=[anime.slug]))
+    assert detail.json()["site_status_distribution"]["watching"] == 1
 
 
 @pytest.mark.django_db
