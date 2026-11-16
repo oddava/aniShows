@@ -1,88 +1,84 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId } from 'react';
+import PropTypes from 'prop-types';
+import { X } from 'lucide-react';
 
-const Modal = ({ isOpen, onClose, title, children, size = 'medium' }) => {
-  const modalRef = useRef(null);
+import { useFocusTrap } from '../../../hooks/useFocusTrap';
+
+const SIZE_CLASSES = {
+  small: 'max-w-md',
+  medium: 'max-w-lg',
+  large: 'max-w-2xl',
+  xlarge: 'max-w-4xl',
+  full: 'max-w-[90vw]',
+};
+
+function ModalPanel({ onClose, title, children, size }) {
+  const titleId = useId();
+  const containerRef = useFocusTrap(true, onClose);
 
   useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'hidden';
-    }
-
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = previous;
     };
-  }, [isOpen, onClose]);
+  }, []);
 
   const handleBackdropClick = (e) => {
-    if (e.target === modalRef.current) {
-      onClose();
-    }
-  };
-
-  if (!isOpen) return null;
-
-  const sizeClasses = {
-    small: 'max-w-md',
-    medium: 'max-w-lg',
-    large: 'max-w-2xl',
-    xlarge: 'max-w-4xl',
-    full: 'max-w-[90vw]',
+    if (e.target === e.currentTarget) onClose();
   };
 
   return (
     <div
-      ref={modalRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn"
-      onClick={handleBackdropClick}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+      onMouseDown={handleBackdropClick}
     >
       <div
-        className={`${sizeClasses[size]} w-full bg-dark-100 border border-white/10 rounded-2xl shadow-2xl animate-slideUp max-h-[90vh] overflow-hidden flex flex-col`}
-        onClick={(e) => e.stopPropagation()}
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : 'Dialog'}
+        className={`${SIZE_CLASSES[size] || SIZE_CLASSES.medium} w-full bg-dark-100 border border-white/10 rounded-2xl max-h-[90vh] overflow-hidden flex flex-col`}
       >
-        {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-            <h3 className="text-xl font-semibold text-white">{title}</h3>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              ✕
-            </button>
-          </div>
-        )}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+          {title ? (
+            <h2 id={titleId} className="text-xl font-semibold text-white">{title}</h2>
+          ) : <span />}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="w-11 h-11 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
         <div className="p-6 overflow-y-auto flex-1">{children}</div>
       </div>
-
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.2s ease-out;
-        }
-        .animate-slideUp {
-          animation: slideUp 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
+}
+
+ModalPanel.propTypes = {
+  onClose: PropTypes.func.isRequired,
+  title: PropTypes.node,
+  children: PropTypes.node,
+  size: PropTypes.oneOf(Object.keys(SIZE_CLASSES)),
+};
+
+/**
+ * Admin dialog: `role="dialog"`, labelled by its title, focus trapped while
+ * open and restored to the opener on close, Escape and backdrop close it.
+ */
+const Modal = ({ isOpen, size = 'medium', ...props }) => {
+  if (!isOpen) return null;
+  return <ModalPanel size={size} {...props} />;
+};
+
+Modal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  ...ModalPanel.propTypes,
 };
 
 export default Modal;
