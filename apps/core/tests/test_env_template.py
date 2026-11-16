@@ -87,6 +87,7 @@ def _settings_env_names() -> set[str]:
                 and isinstance(node.value, ast.Attribute)
                 and node.value.attr == "environ"
                 and isinstance(node.slice, ast.Constant)
+                and isinstance(node.slice.value, str)
             ):
                 names.add(node.slice.value)
     return names
@@ -100,6 +101,8 @@ def _compose_names() -> set[str]:
 
 
 class EnvTemplateTests(SimpleTestCase):
+    entries: dict[str, tuple[bool, str]]
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()

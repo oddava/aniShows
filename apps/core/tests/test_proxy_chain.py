@@ -27,14 +27,7 @@ CADDYFILE = REPO_ROOT / "Caddyfile.prod"
 COMPOSE_TRUSTED = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 CADDY_IP = "172.18.0.5"  # the app's only peer: Caddy on the compose network
 
-REST_FRAMEWORK_ONE_PROXY = {
-    **settings.REST_FRAMEWORK,
-    "NUM_PROXIES": 1,
-    "DEFAULT_THROTTLE_RATES": {
-        **settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"],
-        "login": "5/minute",
-    },
-}
+REST_FRAMEWORK_ONE_PROXY = {**settings.REST_FRAMEWORK, "NUM_PROXIES": 1}
 
 
 def _request(xff: str | None, remote_addr: str = CADDY_IP):
@@ -84,9 +77,9 @@ class LoginThrottleBucketTests(SimpleTestCase):
         self.addCleanup(cache.clear)
 
     def _allowed(self, xff: str) -> bool:
-        throttle = LoginRateThrottle()
-        throttle.rate = "5/minute"
-        throttle.num_requests, throttle.duration = throttle.parse_rate(throttle.rate)
+        # The production rate (test settings relax every scope).
+        with patch.object(LoginRateThrottle, "THROTTLE_RATES", {"login": "5/minute"}):
+            throttle = LoginRateThrottle()
         return throttle.allow_request(_request(xff), APIView())
 
     def test_each_client_gets_its_own_bucket(self):
@@ -108,6 +101,8 @@ class LoginThrottleBucketTests(SimpleTestCase):
 class CaddyfileKeepsItsSideTests(SimpleTestCase):
     """Static checks on Caddyfile.prod (Caddy itself is not in CI)."""
 
+    text: str
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -115,7 +110,7 @@ class CaddyfileKeepsItsSideTests(SimpleTestCase):
 
     def _snippet(self, name: str) -> str:
         match = re.search(rf"^\({re.escape(name)}\) \{{\n(.*?)^\}}", self.text, re.M | re.S)
-        self.assertIsNotNone(match, f"snippet ({name}) missing")
+        assert match is not None, f"snippet ({name}) missing"
         return match.group(1)
 
     def test_django_snippet_sends_only_the_real_client(self):

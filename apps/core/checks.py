@@ -88,7 +88,7 @@ def external_database_pool_check(app_configs, **kwargs):
     """Without the pool, every process holds CONN_MAX_AGE connections to a shared server."""
     database = settings.DATABASES.get("default", {})
     host = str(database.get("HOST") or "").strip().lower()
-    if host in _BUNDLED_DB_HOSTS or getattr(settings, "DB_POOL_MAX_SIZE", 0):
+    if host in _BUNDLED_DB_HOSTS or settings.DB_POOL_MAX_SIZE:
         return []
     return [
         Warning(

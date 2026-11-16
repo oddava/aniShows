@@ -18,6 +18,7 @@ Empty in the prep commit: it changes nothing until the group adds to it.
 """
 
 import os
+from typing import cast
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -35,15 +36,17 @@ _VALID_SSLMODES = {"disable", "allow", "prefer", "require", "verify-ca", "verify
 DB_SSLMODE = os.getenv("DB_SSLMODE", "").strip().lower()
 DB_SSLROOTCERT = os.getenv("DB_SSLROOTCERT", "").strip()
 
+_db_options = cast("dict[str, object]", DATABASES["default"]["OPTIONS"])
+
 if DB_SSLMODE:
     if DB_SSLMODE not in _VALID_SSLMODES:
         raise ImproperlyConfigured(
             f"DB_SSLMODE={DB_SSLMODE!r} is not a libpq sslmode; "
             f"expected one of {', '.join(sorted(_VALID_SSLMODES))}."
         )
-    DATABASES["default"]["OPTIONS"]["sslmode"] = DB_SSLMODE
+    _db_options["sslmode"] = DB_SSLMODE
 if DB_SSLROOTCERT:
-    DATABASES["default"]["OPTIONS"]["sslrootcert"] = DB_SSLROOTCERT
+    _db_options["sslrootcert"] = DB_SSLROOTCERT
 
 # =============================================================================
 # LOGGING FORMAT AND RELEASE

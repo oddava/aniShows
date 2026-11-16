@@ -7,6 +7,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.test import SimpleTestCase, override_settings
 
@@ -48,19 +50,23 @@ class AllowedHostsCheckTests(SimpleTestCase):
 
 
 class ExternalDatabasePoolCheckTests(SimpleTestCase):
-    def _databases(self, host):
-        return {"default": {"ENGINE": "django.db.backends.postgresql", "HOST": host}}
+    @staticmethod
+    def _settings(host, pool):
+        # A stand-in settings object: overriding DATABASES itself is unsafe in tests.
+        return SimpleNamespace(DATABASES={"default": {"HOST": host}}, DB_POOL_MAX_SIZE=pool)
 
     def test_external_host_without_pool_warns(self):
-        with override_settings(DATABASES=self._databases("pg.internal"), DB_POOL_MAX_SIZE=0):
+        with patch.object(checks, "settings", self._settings("pg.internal", 0)):
             (warning,) = checks.external_database_pool_check(None)
-            self.assertEqual(warning.id, "core.W002")
+        self.assertEqual(warning.id, "core.W002")
 
     def test_pool_or_bundled_db_passes(self):
-        with override_settings(DATABASES=self._databases("pg.internal"), DB_POOL_MAX_SIZE=5):
-            self.assertEqual(checks.external_database_pool_check(None), [])
-        with override_settings(DATABASES=self._databases("db"), DB_POOL_MAX_SIZE=0):
-            self.assertEqual(checks.external_database_pool_check(None), [])
+        for host, pool in (("pg.internal", 5), ("db", 0), ("", 0)):
+            with (
+                self.subTest(host=host),
+                patch.object(checks, "settings", self._settings(host, pool)),
+            ):
+                self.assertEqual(checks.external_database_pool_check(None), [])
 
 
 class ProductionCheckDeployTests(SimpleTestCase):
