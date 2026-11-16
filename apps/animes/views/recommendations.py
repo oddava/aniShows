@@ -69,6 +69,10 @@ def _is_recommendations_cache_fresh(cached_data, stale_after_hours: int = 24) ->
     return newest_created_at >= stale_before
 
 
+# The debounce key G3's ``schedule_recommendations_debounced`` sets before it enqueues.
+RECO_PENDING_KEY = "reco_pending:{user_id}"
+
+
 def _queue_refresh(user_id: int) -> bool:
     """Queue a debounced generation for one user; False if the broker is unreachable."""
     try:
@@ -77,6 +81,9 @@ def _queue_refresh(user_id: int) -> bool:
         )
     except ENQUEUE_ERRORS:
         logger.warning("Could not queue recommendations for user %s", user_id, exc_info=True)
+        # The helper marks the user pending before it enqueues; nothing was queued,
+        # so a retry must not be debounced into a 202 for nothing.
+        cache.delete(RECO_PENDING_KEY.format(user_id=user_id))
         return False
     return True
 

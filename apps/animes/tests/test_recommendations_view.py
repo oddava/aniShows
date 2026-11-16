@@ -88,6 +88,20 @@ class RecommendationsRefreshTests(RecommendationsViewTestBase):
         self.enqueue.assert_called_once()
         self.assertEqual(self.enqueue.call_args.kwargs["kwargs"], {"user_id": self.user.id})
 
+    def test_a_refresh_the_broker_refused_is_not_debounced(self):
+        from kombu.exceptions import OperationalError
+
+        self._forget_pending()
+        self.enqueue.side_effect = OperationalError("broker down")
+        refused = self.client.post(REFRESH_URL)
+        self.enqueue.side_effect = None
+        retried = self.client.post(REFRESH_URL)
+
+        self.assertEqual(refused.status_code, 503)
+        # Nothing was queued, so the retry must really queue (not answer 202 for nothing).
+        self.assertEqual(retried.status_code, 202)
+        self.assertEqual(self.enqueue.call_count, 2)
+
     def test_refresh_never_generates_in_the_request(self):
         with patch.object(RecommendationService, "generate_for_user") as generate:
             self.client.post(REFRESH_URL)

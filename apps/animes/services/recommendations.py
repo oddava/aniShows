@@ -32,6 +32,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any, TypedDict
 
+from celery.exceptions import SoftTimeLimitExceeded
 from django.contrib.auth import get_user_model
 from django.contrib.postgres.expressions import ArraySubquery
 from django.core.cache import cache
@@ -1029,6 +1030,12 @@ class RecommendationService:
                 saved = self.generate_for_user(
                     user, limit=limit, pool=pools[show_adult], can_view_adult=show_adult
                 )
+            except SoftTimeLimitExceeded:
+                # The task is out of time: stop here (and let it release its run
+                # lock) instead of counting it as one user's failure and carrying
+                # on until the hard limit kills the worker.
+                logger.warning("Recommendation batch hit its time limit: %s", stats)
+                raise
             except Exception:
                 stats["failed"] += 1
                 stats["failed_user_ids"].append(user.id)

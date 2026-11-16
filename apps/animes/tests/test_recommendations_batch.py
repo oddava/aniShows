@@ -8,7 +8,7 @@ DELETE, INSERT, RELEASE). The pool costs 6 queries once per adult setting per ru
 from datetime import timedelta
 from unittest.mock import patch
 
-from celery.exceptions import Retry
+from celery.exceptions import Retry, SoftTimeLimitExceeded
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import connection
@@ -135,6 +135,21 @@ class BatchRunTests(RecommendationBatchTestBase):
         self.assertGreaterEqual(stats["processed"], 1)
         self.assertTrue(UserRecommendation.objects.filter(user=healthy).exists())
         log_exception.assert_called_once()
+
+    def test_the_soft_time_limit_stops_the_batch(self):
+        self._member()
+        self._member()
+
+        with (
+            patch.object(
+                RecommendationService, "generate_for_user", side_effect=SoftTimeLimitExceeded()
+            ) as generate,
+            self.assertRaises(SoftTimeLimitExceeded),
+        ):
+            RecommendationService().generate_for_all_users(limit=5)
+
+        # Out of time: no further user is attempted (it is not one user's failure).
+        generate.assert_called_once()
 
     def test_pool_is_built_once_per_adult_setting(self):
         for _ in range(3):
