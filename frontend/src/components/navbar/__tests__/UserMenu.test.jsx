@@ -53,4 +53,15 @@ describe('UserMenu (desktop account disclosure)', () => {
         expect(screen.getByRole('link', { name: 'After the menu' })).toHaveFocus();
         expect(button).toHaveAttribute('aria-expanded', 'false');
     });
+
+    it('deep-links Settings to the Account tab', async () => {
+        const user = userEvent.setup();
+        render(<Harness />);
+
+        await user.click(screen.getByRole('button', { name: /Account menu for oddava/ }));
+        expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+            'href',
+            '/settings?tab=account',
+        );
+    });
 });

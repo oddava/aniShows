@@ -17,14 +17,17 @@ export default function ConfirmEmailChange() {
     const uid = linkParams?.uid;
     const token = linkParams?.token;
     const new_email = linkParams?.new_email;
-    const { isAuthenticated, logout } = useAuth();
+    const { isAuthenticated, loading, logout } = useAuth();
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('Confirming your new email address...');
     // The link is single-use; never submit it twice (StrictMode, auth changes).
     const submittedLink = useRef(null);
 
     useEffect(() => {
-        if (isRedirecting) return;
+        // Wait for the session restore: a link opened in a new tab arrives
+        // before AuthContext knows whether this browser is signed in, and the
+        // local sign-out below must not be skipped.
+        if (isRedirecting || loading) return;
         const linkKey = `${uid}/${token}/${new_email}`;
         if (submittedLink.current === linkKey) return;
         submittedLink.current = linkKey;
@@ -57,7 +60,7 @@ export default function ConfirmEmailChange() {
             setStatus('error');
             setMessage('Invalid verification link.');
         }
-    }, [uid, token, new_email, isRedirecting, isAuthenticated, logout]);
+    }, [uid, token, new_email, isRedirecting, loading, isAuthenticated, logout]);
 
     return (
         <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4">

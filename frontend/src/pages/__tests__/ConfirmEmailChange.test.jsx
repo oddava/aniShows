@@ -12,11 +12,9 @@ vi.mock('../../api/client', () => ({
     },
 }));
 
+let authState = { isAuthenticated: true, loading: false };
 vi.mock('../../context/AuthContext', () => ({
-    useAuth: () => ({
-        isAuthenticated: true,
-        logout: logoutMock,
-    }),
+    useAuth: () => ({ ...authState, logout: logoutMock }),
 }));
 
 let currentPath = '';
@@ -25,8 +23,7 @@ function PathSpy() {
     return null;
 }
 
-const renderAt = (entry) =>
-    render(
+const tree = (entry) => (
         <MemoryRouter initialEntries={[entry]}>
             <PathSpy />
             <Routes>
@@ -37,12 +34,15 @@ const renderAt = (entry) =>
                     element={<ConfirmEmailChange />}
                 />
             </Routes>
-        </MemoryRouter>,
-    );
+        </MemoryRouter>
+);
+
+const renderAt = (entry) => render(tree(entry));
 
 describe('ConfirmEmailChange', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        authState = { isAuthenticated: true, loading: false };
     });
 
     it('signs out locally after a successful email confirmation', async () => {
@@ -78,5 +78,21 @@ describe('ConfirmEmailChange', () => {
         expect(authApi.confirmEmailChange).toHaveBeenCalledTimes(1);
         expect(currentPath).toBe('/confirm-email-change');
         expect(await screen.findByText(/sign in again/i)).toBeInTheDocument();
+    });
+
+    it('waits for the session restore before confirming, then signs out (cold tab)', async () => {
+        authApi.confirmEmailChange.mockResolvedValue({ data: { message: 'ok' } });
+        logoutMock.mockResolvedValue(undefined);
+        authState = { isAuthenticated: false, loading: true };
+
+        const view = renderAt('/confirm-email-change/Nw/token123');
+        await waitFor(() => expect(currentPath).toBe('/confirm-email-change'));
+        expect(authApi.confirmEmailChange).not.toHaveBeenCalled();
+
+        authState = { isAuthenticated: true, loading: false };
+        view.rerender(tree('/confirm-email-change/Nw/token123'));
+
+        await waitFor(() => expect(authApi.confirmEmailChange).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(logoutMock).toHaveBeenCalledTimes(1));
     });
 });

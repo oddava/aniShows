@@ -143,7 +143,7 @@ export default function UserMenu({
                                     )}
                                 </Link>
                                 <Link
-                                    to="/settings"
+                                    to="/settings?tab=account"
                                     onClick={() => setIsProfileOpen(false)}
                                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                                 >
