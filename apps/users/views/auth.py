@@ -130,15 +130,18 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         identifier = _login_identifier(request_body(request))
         identifier_throttle = throttling.LoginIdentifierThrottle(identifier) if identifier else None
         if identifier_throttle is not None:
-            wait = identifier_throttle.wait()
+            wait = identifier_throttle.begin_attempt()
             if wait is not None:
                 raise Throttled(wait=wait)
 
         try:
             response = super().post(request, *args, **kwargs)
         except AuthenticationFailed:
+            raise  # stays counted
+        except Exception:
+            # A 400 (bad input) never reached the password check.
             if identifier_throttle is not None:
-                identifier_throttle.record_failure()
+                identifier_throttle.release_attempt()
             raise
         if identifier_throttle is not None:
             identifier_throttle.reset()

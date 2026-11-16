@@ -1,3 +1,5 @@
+import unicodedata
+
 from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.core.exceptions import ValidationError
 
@@ -14,7 +16,9 @@ def validate_username(value: str) -> str:
 
     The single source of username rules for both sign-up and renames.
     """
-    username = (value or "").strip()
+    # NFKC as create_user's normalize_username does, so a rename cannot slip in
+    # a fullwidth or compatibility lookalike of an existing name.
+    username = unicodedata.normalize("NFKC", value or "").strip()
     min_length, max_length = username_length_limits()
 
     if len(username) < min_length:

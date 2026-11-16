@@ -55,6 +55,12 @@ describe('ProfileTab', () => {
         expect(screen.queryByText('Adjusted for readability')).not.toBeInTheDocument();
     });
 
+    it('says animated avatars are limited to 512x512', () => {
+        render(<ProfileTab user={{ username: 'me' }} profile={profileState()} />);
+
+        expect(screen.getByText(/Animated GIFs stay animated up to 512×512/)).toBeInTheDocument();
+    });
+
     it('labels the username field', () => {
         render(<ProfileTab user={{ username: 'me' }} profile={profileState()} />);
 

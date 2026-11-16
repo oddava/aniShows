@@ -214,6 +214,9 @@ export default function ProfileTab({ user, profile }) {
                             </div>
                         )}
                     </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                        Saved as WebP without photo metadata. Animated GIFs stay animated up to 512×512.
+                    </p>
                 </div>
 
                 {/* Banner */}

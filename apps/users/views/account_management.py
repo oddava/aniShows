@@ -126,7 +126,8 @@ class AccountManagementViewSet(ViewSet):
             default_code="cancel_email_change_failed",
         )
 
-    @action(detail=False, methods=["post"], permission_classes=[AllowAny])
+    # AllowAny and no authenticators come from get_permissions/get_authenticators.
+    @action(detail=False, methods=["post"])
     def confirm_email_change(self, request):
         """Confirm email change with ``{uid, token}``.
 

@@ -3,6 +3,7 @@ Custom throttle classes for API rate limiting.
 Provides different rate limits for different types of endpoints.
 """
 
+import contextlib
 import hashlib
 import math
 import time
@@ -166,7 +167,9 @@ def fold_identifier(identifier: str) -> str:
     counter yet sign in to the same account. NFKC (compatibility forms such as
     long s, Kelvin sign), mapping U+0130 to ``I`` and a round trip through upper
     case merge them, while accented letters stay distinct, as they are distinct
-    usernames.
+    usernames. It still merges a few spellings the database keeps apart (sharp s
+    and "ss", ligatures, fullwidth letters); sharing a counter there is harmless
+    under R5, where anyone can lock any identifier anyway.
     """
     composed = unicodedata.normalize("NFKC", identifier.strip()).replace("\u0130", "I")
     return composed.upper().lower()
@@ -189,21 +192,33 @@ class LoginIdentifierThrottle:
         self.max_failures = settings.LOGIN_IDENTIFIER_MAX_FAILURES
         self.window = settings.LOGIN_IDENTIFIER_WINDOW_SECONDS
 
-    def wait(self) -> int | None:
-        """Seconds until the lock ends, or None when attempts are allowed."""
-        if (cache.get(self.count_key) or 0) < self.max_failures:
+    def begin_attempt(self) -> int | None:
+        """Count this attempt *before* the password is checked.
+
+        Returns the seconds until the lock ends when the attempt is over the
+        limit (the caller answers 429), else None. Counting first means a burst
+        of simultaneous guesses cannot all pass the check before the first
+        failure is recorded: the counter is atomic, so the 11th concurrent
+        attempt is refused. A failed attempt simply stays counted.
+        """
+        if cache.add(self.count_key, 0, timeout=self.window):
+            cache.set(self.reset_key, time.time() + self.window, timeout=self.window)
+        try:
+            count = cache.incr(self.count_key)
+        except ValueError:  # expired between add() and incr()
+            cache.set(self.count_key, 1, timeout=self.window)
+            cache.set(self.reset_key, time.time() + self.window, timeout=self.window)
+            count = 1
+        if count <= self.max_failures:
             return None
         reset_at = cache.get(self.reset_key) or (time.time() + self.window)
         return max(1, math.ceil(reset_at - time.time()))
 
-    def record_failure(self) -> None:
-        if cache.add(self.count_key, 0, timeout=self.window):
-            cache.set(self.reset_key, time.time() + self.window, timeout=self.window)
-        try:
-            cache.incr(self.count_key)
-        except ValueError:  # expired between add() and incr()
-            cache.set(self.count_key, 1, timeout=self.window)
-            cache.set(self.reset_key, time.time() + self.window, timeout=self.window)
+    def release_attempt(self) -> None:
+        """Uncount an attempt that never reached the password check (a 400)."""
+        with contextlib.suppress(ValueError):  # the window expired meanwhile
+            cache.decr(self.count_key)
 
     def reset(self) -> None:
+        """A successful login clears the identifier's count."""
         cache.delete_many([self.count_key, self.reset_key])

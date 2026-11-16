@@ -169,3 +169,12 @@ class OAuthNameCharactersTests(TestCase):
 
         self.assertEqual(_name_candidate("ann@home"), "annhome")
         self.assertIsNone(_name_candidate("@@@"))
+
+
+class RenameNormalisationTests(TestCase):
+    def test_rename_to_a_fullwidth_lookalike_is_refused(self):
+        User.objects.create_user(username="bob", email="b@example.com", password="x")
+        other = User.objects.create_user(username="carl", email="c@example.com", password="x")
+        fullwidth_bob = "".join(chr(0xFEE0 + ord(char)) for char in "bob")
+        with self.assertRaises(DRFValidationError):
+            update_user_profile(other, {"username": fullwidth_bob})

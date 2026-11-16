@@ -303,3 +303,28 @@ class IdentifierFoldingTests(APITestCase):
             **XHR,
         )
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+class LoginLockBurstTests(APITestCase):
+    """Attempts are counted before the password check, so a burst cannot overrun the limit."""
+
+    def test_eleventh_in_flight_attempt_is_refused_before_any_failure_is_recorded(self):
+        from ..throttling import LoginIdentifierThrottle
+
+        # Ten attempts are "in flight" (counted, none finished yet).
+        for _ in range(10):
+            self.assertIsNone(LoginIdentifierThrottle("burst").begin_attempt())
+        self.assertIsNotNone(LoginIdentifierThrottle("burst").begin_attempt())
+
+    def test_a_400_releases_its_slot(self):
+        from ..throttling import LoginIdentifierThrottle
+
+        for _ in range(12):
+            response = self.client.post(
+                reverse("token_obtain_pair"),
+                {"username": "slot", "password": 12345},
+                format="json",
+                **XHR,
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNone(LoginIdentifierThrottle("slot").begin_attempt())

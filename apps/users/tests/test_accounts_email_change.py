@@ -208,3 +208,20 @@ class PendingEmailTests(APITestCase):
         )
         self.user.refresh_from_db()
         self.assertEqual(self.user.email, "old@example.com")
+
+    def test_request_and_cancel_take_the_user_row_lock(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        for action in (
+            lambda: self._request(),
+            lambda: self.client.post(reverse("cancel_email_change")),
+        ):
+            with CaptureQueriesContext(connection) as queries:
+                self.assertEqual(action().status_code, status.HTTP_200_OK)
+            self.assertTrue(
+                any(
+                    "FOR UPDATE" in q["sql"] and '"users_customuser"' in q["sql"]
+                    for q in queries.captured_queries
+                )
+            )

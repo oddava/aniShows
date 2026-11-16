@@ -10,7 +10,7 @@ from django.utils.http import urlsafe_base64_decode
 
 from ..models import UserProfile
 from ..tokens import EmailChangeTokenGenerator, normalize_email
-from .auth_service import AuthService, revoke_all_sessions
+from .auth_service import AuthService, lock_user_sessions, revoke_all_sessions
 from .cache import invalidate_user_caches
 from .email_service import EmailService
 
@@ -110,9 +110,12 @@ def request_email_change(user, new_email, password, email_service: EmailService)
         )
 
     # The address waits on the profile until its owner clicks the link; the
-    # link itself carries only uid and token (A14).
-    profile, _ = UserProfile.objects.get_or_create(user=user)
-    _set_pending_email(profile, new_email)
+    # link itself carries only uid and token (A14). The user-row lock orders
+    # this against a confirm running at the same moment.
+    with transaction.atomic():
+        lock_user_sessions(user.pk)
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        _set_pending_email(profile, new_email)
     # The token covers pending_email_requested_at; mint it from this profile,
     # not a copy cached on request.user before the request.
     user.userprofile = profile
@@ -138,9 +141,11 @@ def resend_email_change(user, email_service: EmailService) -> AccountManagementR
 
 def cancel_email_change(user) -> AccountManagementResult:
     """Forget the pending address; links already sent stop working."""
-    profile, _ = UserProfile.objects.get_or_create(user=user)
-    if profile.pending_email:
-        _set_pending_email(profile, "")
+    with transaction.atomic():
+        lock_user_sessions(user.pk)  # ordered against a concurrent confirm
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if profile.pending_email:
+            _set_pending_email(profile, "")
     return _pending_email_result("Email change cancelled.", profile)
 
 
