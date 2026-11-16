@@ -433,6 +433,15 @@ class TestNesting:
             # Mid-line runs count only where containers can open (alignment splits, footnotes).
             ("hype " + ">" * 20 + " lol", 0),
             ('a<p align="center">b</p>' + "- " * 100 + "x", 100),
+            # G5 Major 1: alignment tags split across lines, or followed by a space that the
+            # renderer's trim() removes (no-break space, BOM, line separator).
+            ('<p\nalign="center">' + "> " * 100 + "x</p>", 100),
+            ('<p\nalign="center">\n' + "> " * 100 + "x</p>", 100),
+            # The tag's own ">" starts the line, so it counts too (conservative).
+            ("<div\r\nalign='right'\r\n>" + "- " * 100 + "x</div>", 101),
+            ('<p align="center">\u00a0' + "- " * 100 + "x</p>", 100),
+            ('<p align="center">\ufeff\u2028' + "> " * 100 + "x</p>", 100),
+            ('a<p align="center">b</p\n>\u00a0' + "- " * 100 + "x", 100),
             ("[^" + "b" * 120 + "]: " + "- " * 50, 51),
             ("a\r\n> b\r\n> > c", 2),
             ("a\n> b\n> > c", 2),
@@ -542,3 +551,38 @@ def test_line_endings_are_stored_as_lf(make_user, make_thread, api_for):
 
     assert response.status_code == 201
     assert thread.posts.get().content == "a\nb\nc"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "body",
+    [
+        '<p\nalign="center">' + "> " * 480 + "x</p>",
+        '<p\r\nalign="center">\r\n' + "> " * 480 + "x</p>",
+        "<div\nalign='right'\n>" + "> " * 480 + "x</div>",
+        '<p align="center">\u00a0' + "> " * 480 + "x</p>",
+        '<p align="center">\ufeff' + "> " * 480 + "x</p>",
+    ],
+    ids=["split-opener", "split-crlf", "split-div", "nbsp", "bom"],
+)
+def test_split_alignment_tag_bypasses_are_refused(make_user, make_thread, api_for, body):
+    """G5 Major 1: these short bodies nest ~480 quotes; each view parsed them synchronously."""
+    author = make_user()
+    thread = make_thread(author)
+
+    response = api_for(author).post(
+        POSTS_URL, {"thread": thread.id, "content": body}, format="json"
+    )
+
+    assert response.status_code == 400
+    assert "content" in response.data["errors"]
+
+
+def test_whole_text_alignment_scan_stays_linear():
+    """Thousands of split tags and long quote runs: one pass over the text, not one per line."""
+    body = ('<p\nalign="center">' + "> " * 2_000 + "x</p>\n") * 20 + '<p\nalign="left">\n' * 5_000
+    started = time.perf_counter()
+    stats = container_stats(body)
+    elapsed = time.perf_counter() - started
+    assert stats.depth >= 2_000
+    assert elapsed < 0.25

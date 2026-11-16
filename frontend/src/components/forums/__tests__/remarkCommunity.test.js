@@ -256,6 +256,14 @@ describe('maxContainerNesting (mirrors apps/forums/services/nesting.py)', () => 
         // Mid-line runs count only where containers can open (alignment splits, footnotes).
         [`hype ${'>'.repeat(20)} lol`, 0],
         [`a<p align="center">b</p>${'- '.repeat(100)}x`, 100],
+        // G5 Major 1: alignment tags split across lines, or followed by a space trim() removes.
+        [`<p\nalign="center">${'> '.repeat(100)}x</p>`, 100],
+        [`<p\nalign="center">\n${'> '.repeat(100)}x</p>`, 100],
+        // The tag's own `>` starts the line, so it counts too (conservative).
+        [`<div\r\nalign='right'\r\n>${'- '.repeat(100)}x</div>`, 101],
+        [`<p align="center">\u00a0${'- '.repeat(100)}x</p>`, 100],
+        [`<p align="center">\ufeff\u2028${'> '.repeat(100)}x</p>`, 100],
+        [`a<p align="center">b</p\n>\u00a0${'- '.repeat(100)}x`, 100],
         [`[^${'b'.repeat(120)}]: ${'- '.repeat(50)}`, 51],
         ['a\r\n> b\r\n> > c', 2],
         ['a\n> b\n> > c', 2],
@@ -292,6 +300,8 @@ describe('container limits (mirror FORUM_MAX_CONTAINER_NESTING / _MARKERS)', () 
         ['an indented-continuation bypass', `- - a\n    ${'- '.repeat(100)}a`],
         ['a tab-continuation bypass', `-\ta\n\t${'- '.repeat(100)}a`],
         ['too many markers in total', '- a\n'.repeat(1501)],
+        ['an alignment opener split across lines', `<p\nalign="center">${'> '.repeat(480)}x</p>`],
+        ['an alignment opener followed by a no-break space', `<p align="center">\u00a0${'> '.repeat(480)}x</p>`],
     ])('flags %s', (_name, source) => {
         expect(exceedsContainerLimits(source)).toBe(true);
     });

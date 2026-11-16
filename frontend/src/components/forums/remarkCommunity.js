@@ -196,14 +196,20 @@ const markerRun = (source, index, end) => {
     }
 };
 
-/** Offsets on the line just after an alignment tag (and any whitespace): where a segment starts. */
-const segmentStarts = (source, start, end) => {
+/**
+ * Offsets in the whole source just after an alignment tag and any whitespace: where a segment starts.
+ * Found in the whole text, not line by line: the splitter's `\s` matches line breaks
+ * (`<p` newline `align="center">`) and aligned content is trimmed (Unicode spaces too), so a run can
+ * start after a tag that began on an earlier line, or after a no-break space. Skipping whitespace
+ * may cross line breaks; the offset then lands on a later line, whose own scan picks it up.
+ */
+const segmentStarts = (source) => {
     const starts = new Set();
-    const line = source.slice(start, end);
+    if (!source.includes('<')) return starts;
     ALIGNMENT_TAG.lastIndex = 0;
-    for (let match = ALIGNMENT_TAG.exec(line); match; match = ALIGNMENT_TAG.exec(line)) {
-        let index = start + match.index + match[0].length;
-        while (index < end && isSpaceOrTab(source[index])) index += 1;
+    for (let match = ALIGNMENT_TAG.exec(source); match; match = ALIGNMENT_TAG.exec(source)) {
+        let index = match.index + match[0].length;
+        while (index < source.length && /\s/.test(source[index])) index += 1;
         starts.add(index);
     }
     return starts;
@@ -211,7 +217,7 @@ const segmentStarts = (source, start, end) => {
 
 const isFootnoteDefinition = (source, index) => source[index] === '[' && source[index + 1] === '^';
 
-const lineContainerStats = (source, start, end) => {
+const lineContainerStats = (source, start, end, starts) => {
     let columns = 0;
     let index = start;
     while (index < end && isSpaceOrTab(source[index])) {
@@ -219,13 +225,11 @@ const lineContainerStats = (source, start, end) => {
         index += 1;
     }
     const indentDepth = Math.floor(columns / 2);
-    const tagAt = source.indexOf('<', start);
-    const starts = tagAt !== -1 && tagAt < end ? segmentStarts(source, start, end) : null;
     let depth = indentDepth;
     let markers = 0;
     let atLineStart = true;
     while (index < end) {
-        const opensContainers = atLineStart || starts?.has(index) || isFootnoteDefinition(source, index);
+        const opensContainers = atLineStart || starts.has(index) || isFootnoteDefinition(source, index);
         const run = opensContainers ? markerRun(source, index, end) : { markers: 0 };
         if (run.markers) {
             markers += run.markers;
@@ -244,10 +248,11 @@ export const containerStats = (source = '') => {
     let depth = 0;
     let markers = 0;
     let start = 0;
+    const starts = segmentStarts(source);
     for (;;) {
         let end = start;
         while (end < source.length && !isLineEnd(source[end])) end += 1;
-        const line = lineContainerStats(source, start, end);
+        const line = lineContainerStats(source, start, end, starts);
         depth = Math.max(depth, line.depth);
         markers += line.markers;
         if (end >= source.length) break;

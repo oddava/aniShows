@@ -16,6 +16,10 @@ list level needs at least two columns to continue), right after an alignment ope
 (``<p align=…>``, ``</p>``: the renderer splits the text there), or when the run starts with a
 footnote definition. So ``hype >>>>> lol`` is just text. Fenced code is counted too: guessing
 fences differently from the parser would open a bypass.
+
+Alignment tags are found in the whole text, not line by line: the renderer's whitespace class matches line
+breaks (``<p`` newline ``align="center">``) and it trims aligned content, Unicode spaces included,
+so a run can start after a tag that began on an earlier line, or after a no-break space.
 """
 
 import re
@@ -29,10 +33,16 @@ _TAB_STOP = 4
 _MAX_ORDER_DIGITS = 9
 # Longest footnote label the parser accepts (micromark: 999), which also keeps the scan linear.
 _MAX_FOOTNOTE_LABEL = 999
-# Where the renderer's splitAlignedBlocks cuts a line, so a container can open right after it.
+# Where the renderer's splitAlignedBlocks cuts the text, so a container can open right after it.
+# JavaScript's \s (what the renderer matches and trims) is Python's \s plus U+FEFF; matching that
+# union over the whole text finds every cut, including tags split across lines.
+_JS_SPACE = r"[\s\ufeff]"
 _ALIGNMENT_TAG = re.compile(
-    r"""<(?:p|div)\s+align=["'](?:left|center|right)["']\s*>|</(?:p|div)\s*>""", re.IGNORECASE
+    rf"""<(?:p|div){_JS_SPACE}+align=["'](?:left|center|right)["']{_JS_SPACE}*>"""
+    rf"""|</(?:p|div){_JS_SPACE}*>""",
+    re.IGNORECASE,
 )
+_LEADING_JS_SPACE = re.compile(rf"{_JS_SPACE}*")
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,26 +91,30 @@ def _marker_run(line: str, index: int) -> tuple[int, int]:
     return markers, index
 
 
-def _segment_starts(line: str) -> frozenset[int]:
-    """Offsets just after an alignment tag (and any whitespace): where the renderer starts a segment."""
-    starts = set()
-    for match in _ALIGNMENT_TAG.finditer(line):
-        index = match.end()
-        while index < len(line) and line[index] in _WHITESPACE:
-            index += 1
-        starts.add(index)
-    return frozenset(starts)
+def _segment_starts(text: str) -> list[int]:
+    """Sorted offsets just after an alignment tag and any whitespace: where a segment starts.
+
+    Skipping whitespace may cross line breaks; the offset then lands on a later line, whose own
+    scan picks it up.
+    """
+    starts = []
+    for match in _ALIGNMENT_TAG.finditer(text):
+        skipped = _LEADING_JS_SPACE.match(text, match.end())
+        starts.append(skipped.end() if skipped else match.end())
+    return sorted(set(starts))
 
 
-def _line_stats(line: str) -> ContainerStats:
-    """Depth and marker count of one line; a single forward pass."""
+def _line_stats(line: str, starts: frozenset[int] = frozenset()) -> ContainerStats:
+    """Depth and marker count of one line; a single forward pass.
+
+    ``starts``: offsets on this line where an alignment split starts a segment.
+    """
     length = len(line)
     columns = index = 0
     while index < length and line[index] in _WHITESPACE:
         columns += _TAB_STOP - columns % _TAB_STOP if line[index] == "\t" else 1
         index += 1
     indent_depth = columns // 2
-    starts = _segment_starts(line) if "<" in line else frozenset()
     depth, markers, at_line_start = indent_depth, 0, True
     while index < length:
         opens_containers = at_line_start or index in starts or line.startswith("[^", index)
@@ -122,11 +136,20 @@ def normalize_line_endings(text: str) -> str:
 
 def container_stats(text: str) -> ContainerStats:
     """The deepest line's nesting and the total container markers (linear in the length)."""
-    depth = markers = 0
-    for line in normalize_line_endings(text or "").split("\n"):
-        stats = _line_stats(line)
+    text = normalize_line_endings(text or "")
+    starts = _segment_starts(text) if "<" in text else []
+    depth = markers = offset = cursor = 0
+    for line in text.split("\n"):
+        line_end = offset + len(line)
+        line_starts = set()
+        while cursor < len(starts) and starts[cursor] < line_end:
+            if starts[cursor] >= offset:
+                line_starts.add(starts[cursor] - offset)
+            cursor += 1
+        stats = _line_stats(line, frozenset(line_starts))
         depth = max(depth, stats.depth)
         markers += stats.markers
+        offset = line_end + 1
     return ContainerStats(depth=depth, markers=markers)
 
 
