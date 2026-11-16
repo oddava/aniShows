@@ -137,9 +137,9 @@ const AdminLayout = () => {
                 aria-label="Admin navigation"
                 className={`
                     fixed inset-y-0 left-0 z-50 w-72 bg-dark border-r border-white/5
-                    transform transition-transform duration-300 ease-in-out flex flex-col
+                    transform transition-[transform,visibility] duration-300 ease-in-out flex flex-col
                     lg:translate-x-0 lg:static lg:flex-shrink-0 motion-reduce:transition-none
-                    ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                    ${sidebarOpen ? 'translate-x-0' : '-translate-x-full invisible lg:visible'}
                 `}
             >
                 <div className="h-20 flex items-center justify-between px-6 border-b border-white/5">
@@ -186,11 +186,9 @@ const AdminLayout = () => {
                                             <Icon size={ICON_SIZE} aria-hidden="true" />
                                             <span className="flex-1">{item.label}</span>
                                             {badgeCount > 0 && (
-                                                <span
-                                                    className="min-w-[20px] h-5 px-1.5 rounded-full bg-[#7c3aed] text-white text-[11px] font-semibold flex items-center justify-center"
-                                                    aria-label={`${badgeCount} open`}
-                                                >
-                                                    {badgeCount > 99 ? '99+' : badgeCount}
+                                                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-[#7c3aed] text-white text-[11px] font-semibold flex items-center justify-center">
+                                                    <span aria-hidden="true">{badgeCount > 99 ? '99+' : badgeCount}</span>
+                                                    <span className="sr-only">{`, ${badgeCount} open`}</span>
                                                 </span>
                                             )}
                                         </>
