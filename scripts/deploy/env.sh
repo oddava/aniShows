@@ -6,9 +6,10 @@
 # up in the wrong mode. Sets:
 #   COMPOSE (array)        docker compose -f ... with the mode's override files
 #   COMPOSE_PROFILES       bundled-db / analytics / tunnel (exported)
-#   CADDY_* (exported)     site addresses, trusted peers, HSTS header
+#   CADDY_* (exported)     site addresses, trusted peers, client-IP header, HSTS header
 #   DOMAIN, ANALYTICS, TUNNEL_IN_STACK
-# Never prints secrets.
+# and edge_config_problems() lists what the edge still lacks (deploy-prod.sh
+# refuses to start on any of them). Never prints secrets.
 
 if ! declare -F die >/dev/null; then
     die() { echo "Error: $*" >&2; exit 1; }
@@ -103,10 +104,13 @@ load_deployed_state() {
 is_true() { case "${1,,}" in 1|true|yes|on) return 0 ;; *) return 1 ;; esac; }
 
 resolve_deploy_mode() {
-    CADDY_MODE="${CADDY_MODE:-public}"
+    # proxy (default): an existing reverse proxy on the host terminates TLS
+    # and forwards to Caddy. public: Caddy owns 80/443 + ACME. tunnel:
+    # Cloudflare Tunnel. docs/deploy/DEPLOY.md.
+    CADDY_MODE="${CADDY_MODE:-proxy}"
     case "$CADDY_MODE" in
-        public|tunnel) ;;
-        *) die "CADDY_MODE must be 'public' or 'tunnel' (got '$CADDY_MODE')" ;;
+        proxy|public|tunnel) ;;
+        *) die "CADDY_MODE must be 'proxy', 'public' or 'tunnel' (got '$CADDY_MODE')" ;;
     esac
     export CADDY_MODE
 
@@ -137,6 +141,12 @@ resolve_deploy_mode() {
 
     COMPOSE=(docker compose -f docker-compose.prod.yml)
     [ "$CADDY_MODE" = public ] && COMPOSE+=(-f infra/compose/public-ports.yml)
+    # Proxy mode: Caddy on the host's loopback for the host's proxy, unless
+    # the proxy reaches it over a Docker network instead
+    # (CADDY_PROXY_PUBLISH=0 + infra/compose/shared-proxy-network.yml).
+    if [ "$CADDY_MODE" = proxy ] && [ "${CADDY_PROXY_PUBLISH:-1}" != 0 ]; then
+        COMPOSE+=(-f infra/compose/proxy-port.yml)
+    fi
     local extra
     for extra in ${COMPOSE_EXTRA_FILES:-}; do
         [ -f "$extra" ] || die "COMPOSE_EXTRA_FILES: $extra not found"
@@ -148,33 +158,115 @@ resolve_deploy_mode() {
     local loopback="127.0.0.1/8 ::1/128"
     # Set before any default below: was the trust list chosen by the operator?
     TRUSTED_PROXIES_EXPLICIT=0
+    # The template's "<...>" placeholder counts as unset (Caddy cannot parse it).
+    if [[ "${CADDY_TRUSTED_PROXIES:-}" == *"<"* ]]; then
+        unset CADDY_TRUSTED_PROXIES
+    fi
     [ -n "${CADDY_TRUSTED_PROXIES:-}" ] && TRUSTED_PROXIES_EXPLICIT=1
     export TRUSTED_PROXIES_EXPLICIT  # read by deploy-prod.sh
     export EDGE_SUBNET="${EDGE_SUBNET:-10.250.250.240/29}"
-    if [ "$CADDY_MODE" = tunnel ]; then
-        : "${CADDY_SITE_ADDRESS:=:80}"
-        if [ "$TUNNEL_IN_STACK" = 1 ]; then
-            # Only cloudflared and Caddy sit on the edge network: no other
-            # container can set CF-Connecting-IP.
-            : "${CADDY_TRUSTED_PROXIES:=${EDGE_SUBNET} ${loopback}}"
-        else
-            # A shared or host cloudflared: narrow this to its address/subnet.
-            : "${CADDY_TRUSTED_PROXIES:=private_ranges}"
-        fi
-        if [ "$ANALYTICS" = 1 ]; then : "${CADDY_UMAMI_SITE_ADDRESS:=http://${UMAMI_DOMAIN:-umami.invalid}}"; fi
-    else
-        # As given (may list several hosts, e.g. "anishows.com, www.anishows.com").
-        : "${CADDY_SITE_ADDRESS:=${DOMAIN_NAME:-localhost}}"
-        : "${CADDY_TRUSTED_PROXIES:=${loopback}}"
-        if [ "$ANALYTICS" = 1 ]; then : "${CADDY_UMAMI_SITE_ADDRESS:=${UMAMI_DOMAIN:-http://umami.invalid}}"; fi
-    fi
+    export APP_SUBNET="${APP_SUBNET:-10.250.250.0/25}"
+    case "$CADDY_MODE" in
+        proxy)
+            # Plain HTTP behind the host's proxy (it holds the certificates).
+            # Trusted peers: the operator's explicit list only (that proxy's
+            # address as Caddy sees it), so no other client can choose its IP
+            # or claim https; edge_config_problems() refuses an empty one.
+            : "${CADDY_SITE_ADDRESS:=:80}"
+            : "${CADDY_CLIENT_IP_HEADERS:=X-Forwarded-For}"
+            if [ "$ANALYTICS" = 1 ]; then : "${CADDY_UMAMI_SITE_ADDRESS:=http://${UMAMI_DOMAIN:-umami.invalid}}"; fi
+            ;;
+        tunnel)
+            : "${CADDY_SITE_ADDRESS:=:80}"
+            : "${CADDY_CLIENT_IP_HEADERS:=CF-Connecting-IP}"
+            if [ "$TUNNEL_IN_STACK" = 1 ]; then
+                # Only cloudflared and Caddy sit on the edge network: no other
+                # container can set CF-Connecting-IP.
+                : "${CADDY_TRUSTED_PROXIES:=${EDGE_SUBNET} ${loopback}}"
+            fi
+            # A shared or host cloudflared: no default; its address is required.
+            if [ "$ANALYTICS" = 1 ]; then : "${CADDY_UMAMI_SITE_ADDRESS:=http://${UMAMI_DOMAIN:-umami.invalid}}"; fi
+            ;;
+        public)
+            # As given (may list several hosts, e.g. "anishows.com, www.anishows.com").
+            : "${CADDY_SITE_ADDRESS:=${DOMAIN_NAME:-localhost}}"
+            : "${CADDY_TRUSTED_PROXIES:=${loopback}}"
+            : "${CADDY_CLIENT_IP_HEADERS:=X-Forwarded-For}"
+            if [ "$ANALYTICS" = 1 ]; then : "${CADDY_UMAMI_SITE_ADDRESS:=${UMAMI_DOMAIN:-http://umami.invalid}}"; fi
+            ;;
+    esac
     : "${CADDY_UMAMI_SITE_ADDRESS:=http://umami.invalid}"
 
     local hsts_seconds="${SECURE_HSTS_SECONDS:-31536000}" hsts
     [[ "$hsts_seconds" =~ ^[0-9]+$ ]] || die "SECURE_HSTS_SECONDS must be a whole number of seconds"
     hsts="max-age=${hsts_seconds}"
-    is_true "${SECURE_HSTS_INCLUDE_SUBDOMAINS:-True}" && hsts+="; includeSubDomains"
-    is_true "${SECURE_HSTS_PRELOAD:-True}" && hsts+="; preload"
+    is_true "${SECURE_HSTS_INCLUDE_SUBDOMAINS:-False}" && hsts+="; includeSubDomains"
+    is_true "${SECURE_HSTS_PRELOAD:-False}" && hsts+="; preload"
     : "${CADDY_HSTS_HEADER:=$hsts}"
+    # Empty means "only Caddy's own loopback" (deploy smoke tests): the D-9
+    # operator routes are closed to everyone else until it is set.
+    # 100::/64 is the RFC 6666 discard prefix: it matches no real client.
+    : "${ADMIN_ALLOW_CIDRS:=100::/64}"
     export CADDY_SITE_ADDRESS CADDY_TRUSTED_PROXIES CADDY_UMAMI_SITE_ADDRESS CADDY_HSTS_HEADER
+    export CADDY_CLIENT_IP_HEADERS ADMIN_ALLOW_CIDRS
+}
+
+# cidr_is_wide CIDR: true for a range that covers a large part of the internet
+# (an IPv4 prefix shorter than /8, an IPv6 prefix shorter than /16, or Caddy's
+# private_ranges shorthand, which spans every Docker network on the host).
+cidr_is_wide() {
+    local cidr="${1,,}" prefix
+    case "$cidr" in
+        private_ranges) return 0 ;;
+        */*) prefix="${cidr##*/}" ;;
+        *) return 1 ;;
+    esac
+    [[ "$prefix" =~ ^[0-9]+$ ]] || return 0
+    if [[ "$cidr" == *:* ]]; then
+        [ "$prefix" -lt 16 ]
+    else
+        [ "$prefix" -lt 8 ]
+    fi
+}
+
+# edge_config_problems: one line per missing or unsafe edge setting (none
+# when the edge is fully configured). Run after resolve_deploy_mode.
+#   - TRUSTED_PROXY_CIDRS (Django's trusted peers, comma-separated): required
+#     in every mode, never wide. Without it every request looks like Caddy's
+#     own address (one throttle bucket for the whole site).
+#   - CADDY_TRUSTED_PROXIES: required in proxy mode and for an external
+#     cloudflared; never wide. Without it Django sees http behind the proxy
+#     (redirect loop) and every client shares one address.
+#   - ADMIN_ALLOW_CIDRS: never wide, unless ALLOW_WIDE_ADMIN_CIDRS=1.
+edge_config_problems() {
+    local cidr
+    if is_placeholder_value "${TRUSTED_PROXY_CIDRS:-}"; then
+        echo "TRUSTED_PROXY_CIDRS is unset: set it to Caddy's network, APP_SUBNET (${APP_SUBNET})"
+    else
+        for cidr in ${TRUSTED_PROXY_CIDRS//,/ }; do
+            if cidr_is_wide "$cidr"; then
+                echo "TRUSTED_PROXY_CIDRS lists ${cidr}, which is far wider than Caddy's network (APP_SUBNET ${APP_SUBNET})"
+            fi
+        done
+    fi
+    if [ "$CADDY_MODE" = proxy ] && [ "$TRUSTED_PROXIES_EXPLICIT" != 1 ]; then
+        echo "CADDY_MODE=proxy needs CADDY_TRUSTED_PROXIES: the existing reverse proxy's address as Caddy sees it (docs/deploy/DEPLOY.md)"
+    fi
+    if [ "$CADDY_MODE" = tunnel ] && [ "$TUNNEL_IN_STACK" != 1 ] && [ "$TRUSTED_PROXIES_EXPLICIT" != 1 ]; then
+        echo "TUNNEL_EXTERNAL=1 needs CADDY_TRUSTED_PROXIES set to that cloudflared's address or subnet (plus 127.0.0.1/8 ::1/128); see docs/deploy/tunnel.md"
+    fi
+    if [ "$TRUSTED_PROXIES_EXPLICIT" = 1 ]; then
+        for cidr in ${CADDY_TRUSTED_PROXIES}; do
+            if cidr_is_wide "$cidr"; then
+                echo "CADDY_TRUSTED_PROXIES lists ${cidr}: list only the proxy's own address or subnet"
+            fi
+        done
+    fi
+    if [ "${ALLOW_WIDE_ADMIN_CIDRS:-0}" != 1 ]; then
+        for cidr in ${ADMIN_ALLOW_CIDRS}; do
+            if cidr_is_wide "$cidr"; then
+                echo "ADMIN_ALLOW_CIDRS lists ${cidr}, which opens /django-admin, /metrics and readiness to the internet (set ALLOW_WIDE_ADMIN_CIDRS=1 to accept that)"
+            fi
+        done
+    fi
 }

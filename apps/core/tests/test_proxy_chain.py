@@ -1,8 +1,9 @@
 """The proxy contract (G7): the app trusts exactly one proxy hop, Caddy.
 
-In both deploy modes Caddy sends one X-Forwarded-For entry, the real client
-(``header_up X-Forwarded-For {client_ip}``; behind Cloudflare Tunnel
-``{client_ip}`` is CF-Connecting-IP). These tests pin the app side of that
+In every deploy mode Caddy sends one X-Forwarded-For entry, the real client
+(``header_up X-Forwarded-For {client_ip}``; behind the host's reverse proxy
+``{client_ip}`` is the right-most untrusted X-Forwarded-For entry, behind
+Cloudflare Tunnel it is CF-Connecting-IP). These tests pin the app side of that
 chain (DRF throttle identity and ``get_client_ip``) and check the Caddyfile
 keeps its side, so login throttles stay per client instead of global.
 """
@@ -24,8 +25,9 @@ from apps.users.throttling import LoginRateThrottle
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CADDYFILE = REPO_ROOT / "Caddyfile.prod"
-COMPOSE_TRUSTED = "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-CADDY_IP = "172.18.0.5"  # the app's only peer: Caddy on the compose network
+COMPOSE_FILE = REPO_ROOT / "docker-compose.prod.yml"
+COMPOSE_TRUSTED = "10.250.250.0/25"  # APP_SUBNET: what the template tells operators to set
+CADDY_IP = "10.250.250.5"  # the app's only peer: Caddy on the compose network
 
 REST_FRAMEWORK_ONE_PROXY = {**settings.REST_FRAMEWORK, "NUM_PROXIES": 1}
 
@@ -126,12 +128,19 @@ class CaddyfileKeepsItsSideTests(SimpleTestCase):
         # And no bare one-line proxy that would skip it.
         self.assertNotRegex(self.text, r"reverse_proxy \{\$WEB_UPSTREAMS:web:8000\}\s*\n")
 
-    def test_client_ip_comes_from_cloudflare_only_via_trusted_peers(self):
-        self.assertIn("client_ip_headers CF-Connecting-IP", self.text)
-        # The default trusts loopback only: in public mode no client can pick its IP.
+    def test_client_ip_comes_only_via_trusted_peers(self):
+        # Proxy mode reads X-Forwarded-For; tunnel mode CF-Connecting-IP (env.sh).
+        self.assertIn("client_ip_headers {$CADDY_CLIENT_IP_HEADERS:X-Forwarded-For}", self.text)
+        # Right to left past trusted peers: a client's own prefix is ignored.
+        self.assertRegex(self.text, r"(?m)^\t\ttrusted_proxies_strict$")
+        # The default trusts loopback only: unset, no client can pick its IP.
         self.assertIn(
             "trusted_proxies static {$CADDY_TRUSTED_PROXIES:127.0.0.1/8 ::1/128}", self.text
         )
+
+    def test_proxy_mode_is_the_default(self):
+        self.assertIn("import /etc/caddy/sites-{$CADDY_MODE:proxy}.d/*.caddy", self.text)
+        self.assertTrue((REPO_ROOT / "infra" / "caddy" / "sites-proxy.d").is_dir())
 
     def test_operator_routes_are_gated_inside_their_handle_blocks(self):
         for path, arg in (
@@ -144,7 +153,8 @@ class CaddyfileKeepsItsSideTests(SimpleTestCase):
                     self.text, rf"handle {re.escape(path)} \{{\n\t\timport operator_gate {arg}\n"
                 )
         gate = self._snippet("operator_gate")
-        self.assertIn("not client_ip {$ADMIN_ALLOW_CIDRS:0.0.0.0/0 ::/0}\n", gate)
+        # Unset or empty: closed to every client (only Caddy's loopback passes).
+        self.assertIn("not client_ip {$ADMIN_ALLOW_CIDRS:100::/64}\n", gate)
         # Loopback passes by TCP peer only: a trusted proxy's CF-Connecting-IP
         # of 127.0.0.1 must not open the gate.
         self.assertIn("not remote_ip 127.0.0.1/8 ::1/128", gate)
@@ -182,3 +192,32 @@ class CaddyfileKeepsItsSideTests(SimpleTestCase):
     def test_liveness_stays_the_upstream_health_check(self):
         self.assertNotIn("health_uri /api/v1/health/ready/", self.text)
         self.assertIn("health_uri /api/v1/health/", self.text)
+
+
+class ComposeHasNoPermissiveTrustDefaultsTests(SimpleTestCase):
+    """docker-compose.prod.yml: trusted peers and the operator gate default closed."""
+
+    text: str
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.text = COMPOSE_FILE.read_text(encoding="utf-8")
+
+    def test_django_trusted_proxies_are_required(self):
+        self.assertRegex(self.text, r"TRUSTED_PROXY_CIDRS: \$\{TRUSTED_PROXY_CIDRS:\?")
+
+    def test_caddy_trusts_loopback_only_by_default(self):
+        self.assertIn("CADDY_TRUSTED_PROXIES: ${CADDY_TRUSTED_PROXIES:-127.0.0.1/8 ::1/128}", self.text)
+
+    def test_operator_gate_defaults_closed(self):
+        self.assertIn("ADMIN_ALLOW_CIDRS: ${ADMIN_ALLOW_CIDRS:-100::/64}", self.text)
+        self.assertNotIn("0.0.0.0/0", self.text)
+
+    def test_proxy_mode_and_a_fixed_app_subnet_are_the_defaults(self):
+        self.assertIn("CADDY_MODE: ${CADDY_MODE:-proxy}", self.text)
+        self.assertIn("CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:-:80}", self.text)
+        self.assertIn("- subnet: ${APP_SUBNET:-10.250.250.0/25}", self.text)
+        override = (REPO_ROOT / "infra" / "compose" / "proxy-port.yml").read_text(encoding="utf-8")
+        # Loopback only by default: nothing but the host's proxy reaches Caddy.
+        self.assertIn('"${CADDY_PROXY_BIND:-127.0.0.1}:${CADDY_PROXY_PORT:-8080}:80"', override)

@@ -143,7 +143,7 @@ class EnvTemplateTests(SimpleTestCase):
 
     def test_production_mode_defaults(self):
         self.assertEqual(self.entries["DJANGO_ENV"], (True, "production"))
-        self.assertEqual(self.entries["CADDY_MODE"], (True, "tunnel"))
+        self.assertEqual(self.entries["CADDY_MODE"], (True, "proxy"))
         self.assertEqual(self.entries["DRF_NUM_PROXIES"], (True, "1"))
         self.assertEqual(self.entries["BACKUP_KEEP"], (True, "7"))
         for name in ("VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "ADMIN_ALLOW_CIDRS"):

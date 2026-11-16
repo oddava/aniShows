@@ -21,4 +21,8 @@ source scripts/deploy/env.sh
 load_deployed_state
 load_env_file .env
 resolve_deploy_mode
+# Manual commands (logs, ps, exec) still run; deploy-prod.sh refuses these.
+while IFS= read -r problem; do
+    [ -n "$problem" ] && warn "edge not configured: $problem"
+done < <(edge_config_problems)
 exec "${COMPOSE[@]}" "$@"

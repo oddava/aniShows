@@ -1,8 +1,10 @@
-# Behind Cloudflare Tunnel: the proxy chain
+# Behind Cloudflare Tunnel: the proxy chain (optional mode)
 
-aniShows runs in one of two edge modes, chosen by `CADDY_MODE` in `.env`:
+The default edge is **proxy mode** (`CADDY_MODE=proxy`): the host's existing reverse proxy
+terminates TLS and forwards to Caddy; see [DEPLOY.md](DEPLOY.md). This page covers the optional
+Cloudflare Tunnel mode, and compares it with public mode:
 
-| | `public` (default, the old layout) | `tunnel` (shared VPS) |
+| | `public` (the old layout) | `tunnel` (optional) |
 |---|---|---|
 | Who reaches Caddy | the internet, on host ports 80/443 | only `cloudflared`, over a Docker network |
 | Host ports | 80, 443 (`infra/compose/public-ports.yml`) | none |

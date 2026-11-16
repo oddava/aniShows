@@ -10,9 +10,15 @@
 #   6. smoke tests through Caddy, and through PUBLIC_BASE_URL when set
 # A failure after the migrations prints the rollback recipe.
 #
-# Modes (CADDY_MODE in .env, docs/deploy/tunnel.md):
-#   public (default)  Caddy publishes 80/443 and runs ACME
-#   tunnel            Cloudflare Tunnel; nothing is published on the host
+# Modes (CADDY_MODE in .env, docs/deploy/DEPLOY.md):
+#   proxy (default)  an existing reverse proxy on the host terminates TLS and
+#                    forwards to Caddy on 127.0.0.1:CADDY_PROXY_PORT (8080)
+#   public           Caddy publishes 80/443 and runs ACME
+#   tunnel           Cloudflare Tunnel; nothing is published on the host
+# The edge must be configured explicitly (scripts/deploy/env.sh,
+# edge_config_problems): TRUSTED_PROXY_CIDRS always, CADDY_TRUSTED_PROXIES in
+# proxy mode, and no wide-open ADMIN_ALLOW_CIDRS (unless
+# ALLOW_WIDE_ADMIN_CIDRS=1). The deploy refuses to start otherwise.
 #
 # Env (from .env or the shell; the shell wins): SCALE_WEB (default 2),
 # BACKEND_TAG / FRONTEND_TAG (default latest), DB_HOST (default db = bundled
@@ -98,10 +104,17 @@ if [ "$CADDY_MODE" = public ] && [ "$DOMAIN" != localhost ]; then
         die "Public mode needs a real CADDY_ACME_EMAIL for certificate registration"
     fi
 fi
-if [ "${TUNNEL_EXTERNAL:-0}" = 1 ] && [ "$TRUSTED_PROXIES_EXPLICIT" != 1 ]; then
-    # With cloudflared outside this stack Caddy cannot know its address, and
-    # the private_ranges default lets any container choose its client IP.
-    die "TUNNEL_EXTERNAL=1 needs CADDY_TRUSTED_PROXIES set to that cloudflared's address or subnet (plus 127.0.0.1/8 ::1/128); see docs/deploy/tunnel.md"
+# Trusted peers and the operator gate: no permissive defaults, and no
+# ALLOW_INSECURE_DEFAULTS escape (a wrong value here is silent at runtime:
+# one throttle bucket for everyone, a redirect loop, or an open admin).
+mapfile -t edge_problems < <(edge_config_problems)
+if [ "${#edge_problems[@]}" -gt 0 ]; then
+    echo -e "${RED}    Refusing to deploy: the edge is not configured:${NC}"
+    printf '      - %s\n' "${edge_problems[@]}"
+    die "Set them in .env (see .env.production.example and docs/deploy/DEPLOY.md)."
+fi
+if [ "$ADMIN_ALLOW_CIDRS" = 100::/64 ]; then
+    warn "ADMIN_ALLOW_CIDRS is empty: /django-admin, /metrics and readiness answer 403 to every client."
 fi
 
 PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
@@ -451,9 +464,9 @@ fi
 # Smoke tests
 # -----------------------------------------------------------------------------
 step "Smoke tests (through Caddy)"
-if [ "$CADDY_MODE" = tunnel ]; then
-    # Inside the Caddy container, as cloudflared would send it (Host = the
-    # domain, Cloudflare's scheme). Loopback passes the D-9 gate.
+if [ "$CADDY_MODE" != public ]; then
+    # Inside the Caddy container, as the host's proxy or cloudflared would
+    # send it (Host = the domain, https). Loopback passes the D-9 gate.
     fetch() {
         "${COMPOSE[@]}" exec -T caddy wget -q -O - -T 10 \
             --header "Host: ${DOMAIN}" --header "X-Forwarded-Proto: https" \
@@ -519,6 +532,18 @@ if [ "$CADDY_MODE" = tunnel ]; then
     acceptable_status "$status" \
         || die "Django answered ${NON_EXEMPT_ROUTE} with '${status:-no response}' for an https request from the tunnel: the trusted-peer / X-Forwarded-Proto chain is broken (EDGE_SUBNET, CADDY_TRUSTED_PROXIES; docs/deploy/tunnel.md)"
     ok "scheme chain (https from the tunnel seen by Django)"
+fi
+if [ "$CADDY_MODE" = proxy ] && [ "${CADDY_PROXY_PUBLISH:-1}" != 0 ]; then
+    # As the host's reverse proxy sends it, through the published loopback
+    # port (Caddy sees the Docker gateway as the peer). A missing gateway in
+    # CADDY_TRUSTED_PROXIES makes Caddy reset X-Forwarded-Proto to http, and
+    # Django answers with a redirect: caught here, not by users.
+    status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+        -H "Host: ${DOMAIN}" -H "X-Forwarded-Proto: https" -H "X-Forwarded-For: 192.0.2.10" \
+        "http://${CADDY_PROXY_BIND:-127.0.0.1}:${CADDY_PROXY_PORT:-8080}${NON_EXEMPT_ROUTE}" || true)"
+    acceptable_status "$status" \
+        || die "Django answered ${NON_EXEMPT_ROUTE} with '${status:-no response}' for an https request from the host's proxy: CADDY_TRUSTED_PROXIES must list the Docker gateway of APP_SUBNET (docs/deploy/DEPLOY.md)"
+    ok "scheme chain (https from the host's proxy seen by Django)"
 fi
 
 if [ -n "${PUBLIC_BASE_URL:-}" ]; then

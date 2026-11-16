@@ -92,13 +92,27 @@ class ProductionAllowedHostsTests(SimpleTestCase):
 
 
 class ProductionHstsTests(SimpleTestCase):
-    def test_defaults_are_the_previous_values(self):
+    def test_defaults_are_on_without_subdomains_or_preload(self):
+        # Owner decision G7 Q1: a year of HSTS; subdomains and preload are opt-in.
         self.assertEqual(
             _production_setting(
                 "[settings.SECURE_HSTS_SECONDS, settings.SECURE_HSTS_INCLUDE_SUBDOMAINS, "
                 "settings.SECURE_HSTS_PRELOAD]"
             ),
-            [31536000, True, True],
+            [31536000, False, False],
+        )
+
+    def test_check_deploy_is_silent_only_about_the_opted_out_flags(self):
+        self.assertEqual(
+            _production_setting("sorted(settings.SILENCED_SYSTEM_CHECKS)"),
+            ["security.W005", "security.W021"],
+        )
+        self.assertEqual(
+            _production_setting(
+                "sorted(settings.SILENCED_SYSTEM_CHECKS)",
+                {"SECURE_HSTS_INCLUDE_SUBDOMAINS": "True", "SECURE_HSTS_PRELOAD": "True"},
+            ),
+            [],
         )
 
     def test_header_is_byte_identical_with_no_env(self):
@@ -111,8 +125,15 @@ class ProductionHstsTests(SimpleTestCase):
         )
         result = _run_production(code)
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines()[-1], "max-age=31536000")
+
+    def test_env_turns_preload_and_subdomains_on(self):
         self.assertEqual(
-            result.stdout.strip().splitlines()[-1], "max-age=31536000; includeSubDomains; preload"
+            _production_setting(
+                "[settings.SECURE_HSTS_INCLUDE_SUBDOMAINS, settings.SECURE_HSTS_PRELOAD]",
+                {"SECURE_HSTS_INCLUDE_SUBDOMAINS": "True", "SECURE_HSTS_PRELOAD": "true"},
+            ),
+            [True, True],
         )
 
     def test_env_turns_preload_and_subdomains_off(self):

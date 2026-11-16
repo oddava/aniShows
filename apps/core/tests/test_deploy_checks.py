@@ -114,6 +114,13 @@ SAFE_ENV = {
     "CADDY_MODE": "tunnel",
     "TUNNEL_TOKEN": "token-for-the-test",
     "ANALYTICS_ENABLED": "0",
+    "TRUSTED_PROXY_CIDRS": "10.250.250.0/25",
+}
+
+# The default mode: behind the host's existing reverse proxy.
+PROXY_ENV = {
+    **{key: value for key, value in SAFE_ENV.items() if key not in ("CADDY_MODE", "TUNNEL_TOKEN")},
+    "CADDY_TRUSTED_PROXIES": '"10.250.250.1/32 127.0.0.1/8 ::1/128"',
 }
 
 # A stand-in `docker`: records each call (and, for compose, the CADDY_* values
@@ -126,7 +133,7 @@ SAFE_ENV = {
 FAKE_DOCKER = r"""#!/usr/bin/env bash
 echo "$*" >> "$FAKE_DOCKER_LOG"
 if [ "${1:-}" = compose ]; then
-  echo "env: mode=${CADDY_MODE:-} site=${CADDY_SITE_ADDRESS:-} trusted=${CADDY_TRUSTED_PROXIES:-} hsts=${CADDY_HSTS_HEADER:-} profiles=${COMPOSE_PROFILES:-}" >> "$FAKE_DOCKER_LOG"
+  echo "env: mode=${CADDY_MODE:-} site=${CADDY_SITE_ADDRESS:-} trusted=${CADDY_TRUSTED_PROXIES:-} admin=${ADMIN_ALLOW_CIDRS:-} ipheaders=${CADDY_CLIENT_IP_HEADERS:-} hsts=${CADDY_HSTS_HEADER:-} profiles=${COMPOSE_PROFILES:-}" >> "$FAKE_DOCKER_LOG"
   echo "tags: backend=${BACKEND_TAG:-} frontend=${FRONTEND_TAG:-}" >> "$FAKE_DOCKER_LOG"
 fi
 args=" $* "
@@ -301,6 +308,104 @@ class DeployScriptRefusalTests(SimpleTestCase):
                 self.assertIn("needs a real CADDY_ACME_EMAIL", result.stdout)
                 self.assertEqual(calls, "")
 
+    def test_proxy_mode_is_the_default(self):
+        result, calls = self._run(PROXY_ENV)
+        self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
+        self.assertIn("Mode: proxy", result.stdout)
+        self.assertIn("-f infra/compose/proxy-port.yml", calls)
+        self.assertNotIn("public-ports.yml", calls)
+        self.assertRegex(result.stdout, r"(?m)profiles: bundled-db$")
+        self.assertIn(
+            "mode=proxy site=:80 trusted=10.250.250.1/32 127.0.0.1/8 ::1/128 "
+            "admin=100::/64 ipheaders=X-Forwarded-For ",
+            calls,
+        )
+        # Empty ADMIN_ALLOW_CIDRS closes the operator routes, and says so.
+        self.assertIn("ADMIN_ALLOW_CIDRS is empty", result.stdout)
+
+    def test_proxy_mode_without_a_published_port(self):
+        result, calls = self._run(
+            {
+                **PROXY_ENV,
+                "CADDY_PROXY_PUBLISH": "0",
+                "COMPOSE_EXTRA_FILES": "docker-compose.prod.yml",
+            }
+        )
+        self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
+        self.assertNotIn("proxy-port.yml", calls)
+
+    def test_edge_refusals(self):
+        """No permissive defaults: each case refuses before anything runs."""
+        without = {k: v for k, v in PROXY_ENV.items() if k != "CADDY_TRUSTED_PROXIES"}
+        cases = {
+            "proxy mode without CADDY_TRUSTED_PROXIES": (
+                without,
+                "CADDY_MODE=proxy needs CADDY_TRUSTED_PROXIES",
+            ),
+            "the template's placeholder": (
+                {**without, "CADDY_TRUSTED_PROXIES": '"<the proxy> 127.0.0.1/8 ::1/128"'},
+                "CADDY_MODE=proxy needs CADDY_TRUSTED_PROXIES",
+            ),
+            "a wide CADDY_TRUSTED_PROXIES": (
+                {**PROXY_ENV, "CADDY_TRUSTED_PROXIES": "private_ranges"},
+                "CADDY_TRUSTED_PROXIES lists private_ranges",
+            ),
+            "TRUSTED_PROXY_CIDRS unset": (
+                {k: v for k, v in PROXY_ENV.items() if k != "TRUSTED_PROXY_CIDRS"},
+                "TRUSTED_PROXY_CIDRS is unset",
+            ),
+            "TRUSTED_PROXY_CIDRS placeholder": (
+                {**PROXY_ENV, "TRUSTED_PROXY_CIDRS": '"<APP_SUBNET, e.g. 10.250.250.0/25>"'},
+                "TRUSTED_PROXY_CIDRS is unset",
+            ),
+            "TRUSTED_PROXY_CIDRS wide": (
+                {**PROXY_ENV, "TRUSTED_PROXY_CIDRS": "10.250.250.0/25,0.0.0.0/0"},
+                "TRUSTED_PROXY_CIDRS lists 0.0.0.0/0",
+            ),
+            "TRUSTED_PROXY_CIDRS wide in tunnel mode too": (
+                {**SAFE_ENV, "TRUSTED_PROXY_CIDRS": "::/0"},
+                "TRUSTED_PROXY_CIDRS lists ::/0",
+            ),
+            "ADMIN_ALLOW_CIDRS open to everyone": (
+                {**PROXY_ENV, "ADMIN_ALLOW_CIDRS": '"0.0.0.0/0 ::/0"'},
+                "ADMIN_ALLOW_CIDRS lists 0.0.0.0/0",
+            ),
+            "ADMIN_ALLOW_CIDRS nearly everyone": (
+                {**PROXY_ENV, "ADMIN_ALLOW_CIDRS": '"203.0.113.10/32 0.0.0.0/1"'},
+                "ADMIN_ALLOW_CIDRS lists 0.0.0.0/1",
+            ),
+        }
+        for name, (env, message) in cases.items():
+            with self.subTest(name):
+                result, calls = self._run(env)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("the edge is not configured", result.stdout)
+                self.assertIn(message, result.stdout)
+                self.assertEqual(calls, "", "nothing runs before the refusal")
+
+    def test_insecure_defaults_override_does_not_open_the_edge(self):
+        result, calls = self._run(
+            {**PROXY_ENV, "ADMIN_ALLOW_CIDRS": '"0.0.0.0/0 ::/0"'},
+            shell_env={"ALLOW_INSECURE_DEFAULTS": "1"},
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(calls, "")
+
+    def test_wide_admin_cidrs_need_their_own_override(self):
+        result, calls = self._run(
+            {**PROXY_ENV, "ADMIN_ALLOW_CIDRS": '"0.0.0.0/0 ::/0"', "ALLOW_WIDE_ADMIN_CIDRS": "1"}
+        )
+        self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
+        self.assertIn("admin=0.0.0.0/0 ::/0 ", calls)
+
+    def test_narrow_admin_cidrs_pass(self):
+        result, calls = self._run(
+            {**PROXY_ENV, "ADMIN_ALLOW_CIDRS": '"203.0.113.10/32 2001:db8::/48"'}
+        )
+        self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
+        self.assertIn("admin=203.0.113.10/32 2001:db8::/48 ", calls)
+        self.assertNotIn("ADMIN_ALLOW_CIDRS is empty", result.stdout)
+
     def test_env_values_with_spaces_and_comments_parse(self):
         result, _ = self._run(
             {
@@ -413,13 +518,29 @@ class ComposeWrapperTests(SimpleTestCase):
         line = self._env_line(SAFE_ENV)
         self.assertIn("mode=tunnel site=:80 ", line)
         self.assertIn("trusted=10.250.250.240/29 127.0.0.1/8 ::1/128 ", line)
-        self.assertIn("hsts=max-age=31536000; includeSubDomains; preload ", line)
+        self.assertIn("hsts=max-age=31536000 ", line)
         self.assertTrue(line.endswith("profiles=bundled-db,tunnel"), line)
 
-    def test_external_cloudflared_trusts_private_ranges(self):
+    def test_external_cloudflared_gets_no_trust_default(self):
+        # No private_ranges fallback: Caddy trusts only loopback (compose's
+        # default) until the operator names that cloudflared.
         line = self._env_line({**SAFE_ENV, "TUNNEL_EXTERNAL": "1"})
-        self.assertIn("trusted=private_ranges ", line)
+        self.assertIn("trusted= ", line)
+        self.assertIn("ipheaders=CF-Connecting-IP ", line)
         self.assertTrue(line.endswith("profiles=bundled-db"), line)
+
+    def test_proxy_mode_without_the_deploy_script(self):
+        result, calls = _run_in_temp_repo("scripts/deploy/compose.sh", PROXY_ENV, args=("ps",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("-f infra/compose/proxy-port.yml", calls)
+        self.assertIn("mode=proxy site=:80 ", calls)
+        self.assertIn("ipheaders=X-Forwarded-For ", calls)
+
+    def test_manual_commands_warn_about_an_unconfigured_edge(self):
+        env = {k: v for k, v in PROXY_ENV.items() if k != "CADDY_TRUSTED_PROXIES"}
+        result, _ = _run_in_temp_repo("scripts/deploy/compose.sh", env, args=("ps",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CADDY_MODE=proxy needs CADDY_TRUSTED_PROXIES", result.stderr)
 
     def test_public_mode_keeps_every_listed_host(self):
         line = self._env_line(
@@ -427,7 +548,7 @@ class ComposeWrapperTests(SimpleTestCase):
                 **SAFE_ENV,
                 "CADDY_MODE": "public",
                 "DOMAIN_NAME": "'anishows.com, www.anishows.com'",
-                "SECURE_HSTS_PRELOAD": "False",
+                "SECURE_HSTS_INCLUDE_SUBDOMAINS": "True",
             }
         )
         self.assertIn("mode=public site=anishows.com, www.anishows.com ", line)

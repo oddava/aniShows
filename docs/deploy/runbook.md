@@ -2,14 +2,14 @@
 
 Everything runs from the repo root on the server. `deploy-prod.sh` is the only deploy path; CI
 (`.github/workflows/deploy.yml`) calls it over SSH after the images are pushed. Edge modes and the
-proxy chain: [tunnel.md](tunnel.md). Backups: [../backups.md](../backups.md). Every variable:
+proxy chain: [DEPLOY.md](DEPLOY.md) (proxy mode, the default) and [tunnel.md](tunnel.md) (optional). Backups: [../backups.md](../backups.md). Every variable:
 `.env.production.example`.
 
 **Manual compose commands: always `scripts/deploy/compose.sh …`** (short form below: `PROD`).
 It reads `.env` exactly as the deploy does and adds the mode's override files, profiles and the
 derived `CADDY_*` values. A bare `docker compose -f docker-compose.prod.yml up …` that touches
-Caddy recreates it with public-mode defaults: behind the tunnel that is a redirect loop and one
-client IP for everyone. Prefer `--no-deps` for single services.
+Caddy recreates it without the mode's derived values (in tunnel mode: a redirect loop and one
+client IP for everyone). Prefer `--no-deps` for single services.
 
 ## What a deploy does
 
@@ -17,7 +17,9 @@ client IP for everyone. Prefer `--no-deps` for single services.
    `METRICS_PASSWORD`, `DB_PASSWORD`, `REDIS_PASSWORD`, `AWS_SECRET_ACCESS_KEY` (the MinIO root
    password), and the Umami secrets when analytics is on. Also `ALLOWED_HOSTS` that is unset,
    local-only, `*`, or missing `DOMAIN_NAME`'s host, and tunnel mode without a token.
-   `ALLOW_INSECURE_DEFAULTS=1` lets one run through with a warning.
+   `ALLOW_INSECURE_DEFAULTS=1` lets one run through with a warning. The edge is refused with no
+   override: `TRUSTED_PROXY_CIDRS` unset or wide, proxy mode without `CADDY_TRUSTED_PROXIES`, or
+   a wide-open `ADMIN_ALLOW_CIDRS` (unless `ALLOW_WIDE_ADMIN_CIDRS=1`).
 2. `docker compose config` for the chosen mode, pull images, start redis/minio (and the bundled db).
 3. `manage.py check --deploy --fail-level ERROR` (e.g. `core.E010` stops it), then the AniList
    smoke query.
@@ -28,9 +30,10 @@ client IP for everyone. Prefer `--no-deps` for single services.
 6. Frontend files copied over the old build (old chunks stay a week), cache clear, Caddy reload
    (Caddy is recreated, 1–2 s of 502s, when `Caddyfile.prod` changed: it is a single-file bind
    mount and `git pull` replaces the file), cloudflared.
-7. Smoke tests: liveness, the SPA and a non-exempt Django route through Caddy (from the edge
-   network in tunnel mode), readiness from a web replica, then `PUBLIC_BASE_URL` through
-   Cloudflare (a 301/308 on `/api/v1/genres/` fails it: a redirect loop).
+7. Smoke tests: liveness, the SPA and a non-exempt Django route through Caddy (from the host's
+   loopback port in proxy mode, from the edge network in tunnel mode), readiness from a web
+   replica, then `PUBLIC_BASE_URL` through the host's proxy (a 301/308 on `/api/v1/genres/`
+   fails it: a redirect loop).
 8. On success, `backups-data/deployed.env` records the live release (tags and image ids) and the
    previous one. One deploy runs at a time (`backups-data/.deploy.lock`).
 
@@ -65,8 +68,12 @@ a container uses (`scripts/deploy/prune_images.sh`; `PRUNE_IMAGES=0` turns it of
      and `COMPOSE_EXTRA_FILES="infra/compose/db-ca.yml"` (it mounts the CA into web, celery, beat and backup).
      The app needs the `pg_trgm` extension (its migrations create it). On a managed server
      without superuser, run `CREATE EXTENSION pg_trgm;` as an admin first.
-4. Pick the edge (tunnel.md): `CADDY_MODE=tunnel` + `TUNNEL_TOKEN`, or a shared/host cloudflared.
-   In the Cloudflare dashboard, set SSL/TLS to **Full (strict)** and enable "Always Use HTTPS".
+4. The edge (DEPLOY.md): proxy mode is the default. Add the site to the host's reverse proxy
+   (forward to `http://127.0.0.1:8080`, appending `X-Forwarded-For`, sending `X-Forwarded-Proto`),
+   set `CADDY_TRUSTED_PROXIES` (the Docker gateway of `APP_SUBNET`, `10.250.250.1/32` by default,
+   plus `127.0.0.1/8 ::1/128`), `TRUSTED_PROXY_CIDRS` (`APP_SUBNET`) and, if wanted,
+   `ADMIN_ALLOW_CIDRS`. Optional instead: Cloudflare Tunnel (tunnel.md: `CADDY_MODE=tunnel` +
+   `TUNNEL_TOKEN`; SSL/TLS **Full (strict)**, "Always Use HTTPS").
    **Public mode behind Cloudflare's proxy** (orange cloud, no tunnel) needs Caddy to trust
    Cloudflare's edge, or every visitor shares the PoP's IP (one throttle bucket per PoP, D-9 useless):
    set `CADDY_TRUSTED_PROXIES` to Cloudflare's ranges (https://www.cloudflare.com/ips/, space-separated,
@@ -74,8 +81,8 @@ a container uses (`scripts/deploy/prune_images.sh`; `PRUNE_IMAGES=0` turns it of
    DNS-only records in public mode, or the tunnel.
 5. `docker login ghcr.io` (a PAT with `read:packages`), then `./deploy-prod.sh`.
 6. Create the first admin: `$PROD exec web python manage.py createsuperuser`.
-7. Run the R-a checks in tunnel.md (no loop, per-client throttles), then `make prod-verify-backup`
-   after the first nightly backup.
+7. Run the outside checks in DEPLOY.md (no redirect loop, per-client throttles, the real
+   `client_ip` in Caddy's log), then `make prod-verify-backup` after the first nightly backup.
 
 ## Routine deploy
 
@@ -165,9 +172,9 @@ db the same budget applies against Postgres' `max_connections` (100).
 
 | # | Decision | Where |
 |---|---|---|
-| G7 Q1 ⚑ | HSTS `includeSubDomains` + `preload` on anishows.com: they cover every subdomain, and preload is hard to undo. Default: on (unchanged). | `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD` |
+| G7 Q1 ✓ | HSTS on (1 year); `includeSubDomains` and `preload` **off** by default (they cover every subdomain, and preload is hard to undo). Each is an env flag. | `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD` |
 | G7 Q2 ⚑ | Off-site backup target: Hetzner Object Storage (S3), a Storage Box (SFTP), or none. | `BACKUP_REMOTE`, `RCLONE_CONFIG_*` |
-| D-9 ⚑ | Real CIDRs for `/metrics`, readiness, `/django-admin/`. Default: open. | `ADMIN_ALLOW_CIDRS` |
+| D-9 ⚑ | Real CIDRs for `/metrics`, readiness, `/django-admin/`. Default: **closed** (empty = 403 for every client); wide-open values are refused unless `ALLOW_WIDE_ADMIN_CIDRS=1`. | `ADMIN_ALLOW_CIDRS` |
 | D-1 | Session auth flag (G1). | G1 settings |
 | D-2, D-4, D-6 | Adult direct links, email defaults, deleted users' forum posts. | specs 2, 4, 5 |
 | D-8 | Drop the `django_celery_beat` tables at first deploy? | manual SQL after the deploy |

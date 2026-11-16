@@ -132,13 +132,19 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 
-# HSTS. Defaults are the previous hard-coded values (1 year, subdomains,
-# preload). Owner decision G7 Q1: preload and includeSubDomains reach every
-# subdomain of a domain other projects may share, and preload is hard to undo.
+# HSTS: on (1 year), but includeSubDomains and preload off by default (owner
+# decision G7 Q1): they reach every subdomain of a domain other projects may
+# share, and preload is hard to undo. Each is one env flag away.
 # deploy-prod.sh builds Caddy's header from the same variables.
 SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000") or "31536000")
-SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_flag("SECURE_HSTS_INCLUDE_SUBDOMAINS", True)
-SECURE_HSTS_PRELOAD = _env_flag("SECURE_HSTS_PRELOAD", True)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_flag("SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
+SECURE_HSTS_PRELOAD = _env_flag("SECURE_HSTS_PRELOAD", False)
+# check --deploy warns about exactly these two; they are a decision, not an oversight.
+SILENCED_SYSTEM_CHECKS = [
+    *globals().get("SILENCED_SYSTEM_CHECKS", []),
+    *([] if SECURE_HSTS_INCLUDE_SUBDOMAINS else ["security.W005"]),
+    *([] if SECURE_HSTS_PRELOAD else ["security.W021"]),
+]
 
 # =============================================================================
 # ALLOWED HOSTS

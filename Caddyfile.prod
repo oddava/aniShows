@@ -1,34 +1,44 @@
-# Production edge. Two deploy modes share every route below (snippet "app"):
+# Production edge. Three deploy modes share every route below (snippet "app"):
 #
-#   public  (default) Caddy owns the host's 80/443, gets certificates by ACME
-#           and redirects HTTP to HTTPS. CADDY_SITE_ADDRESS is the domain.
+#   proxy   (default) an existing reverse proxy on the host terminates TLS and
+#           forwards plain HTTP to Caddy on 127.0.0.1:CADDY_PROXY_PORT (or over
+#           its Docker network). Caddy runs no ACME. CADDY_SITE_ADDRESS is ":80".
+#   public  Caddy owns the host's 80/443, gets certificates by ACME and
+#           redirects HTTP to HTTPS. CADDY_SITE_ADDRESS is the domain.
 #   tunnel  Cloudflare Tunnel (cloudflared) is the only client. Caddy serves
 #           plain HTTP on :80 inside the compose network, publishes no host
 #           port and runs no ACME. CADDY_SITE_ADDRESS is ":80".
 #
 # deploy-prod.sh derives the CADDY_* variables from CADDY_MODE; see
-# docs/deploy/tunnel.md for the proxy chain and .env.production.example.
+# docs/deploy/DEPLOY.md for the proxy chain and .env.production.example.
 {
 	# ACME account email for certificate issuance/recovery notifications
-	# (public mode only; tunnel mode has no site that needs a certificate).
+	# (public mode only; the other modes have no site that needs a certificate).
 	email {$CADDY_ACME_EMAIL:admin@anishows.local}
 
 	servers {
-		# Peers whose client-IP headers Caddy believes. Public mode: loopback
-		# only, so a client can never choose its own address. Tunnel mode:
-		# the edge network (cloudflared + Caddy only) and loopback; cloudflared
-		# sets CF-Connecting-IP to the address Cloudflare saw. {client_ip}
-		# below resolves through this. The value comes from scripts/deploy/env.sh.
+		# Peers whose client-IP and X-Forwarded-Proto headers Caddy believes.
+		# Proxy mode: the host's reverse proxy only (CADDY_TRUSTED_PROXIES,
+		# required; deploy-prod.sh refuses to start without it). Tunnel mode:
+		# the edge network (cloudflared + Caddy only) and loopback. Public
+		# mode: loopback only, so a client can never choose its own address.
+		# {client_ip} below resolves through this. Values: scripts/deploy/env.sh.
 		trusted_proxies static {$CADDY_TRUSTED_PROXIES:127.0.0.1/8 ::1/128}
-		client_ip_headers CF-Connecting-IP
+		# X-Forwarded-For (proxy mode) is read right to left, skipping trusted
+		# peers: entries a client sent ahead of its real address are ignored.
+		trusted_proxies_strict
+		# Proxy/public: X-Forwarded-For. Tunnel: CF-Connecting-IP (cloudflared
+		# sets it to the address Cloudflare saw).
+		client_ip_headers {$CADDY_CLIENT_IP_HEADERS:X-Forwarded-For}
 	}
 }
 
 # Every reverse_proxy to Django sends exactly one X-Forwarded-For entry: the
-# real client. The app trusts exactly one proxy hop (Caddy), in both modes:
+# real client. The app trusts exactly one proxy hop (Caddy), in every mode:
 # DRF NUM_PROXIES=1 and get_client_ip() both read that single entry, so each
 # client gets its own throttle bucket. X-Forwarded-Proto is Caddy's default:
-# its own scheme, or the trusted peer's (Cloudflare's "https") in tunnel mode.
+# its own scheme, or the trusted peer's ("https" from the host's proxy or
+# Cloudflare) in proxy and tunnel mode.
 (django) {
 	header_up X-Forwarded-For {client_ip}
 }
@@ -36,8 +46,8 @@
 (security_headers) {
 	header {
 		# Matches Django's SECURE_HSTS_* (deploy-prod.sh builds both from the
-		# same env). Default: 1 year, includeSubDomains, preload.
-		Strict-Transport-Security "{$CADDY_HSTS_HEADER:max-age=31536000; includeSubDomains; preload}"
+		# same env). Default: 1 year; includeSubDomains and preload are opt-in.
+		Strict-Transport-Security "{$CADDY_HSTS_HEADER:max-age=31536000}"
 		# Prevent MIME type sniffing
 		X-Content-Type-Options "nosniff"
 		# Prevent clickjacking
@@ -59,15 +69,17 @@
 }
 
 # Operator-only routes (owner decision D-9): /metrics, readiness and the
-# Django admin. ADMIN_ALLOW_CIDRS is a space-separated CIDR list; the default
-# lets everyone through, so nothing changes until it is set. {client_ip} is
-# the real client in both modes (see trusted_proxies above). Requests from
+# Django admin. ADMIN_ALLOW_CIDRS is a space-separated CIDR list; unset or
+# empty it is 100::/64 (the RFC 6666 discard prefix: no client has that
+# address), so every client gets 403 and only Caddy's own loopback (matched
+# below by TCP peer) gets through. deploy-prod.sh refuses wide-open lists. {client_ip}
+# is the real client in every mode (see trusted_proxies above). Requests from
 # Caddy's own loopback (deploy smoke tests) always pass; that is matched on
 # the TCP peer (remote_ip), so no header can claim it. Imported inside each
 # handle block: a top-level respond would sort after handle and never run.
 (operator_gate) {
 	@operator_denied_{args[0]} {
-		not client_ip {$ADMIN_ALLOW_CIDRS:0.0.0.0/0 ::/0}
+		not client_ip {$ADMIN_ALLOW_CIDRS:100::/64}
 		not remote_ip 127.0.0.1/8 ::1/128
 	}
 	respond @operator_denied_{args[0]} 403
@@ -243,30 +255,19 @@
 		header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
 	}
 
-	# Service worker - never cache to ensure updates are detected
-	handle /sw.js {
+	# The web-push worker: never cached, so browsers pick up a new one at once.
+	handle /service-worker.js {
 		root * /srv/frontend
 		file_server
 		header Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
-		header Pragma "no-cache"
-		header Expires "0"
 	}
 
-	handle /workbox-*.js {
-		root * /srv/frontend
-		file_server
-		header Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
-		header Pragma "no-cache"
-		header Expires "0"
-	}
-
-	# Service worker registration - never cache to ensure updates are detected
-	handle /registerSW.js {
-		root * /srv/frontend
-		file_server
-		header Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
-		header Pragma "no-cache"
-		header Expires "0"
+	# Old Workbox/VitePWA files (no longer built, C-INT-7): a plain 404, never
+	# index.html served as a script. public/boot.js unregisters such workers.
+	@legacy_pwa path /sw.js /registerSW.js /workbox-*.js
+	handle @legacy_pwa {
+		header Cache-Control "no-store"
+		respond 404
 	}
 
 	# Static assets with aggressive caching
@@ -328,13 +329,13 @@
 }
 
 # The application. Public mode: the domain (ACME + HTTP->HTTPS redirect).
-# Tunnel mode: ":80", any Host (Django's ALLOWED_HOSTS still checks it).
+# Proxy and tunnel mode: ":80", any Host (Django's ALLOWED_HOSTS still checks it).
 {$CADDY_SITE_ADDRESS:localhost} {
 	import app
 }
 
 # Umami analytics (the "analytics" compose profile). Public mode: its domain;
-# tunnel mode: "http://<domain>" (no ACME). The default never matches a real
+# proxy and tunnel mode: "http://<domain>" (no ACME). The default never matches a real
 # request, so the config loads when analytics is off.
 {$CADDY_UMAMI_SITE_ADDRESS:http://umami.invalid} {
 	encode gzip zstd
@@ -350,6 +351,6 @@
 
 # Extra sites for this mode only (infra/caddy/sites-<mode>.d/*.caddy, mounted
 # at /etc/caddy/sites-<mode>.d). Public mode keeps serving the owner's other
-# site on this Caddy, as before; tunnel mode adds none (cloudflared routes
-# other projects itself). An empty directory is fine.
-import /etc/caddy/sites-{$CADDY_MODE:public}.d/*.caddy
+# site on this Caddy, as before; proxy and tunnel mode add none (the host's
+# proxy or cloudflared routes other projects itself). An empty directory is fine.
+import /etc/caddy/sites-{$CADDY_MODE:proxy}.d/*.caddy
