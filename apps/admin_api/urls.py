@@ -1,11 +1,10 @@
+"""``/api/v1/admin/`` routes. Every view is gated by ``permissions.ADMIN_ACTION_POLICY``."""
+
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from ..core.views.admin_import_jobs import AdminImportJobViewSet
 from ..core.views.celery_admin import CeleryAdminControlViewSet, CeleryTaskResultViewSet
-
-# Import the badge and import views from their respective apps for now
-# or we can move them later. We'll leave them in their original spots and route them here.
 from ..users.views import AdminBadgeViewSet
 from .views.anime import (
     AdminAnimeViewSet,
@@ -17,11 +16,16 @@ from .views.anime import (
 )
 from .views.dashboard import AdminDashboardView, AdminStatsExportView
 from .views.logs import AdminAuditLogViewSet, AdminSystemLogViewSet
+from .views.moderation import (
+    AdminModerationForumViewSet,
+    AdminModerationReviewViewSet,
+    AdminModerationSummaryView,
+)
 from .views.reports import AdminBulkOperationsView, AdminReportsView
 from .views.reviews import AdminReviewViewSet
 from .views.settings import AdminSettingsView
 from .views.system import AdminSystemBeatRunView, AdminSystemView
-from .views.users import AdminFavoritesViewSet, AdminUserListViewSet, AdminUserViewSet
+from .views.users import AdminFavoritesStatsViewSet, AdminUserViewSet
 
 # SimpleRouter: no browsable root view listing every admin endpoint.
 admin_router = SimpleRouter()
@@ -38,21 +42,27 @@ admin_router.register(
     AdminOfflineAnimeSyncStateViewSet,
     basename="admin-offline-sync-states",
 )
-admin_router.register(r"user-lists", AdminUserListViewSet, basename="admin-user-lists")
-admin_router.register(r"favorites", AdminFavoritesViewSet, basename="admin-favorites")
+admin_router.register(r"favorites", AdminFavoritesStatsViewSet, basename="admin-favorites")
 admin_router.register(r"import-jobs", AdminImportJobViewSet, basename="admin-import-jobs")
 admin_router.register(r"logs", AdminSystemLogViewSet, basename="admin-logs")
 admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit-logs")
-
-# Celery admin router
-celery_router = SimpleRouter()
-celery_router.register(
+admin_router.register(
+    r"moderation/reviews", AdminModerationReviewViewSet, basename="admin-moderation-reviews"
+)
+admin_router.register(
+    r"moderation/forums", AdminModerationForumViewSet, basename="admin-moderation-forums"
+)
+admin_router.register(
     r"celery/tasks/results", CeleryTaskResultViewSet, basename="celery-task-results"
 )
 
 urlpatterns = [
+    path(
+        "moderation/summary/",
+        AdminModerationSummaryView.as_view(),
+        name="admin-moderation-summary",
+    ),
     path("", include(admin_router.urls)),
-    path("", include(celery_router.urls)),
     path("dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
     path("stats/export/", AdminStatsExportView.as_view(), name="admin-stats-export"),
     path("bulk/", AdminBulkOperationsView.as_view(), name="admin-bulk"),

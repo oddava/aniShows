@@ -16,37 +16,21 @@ _LOCAL_SETTINGS_CACHE: dict | None = None
 _LOCAL_SETTINGS_CACHE_EXPIRES_AT = 0.0
 _LOCAL_SETTINGS_LOCK = threading.Lock()
 
+# Only settings the code enforces (G6 P1-6). Stored keys outside this shape are
+# dropped by ``merge_admin_settings``, so old rows stay harmless.
 DEFAULT_ADMIN_SETTINGS = {
     "general": {
-        "siteName": "aniShows",
-        "siteDescription": "Your Ultimate Anime Discovery Platform",
         "maintenanceMode": False,
         "allowRegistration": True,
-        "defaultLanguage": "en",
-        "timezone": "UTC",
     },
     "users": {
         "emailVerification": True,
         "allowUsernameChange": True,
         "minUsernameLength": 3,
         "maxUsernameLength": 30,
-        "defaultUserRole": "user",
-        "profileVisibility": "public",
     },
     "content": {
         "enableReviews": True,
-        "requireApproval": False,
-        "autoFetchMetadata": True,
-        "maxUploadSize": 10,
-        "allowedImageTypes": "jpg,jpeg,png,webp",
-    },
-    "security": {
-        "sessionTimeout": 24,
-        "maxLoginAttempts": 5,
-        "requireStrongPassword": True,
-        "twoFactorAuth": False,
-        "ipBlocking": False,
-        "apiRateLimit": 1000,
     },
 }
 

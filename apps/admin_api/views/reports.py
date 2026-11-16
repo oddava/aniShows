@@ -1,55 +1,33 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ...core.permissions import IsAdminUser, IsSuperUser
-from ..services.bulk_operations_service import (
-    BulkOperationError,
-    perform_bulk_operation,
-)
+from ..permissions import AdminPolicyMixin
+from ..services.bulk_operations_service import BulkOperationError, perform_bulk_operation
 from ..services.reports_service import ReportError, generate_report
+from .query_params import wants_refresh
 
 
-class AdminReportsView(APIView):
-    """Generate various admin reports."""
-
-    permission_classes = [IsAdminUser]
+class AdminReportsView(AdminPolicyMixin, APIView):
+    """Generate admin reports (``days`` is one of 7, 30, 90, 365)."""
 
     def get(self, request):
         report_type = request.query_params.get("type", "overview")
         days = request.query_params.get("days", 30)
-        force_refresh = str(request.query_params.get("refresh", "")).lower() in {
-            "1",
-            "true",
-            "yes",
-        }
         try:
-            result = generate_report(report_type, days, force_refresh=force_refresh)
+            result = generate_report(report_type, days, force_refresh=wants_refresh(request))
         except ReportError as exc:
             return Response({"detail": exc.message}, status=exc.status_code)
 
         return Response(result.payload, status=result.status_code)
 
 
-class AdminBulkOperationsView(APIView):
-    """Execute bulk operations on resources."""
-
-    permission_classes = [IsSuperUser]
+class AdminBulkOperationsView(AdminPolicyMixin, APIView):
+    """Bulk operations (superuser): capped, transactional, dry-run first, audited."""
 
     def post(self, request):
-        entity_type = request.data.get("entity_type") or request.data.get("entity")
-        entity_ids = request.data.get("entity_ids")
-        if entity_ids is None:
-            entity_ids = request.data.get("ids", [])
-
         try:
-            result = perform_bulk_operation(
-                request.data.get("operation"),
-                entity_type,
-                entity_ids,
-                request.user,
-                request.data,
-            )
+            result = perform_bulk_operation(request, request.data)
         except BulkOperationError as exc:
-            return Response({"detail": exc.message}, status=exc.status_code)
+            return Response({"detail": exc.message, **exc.extra}, status=exc.status_code)
 
         return Response(result.payload, status=result.status_code)

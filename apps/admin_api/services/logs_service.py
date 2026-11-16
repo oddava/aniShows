@@ -4,7 +4,10 @@ from django.db.models import Count
 from django.utils import timezone
 
 
-def build_system_log_stats(queryset):
+def build_system_log_stats(queryset, *, last_24h_only: bool = True):
+    """Counts by level and type. Unfiltered, it covers only the last 24h (bounded cost)."""
+    if last_24h_only:
+        queryset = queryset.filter(timestamp__gte=timezone.now() - timedelta(hours=24))
     by_level = dict(queryset.values_list("level").annotate(count=Count("id")))
     by_type = dict(queryset.values_list("log_type").annotate(count=Count("id")))
 
@@ -16,7 +19,8 @@ def build_system_log_stats(queryset):
     return {
         "by_level": by_level,
         "by_type": by_type,
-        "total": queryset.count(),
+        "total": sum(by_level.values()),
+        "window": "24h" if last_24h_only else "filtered",
         "recent_errors": recent_errors,
         "error_rate": round((recent_errors / recent_total) * 100, 2) if recent_total else 0.0,
     }
