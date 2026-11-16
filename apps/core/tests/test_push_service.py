@@ -2,12 +2,15 @@ import ipaddress
 import json
 from unittest.mock import patch
 
+import requests
 from django.contrib.auth import get_user_model
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from pywebpush import WebPushException
 from rest_framework.test import APITestCase
 
-from ..models import PushSubscription
-from ..services.push_service import PushService
+from ..models import Notification, PushSubscription
+from ..services.push_service import PushResult, PushService, build_payload
 from ..services.url_validator import URLValidator
 
 User = get_user_model()
@@ -48,18 +51,101 @@ class PushSubscriptionEndpointTests(APITestCase):
         self.assertEqual(PushSubscription.objects.get().endpoint, FCM)
 
 
-class PushPayloadTests(APITestCase):
+def _http_error(status):
+    response = requests.Response()
+    response.status_code = status
+    return WebPushException(f"Push failed: {status}", response=response)
+
+
+@override_settings(VAPID_PUBLIC_KEY="pub", VAPID_PRIVATE_KEY="priv")
+class PushTransportTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="json", email="j@example.com", password="x")
+        self.subscription = PushSubscription.objects.create(
+            user=self.user, endpoint=FCM, p256dh="k", auth="a", is_active=True
+        )
+        self.notification = Notification.objects.create(
+            user=self.user,
+            notification_type=Notification.NotificationType.NEW_EPISODE,
+            title="JoJo's Bizarre Adventure",
+            message="It's out " + "x" * 2000,
+            data={"anime_id": 7, "anime_slug": "jojo"},
+        )
+
+    def _send(self):
+        return PushService.send_notification(self.notification, unread_count=3)
+
     @patch("apps.core.services.push_service.webpush")
-    def test_payload_is_valid_json_with_apostrophes_and_booleans(self, mock_webpush):
-        user = User.objects.create_user(username="json", email="j@example.com", password="x")
-        subscription = PushSubscription.objects.create(
-            user=user, endpoint=FCM, p256dh="k", auth="a", is_active=True
-        )
+    def test_payload_v1_is_small_json_with_a_same_origin_url(self, mock_webpush):
+        self.assertIs(self._send(), PushResult.SENT)
 
-        PushService.send_push_notification(
-            subscription, "JoJo's Bizarre Adventure", "It's out", {"spoiler": True, "x": None}
-        )
-
-        payload = json.loads(mock_webpush.call_args.kwargs["data"])
+        raw = mock_webpush.call_args.kwargs["data"]
+        self.assertLessEqual(len(raw.encode()), 1024)
+        payload = json.loads(raw)
+        self.assertEqual(payload["v"], 1)
         self.assertEqual(payload["title"], "JoJo's Bizarre Adventure")
-        self.assertEqual(payload["data"], {"spoiler": True, "x": None})
+        self.assertLessEqual(len(payload["body"]), 180)
+        self.assertEqual(payload["url"], "/anime/jojo")
+        self.assertEqual(payload["notification_id"], self.notification.pk)
+        self.assertEqual(payload["unread_count"], 3)
+        self.assertEqual(payload["tag"], "ep7")
+
+    @patch("apps.core.services.push_service.webpush")
+    def test_ttl_timeout_urgency_and_topic_are_passed(self, mock_webpush):
+        self._send()
+        kwargs = mock_webpush.call_args.kwargs
+        self.assertEqual(kwargs["ttl"], 86400)
+        self.assertEqual(kwargs["timeout"], 10)
+        self.assertEqual(kwargs["headers"], {"Urgency": "normal", "Topic": "ep7"})
+        self.subscription.refresh_from_db()
+        self.assertIsNotNone(self.subscription.last_used)
+
+    @patch("apps.core.services.push_service.webpush")
+    def test_gone_and_rejected_endpoints_are_deactivated(self, mock_webpush):
+        for status in (410, 404, 403, 400, 413):
+            with self.subTest(status=status):
+                PushSubscription.objects.filter(pk=self.subscription.pk).update(is_active=True)
+                mock_webpush.side_effect = _http_error(status)
+                self.assertIs(self._send(), PushResult.FAILED)
+                self.subscription.refresh_from_db()
+                self.assertFalse(self.subscription.is_active)
+
+    @patch("apps.core.services.push_service.webpush")
+    def test_transient_failures_retry_then_deactivate_after_five(self, mock_webpush):
+        mock_webpush.side_effect = _http_error(429)
+        for attempt in range(1, 5):
+            self.assertIs(self._send(), PushResult.RETRY)
+            self.subscription.refresh_from_db()
+            self.assertEqual(self.subscription.failure_count, attempt)
+            self.assertTrue(self.subscription.is_active)
+        self.assertIs(self._send(), PushResult.FAILED)
+        self.subscription.refresh_from_db()
+        self.assertFalse(self.subscription.is_active)
+
+    @patch("apps.core.services.push_service.webpush")
+    def test_timeouts_and_5xx_are_transient_and_success_resets_the_count(self, mock_webpush):
+        mock_webpush.side_effect = requests.Timeout()
+        self.assertIs(self._send(), PushResult.RETRY)
+        mock_webpush.side_effect = _http_error(503)
+        self.assertIs(self._send(), PushResult.RETRY)
+        mock_webpush.side_effect = None
+        self.assertIs(self._send(), PushResult.SENT)
+        self.subscription.refresh_from_db()
+        self.assertEqual(self.subscription.failure_count, 0)
+
+    @override_settings(VAPID_SUBJECT="", DEFAULT_FROM_EMAIL="AniShows <hello@anishows.example>")
+    def test_vapid_sub_is_parsed_from_a_display_name_address(self):
+        self.assertEqual(PushService.get_vapid_claims(), {"sub": "mailto:hello@anishows.example"})
+
+    @override_settings(VAPID_SUBJECT="mailto:ops@anishows.example")
+    def test_vapid_subject_setting_wins(self):
+        self.assertEqual(PushService.get_vapid_claims(), {"sub": "mailto:ops@anishows.example"})
+
+    def test_payload_falls_back_when_the_url_is_huge(self):
+        self.notification.data = {"anime_id": 7, "anime_slug": "a" * 2000}
+        payload = json.loads(build_payload(self.notification, unread_count=0))
+        self.assertEqual(payload["url"], "/notifications")
+
+    @override_settings(VAPID_PUBLIC_KEY="", VAPID_PRIVATE_KEY="")
+    def test_not_configured_without_keys(self):
+        self.assertFalse(PushService.is_configured())
