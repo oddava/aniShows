@@ -5,6 +5,7 @@ from allauth.account import app_settings as allauth_account_settings
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
+from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.utils.translation import gettext_lazy as _
@@ -73,6 +74,42 @@ def require_recent_auth(request, max_age: int = REAUTH_MAX_AGE_SECONDS) -> None:
     auth_time = token_auth_time(request.auth)
     if auth_time is None or time.time() - auth_time > max_age:
         raise ReauthRequired()
+
+
+def live_refresh_tokens(user):
+    """Unexpired, non-blacklisted refresh tokens of ``user``: one per signed-in device.
+
+    Rotation blacklists each token as it is replaced, so every device holds
+    exactly one live token.
+    """
+    return OutstandingToken.objects.filter(
+        user=user, blacklistedtoken__isnull=True, expires_at__gt=timezone.now()
+    )
+
+
+def revoke_other_sessions(user, keep_jti: str) -> int:
+    """Blacklist every live refresh token of ``user`` except ``keep_jti``; return how many."""
+    others = list(live_refresh_tokens(user).exclude(jti=keep_jti))
+    BlacklistedToken.objects.bulk_create(
+        [BlacklistedToken(token=token) for token in others], ignore_conflicts=True
+    )
+    return len(others)
+
+
+def flush_expired_tokens(batch_size: int = 5000) -> int:
+    """Delete expired outstanding tokens in batches; their blacklist rows cascade (A20)."""
+    deleted = 0
+    now = timezone.now()
+    while True:
+        ids = list(
+            OutstandingToken.objects.filter(expires_at__lte=now).values_list("id", flat=True)[
+                :batch_size
+            ]
+        )
+        if not ids:
+            return deleted
+        OutstandingToken.objects.filter(id__in=ids).delete()
+        deleted += len(ids)
 
 
 def revoke_all_sessions(user) -> None:

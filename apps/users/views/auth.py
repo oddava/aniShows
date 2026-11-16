@@ -1,4 +1,5 @@
 import contextlib
+from datetime import UTC, datetime
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -38,7 +39,13 @@ from ..services.auth_flow_service import (
     resend_verification_flow,
     verify_email_flow,
 )
-from ..services.auth_service import AuthService, add_session_claims
+from ..services.auth_service import (
+    AuthService,
+    add_session_claims,
+    live_refresh_tokens,
+    revoke_other_sessions,
+    token_auth_time,
+)
 from ..services.email_service import EmailService
 from ..services.ws_ticket_service import TICKET_TTL_SECONDS, issue_ws_ticket
 
@@ -402,6 +409,78 @@ class LogoutView(APIView):
 
         end_django_session(request)
         return clear_refresh_cookie(Response(status=status.HTTP_204_NO_CONTENT))
+
+
+def _cookie_session(request) -> RefreshToken | None:
+    """The request's live refresh token (cookie), or None if missing, invalid or revoked."""
+    raw = get_refresh_cookie(request)
+    if not raw:
+        return None
+    try:
+        token = RefreshToken(raw)  # type: ignore[arg-type]
+        token.check_blacklist()
+    except TokenError:
+        return None
+    return token
+
+
+class _CookieSessionView(APIView):
+    """Base for the device-session endpoints under the refresh cookie's path."""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    def _session_or_error(self, request):
+        rejected = cookie_auth_rejected(request)
+        if rejected is not None:
+            return None, None, rejected
+        token = _cookie_session(request)
+        user = (
+            User.objects.filter(pk=token.get(jwt_settings.USER_ID_CLAIM), is_active=True).first()
+            if token is not None
+            else None
+        )
+        if token is None or user is None:
+            return (
+                None,
+                None,
+                error_response(
+                    "Refresh token is invalid or expired.",
+                    code="token_not_valid",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                ),
+            )
+        return token, user, None
+
+
+class SessionsView(_CookieSessionView):
+    """``{active, current_since}``: devices signed in to this account (A20, P1-11)."""
+
+    def get(self, request):
+        token, user, error = self._session_or_error(request)
+        if error is not None:
+            return error
+        auth_time = token_auth_time(token)
+        return Response(
+            {
+                "active": live_refresh_tokens(user).count(),
+                "current_since": (
+                    datetime.fromtimestamp(auth_time, tz=UTC).isoformat() if auth_time else None
+                ),
+            }
+        )
+
+
+class RevokeOtherSessionsView(_CookieSessionView):
+    """Sign out every other device; this one (the cookie's token) stays signed in."""
+
+    def post(self, request):
+        token, user, error = self._session_or_error(request)
+        if error is not None:
+            return error
+        revoked = revoke_other_sessions(user, keep_jti=token[jwt_settings.JTI_CLAIM])
+        logger.info("Signed out other devices", extra={"user_id": user.pk, "revoked": revoked})
+        return Response({"revoked": revoked, "active": live_refresh_tokens(user).count()})
 
 
 class WebSocketTicketView(APIView):

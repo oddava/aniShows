@@ -12,6 +12,7 @@ from ..shared.celery import observed_shared_task, retry_on_error
 from ..shared.errors import iter_exception_chain
 from ..shared.logger import logger
 from ..shared.task_lock import cache_lock
+from .services.auth_service import flush_expired_tokens
 from .services.celery_tasks import UserTaskService
 
 RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
@@ -77,6 +78,16 @@ def _is_retryable_external_error(exc: Exception) -> bool:
 def cleanup_unverified_accounts(self, days: int = 7):
     with retry_on_error(self, "Unverified account cleanup failed", extra={"days": days}):
         return UserTaskService.cleanup_unverified_accounts(days=days)
+
+
+@observed_shared_task(retry_policy="standard")
+def flush_expired_auth_tokens(self, batch_size: int = 5000):
+    """Delete expired JWT outstanding/blacklist rows (A20).
+
+    No beat entry of its own: G3's run_user_maintenance_workflow queues it.
+    """
+    with retry_on_error(self, "Expired auth token flush failed", extra={"batch_size": batch_size}):
+        return {"deleted": flush_expired_tokens(batch_size=batch_size)}
 
 
 @observed_shared_task(retry_policy="standard")
