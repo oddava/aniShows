@@ -286,6 +286,45 @@ class AnimePublicPayloadService:
         "banner_image_large",
     )
 
+    # A save that changes only these fields changes only the detail payload (no
+    # card shows them), so it drops that one key instead of every collection (B2).
+    DETAIL_ONLY_FIELDS = frozenset(
+        {
+            "status_distribution",
+            "synopsis",
+            "external_links",
+            "trailer_url",
+            "theme_songs",
+            "meta_description",
+        }
+    )
+    # The query parameters a list response depends on (``ListFilterMixin`` and
+    # the paginator). Anything else is ignored, so it cannot mint cache keys (B11).
+    LIST_CACHE_SCALAR_PARAMS = (
+        "q",
+        "studio",
+        "season",
+        "year",
+        "min_year",
+        "max_year",
+        "min_rating",
+        "max_rating",
+        "min_episodes",
+        "max_episodes",
+        "min_duration",
+        "max_duration",
+        "source",
+        "shelf",
+        "sort",
+        "page",
+        "page_size",
+    )
+    # Read stripped and lowercased by the filters, so normalised the same way in the
+    # key. The others are kept as sent: the sort variants test their raw truthiness.
+    LIST_CACHE_CASELESS_PARAMS = frozenset({"q", "shelf", "sort"})
+    # Comma-separated sets whose order and case do not matter.
+    LIST_CACHE_SET_PARAMS = ("tags", "type", "status")
+
     @classmethod
     def detail_cache_key(cls, slug: str) -> str:
         return f"anime_detail_base:{cls.PUBLIC_CACHE_VERSION}:{slug}"
@@ -640,18 +679,19 @@ class AnimePublicPayloadService:
 
 # --- Cross-group invalidation contract (G2; overview section 5) ---------------
 # Other groups call these instead of saving the Anime row to flush its caches.
-# Prep-commit stubs: they do exactly what an ``Anime`` post_save does today
-# (``signals._invalidate_anime_public_caches``, which also bumps the collection
-# namespace). G2 narrows ``invalidate_anime_detail`` to the slug's own keys (P0-2).
+# An ``Anime`` save does the same through ``signals``: a save of detail-only
+# fields calls the first, any other save both (P0-2).
 
 
 def invalidate_anime_detail(slug: str) -> None:
-    """Drop the cached public payloads of one anime (today: also every collection)."""
-    from ..signals import _invalidate_anime_public_caches
+    """Drop one anime's cached detail payload; every collection stays cached.
 
-    _invalidate_anime_public_caches(slug)
+    For changes only the detail page shows (review counts, status counts,
+    synopsis...). Its cards in lists and shelves are untouched.
+    """
+    invalidate_public_cache_keys(*AnimePublicPayloadService.detail_cache_keys(slug))
 
 
 def invalidate_public_collections() -> None:
-    """Invalidate every cached public collection (lists, shelves, browse rows)."""
+    """Invalidate every cached public collection (lists, shelves, browse rows, schedule)."""
     AnimePublicPayloadService.bump_collection_cache_namespace()
