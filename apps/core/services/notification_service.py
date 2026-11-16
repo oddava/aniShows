@@ -208,7 +208,9 @@ def _channel_flags(user, category: str, preferences: prefs.Preferences) -> tuple
 
 def _after_create(notification: Notification, *, deliver: bool) -> None:
     def run():
-        unread_count = NotificationService._increment_unread_count(notification.user_id)
+        # Recount instead of +1: when several rows commit together, the first callback
+        # already sees them all, so per-row deltas would overcount the badge.
+        unread_count = NotificationService._recount_unread(notification.user_id)
         NotificationService._broadcast_notification(notification, unread_count=unread_count)
         if deliver:
             _enqueue_delivery([notification.pk])

@@ -217,3 +217,70 @@ class NotifyApiTests(TestCase):
         # A repeat (or an older episode) changes nothing.
         self.assertIsNone(notify(self.recipient, TYPES.NEW_EPISODE, data=data))
         self.assertEqual(Notification.objects.count(), 1)
+
+
+class DeliveryRaceTests(TestCase):
+    """Interleavings found by the council (Sol r1)."""
+
+    def setUp(self):
+        cache.clear()
+        self.recipient = User.objects.create_user("owner", "owner@example.com", "pw-123456")
+        self.actor = User.objects.create_user("fan1", "fan1@example.com", "pw-123456")
+        self.other = User.objects.create_user("fan2", "fan2@example.com", "pw-123456")
+        anime = Anime.objects.create(
+            title="Mushishi", slug="mushishi", anime_type="TV", status="Airing"
+        )
+        self.review = Review.objects.create(user=self.recipient, anime=anime, rating=9, text="Calm")
+
+    def test_rows_committed_together_do_not_overcount_the_badge(self):
+        with self.captureOnCommitCallbacks(execute=True), transaction.atomic():
+            notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.actor)
+            notify(self.recipient, TYPES.NEW_FOLLOWER, actor=self.other)
+        self.assertEqual(NotificationService.get_unread_count(self.recipient), 2)
+
+    @override_settings(**VAPID)
+    def test_a_stale_task_cannot_consume_a_newer_aggregate(self):
+        from ..services import notification_delivery
+        from ..services.push_service import PushResult
+
+        PushSubscription.objects.create(
+            user=self.recipient, endpoint="https://push.example.com/x", p256dh="k", auth="a"
+        )
+        notification_preferences.update_preferences(self.recipient.pk, {"likes": {"push": True}})
+        like = {"review_id": self.review.pk}
+        with patch(ENQUEUE):
+            first = _written(notify(self.recipient, TYPES.REVIEW_LIKE, actor=self.actor, data=like))
+            stale = Notification.objects.get(pk=first.pk)  # a task loaded this revision
+            notify(self.recipient, TYPES.REVIEW_LIKE, actor=self.other, data=like)
+
+        self.assertFalse(notification_delivery._claim(stale, "is_push_sent"))
+        with patch(
+            "apps.core.services.notification_delivery.PushService.send_notification",
+            return_value=PushResult.SENT,
+        ) as send:
+            notification_delivery.deliver([first.pk])
+        sent = send.call_args.args[0]
+        self.assertEqual(sent.message, "fan2 and 1 other liked your review of Mushishi")
+
+    def test_an_email_the_broker_refused_stays_pending(self):
+        from ..services import notification_delivery
+
+        profile = self.recipient.userprofile
+        profile.email_verified = True
+        profile.save(update_fields=["email_verified"])
+        row = Notification.objects.create(
+            user=self.recipient,
+            notification_type=TYPES.NEW_EPISODE,
+            title="New Episode",
+            message="Episode 2 of Mushishi aired.",
+            data={"anime_slug": "mushishi"},
+            is_push_sent=True,
+            is_email_sent=False,
+        )
+        with patch(
+            "apps.users.services.email_service.send_email_task.delay",
+            side_effect=ConnectionError("broker down"),
+        ):
+            notification_delivery.deliver([row.pk])
+        row.refresh_from_db()
+        self.assertFalse(row.is_email_sent)

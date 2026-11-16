@@ -51,15 +51,25 @@ def enqueue_delivery(notification_ids: Iterable[int]) -> None:
             logger.exception("Failed to enqueue notification delivery for %s rows", len(chunk))
 
 
-def _claim(notification_id: int, field: str) -> bool:
+def _claim(notification: Notification, field: str) -> bool:
+    """Take one channel of the revision we loaded.
+
+    Merging into an aggregate (or rolling an episode row forward) bumps ``created_at``
+    and re-opens the channel, so a task holding older contents can't consume newer
+    work: its claim misses, and the merge's own delivery sends the new contents.
+    """
     return (
-        Notification.objects.filter(pk=notification_id, **{field: False}).update(**{field: True})
+        Notification.objects.filter(
+            pk=notification.pk, created_at=notification.created_at, **{field: False}
+        ).update(**{field: True})
         == 1
     )
 
 
-def _release(notification_id: int, field: str) -> None:
-    Notification.objects.filter(pk=notification_id).update(**{field: False})
+def _release(notification: Notification, field: str) -> None:
+    Notification.objects.filter(pk=notification.pk, created_at=notification.created_at).update(
+        **{field: False}
+    )
 
 
 def deliver(notification_ids: Iterable[int]) -> dict:
@@ -82,7 +92,7 @@ def deliver(notification_ids: Iterable[int]) -> dict:
             category = notification_types.category_for(notification.notification_type)
             user_prefs = preferences[notification.user_id]
             try:
-                if not notification.is_push_sent and _claim(notification.pk, "is_push_sent"):
+                if not notification.is_push_sent and _claim(notification, "is_push_sent"):
                     if not (
                         push_ready
                         and notification.user.is_active
@@ -100,12 +110,18 @@ def deliver(notification_ids: Iterable[int]) -> dict:
                         if outcome is PushResult.SENT:
                             result["push_sent"] += 1
                         elif outcome is PushResult.RETRY:
-                            _release(notification.pk, "is_push_sent")
+                            _release(notification, "is_push_sent")
                             result["push_retry"] += 1
-                if not notification.is_email_sent and _claim(notification.pk, "is_email_sent"):
-                    if prefs.wants(user_prefs, category, prefs.EMAIL) and send_notification_email(
-                        notification
-                    ):
+                if not notification.is_email_sent and _claim(notification, "is_email_sent"):
+                    try:
+                        queued = prefs.wants(
+                            user_prefs, category, prefs.EMAIL
+                        ) and send_notification_email(notification)
+                    except Exception:
+                        # Not handed to the email queue (broker down): keep it pending.
+                        _release(notification, "is_email_sent")
+                        raise
+                    if queued:
                         result["email_sent"] += 1
                     else:
                         result["skipped"] += 1
