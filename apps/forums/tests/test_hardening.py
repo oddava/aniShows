@@ -1,5 +1,6 @@
 """Hostile-content limits and moderation edge cases (council round 1)."""
 
+import threading
 import time
 from unittest import mock
 
@@ -15,7 +16,9 @@ from ..models import Post, Thread
 from ..serializers import PostSerializer, ThreadSerializer
 from ..services.excerpt import EXCERPT_SOURCE_LENGTH, build_excerpt
 from ..services.interactions import create_post, update_post, update_thread
+from ..services.mentions import notify_mentions
 from ..services.moderation import lock_thread_then_post
+from ..services.nesting import max_container_nesting
 from .conftest import make_reply
 
 POSTS_URL = reverse("forums:post-list")
@@ -95,9 +98,10 @@ class TestRemovedParents:
         listed = api_for(author).get(POSTS_URL, {"thread__id": thread.id}).data["results"][0]
         assert listed["can_reply"] is False
 
-    def test_staff_may_still_reply_under_a_removed_post(
+    def test_nobody_replies_under_a_removed_post_not_even_staff(
         self, make_user, make_thread, api_for, staff
     ):
+        """Matches the UI, which never offers Reply on a removed post."""
         author = make_user()
         thread = make_thread(author)
         parent = make_reply(thread, author)
@@ -107,7 +111,9 @@ class TestRemovedParents:
             POSTS_URL, {"thread": thread.id, "parent": parent.id, "content": "note"}, format="json"
         )
 
-        assert response.status_code == 201
+        assert response.status_code == 400
+        staff_view = api_for(staff).get(POSTS_URL, {"thread__id": thread.id}).data["results"][0]
+        assert staff_view["can_reply"] is False
 
 
 @pytest.mark.django_db
@@ -200,13 +206,18 @@ class TestExcerpt:
             ">!" * 50_000,
             "||a" * 50_000,
             "[" * 100_000,
+            "@[" * 50_000,
+            "\n" * 100_000,
+            " \n" * 50_000,
             ">!x\n" * 50_000,
+            "[a](" * 25_000,
         ],
     )
     def test_hostile_text_is_fast(self, hostile):
         started = time.perf_counter()
         build_excerpt(hostile)
-        assert time.perf_counter() - started < 0.5
+        # The quadratic patterns took 100-300 ms on the 4k slice; linear ones take ~1 ms.
+        assert time.perf_counter() - started < 0.05
 
 
 def _request_for(user):
@@ -296,3 +307,145 @@ def test_post_writes_lock_the_thread_before_the_post(make_user, make_thread):
     assert len(locking) == 2
     assert '"forums_thread"' in locking[0].split("FROM", 1)[1].split("WHERE", 1)[0]
     assert '"forums_post"' in locking[1].split("FROM", 1)[1].split("WHERE", 1)[0]
+
+
+@pytest.mark.django_db
+class TestRemovedThreadsStayQuietLive:
+    """Removed threads are staff-only: nothing new from them goes to the public channel."""
+
+    def test_new_and_edited_posts_in_a_removed_thread_are_not_broadcast(
+        self, make_user, make_thread, api_for, staff, django_capture_on_commit_callbacks
+    ):
+        thread = make_thread(make_user())
+        mine = make_reply(thread, staff, content="before")
+        thread.is_removed = True
+        thread.save(update_fields=["is_removed"])
+
+        with (
+            mock.patch("apps.forums.services.events.broadcast_to_thread") as broadcast,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            created = api_for(staff).post(
+                POSTS_URL, {"thread": thread.id, "content": "STAFF ONLY NOTE"}, format="json"
+            )
+            edited = api_for(staff).patch(_post_url(mine), {"content": "after"}, format="json")
+
+        assert (created.status_code, edited.status_code) == (201, 200)
+        broadcast.assert_not_called()
+
+    def test_removing_a_thread_tells_its_channel(
+        self, make_user, make_thread, api_for, staff, django_capture_on_commit_callbacks
+    ):
+        thread = make_thread(make_user())
+
+        with (
+            mock.patch("apps.forums.services.events.broadcast_to_thread") as broadcast,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            api_for(staff).post(
+                reverse("forums:thread-remove", args=[thread.id]), {}, format="json"
+            )
+
+        broadcast.assert_called_once_with(
+            thread.id, {"type": "forum.thread_removed", "thread_id": thread.id}
+        )
+
+
+@pytest.mark.django_db
+def test_mention_budget_is_read_under_a_row_lock(make_user, make_thread):
+    """Read-then-increment of ``mentions_notified`` runs under SELECT ... FOR UPDATE."""
+    author = make_user()
+    make_user("pal")
+    post = make_reply(make_thread(author), author, content="hi @pal")
+
+    with CaptureQueriesContext(connection) as queries:
+        notify_mentions(author, post)
+
+    sql = [q["sql"] for q in queries.captured_queries]
+    lock_at = next(i for i, q in enumerate(sql) if "FOR UPDATE" in q and "forums_post" in q)
+    bump_at = next(
+        i for i, q in enumerate(sql) if q.startswith("UPDATE") and "mentions_notified" in q
+    )
+    assert lock_at < bump_at
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_mention_reservations_share_one_budget(make_user, make_thread):
+    """An edit's reservation that waits on another's lock sees the budget that one spent."""
+    author = make_user()
+    names = [make_user(f"late{i}").username for i in range(settings.FORUM_MAX_MENTIONS_PER_POST)]
+    post = make_reply(make_thread(author), author, content=" ".join(f"@{n}" for n in names))
+    holding_lock = threading.Event()
+
+    def other_edit_spends_the_budget():
+        try:
+            with transaction.atomic():
+                list(Post.objects.select_for_update().filter(pk=post.pk).values_list("pk"))
+                holding_lock.set()
+                time.sleep(0.5)
+                Post.objects.filter(pk=post.pk).update(
+                    mentions_notified=settings.FORUM_MAX_MENTIONS_PER_POST
+                )
+        finally:
+            connection.close()
+
+    worker = threading.Thread(target=other_edit_spends_the_budget)
+    worker.start()
+    assert holding_lock.wait(5)
+    notify_mentions(author, post)  # waits for the worker, then finds no budget left
+    worker.join(10)
+
+    assert not Notification.objects.filter(notification_type=MENTION).exists()
+    assert Post.objects.get(pk=post.pk).mentions_notified == settings.FORUM_MAX_MENTIONS_PER_POST
+
+
+class TestNesting:
+    @pytest.mark.parametrize(
+        ("text", "depth"),
+        [
+            ("plain", 0),
+            ("> quote", 1),
+            ("> > - 1. item", 4),
+            (">>>> x", 4),
+            ("-----", 0),  # a separator, not a list
+            ("- - -", 3),
+            ("   > three spaces indent", 1),
+            ("    > four spaces is code", 0),
+            ("a\n> b\n> > c", 2),
+        ],
+    )
+    def test_counts_leading_container_markers(self, text, depth):
+        assert max_container_nesting(text) == depth
+
+    def test_counting_is_linear(self):
+        started = time.perf_counter()
+        max_container_nesting("> " * 10_000 + "\n" + "- " * 10_000)
+        assert time.perf_counter() - started < 0.05
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("body", ["> " * 3_000 + "a", "- " * 2_000 + "a"])
+def test_deeply_nested_bodies_are_refused(make_user, make_thread, api_for, body):
+    """Bodies like these overflow or stall the markdown parser in every viewer's browser."""
+    author = make_user()
+    thread = make_thread(author)
+
+    response = api_for(author).post(
+        POSTS_URL, {"thread": thread.id, "content": body}, format="json"
+    )
+
+    assert response.status_code == 400
+    assert "content" in response.data["errors"]
+
+
+@pytest.mark.django_db
+def test_nesting_at_the_cap_is_accepted(make_user, make_thread, api_for):
+    author = make_user()
+    thread = make_thread(author)
+    body = "> " * settings.FORUM_MAX_CONTAINER_NESTING + "fine"
+
+    response = api_for(author).post(
+        POSTS_URL, {"thread": thread.id, "content": body}, format="json"
+    )
+
+    assert response.status_code == 201

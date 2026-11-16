@@ -10,6 +10,7 @@ from ..users.services.avatar_service import get_user_avatar_url
 from . import messages
 from .models import Category, Post, Tag, Thread
 from .services.excerpt import build_excerpt
+from .services.nesting import max_container_nesting
 
 User = get_user_model()
 
@@ -20,6 +21,15 @@ CONTENT_FIELD_KWARGS = {"content": {"max_length": settings.FORUM_CONTENT_MAX_LEN
 def _viewer_is_staff(serializer) -> bool:
     request = serializer.context.get("request")
     return bool(request and request.user.is_staff)
+
+
+class ContentNestingMixin:
+    """Refuse bodies nested deeper than the markdown parser can safely handle."""
+
+    def validate_content(self, value: str) -> str:
+        if max_container_nesting(value) > settings.FORUM_MAX_CONTAINER_NESTING:
+            raise ValidationError(messages.TOO_NESTED)
+        return value
 
 
 class LikedByUserMixin:
@@ -125,7 +135,7 @@ class ThreadListSerializer(LikedByUserMixin, ModelSerializer):
         return build_excerpt(obj.content)
 
 
-class ThreadSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
+class ThreadSerializer(ContentNestingMixin, RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
     """Full serializer for thread detail view"""
 
     author = CustomUserSerializer(read_only=True)
@@ -193,7 +203,7 @@ class ThreadSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
         return bool(getattr(obj, "is_subscribed", False))
 
 
-class PostSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
+class PostSerializer(ContentNestingMixin, RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
     """A post. Removed posts keep their place; non-staff see no content or author."""
 
     author = CustomUserSerializer(read_only=True)
@@ -263,7 +273,8 @@ class PostSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
             raise ValidationError({"parent": "Parent post must belong to the same thread."})
         if parent and parent.depth >= Post.MAX_DEPTH:
             raise ValidationError({"parent": messages.TOO_DEEP})
-        if parent and parent.is_removed and not _viewer_is_staff(self):
+        if parent and parent.is_removed:
+            # Nobody replies under a removed post (the UI never offers it either).
             raise ValidationError({"parent": messages.PARENT_REMOVED})
 
         if thread and thread.is_locked and not _viewer_is_staff(self):

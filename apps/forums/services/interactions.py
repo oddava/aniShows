@@ -276,7 +276,7 @@ def _lock_reply_targets(serializer, author) -> tuple[Thread, Post | None]:
     parent = Post.objects.select_for_update().filter(pk=parent.pk).first()
     if parent is None:
         raise ValidationError({"parent": messages.PARENT_NOT_FOUND})
-    if parent.is_removed and not is_staff:
+    if parent.is_removed:
         raise ValidationError({"parent": messages.PARENT_REMOVED})
     return thread, parent
 
@@ -311,7 +311,9 @@ def create_post(serializer, author) -> Post:
             "Failed to queue the subscriber fan-out for post %s",
             post.id,
         )
-        _broadcast_new_post(post)
+        # A removed thread is staff-only: its live channel carries no new content.
+        if not thread.is_removed:
+            _broadcast_new_post(post)
     return post
 
 
@@ -340,7 +342,8 @@ def update_post(serializer) -> Post:
                 "Failed to process post mentions for post %s",
                 post.id,
             )
-            broadcast_post_updated(post)
+            if not post.thread.is_removed:
+                broadcast_post_updated(post)
     return post
 
 

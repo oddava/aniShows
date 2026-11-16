@@ -14,11 +14,14 @@ EXCERPT_SOURCE_LENGTH = 4_000
 # Spoiler openers and their closers (``||x||`` in forums, ``>!x!<`` in reviews).
 _SPOILER_CLOSERS = {"||": "||", ">!": "!<"}
 
-_CODE_FENCE_MARKERS = re.compile(r"^\s*(```|~~~)[^\n]*$", re.MULTILINE)
+# ``[ \t]`` (never ``\s``) and bounded classes: no pattern can rescan across lines.
+_CODE_FENCE_MARKERS = re.compile(r"^[ \t]*(```|~~~)[^\n]*$", re.MULTILINE)
 # ``@[title](url)`` embeds and ``![alt](url|width|align)`` images carry no text.
-_EMBEDS = re.compile(r"(?:!|@)\[[^\]]*\]\([^)]*\)")
-_LINKS = re.compile(r"\[([^\]]*)\]\([^)]*\)")
-_LINE_PREFIXES = re.compile(r"^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+)", re.MULTILINE)
+_EMBEDS = re.compile(r"(?:!|@)\[[^\]\n]{0,300}\]\([^)\n]{0,500}\)")
+_LINKS = re.compile(r"\[([^\]\n]{0,300})\]\([^)\n]{0,500}\)")
+_LINE_PREFIXES = re.compile(
+    r"^[ \t]{0,3}(?:#{1,6}[ \t]+|>[ \t]?|[-*+][ \t]+|\d{1,9}[.)][ \t]+)", re.MULTILINE
+)
 # A single ``_`` only at a word edge, so ``snake_case`` names survive.
 _EMPHASIS = re.compile(r"\*\*|__|~~|`|\*|(?<!\w)_|_(?!\w)")
 _WHITESPACE = re.compile(r"\s+")

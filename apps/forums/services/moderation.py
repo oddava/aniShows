@@ -16,6 +16,7 @@ from .events import (
     ForumActionResult,
     broadcast_post_removed,
     broadcast_post_restored,
+    broadcast_thread_removed,
     run_after_commit,
 )
 
@@ -49,12 +50,14 @@ def _audit(
     )
 
 
-def _set_removed(instance: Thread | Post, *, removed_by, reason: str) -> None:
+def _set_removed(
+    instance: Thread | Post, *, removed_by, reason: str, extra_fields: tuple[str, ...] = ()
+) -> None:
     instance.is_removed = True
     instance.removed_by = removed_by
     instance.removed_at = timezone.now()
     instance.removal_reason = reason
-    instance.save(update_fields=_REMOVAL_FIELDS)
+    instance.save(update_fields=[*_REMOVAL_FIELDS, *extra_fields])
 
 
 def _clear_removed(instance: Thread | Post) -> None:
@@ -130,6 +133,7 @@ def remove_thread(thread: Thread, *, request, reason: str = "") -> ForumActionRe
                 reason=reason,
             )
             _invalidate_thread_everywhere(locked)
+            broadcast_thread_removed(locked)
     return ForumActionResult(payload={"status": "removed", "is_removed": True}, status_code=200)
 
 
@@ -158,8 +162,7 @@ def mark_post_removed(post: Post, *, removed_by, reason: str = "", by_author: bo
     removal, even a staff member removing their own post through the moderation action.
     """
     post.removed_by_author = by_author
-    post.save(update_fields=["removed_by_author"])
-    _set_removed(post, removed_by=removed_by, reason=reason)
+    _set_removed(post, removed_by=removed_by, reason=reason, extra_fields=("removed_by_author",))
     post.thread.adjust_reply_count(-1)
     run_after_commit(
         lambda: invalidate_thread_caches(post.thread_id),
@@ -207,7 +210,8 @@ def restore_post(post: Post, *, request) -> ForumActionResult:
                 "Failed to invalidate caches for restored post %s",
                 locked.id,
             )
-            broadcast_post_restored(locked)
+            if not locked.thread.is_removed:
+                broadcast_post_restored(locked)
     return ForumActionResult(payload={"status": "restored", "is_removed": False}, status_code=200)
 
 
