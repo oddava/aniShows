@@ -7,6 +7,7 @@ from django.contrib.postgres.search import TrigramWordSimilarity
 from django.db import connections
 from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.db.models.functions import Greatest
+from django.db.models.lookups import GreaterThanOrEqual
 
 from ....shared.parsing import positive_int
 from ....users.models import UserProfile
@@ -21,6 +22,9 @@ MIN_SEARCH_LENGTH = 2
 MIN_SYNOPSIS_SEARCH_LENGTH = 3
 # Fuzzy matching compares trigrams, so it needs at least one (3 characters).
 MIN_FUZZY_SEARCH_LENGTH = 3
+# In a whole-phrase match, how close each word must at least come to the title
+# (``word_similarity``): a misspelt word passes, an unrelated one does not.
+PHRASE_WORD_MIN_SIMILARITY = 0.3
 # ``sort`` values that order a search by how well titles match.
 RELEVANCE_SORTS = {"", "relevance"}
 # A search with more matches than this (a common word: "season" is in a
@@ -90,6 +94,29 @@ def _title_match(word: str) -> Q:
     match = Q(title__ilike=word) | Q(title_jp__ilike=word)
     if len(word) >= MIN_FUZZY_SEARCH_LENGTH:
         match |= Q(title__trigram_word_similar=word) | Q(title_jp__trigram_word_similar=word)
+    return match
+
+
+def _phrase_match(search: str, words: list[str], field: str) -> Q:
+    """The whole query is close to ``field``, and each word at least resembles it.
+
+    Rescues a short misspelt word that misses the per-word bar: "pice" scores
+    0.40 against "One Piece", but "one pice" scores 0.67 as a phrase. The
+    phrase alone is not enough: one exact word out of two already scores 0.5
+    ("one zzzz" against "One Piece"), and "one pice" against "One-Punch Man"
+    scores 0.56. So every word must also be in the title or score at least
+    ``PHRASE_WORD_MIN_SIMILARITY`` against it ("pice" 0.40, "zzzz" 0.0,
+    "pice"/"One-Punch Man" 0.2). Only the ``<%`` condition needs the index; the
+    per-word checks are rechecked on the rows it returns.
+    """
+    match = Q(**{f"{field}__trigram_word_similar": search})
+    for word in words:
+        resembles = Q(**{f"{field}__ilike": word})
+        if len(word) >= MIN_FUZZY_SEARCH_LENGTH:
+            resembles |= Q(
+                GreaterThanOrEqual(TrigramWordSimilarity(word, field), PHRASE_WORD_MIN_SIMILARITY)
+            )
+        match &= resembles
     return match
 
 
@@ -272,7 +299,9 @@ class ListFilterMixin:
         and pg_trgm's word similarity (``word <% title``), which also finds
         titles with a typo. A single word also matches the synopsis, by
         substring only: fuzzy matches in long text are noise. With several
-        words, each must appear in the title or be a close match.
+        words, each must appear in the title or be a close match, or the
+        whole phrase must be close to the title (``_phrase_match``), which
+        finds "one pice".
         """
         search_words = search.split()
         if len(search_words) == 1:
@@ -282,9 +311,16 @@ class ListFilterMixin:
             return queryset.filter(match)
 
         words = [word for word in search_words if len(word) >= MIN_SEARCH_LENGTH]
+        if not words:
+            return queryset
+        every_word = Q()
         for word in words:
-            queryset = queryset.filter(_title_match(word))
-        return queryset
+            every_word &= _title_match(word)
+        return queryset.filter(
+            every_word
+            | _phrase_match(search, words, "title")
+            | _phrase_match(search, words, "title_jp")
+        )
 
     @staticmethod
     def _search_rank_annotations(search: str) -> dict:
