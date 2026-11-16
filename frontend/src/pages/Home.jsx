@@ -1,18 +1,43 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Play, Pause, Star, ChevronRight, Plus, Check, Loader2 } from 'lucide-react';
+import { Play, Pause, Star, ChevronRight, Plus, Check, Loader2, X } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import logger from '../utils/logger';
+import { formatRelativeTime } from '../utils/dateUtils';
 import SEO from '../components/SEO';
 import SectionHeader from '../components/common/SectionHeader';
 import ErrorState from '../components/common/ErrorState';
 import HeroSearch from '../components/home/HeroSearch';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
-import { animeKeys, animeQueries } from '../api/queries/anime';
-import { listKeys, recommendationQueries, userQueries } from '../api/queries/user';
+import { animeKeys, animeQueries, scheduleQueries } from '../api/queries/anime';
+import { listKeys, userQueries } from '../api/queries/user';
+import { recommendationMutations, recommendationQueries } from '../api/queries/recommendations';
+
+const UP_NEXT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const UP_NEXT_LIMIT = 6;
+
+/**
+ * Watching entries from the (already cached, per-user enriched) schedule
+ * payload whose next episode airs within the next 7 days, soonest first.
+ */
+function selectUpNext(scheduleDays, now = Date.now()) {
+    const seen = new Set();
+    return Object.values(scheduleDays || {})
+        .flatMap((items) => (Array.isArray(items) ? items : []))
+        .filter((anime) => {
+            if (!anime || seen.has(anime.id)) return false;
+            if (anime.user_list_status?.status !== 'Watching') return false;
+            const airsAt = Date.parse(anime.next_airing_date);
+            if (!Number.isFinite(airsAt) || airsAt < now || airsAt > now + UP_NEXT_WINDOW_MS) return false;
+            seen.add(anime.id);
+            return true;
+        })
+        .sort((a, b) => Date.parse(a.next_airing_date) - Date.parse(b.next_airing_date))
+        .slice(0, UP_NEXT_LIMIT);
+}
 
 export default function Home() {
     const { isAuthenticated } = useAuth();
@@ -172,6 +197,7 @@ export default function Home() {
 
                 {/* Main Content Area */}
                 <div className="relative space-y-12 md:space-y-16 pt-6 pb-10 md:py-14">
+                    {isAuthenticated && <UpNextSection />}
                     {isAuthenticated && <CurrentlyWatchingSection />}
 
                     <AnimeShelf
@@ -484,6 +510,43 @@ function MemberCarouselHero({
     );
 }
 
+// Members: what airs next from the shows they're watching. Reuses the
+// schedule query (same key as the Schedule page), so it costs no new request
+// once either page has loaded. Hidden while loading and when empty.
+function UpNextSection() {
+    const { isAuthenticated, user } = useAuth();
+    const adultContentEnabled = Boolean(user?.show_adult_content);
+    const preferredTimezone = user?.preferred_timezone;
+
+    const { data: scheduleDays, isLoading } = useQuery({
+        ...scheduleQueries.week(isAuthenticated, adultContentEnabled),
+        staleTime: 5 * 60 * 1000,
+        enabled: isAuthenticated,
+    });
+
+    const upNext = useMemo(() => selectUpNext(scheduleDays), [scheduleDays]);
+
+    if (isLoading || upNext.length === 0) return null;
+
+    return (
+        <AnimeShelf
+            title="Up next"
+            viewAllTo="/schedule?mine=1"
+            items={upNext}
+            renderItem={(anime, index) => {
+                const when = formatRelativeTime(anime.next_airing_date, preferredTimezone);
+                return (
+                    <AnimeCard
+                        anime={anime}
+                        index={index}
+                        metaText={anime.next_airing_episode ? `EP ${anime.next_airing_episode} · ${when}` : when}
+                    />
+                );
+            }}
+        />
+    );
+}
+
 function CurrentlyWatchingSection() {
     const { isAuthenticated } = useAuth();
 
@@ -515,42 +578,61 @@ function CurrentlyWatchingSection() {
     );
 }
 
+function getRecommendationsSubtitle(recommendations) {
+    // Users without personal picks yet get generic trending items from the
+    // backend; those say nothing about the user's taste.
+    const personal = recommendations.filter((rec) => rec.reason !== 'trending');
+    if (personal.length === 0) return 'Popular right now while we learn your taste';
+
+    const genreCounts = {};
+    personal.forEach((rec) => {
+        (rec.reason_metadata?.matched_genres || []).forEach((genre) => {
+            genreCounts[genre] = (genreCounts[genre] || 0) + 1;
+        });
+    });
+    const topGenres = Object.entries(genreCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 3)
+        .map(([genre]) => genre);
+
+    return topGenres.length > 0
+        ? `Based on your love for ${topGenres.join(', ')}`
+        : 'Curated just for you';
+}
+
 function RecommendedForYouSection({ revealRef }) {
     const { isAuthenticated } = useAuth();
+    const queryClient = useQueryClient();
 
     const { data: recommendations, isLoading, error } = useQuery({
         ...recommendationQueries.all(12),
         enabled: isAuthenticated,
         staleTime: 1000 * 60 * 60,
         refetchInterval: 1000 * 60 * 60,
-        refetchIntervalInBackground: true,
         retry: 1,
     });
+
+    const { mutate: dismissRecommendation } = useMutation(recommendationMutations.dismiss(queryClient));
+
+    // Move focus to a neighbouring card's button before this card leaves, so
+    // keyboard users don't drop back to the top of the page.
+    const handleDismiss = useCallback((event, animeId) => {
+        const buttons = Array.from(
+            event.currentTarget.closest('section')?.querySelectorAll('[data-rec-dismiss]') || []
+        );
+        const position = buttons.indexOf(event.currentTarget);
+        const neighbour = buttons[position + 1] || buttons[position - 1];
+        neighbour?.focus();
+        dismissRecommendation(animeId, {
+            onError: (dismissError) => logger.error('Error dismissing recommendation:', dismissError),
+        });
+    }, [dismissRecommendation]);
 
     if (!isAuthenticated || (error && !isLoading) || (!isLoading && (!recommendations || recommendations.length === 0))) {
         return null;
     }
 
-    const genreCounts = {};
-    if (recommendations) {
-        recommendations.forEach(rec => {
-            const genres = rec.reason_metadata?.matched_genres || [];
-            genres.forEach(g => {
-                genreCounts[g] = (genreCounts[g] || 0) + 1;
-            });
-        });
-    }
-
-    const topGenres = Object.entries(genreCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 3)
-        .map(([genre]) => genre);
-
-    const subtitle = isLoading
-        ? 'Finding picks for you…'
-        : (topGenres.length > 0
-            ? `Based on your love for ${topGenres.join(', ')}`
-            : 'Curated just for you');
+    const subtitle = isLoading ? 'Finding picks for you…' : getRecommendationsSubtitle(recommendations);
 
     return (
         <AnimeShelf
@@ -559,7 +641,21 @@ function RecommendedForYouSection({ revealRef }) {
             subtitle={subtitle}
             items={recommendations}
             isLoading={isLoading}
-            renderItem={(rec, index) => <AnimeCard anime={rec.anime} index={index} showMeta />}
+            renderItem={(rec, index) => (
+                <div className="relative h-full group/rec">
+                    <AnimeCard anime={rec.anime} index={index} showMeta />
+                    <button
+                        type="button"
+                        data-rec-dismiss
+                        onClick={(event) => handleDismiss(event, rec.anime.id)}
+                        aria-label={`Not interested in ${rec.anime.title}`}
+                        title="Not interested"
+                        className="absolute top-2 right-2 z-[200] w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg border bg-black/50 border-white/20 text-white hover:bg-black/70 hover:border-white/30 transition-opacity duration-200 opacity-0 group-hover/rec:opacity-100 group-focus-within/rec:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 touch-manipulation after:absolute after:-inset-2 sm:after:inset-0 after:content-['']"
+                    >
+                        <X aria-hidden="true" className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    </button>
+                </div>
+            )}
         />
     );
 }

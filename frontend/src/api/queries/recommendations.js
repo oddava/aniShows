@@ -22,3 +22,29 @@ export const recommendationQueries = {
         queryFn: () => recommendationsApi.getAll(limit).then((res) => res.data.results || res.data),
     }),
 };
+
+export const recommendationMutations = {
+    /*
+     * "Not interested": the card leaves the cached list at once and comes
+     * back if the request fails. No refetch on success: the server keeps the
+     * row dismissed, and the cached list already matches it.
+     */
+    dismiss: (queryClient) => ({
+        mutationFn: (animeId) => recommendationsApi.dismiss(animeId),
+        onMutate: async (animeId) => {
+            await queryClient.cancelQueries({ queryKey: recommendationKeys.all });
+            const previous = queryClient.getQueryData(recommendationKeys.all);
+            queryClient.setQueryData(recommendationKeys.all, (current) => (
+                Array.isArray(current)
+                    ? current.filter((rec) => rec?.anime?.id !== animeId)
+                    : current
+            ));
+            return { previous };
+        },
+        onError: (_error, _animeId, context) => {
+            if (context && context.previous !== undefined) {
+                queryClient.setQueryData(recommendationKeys.all, context.previous);
+            }
+        },
+    }),
+};
