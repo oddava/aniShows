@@ -10,7 +10,7 @@ from ..users.services.avatar_service import get_user_avatar_url
 from . import messages
 from .models import Category, Post, Tag, Thread
 from .services.excerpt import build_excerpt
-from .services.nesting import container_stats
+from .services.nesting import container_stats, normalize_line_endings
 
 User = get_user_model()
 
@@ -24,9 +24,11 @@ def _viewer_is_staff(serializer) -> bool:
 
 
 class ContentNestingMixin:
-    """Refuse bodies nested deeper than the markdown parser can safely handle."""
+    """Normalise line endings and refuse bodies the markdown parser can't safely handle."""
 
     def validate_content(self, value: str) -> str:
+        # Stored with LF only: the markdown parser treats a bare CR as a line end too.
+        value = normalize_line_endings(value)
         stats = container_stats(value)
         if stats.depth > settings.FORUM_MAX_CONTAINER_NESTING:
             raise ValidationError(messages.TOO_NESTED)

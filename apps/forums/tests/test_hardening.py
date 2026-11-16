@@ -415,7 +415,7 @@ class TestNesting:
             ("> quote", 1),
             ("> > - 1. item", 4),
             (">>>> x", 4),
-            ("-----", 0),  # a separator, not a list
+            ("-----", 1),  # the last "-" ends the line; a separator can't nest
             ("- - -", 3),
             # Indentation counts half its columns (tab = 4): it continues open list items.
             ("   > three spaces indent", 2),
@@ -425,6 +425,12 @@ class TestNesting:
             ("- - a\n    " + "- " * 100 + "a", 102),
             ("-\ta\n\t" + "- " * 100 + "a", 102),
             (" " * 64 + "- " * 16 + "a", 48),
+            # Round-4 bypasses: containers opening mid-line, after a footnote or a bare CR.
+            ("[^a]: " + "- " * 100 + "x", 101),
+            ("a\r" + "- " * 100 + "x", 100),
+            ('a<p align="center">' + "- " * 100 + "x</p>", 101),
+            ("well - yes, in 2023. Then version 2.0 > 1.9", 1),
+            ("a\r\n> b\r\n> > c", 2),
             ("a\n> b\n> > c", 2),
         ],
     )
@@ -498,3 +504,37 @@ class TestContainerBudget:
         )
 
         assert response.status_code == 400
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "body",
+    [
+        ("[^a]: " + "- " * 900 + "x\n\n") * 10,
+        ("a\r" + "- " * 900 + "x\r\r") * 10,
+        ('a<p align="center">' + "- " * 1000 + "x</p>\n\n") * 9,
+    ],
+    ids=["footnote", "bare-cr", "aligned-block"],
+)
+def test_round4_bypass_shapes_are_refused(make_user, make_thread, api_for, body):
+    author = make_user()
+    thread = make_thread(author)
+
+    response = api_for(author).post(
+        POSTS_URL, {"thread": thread.id, "content": body}, format="json"
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_line_endings_are_stored_as_lf(make_user, make_thread, api_for):
+    author = make_user()
+    thread = make_thread(author)
+
+    response = api_for(author).post(
+        POSTS_URL, {"thread": thread.id, "content": "a\r\nb\rc"}, format="json"
+    )
+
+    assert response.status_code == 201
+    assert thread.posts.get().content == "a\nb\nc"

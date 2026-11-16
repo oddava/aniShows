@@ -323,7 +323,8 @@ def update_post(serializer) -> Post:
     not be undone by saving the stale instance.
     """
     with transaction.atomic():
-        post = Post.objects.select_for_update().get(pk=serializer.instance.pk)
+        # Thread first (one lock order); its is_removed then can't change under this edit.
+        post = lock_thread_then_post(serializer.instance)
         if post.is_removed:
             raise ValidationError({"content": messages.POST_REMOVED})
         previous_content = post.content
