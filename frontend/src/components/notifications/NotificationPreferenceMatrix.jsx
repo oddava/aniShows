@@ -56,6 +56,7 @@ export default function NotificationPreferenceMatrix({
     const baseId = useId();
     const pushHintId = `${baseId}-push-hint`;
     const lockedHintId = `${baseId}-locked-hint`;
+    const inAppHintId = `${baseId}-in-app-hint`;
 
     const channels = (schema?.channels || []).filter((channel) => channel.key !== 'push' || push.available);
     const categories = schema?.categories || [];
@@ -89,6 +90,7 @@ export default function NotificationPreferenceMatrix({
                         <p className="mt-2 text-sm text-gray-400">Push isn’t available right now, so it isn’t listed.</p>
                     )}
                     <span id={lockedHintId} className="sr-only">Always on</span>
+                    <span id={inAppHintId} className="sr-only">Turn on In-app first</span>
 
                     <div className="mt-5">
                         <div
@@ -129,6 +131,10 @@ export default function NotificationPreferenceMatrix({
                                                 }
                                                 const locked = Boolean(category.locked?.includes(channel.key));
                                                 const pushBlocked = channel.key === 'push' && !push.ready;
+                                                // Push and email are only sent for rows that exist in-app.
+                                                const needsInApp = channel.key !== 'in_app'
+                                                    && category.channels?.includes('in_app')
+                                                    && !preferences?.[category.key]?.in_app;
                                                 const saving = `${category.key}.${channel.key}` in savingKeys;
                                                 const checked = Boolean(preferences?.[category.key]?.[channel.key]);
                                                 return (
@@ -142,8 +148,12 @@ export default function NotificationPreferenceMatrix({
                                                         <PreferenceSwitch
                                                             checked={checked}
                                                             label={`${channel.label} for ${category.label}`}
-                                                            disabled={locked || pushBlocked || saving}
-                                                            describedBy={locked ? lockedHintId : pushBlocked ? pushHintId : undefined}
+                                                            disabled={locked || pushBlocked || needsInApp || saving}
+                                                            describedBy={
+                                                                locked ? lockedHintId
+                                                                    : needsInApp ? inAppHintId
+                                                                        : pushBlocked ? pushHintId : undefined
+                                                            }
                                                             onToggle={() => onToggle(category.key, channel.key)}
                                                         />
                                                     </div>

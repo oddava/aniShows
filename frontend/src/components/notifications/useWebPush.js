@@ -111,6 +111,10 @@ export default function useWebPush({ userId } = {}) {
 
     const devices = devicesQuery.data || [];
     const otherDevices = devices.filter((item) => device.id == null || item.id !== device.id);
+    // The server is the truth: a row removed elsewhere (or dropped after failures)
+    // means this device gets nothing, whatever the browser still holds.
+    const onServer = devicesQuery.data == null || device.id == null
+        || devices.some((item) => item.id === device.id);
 
     return {
         isConfigLoading: signedIn && configQuery.isPending,
@@ -118,7 +122,7 @@ export default function useWebPush({ userId } = {}) {
         configError: Boolean(configQuery.error),
         support: device.support,
         isChecking: !device.checked,
-        subscribed: configEnabled && device.subscribed,
+        subscribed: configEnabled && device.subscribed && onServer,
         deviceId: device.id,
         isBusy,
         message,

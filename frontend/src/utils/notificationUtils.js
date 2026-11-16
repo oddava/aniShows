@@ -171,7 +171,9 @@ export const getActorUsernameData = (notification) => {
 };
 
 /** A same-origin app path (`/anime/x`), not a protocol-relative or absolute URL. */
-const isAppPath = (value) => typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
+const isAppPath = (value) => (
+    typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\')
+);
 
 /**
  * Returns the target URL for a notification: the server's `url` when it sent

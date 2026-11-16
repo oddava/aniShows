@@ -15,6 +15,9 @@ import logger from '../../utils/logger';
 export const SERVICE_WORKER_URL = '/service-worker.js';
 export const PUSH_DEVICE_STORAGE_KEY = 'anishows.pushDevice';
 export const DETACH_TIMEOUT_MS = 1500;
+// Re-post this device at most daily: it re-activates a server row the backend dropped
+// after repeated push failures (or that was removed from another device).
+export const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 const readStoredDevice = () => {
     try {
@@ -186,7 +189,12 @@ const postSubscription = async (subscription, userId) => {
         device_type: 'browser',
         device_info: { label: deviceLabel() },
     });
-    const device = { endpoint: json.endpoint, id: data?.id ?? null, userId: userId ?? null };
+    const device = {
+        endpoint: json.endpoint,
+        id: data?.id ?? null,
+        userId: userId ?? null,
+        syncedAt: Date.now(),
+    };
     writeStoredDevice(device);
     return device;
 };
@@ -296,7 +304,8 @@ export async function getDeviceState(userId) {
 /**
  * Keeps the server in step with this browser, without prompting. When this
  * user opted in here and the browser's subscription changed (it can rotate,
- * see `pushsubscriptionchange`), the new one is posted; when it disappeared
+ * see `pushsubscriptionchange`) or was last posted over a day ago, it is
+ * posted (re-activating a row the server dropped); when it disappeared
  * while permission is still granted, a fresh one is made. Never throws.
  */
 export async function syncOnLoad({ userId } = {}) {
@@ -317,7 +326,8 @@ export async function syncOnLoad({ userId } = {}) {
         }
 
         if (subscription) {
-            if (subscription.endpoint === stored.endpoint && stored.id != null) return stored;
+            const fresh = Date.now() - (Number(stored.syncedAt) || 0) < SYNC_INTERVAL_MS;
+            if (subscription.endpoint === stored.endpoint && stored.id != null && fresh) return stored;
             return await postSubscription(subscription, userId ?? stored.userId);
         }
 

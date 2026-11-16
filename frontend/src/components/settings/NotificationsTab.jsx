@@ -47,7 +47,7 @@ function NotificationSettings({ notifications }) {
                 preferences={notifications.preferences}
                 savingKeys={notifications.savingKeys}
                 onToggle={notifications.handleTogglePreference}
-                push={{ available: pushAvailable, ready: push.subscribed }}
+                push={{ available: pushAvailable, ready: push.subscribed || push.otherDevices.length > 0 }}
                 isLoading={notifications.isLoadingPreferences}
                 loadError={notifications.preferencesLoadError}
                 onRetry={notifications.retryPreferences}

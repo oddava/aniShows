@@ -61,8 +61,9 @@ const renderTab = () => {
     return client;
 };
 
-const deviceWithPush = (subscribed) => {
+const deviceWithPush = (subscribed, serverDevices = subscribed ? [{ id: 1, device_info: { label: 'This one' } }] : []) => {
     push.getDeviceState.mockResolvedValue({ support: 'granted', subscribed, endpoint: subscribed ? 'e' : null, id: subscribed ? 1 : null });
+    api.getSubscriptions.mockResolvedValue({ data: serverDevices });
 };
 
 beforeEach(() => {
@@ -71,11 +72,37 @@ beforeEach(() => {
     push.support.mockReturnValue('granted');
     api.getPreferences.mockResolvedValue({ data: { preferences: PREFERENCES, schema: SCHEMA } });
     api.getPushConfig.mockResolvedValue({ data: { enabled: true, public_key: 'BAEC' } });
-    api.getSubscriptions.mockResolvedValue({ data: [] });
     deviceWithPush(true);
 });
 
 describe('NotificationsTab (preferences matrix)', () => {
+    it('treats this device as off when the server no longer has its row', async () => {
+        deviceWithPush(true, []);
+        renderTab();
+        const pushSwitch = await screen.findByRole('switch', { name: 'Push for Replies' });
+        await waitFor(() => expect(pushSwitch).toBeDisabled());
+        expect(pushSwitch).toHaveAccessibleDescription('Enable push on this device first');
+    });
+
+    it('lets push preferences change when another device has push', async () => {
+        deviceWithPush(false, [{ id: 5, device_info: { label: 'Chrome on Android' } }]);
+        renderTab();
+        const pushSwitch = await screen.findByRole('switch', { name: 'Push for Replies' });
+        await waitFor(() => expect(pushSwitch).toBeEnabled());
+    });
+
+    it('disables push and email while in-app is off for that category', async () => {
+        api.getPreferences.mockResolvedValue({
+            data: { preferences: { ...PREFERENCES, episodes: { in_app: false, push: true, email: true } }, schema: SCHEMA },
+        });
+        renderTab();
+        const pushSwitch = await screen.findByRole('switch', { name: 'Push for Episodes' });
+        await waitFor(() => expect(pushSwitch).toBeDisabled());
+        expect(pushSwitch).toHaveAccessibleDescription('Turn on In-app first');
+        expect(screen.getByRole('switch', { name: 'Email for Episodes' })).toBeDisabled();
+        expect(screen.getByRole('switch', { name: 'In-app for Episodes' })).toBeEnabled();
+    });
+
     it('renders a switch for each channel a category offers', async () => {
         renderTab();
 

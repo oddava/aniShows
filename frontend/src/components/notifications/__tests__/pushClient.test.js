@@ -130,7 +130,7 @@ describe('enable()', () => {
             device_info: { label: 'Chrome on Android' },
         });
         expect(result).toEqual({ endpoint: 'https://push.example/new', id: 42 });
-        expect(stored()).toEqual({ endpoint: 'https://push.example/new', id: 42, userId: 7 });
+        expect(stored()).toMatchObject({ endpoint: 'https://push.example/new', id: 42, userId: 7 });
     });
 
     it('fetches the public key when it is not given, and refuses when push is off', async () => {
@@ -182,7 +182,18 @@ describe('syncOnLoad()', () => {
         await syncOnLoad({ userId: 7 });
 
         expect(api.subscribe).toHaveBeenCalledWith(expect.objectContaining({ endpoint: 'https://push.example/rotated' }));
-        expect(stored()).toEqual({ endpoint: 'https://push.example/rotated', id: 9, userId: 7 });
+        expect(stored()).toMatchObject({ endpoint: 'https://push.example/rotated', id: 9, userId: 7 });
+        expect(stored().syncedAt).toEqual(expect.any(Number));
+    });
+
+    it('re-posts an unchanged subscription once a day, so a dropped server row comes back', async () => {
+        installPushBrowser({ permission: 'granted', subscription: fakeSubscription('https://push.example/a') });
+        store({ endpoint: 'https://push.example/a', id: 3, userId: 7, syncedAt: Date.now() - 25 * 60 * 60 * 1000 });
+        api.subscribe.mockResolvedValue({ data: { id: 3 } });
+
+        await syncOnLoad({ userId: 7 });
+
+        expect(api.subscribe).toHaveBeenCalledWith(expect.objectContaining({ endpoint: 'https://push.example/a' }));
     });
 
     it('does nothing when the endpoint is unchanged or permission is not granted', async () => {
@@ -190,7 +201,7 @@ describe('syncOnLoad()', () => {
             permission: 'granted',
             subscription: fakeSubscription('https://push.example/a'),
         });
-        store({ endpoint: 'https://push.example/a', id: 3, userId: 7 });
+        store({ endpoint: 'https://push.example/a', id: 3, userId: 7, syncedAt: Date.now() });
 
         await syncOnLoad({ userId: 7 });
         NotificationMock.permission = 'default';
