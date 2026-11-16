@@ -108,11 +108,17 @@ export default function Profile({ forcedUsername }) {
 
     // Reset tab state and refetch when navigating between different profiles
     useEffect(() => {
-        if (prevTargetUsernameRef.current !== targetUsername) {
+        const previousUsername = prevTargetUsernameRef.current;
+        if (previousUsername !== targetUsername) {
+            prevTargetUsernameRef.current = targetUsername;
+            // Same profile in its canonical case (see below): keep the tab.
+            if (previousUsername && targetUsername
+                && previousUsername.toLowerCase() === targetUsername.toLowerCase()) {
+                return;
+            }
             handleTabChange('overview', { replace: true });
             setSearchQuery('');
             setListStatusFilter('Watching');
-            prevTargetUsernameRef.current = targetUsername;
 
             // When switching back to own profile, force a refetch since refetchOnMount
             // won't trigger (component doesn't unmount between /profile/:username and /profile)
@@ -162,7 +168,6 @@ export default function Profile({ forcedUsername }) {
     const { data: publicProfile, isLoading: profileLoading, isError } = useQuery({
         ...profileQueries.byUsername(targetUsername),
         enabled: isPublicView,
-        retry: 2,
         staleTime: 30 * 1000, // 30 seconds — allow quick revisits to use cache, but refetch often
         gcTime: 10 * 60 * 1000,
         refetchOnMount: true,
@@ -173,6 +178,27 @@ export default function Profile({ forcedUsername }) {
     const { data: ownProfile } = useUserProfile();
 
     const displayUser = isPublicView ? publicProfile : (ownProfile || currentUser);
+
+    // Usernames are case-insensitive: /u/someone shows "SomeOne". Once the
+    // profile has loaded, swap the URL to the canonical name, keeping the tab,
+    // query and hash, and seed the cache so the new key needs no refetch.
+    const canonicalUsername = displayUser?.username;
+    useEffect(() => {
+        if (forcedUsername || pathSegments[0] !== 'u') return;
+        const urlUsername = pathSegments[1];
+        if (!urlUsername || !canonicalUsername) return;
+        if (urlUsername === canonicalUsername) return;
+        if (urlUsername.toLowerCase() !== canonicalUsername.toLowerCase()) return;
+
+        if (isPublicView && publicProfile) {
+            queryClient.setQueryData(profileKeys.byUsername(canonicalUsername), publicProfile);
+        }
+        const rest = pathSegments.slice(2).map((segment) => `/${segment}`).join('');
+        navigate(`/u/${canonicalUsername}${rest}${location.search}${location.hash}`, { replace: true });
+    }, [
+        forcedUsername, pathSegments, canonicalUsername, isPublicView, publicProfile,
+        queryClient, navigate, location.search, location.hash,
+    ]);
     const isPrivate = isPublicView && displayUser?.is_private;
 
     const openFollowersModal = (type) => {

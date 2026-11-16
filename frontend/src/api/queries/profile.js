@@ -36,9 +36,17 @@ export const miniProfileKeys = {
     favorites: (username) => ['mini-profile', username, 'favorites'],
 };
 
+/**
+ * Retry policy for profile reads: only server errors (5xx), at most twice.
+ * A 4xx such as a private or missing profile's 404 will not change on retry.
+ */
+export const profileQueryRetry = (failureCount, error) =>
+    error?.response?.status >= 500 && failureCount < 2;
+
 export const profileQueries = {
     own: () => queryOptions({
         queryKey: profileKeys.own,
+        retry: profileQueryRetry,
         queryFn: async () => {
             const response = await authApi.getProfile(true); // Fetch full profile with stats
             return response.data;
@@ -46,6 +54,7 @@ export const profileQueries = {
     }),
     byUsername: (username) => queryOptions({
         queryKey: profileKeys.byUsername(username),
+        retry: profileQueryRetry,
         queryFn: () => authApi.getByUsername(username).then((res) => res.data),
     }),
 };
