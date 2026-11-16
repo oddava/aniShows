@@ -4,6 +4,12 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeRaw from "rehype-raw";
 import DOMPurify from "dompurify";
+import AccessibleSpoiler from "./Spoiler";
+import remarkCommunity, {
+    escapeLineStartSpoilers,
+    remarkNoRawHtml,
+    splitAlignedBlocks,
+} from "../forums/remarkCommunity";
 
 const ReactMarkdown = lazy(() => import("react-markdown"));
 
@@ -383,7 +389,91 @@ const decodeHtmlEntities = (text = "") => {
         .replace(/&amp;/gi, "&");
 };
 
-const MarkdownRenderer = ({ content, className = "" }) => {
+/*
+ * mode="markdown": markdown only, no raw HTML anywhere (no rehype-raw, no HTML strings, no DOMPurify).
+ * Community syntax comes from the remark plugins in components/forums/remarkCommunity.js; the
+ * Tailwind classes are the legacy ones so both modes look the same.
+ */
+const communitySafeProtocol = /^(https?|mailto)$/i;
+
+// react-markdown's defaultUrlTransform, limited to http(s)/mailto (plus relative URLs).
+const communityUrlTransform = (value = "") => {
+    const colon = value.indexOf(":");
+    const questionMark = value.indexOf("?");
+    const numberSign = value.indexOf("#");
+    const slash = value.indexOf("/");
+    if (
+        colon === -1 ||
+        (slash !== -1 && colon > slash) ||
+        (questionMark !== -1 && colon > questionMark) ||
+        (numberSign !== -1 && colon > numberSign) ||
+        communitySafeProtocol.test(value.slice(0, colon))
+    ) {
+        return value;
+    }
+    return "";
+};
+
+const communityRemarkPlugins = [remarkNoRawHtml, remarkGfm, remarkCommunity, remarkBreaks];
+
+// Legacy-only handlers (`span.is-spoiler`, `alignedblock`) are left out; the rest is shared.
+const { span: _legacySpan, alignedblock: _legacyAlignedBlock, ...sharedMarkdownComponents } = markdownComponents;
+
+const communityComponents = {
+    ...sharedMarkdownComponents,
+    p: ({ node, ...props }) => (
+        <p className="mb-4 last:mb-0 text-gray-200 leading-relaxed" {...props} />
+    ),
+    spoiler: ({ children }) => <AccessibleSpoiler>{children}</AccessibleSpoiler>,
+    youtube: ({ "data-video-id": videoId }) => (
+        <span className="block relative w-full max-w-3xl aspect-video rounded-xl overflow-hidden my-4 border border-gray-800">
+            <iframe
+                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+                title="YouTube video player"
+                allow="fullscreen"
+                allowFullScreen
+                className="absolute top-0 left-0 w-full h-full"
+            ></iframe>
+        </span>
+    ),
+};
+
+/** Renders already-decoded community markdown; alignment blocks recurse with their inner markdown. */
+const CommunityMarkdown = ({ source }) =>
+    splitAlignedBlocks(source).map((segment, index) => {
+        if (segment.align) {
+            const alignmentClassName = alignedBlockClassNames[segment.align] || alignedBlockClassNames.left;
+            return (
+                <div key={index} className={`my-4 ${alignmentClassName}`}>
+                    <CommunityMarkdown source={segment.content} />
+                </div>
+            );
+        }
+        if (!segment.content.trim()) return null;
+        return (
+            <ReactMarkdown
+                key={index}
+                remarkPlugins={communityRemarkPlugins}
+                components={communityComponents}
+                urlTransform={communityUrlTransform}
+            >
+                {escapeLineStartSpoilers(segment.content)}
+            </ReactMarkdown>
+        );
+    });
+
+const MarkdownRenderer = ({ content, className = "", mode = "legacy" }) => {
+    if (mode === "markdown") {
+        return (
+            <div className={`markdown-preview max-w-none ${className}`}>
+                <Suspense fallback={<div className="prose prose-invert"><p>Loading...</p></div>}>
+                    {/* Stored forum rows are entity-encoded at write time: decode exactly once. */}
+                    <CommunityMarkdown source={decodeHtmlEntities(content || "")} />
+                </Suspense>
+            </div>
+        );
+    }
+
     const cleanContent = preprocessMarkdown(content || "");
 
     return (
