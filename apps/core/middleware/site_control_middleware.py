@@ -1,10 +1,29 @@
 from django.http import JsonResponse
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 from ..services.admin_settings_service import is_maintenance_mode_enabled
 
+MAINTENANCE_RETRY_AFTER_SECONDS = "300"
+
+
+def _is_staff(user) -> bool:
+    return bool(
+        user is not None
+        and user.is_authenticated
+        and user.is_active
+        and (user.is_staff or user.is_superuser)
+    )
+
 
 class SiteControlMiddleware:
-    """Enforce global site controls such as maintenance mode."""
+    """Enforce global site controls such as maintenance mode.
+
+    During maintenance, staff keep access whether they sign in with a session or a
+    JWT. A JWT is only decoded when maintenance is on and the session user is not
+    staff, so normal traffic pays nothing for it. Everyone else gets a 503.
+    """
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -28,27 +47,33 @@ class SiteControlMiddleware:
         }
 
     def __call__(self, request):
-        if self._is_exempt_path(request.path):
+        if self._is_exempt_path(request.path) or not is_maintenance_mode_enabled():
             return self.get_response(request)
 
-        user = getattr(request, "user", None)
-        if user and user.is_authenticated and (user.is_staff or user.is_superuser):
+        if _is_staff(getattr(request, "user", None)) or self._is_jwt_staff(request):
             return self.get_response(request)
 
-        if is_maintenance_mode_enabled():
-            response = JsonResponse(
-                {
-                    "detail": (
-                        "Service is temporarily unavailable due to maintenance. "
-                        "Please try again later."
-                    )
-                },
-                status=503,
-            )
-            response["Retry-After"] = "300"
-            return response
+        response = JsonResponse(
+            {
+                "detail": (
+                    "Service is temporarily unavailable due to maintenance. Please try again later."
+                )
+            },
+            status=503,
+        )
+        response["Retry-After"] = MAINTENANCE_RETRY_AFTER_SECONDS
+        return response
 
-        return self.get_response(request)
+    def _is_jwt_staff(self, request) -> bool:
+        """Whether a valid Bearer token belongs to an active staff account."""
+        try:
+            result = JWTAuthentication().authenticate(request)
+        except (AuthenticationFailed, InvalidToken, TokenError):
+            return False
+        if result is None:
+            return False
+        user, _token = result
+        return _is_staff(user)
 
     def _is_exempt_path(self, path: str) -> bool:
         if path in self.exempt_paths:

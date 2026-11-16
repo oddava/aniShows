@@ -73,6 +73,12 @@ class AuditLog(Model):
         LOGOUT = "LOGOUT", "Logout"
         EXPORT = "EXPORT", "Export"
         BULK_ACTION = "BULK_ACTION", "Bulk Action"
+        SUSPEND = "SUSPEND", "Suspend"
+        RESTORE = "RESTORE", "Restore"
+        RESOLVE = "RESOLVE", "Resolve"
+        DISMISS = "DISMISS", "Dismiss"
+        TRIGGER = "TRIGGER", "Trigger"
+        CONTROL = "CONTROL", "Control"
 
     timestamp = DateTimeField(auto_now_add=True, db_index=True)
     user = ForeignKey("users.CustomUser", SET_NULL, null=True, blank=True)
@@ -95,6 +101,8 @@ class AuditLog(Model):
             Index(fields=["action", "timestamp"]),
             Index(fields=["entity_type", "timestamp"]),
             Index(fields=["user", "timestamp"]),
+            # A user's moderation history (entity User/<id>, newest first).
+            Index(fields=["entity_type", "entity_id", "-timestamp"], name="core_audit_entity_idx"),
         ]
 
     def __str__(self):
