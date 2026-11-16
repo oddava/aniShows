@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from ...shared.logger import logger
-from ..auth_cookies import set_refresh_cookie
+from ..auth_cookies import end_django_session, set_refresh_cookie
 from .social_auth import SocialLoginView
 
 
@@ -88,6 +88,10 @@ class GoogleLogin(SocialLoginView):
             # Log error securely without exposing sensitive data
             logger.exception("GoogleLogin failed")
             raise
+        finally:
+            # allauth's complete_social_login performs a Django session login;
+            # end it so only the JWT pair stands for this sign-in (A05).
+            end_django_session(request)
 
         # The refresh token goes out only as the httpOnly cookie.
         response.data.pop("refresh", None)

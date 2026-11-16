@@ -46,7 +46,9 @@ class SocialLinksThrottleTests(APITestCase):
 
     def _form_links(self):
         # What Settings sends back: {platform, value} built from the stored links.
-        return json.dumps([{"platform": link["platform"], "value": link["url"]} for link in STORED_LINKS])
+        return json.dumps(
+            [{"platform": link["platform"], "value": link["url"]} for link in STORED_LINKS]
+        )
 
     @patch("apps.core.services.url_validator.URLValidator.validate")
     def test_bio_saves_resending_unchanged_links_skip_validation_and_throttle(self, validate):

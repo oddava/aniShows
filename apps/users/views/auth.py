@@ -25,6 +25,7 @@ from .. import throttling
 from ..auth_cookies import (
     clear_refresh_cookie,
     cookie_csrf_failure,
+    end_django_session,
     get_refresh_cookie,
     move_refresh_to_cookie,
 )
@@ -337,6 +338,9 @@ class LoggingTokenRefreshView(BaseTokenRefreshView):
         try:
             serializer.is_valid(raise_exception=True)
         except (AuthenticationFailed, TokenError):
+            # The JWT session is over (revoked, expired or rotated away); a
+            # Django session must not outlive it.
+            end_django_session(request)
             response = error_response(
                 "Refresh token is invalid or expired.",
                 code="token_not_valid",
@@ -370,6 +374,7 @@ class LogoutView(APIView):
             with contextlib.suppress(TokenError):
                 RefreshToken(refresh_token).blacklist()
 
+        end_django_session(request)
         return clear_refresh_cookie(Response(status=status.HTTP_204_NO_CONTENT))
 
 

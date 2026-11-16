@@ -33,7 +33,10 @@ class EmailVerificationTokenGenerator(PasswordResetTokenGenerator):
         return bool(profile and profile.email_verified)
 
     def _make_hash_value(self, user, timestamp):
-        return f"{super()._make_hash_value(user, timestamp)}{self._email_verified(user)}"
+        # Unlike a reset token, this one leaves ``last_login`` out: logins bump
+        # it (SIMPLE_JWT UPDATE_LAST_LOGIN) and unverified users may sign in, so
+        # signing in before clicking the link must not break the link.
+        return f"{user.pk}{user.password}{user.email}{timestamp}{self._email_verified(user)}"
 
     def was_valid_before_verification(self, user, token) -> bool:
         """True if ``token`` was a genuine, unexpired link for ``user`` before they verified."""

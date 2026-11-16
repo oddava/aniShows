@@ -57,7 +57,7 @@ class UserProfileView(APIView):
             .first()
         )
         if social_links_unchanged(stored_links, data.get("social_links")):
-            return {key: data[key] for key in data.keys() if key != "social_links"}
+            return {key: data[key] for key in data if key != "social_links"}
 
         throttle = throttling.SocialLinksRateThrottle()
         if not throttle.allow_request(request, self):

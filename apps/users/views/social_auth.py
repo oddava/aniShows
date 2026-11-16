@@ -1,4 +1,3 @@
-from allauth.account.adapter import get_adapter
 from dj_rest_auth.views import LoginView
 
 from ..serializers.social_auth import SocialLoginSerializer
@@ -10,4 +9,8 @@ class SocialLoginView(LoginView):
     serializer_class = SocialLoginSerializer
 
     def process_login(self):
-        get_adapter(self.request).login(self.request, self.user)
+        """Never start a Django session: the API authenticates with JWTs only.
+
+        A session cookie would outlive the JWT logout and keep authenticating
+        API calls through ``SessionAuthentication`` (A05).
+        """

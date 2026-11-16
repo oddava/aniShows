@@ -16,6 +16,7 @@ when the browser sends one, an allowed ``Origin``.
 from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.contrib.auth import logout as django_logout
 from rest_framework_simplejwt.settings import api_settings as jwt_settings
 
 REFRESH_COOKIE_NAME = "anishows_refresh"
@@ -76,3 +77,15 @@ def cookie_csrf_failure(request) -> str | None:
     if origin and origin.rstrip("/") not in _allowed_origins(request):
         return "Origin not allowed."
     return None
+
+
+def end_django_session(request) -> None:
+    """Log out of Django's session framework (flushes the session).
+
+    Accepts a DRF ``Request`` or a Django ``HttpRequest``. The API itself is
+    JWT-only, so a session left behind by allauth would otherwise outlive the
+    JWT logout and keep authenticating through ``SessionAuthentication``.
+    """
+    http_request = getattr(request, "_request", request)
+    if hasattr(http_request, "session"):
+        django_logout(http_request)
