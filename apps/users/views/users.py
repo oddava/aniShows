@@ -12,7 +12,7 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 from ...core.api_errors import error_response
 from ...shared.logger import logger
 from .. import throttling
-from ..serializers.users import (
+from ..serializers.accounts import (
     PublicUserSerializer,
     UserProfileUpdateSerializer,
 )

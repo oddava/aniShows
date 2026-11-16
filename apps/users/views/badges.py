@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from ..models import UserBadge
-from ..serializers.users import UserBadgeSerializer
+from ..serializers.badges import UserBadgeSerializer
 
 
 class UserBadgeViewSet(GenericViewSet):

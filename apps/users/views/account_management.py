@@ -8,7 +8,7 @@ from ...core.api_errors import api_response
 from ...shared.logger import logger
 from .. import throttling
 from ..auth_cookies import set_refresh_cookie
-from ..serializers.users import ChangePasswordSerializer
+from ..serializers.accounts import ChangePasswordSerializer
 from ..services.account_management_service import (
     change_password,
     confirm_email_change,

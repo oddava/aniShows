@@ -668,3 +668,17 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 # Generate VAPID keys if not set (for development)
 # Run: openssl ecparam -genkey -name prime256v1 -out vapid_private.pem
 # Then: openssl ec -in vapid_private.pem -pubout -out vapid_public.pem
+
+# =============================================================================
+# FEATURE SETTINGS (feature-revamp seams)
+# =============================================================================
+# One module per owning group, applied last so a group can add settings or
+# documented overrides without editing this file (see root/settings/features/).
+
+from .features.accounts import *
+from .features.admin import *
+from .features.browse import *
+from .features.community import *
+from .features.lists import *
+from .features.notifications import *
+from .features.ops import *

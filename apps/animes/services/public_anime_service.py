@@ -636,3 +636,22 @@ class AnimePublicPayloadService:
             cls.payload_has_internal_media_urls(payload)
             or cls.payload_has_stale_imagekit_cache_urls(payload)
         )
+
+
+# --- Cross-group invalidation contract (G2; overview section 5) ---------------
+# Other groups call these instead of saving the Anime row to flush its caches.
+# Prep-commit stubs: they do exactly what an ``Anime`` post_save does today
+# (``signals._invalidate_anime_public_caches``, which also bumps the collection
+# namespace). G2 narrows ``invalidate_anime_detail`` to the slug's own keys (P0-2).
+
+
+def invalidate_anime_detail(slug: str) -> None:
+    """Drop the cached public payloads of one anime (today: also every collection)."""
+    from ..signals import _invalidate_anime_public_caches
+
+    _invalidate_anime_public_caches(slug)
+
+
+def invalidate_public_collections() -> None:
+    """Invalidate every cached public collection (lists, shelves, browse rows)."""
+    AnimePublicPayloadService.bump_collection_cache_namespace()

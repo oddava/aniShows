@@ -22,8 +22,8 @@ class TestSendPendingNotifications(TestCase):
         )
 
     @patch("apps.users.services.email_service.send_email_task.delay")
-    @patch("apps.core.services.celery_tasks.PushService.has_active_subscriptions")
-    @patch("apps.core.services.celery_tasks.PushService.send_to_user")
+    @patch("apps.core.services.notification_tasks_service.PushService.has_active_subscriptions")
+    @patch("apps.core.services.notification_tasks_service.PushService.send_to_user")
     def test_push_notifications_are_not_resent_on_subsequent_runs(
         self, mock_send_push, mock_has_active_subscriptions, mock_send_email
     ):
@@ -52,9 +52,10 @@ class TestSendPendingNotifications(TestCase):
 
     @patch("apps.users.services.email_service.send_email_task.delay")
     @patch(
-        "apps.core.services.celery_tasks.PushService.has_active_subscriptions", return_value=True
+        "apps.core.services.notification_tasks_service.PushService.has_active_subscriptions",
+        return_value=True,
     )
-    @patch("apps.core.services.celery_tasks.PushService.send_to_user")
+    @patch("apps.core.services.notification_tasks_service.PushService.send_to_user")
     def test_sends_before_a_crash_are_not_repeated_by_the_retry(
         self, mock_send_push, _mock_active, _mock_email
     ):
@@ -84,7 +85,9 @@ class TestSendPendingNotifications(TestCase):
             sorted(sent_titles.count(title) for title in (first.title, second.title)), [1, 2]
         )
 
-    @patch("apps.core.services.celery_tasks.CoreTaskService.send_pending_notifications")
+    @patch(
+        "apps.core.services.notification_tasks_service.NotificationTaskService.send_pending_notifications"
+    )
     def test_overlapping_run_is_skipped(self, mock_send):
         from django.core.cache import cache
 
@@ -96,7 +99,7 @@ class TestSendPendingNotifications(TestCase):
         mock_send.assert_not_called()
 
     @patch("apps.users.services.email_service.send_email_task.delay")
-    @patch("apps.core.services.celery_tasks.PushService.send_to_user")
+    @patch("apps.core.services.notification_tasks_service.PushService.send_to_user")
     def test_push_notifications_without_active_subscriptions_are_finalized(
         self, mock_send_push, mock_send_email
     ):

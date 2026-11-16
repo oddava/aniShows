@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
 from ...users.permissions import VerifiedEmailForWrites
-from ...users.serializers.users import (
+from ...users.serializers.favorites import (
     CharacterFavoriteSerializer,
     FavoriteCompactSerializer,
     FavoriteSerializer,

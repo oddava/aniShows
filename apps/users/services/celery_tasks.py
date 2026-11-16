@@ -432,7 +432,7 @@ class UserTaskService:
         from django.core.cache import cache
         from django.db.models import Count
 
-        from ..serializers.users import PublicUserSerializer
+        from ..serializers.accounts import PublicUserSerializer
         from .cache import get_public_profile_cache_key
 
         selected_usernames = usernames

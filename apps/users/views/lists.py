@@ -3,7 +3,7 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.viewsets import ModelViewSet
 
 from ..permissions import VerifiedEmailForWrites
-from ..serializers.users import UserAnimeListSerializer
+from ..serializers.lists import UserAnimeListSerializer
 from ..services.list_service import (
     create_user_anime_list_entry,
     delete_user_anime_list_entry,

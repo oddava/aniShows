@@ -1,7 +1,7 @@
 import httpx
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
@@ -78,8 +78,12 @@ def _response_excerpt(response: httpx.Response | None, limit: int = 300) -> str:
 
 
 @observed_shared_task(retry_policy="standard")
-def send_email_task(self, subject, message, recipient_list, html_message=None):
-    """Celery task for sending emails through Resend HTTP API."""
+def send_email_task(self, subject, message, recipient_list, html_message=None, headers=None):
+    """Celery task for sending emails through Resend HTTP API.
+
+    ``headers`` (e.g. ``List-Unsubscribe``) is passed through to the message; the
+    default ``None`` sends exactly what this task sent before it existed.
+    """
     try:
         from_email = settings.DEFAULT_FROM_EMAIL
         resend_api_key = settings.RESEND_API_KEY
@@ -93,14 +97,26 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
             "django.core.mail.backends.filebased.EmailBackend",
         )
         if email_backend in local_backends:
-            sent_count = send_mail(
-                subject=subject,
-                message=message,
-                from_email=from_email,
-                recipient_list=recipient_list,
-                html_message=html_message,
-                fail_silently=False,
-            )
+            if headers:
+                mail = EmailMultiAlternatives(
+                    subject=subject,
+                    body=message,
+                    from_email=from_email,
+                    to=recipient_list,
+                    headers=dict(headers),
+                )
+                if html_message:
+                    mail.attach_alternative(html_message, "text/html")
+                sent_count = mail.send(fail_silently=False)
+            else:
+                sent_count = send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=from_email,
+                    recipient_list=recipient_list,
+                    html_message=html_message,
+                    fail_silently=False,
+                )
             logger.info(
                 "Email sent via Django backend %s to %s (count=%s)",
                 email_backend,
@@ -120,8 +136,10 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
         }
         if html_message:
             payload["html"] = html_message
+        if headers:
+            payload["headers"] = dict(headers)
 
-        headers = {
+        request_headers = {
             "Authorization": f"Bearer {resend_api_key}",
             "Content-Type": "application/json",
         }
@@ -129,7 +147,7 @@ def send_email_task(self, subject, message, recipient_list, html_message=None):
         with httpx.Client(timeout=settings.RESEND_REQUEST_TIMEOUT) as client:
             response = client.post(
                 f"{resend_base_url}/emails",
-                headers=headers,
+                headers=request_headers,
                 json=payload,
             )
             response.raise_for_status()

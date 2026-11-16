@@ -11,7 +11,7 @@ from rest_framework.viewsets import ViewSet
 
 from ...core.api_errors import error_response
 from ...shared.logger import logger
-from ...users.serializers.users import UserRecommendationSerializer
+from ...users.serializers.recommendations import UserRecommendationSerializer
 
 
 def _is_recommendations_cache_fresh(cached_data, stale_after_hours: int = 24) -> bool:

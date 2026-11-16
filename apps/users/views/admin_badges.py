@@ -11,7 +11,7 @@ from ...core.permissions import IsAdminUser, SuperUserRequiredForActionsMixin
 from ...core.services.notification_service import NotificationService
 from ...shared.logger import logger
 from ..models import Badge, UserBadge
-from ..serializers.users import BadgeSerializer
+from ..serializers.badges import BadgeSerializer
 from ..services.avatar_service import get_user_avatar_url
 
 User = get_user_model()

@@ -1,11 +1,8 @@
 from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
-from rest_framework.fields import BooleanField, CharField, JSONField
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.serializers import ModelSerializer, Serializer
 from rest_framework.viewsets import GenericViewSet
 
 from ...animes.models import Anime
@@ -13,62 +10,11 @@ from ...core.api_errors import error_response
 from ...core.models import Notification, PushSubscription
 from ...core.services.notification_service import NotificationService
 from ...core.services.push_service import PushService
-from ...core.services.url_validator import URLValidationError, URLValidator
-
-
-class NotificationSerializer(ModelSerializer):
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        cover_payload = getattr(instance, "_notification_cover_payload", None)
-        if cover_payload:
-            data = dict(representation.get("data") or {})
-            for key, value in cover_payload.items():
-                if value and not data.get(key):
-                    data[key] = value
-            representation["data"] = data
-        return representation
-
-    class Meta:
-        model = Notification
-        fields = [
-            "id",
-            "notification_type",
-            "title",
-            "message",
-            "data",
-            "is_read",
-            "created_at",
-            "read_at",
-        ]
-        read_only_fields = ["id", "created_at", "read_at"]
-
-
-class PushSubscriptionSerializer(ModelSerializer):
-    endpoint = CharField(required=True, max_length=2048)
-    p256dh = CharField(required=True)
-    auth = CharField(required=True)
-    device_type = CharField(default="browser")
-    device_info = JSONField(required=False, default=dict)
-
-    class Meta:
-        model = PushSubscription
-        fields = ["id", "endpoint", "p256dh", "auth", "device_type", "device_info", "created_at"]
-
-    def validate_endpoint(self, value):
-        # The worker POSTs to this URL; only public HTTPS push services qualify.
-        try:
-            URLValidator().validate_public_target(value)
-        except URLValidationError as exc:
-            raise ValidationError(f"Invalid push endpoint: {exc}") from exc
-        # Stored verbatim: unsubscribe matches the browser's endpoint exactly.
-        return value
-
-
-class NotificationPreferencesSerializer(Serializer):
-    email_new_episodes = BooleanField()
-    push_new_episodes = BooleanField()
-    push_review_replies = BooleanField()
-    push_new_follower = BooleanField()
+from ..serializers.notifications import (
+    NotificationPreferencesSerializer,
+    NotificationSerializer,
+    PushSubscriptionSerializer,
+)
 
 
 class NotificationViewSet(GenericViewSet):

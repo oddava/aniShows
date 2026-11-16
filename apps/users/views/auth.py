@@ -28,7 +28,7 @@ from ..auth_cookies import (
     get_refresh_cookie,
     move_refresh_to_cookie,
 )
-from ..serializers.users import RegisterSerializer
+from ..serializers.accounts import RegisterSerializer
 from ..services.auth_flow_service import (
     AuthFlowError,
     password_reset_confirm_flow,

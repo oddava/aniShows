@@ -7,7 +7,7 @@ from django.db.models import Exists, OuterRef
 from ...shared.logger import logger
 from ...shared.media_urls import normalize_media_url
 from ...shared.text import normalize_bio, normalize_primary_color
-from ..serializers.users import PublicUserSerializer
+from ..serializers.accounts import PublicUserSerializer
 from .avatar_service import get_user_avatar_url
 from .cache import get_public_profile_cache_key
 from .profile_service import build_profile_user_queryset, get_featured_badges

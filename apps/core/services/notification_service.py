@@ -759,3 +759,168 @@ class NotificationService:
             },
             priority="high",
         )
+
+
+# --- Producer API (G4 contract; overview section 5, spec 4 "Frozen: producer API") ---
+# Producers in other groups call these. Prep-commit stubs: ``notify`` loads the
+# objects named in ``data`` and calls today's ``create_*`` method for the type, so a
+# call through it writes exactly the row the old call writes. ``dedupe_key`` and
+# ``group_key`` are accepted and ignored until G4 lands (only ``retract`` reads
+# ``group_key``, to find the review). Never raises.
+
+_NotifyResult = Notification | None
+
+
+def _resolve_user(user_or_id):
+    if user_or_id is None or hasattr(user_or_id, "pk"):
+        return user_or_id
+    from django.contrib.auth import get_user_model
+
+    return get_user_model().objects.select_related("userprofile").get(pk=user_or_id)
+
+
+def _forum_target(data: dict):
+    """Return ``(instance, is_thread)`` for forum ``data`` (``post_id`` wins over ``thread_id``)."""
+    from ...forums.models import Post, Thread
+
+    if data.get("post_id"):
+        return Post.objects.select_related("thread", "author").get(pk=data["post_id"]), False
+    return Thread.objects.select_related("author").get(pk=data["thread_id"]), True
+
+
+def _dispatch(recipient, notification_type: str, actor, data: dict) -> _NotifyResult:
+    types = Notification.NotificationType
+    if notification_type == types.NEW_FOLLOWER:
+        return NotificationService.create_new_follower_notification(user=recipient, follower=actor)
+    if notification_type == types.REVIEW_LIKE:
+        from ...animes.models import Review
+
+        review = Review.objects.select_related("anime").get(pk=data["review_id"])
+        return NotificationService.create_review_like_notification(
+            user=recipient, author=actor, review=review
+        )
+    if notification_type == types.FORUM_REPLY:
+        from ...forums.models import Post
+
+        post = Post.objects.select_related("thread", "author", "parent").get(pk=data["post_id"])
+        if data.get("parent_post_id"):
+            return NotificationService.create_forum_reply_to_post_notification(
+                user=recipient, reply=post
+            )
+        return NotificationService.create_forum_reply_notification(
+            user=recipient, thread=post.thread, post=post
+        )
+    if notification_type == types.FORUM_MENTION:
+        instance, is_thread = _forum_target(data)
+        return NotificationService.create_forum_mention_notification(
+            user=recipient, author=actor, instance=instance, is_thread=is_thread
+        )
+    if notification_type == types.FORUM_LIKE:
+        instance, is_thread = _forum_target(data)
+        return NotificationService.create_forum_like_notification(
+            user=recipient, author=actor, instance=instance, is_thread=is_thread
+        )
+    if notification_type == types.BADGE_AWARDED:
+        from ...users.models import Badge
+
+        badge = Badge.objects.get(pk=data["badge_id"])
+        return NotificationService.create_badge_awarded_notification(
+            user=recipient, badge=badge, granted_by=actor
+        )
+    if notification_type == types.NEW_EPISODE:
+        from ...animes.models import Anime
+
+        anime = Anime.objects.get(pk=data["anime_id"])
+        return NotificationService.create_new_episode_notification(
+            user=recipient,
+            anime=anime,
+            episode_number=data["episode_number"],
+            aired_at=data.get("aired_at"),
+        )
+    logger.warning("notify(): no producer for notification type %s yet", notification_type)
+    return None
+
+
+def notify(
+    recipient,
+    type: str,
+    *,
+    actor=None,
+    data: dict | None = None,
+    dedupe_key: str | None = None,
+    group_key: str | None = None,
+) -> _NotifyResult:
+    """Notify ``recipient`` (a user or user id) of a ``Notification.NotificationType`` event.
+
+    Returns the notification, or ``None`` when nothing was written: the recipient is
+    the actor, the type has no producer yet, an object in ``data`` is gone, or the
+    write failed (logged).
+    """
+    try:
+        user = _resolve_user(recipient)
+        actor_user = _resolve_user(actor)
+        if actor_user is not None and actor_user.pk == user.pk:
+            return None
+        return _dispatch(user, type, actor_user, dict(data or {}))
+    except Exception:
+        logger.exception("notify() failed for type %s", type)
+        return None
+
+
+def notify_many(
+    recipient_ids,
+    type: str,
+    *,
+    actor=None,
+    data: dict | None = None,
+    dedupe_key: str | None = None,
+    group_key: str | None = None,
+) -> int:
+    """Notify each recipient; return how many notifications were written."""
+    return sum(
+        1
+        for recipient in recipient_ids
+        if notify(
+            recipient,
+            type,
+            actor=actor,
+            data=data,
+            dedupe_key=dedupe_key,
+            group_key=group_key,
+        )
+        is not None
+    )
+
+
+def retract(
+    recipient,
+    type: str,
+    *,
+    actor,
+    group_key: str,
+) -> None:
+    """Remove ``actor`` from ``recipient``'s unread aggregate (today: review likes only)."""
+    try:
+        if type != Notification.NotificationType.REVIEW_LIKE or not group_key.startswith(
+            "review_like:"
+        ):
+            return
+        from ...animes.models import Review
+
+        review = Review.objects.select_related("anime").get(pk=int(group_key.split(":", 1)[1]))
+        NotificationService.remove_review_like_from_notification(
+            user=_resolve_user(recipient), author=_resolve_user(actor), review=review
+        )
+    except Exception:
+        logger.exception("retract() failed for type %s", type)
+
+
+def invalidate_unread_counts(user_ids) -> None:
+    """Forget the cached unread counts; the next read recounts from the database."""
+    keys = [NotificationService._unread_count_cache_key(user_id) for user_id in user_ids]
+    if not keys:
+        return
+    try:
+        cache.delete_many(keys)
+    except CACHE_ERRORS:
+        logger.debug("Failed to invalidate unread notification counts for %s users", len(keys))

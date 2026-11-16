@@ -2,9 +2,9 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { initSentry } from './sentry'
 import './index.css'
+import { clearAppRuntimeCaches } from './pwa/serviceWorker'
 
 const BOOTSTRAP_RECOVERY_KEY = 'frontend_bootstrap_recovery'
-const CACHE_PURGE_TOKENS = ['workbox', 'precache', 'vite-pwa', 'api-cache', 'images']
 
 function isRecoverableBootstrapError(error) {
   const message = String(
@@ -20,32 +20,6 @@ function isRecoverableBootstrapError(error) {
     'Loading chunk',
     "can't access property 'createContext' of undefined",
   ].some((needle) => message.includes(needle))
-}
-
-async function clearAppRuntimeCaches() {
-  const jobs = []
-
-  if ('serviceWorker' in navigator) {
-    jobs.push(
-      navigator.serviceWorker.getRegistrations().then((registrations) => (
-        Promise.allSettled(registrations.map((registration) => registration.unregister()))
-      )),
-    )
-  }
-
-  if ('caches' in window) {
-    jobs.push(
-      caches.keys().then((keys) => (
-        Promise.allSettled(
-          keys
-            .filter((key) => CACHE_PURGE_TOKENS.some((token) => key.includes(token)))
-            .map((key) => caches.delete(key)),
-        )
-      )),
-    )
-  }
-
-  await Promise.allSettled(jobs)
 }
 
 function renderFatalBootstrapError() {

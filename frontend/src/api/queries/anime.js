@@ -97,6 +97,17 @@ export const scheduleKeys = {
 /** Only ever invalidated (AnimeCard); nothing reads it today. Kept so that call is unchanged. */
 export const seasonalKeys = { all: ['seasonal'] };
 
+/**
+ * Bring cached anime payloads up to date after a list change (G2 contract, used by
+ * G3's useListEntryMutation). Prep-commit stub: it does what AnimeCard does today,
+ * invalidating every anime query (and the unused seasonal key); `animeId` and
+ * `userListStatus` are accepted for the precise in-place patch G2 adds (P1-9).
+ */
+export const patchAnimeListStatus = (queryClient, animeId, userListStatus) => Promise.all([
+    queryClient.invalidateQueries({ queryKey: animeKeys.all }),
+    queryClient.invalidateQueries({ queryKey: seasonalKeys.all }),
+]);
+
 const data = (res) => res.data;
 
 /** Next page number from DRF's absolute `next` URL (what AnimeDetail has always used). */
