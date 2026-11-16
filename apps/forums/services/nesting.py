@@ -10,13 +10,15 @@ nests deeper than ``FORUM_MAX_CONTAINER_NESTING`` or the body has more than
 Lines end at LF, CRLF or a bare CR (the parser treats a bare CR as a line end too; the
 serializers also normalise line endings before saving). On each line a marker run is container
 markers separated only by whitespace: ``>``, a ``-``/``*``/``+`` bullet or a ``1.``/``1)`` number
-followed by whitespace (or the line end), or a ``[^label]:`` footnote definition. A run may start
-anywhere on the line (containers also open after footnote prefixes or alignment splits); a run at
-the start of the line also counts half the indentation in columns (a list level needs at least
-two columns to continue). Fenced code is counted too: guessing fences differently from the
-parser would open a bypass.
+followed by whitespace (or the line end), or a ``[^label]:`` footnote definition. Runs count where
+the parser can open containers: at the start of the line (plus half the indentation in columns: a
+list level needs at least two columns to continue), right after an alignment opener or closer
+(``<p align=…>``, ``</p>``: the renderer splits the text there), or when the run starts with a
+footnote definition. So ``hype >>>>> lol`` is just text. Fenced code is counted too: guessing
+fences differently from the parser would open a bypass.
 """
 
+import re
 from dataclasses import dataclass
 
 _DIGITS = "0123456789"
@@ -25,8 +27,12 @@ _WHITESPACE = " \t"
 _TAB_STOP = 4
 # Ordered-list numbers have at most nine digits.
 _MAX_ORDER_DIGITS = 9
-# Longest footnote label looked at, which keeps the scan linear.
-_MAX_FOOTNOTE_LABEL = 100
+# Longest footnote label the parser accepts (micromark: 999), which also keeps the scan linear.
+_MAX_FOOTNOTE_LABEL = 999
+# Where the renderer's splitAlignedBlocks cuts a line, so a container can open right after it.
+_ALIGNMENT_TAG = re.compile(
+    r"""<(?:p|div)\s+align=["'](?:left|center|right)["']\s*>|</(?:p|div)\s*>""", re.IGNORECASE
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +81,17 @@ def _marker_run(line: str, index: int) -> tuple[int, int]:
     return markers, index
 
 
+def _segment_starts(line: str) -> frozenset[int]:
+    """Offsets just after an alignment tag (and any whitespace): where the renderer starts a segment."""
+    starts = set()
+    for match in _ALIGNMENT_TAG.finditer(line):
+        index = match.end()
+        while index < len(line) and line[index] in _WHITESPACE:
+            index += 1
+        starts.add(index)
+    return frozenset(starts)
+
+
 def _line_stats(line: str) -> ContainerStats:
     """Depth and marker count of one line; a single forward pass."""
     length = len(line)
@@ -83,9 +100,11 @@ def _line_stats(line: str) -> ContainerStats:
         columns += _TAB_STOP - columns % _TAB_STOP if line[index] == "\t" else 1
         index += 1
     indent_depth = columns // 2
+    starts = _segment_starts(line) if "<" in line else frozenset()
     depth, markers, at_line_start = indent_depth, 0, True
     while index < length:
-        run, end = _marker_run(line, index)
+        opens_containers = at_line_start or index in starts or line.startswith("[^", index)
+        run, end = _marker_run(line, index) if opens_containers else (0, index)
         if run:
             markers += run
             depth = max(depth, run + (indent_depth if at_line_start else 0))
