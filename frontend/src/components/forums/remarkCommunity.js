@@ -133,48 +133,89 @@ const lineStartSpoilerOffset = (line) => {
 };
 
 /**
- * How deeply a line can nest containers, mirroring `apps/forums/services/nesting.py`: half its leading
- * indentation in columns (a list level needs at least two columns to continue) plus every container
- * marker (`>`, a `-`/`*`/`+` bullet followed by whitespace, `1.`/`1)`) with any whitespace between them.
- * Fenced code is counted too: guessing fences differently from the parser would open a bypass.
+ * How deeply a line can nest containers, mirroring `apps/forums/services/nesting.py`. Lines end at
+ * `\n`, `\r\n` or `\r` (the parser treats a bare `\r` as a line end too). On each line a marker run
+ * is container markers separated only by whitespace: `>`, a `-`/`*`/`+` bullet or a `1.`/`1)` number
+ * followed by whitespace (or the line end), or a `[^label]:` footnote definition. A run can start
+ * anywhere on the line (containers also open after footnote prefixes or alignment splits); a run at
+ * the start of the line also counts half the indentation in columns (a list level needs at least two
+ * columns to continue). Fenced code is counted too: guessing fences differently from the parser
+ * would open a bypass.
  *
  * Deep nesting overflows the parser's stack or makes it quadratic, and parse time grows with the
  * total number of markers, so text past either limit is shown as plain text (the server refuses it).
- * Both counts are linear in the length.
+ * Both counts are linear in the length. (Long text is also parsed under a time budget: see
+ * useCommunityTree.js.)
  */
 export const MAX_CONTAINER_NESTING = 16;
 export const MAX_CONTAINER_MARKERS = 1_500;
+// Longest footnote label looked at, which keeps the scan linear.
+const MAX_FOOTNOTE_LABEL = 100;
 
 const isSpaceOrTab = (char) => char === ' ' || char === '\t';
+const isLineEnd = (char) => char === '\n' || char === '\r';
+
+const isFollowedBySpace = (source, index, end) => index >= end || isSpaceOrTab(source[index]);
 
 const containerMarkerEnd = (source, index, end) => {
-    const char = index < end ? source[index] : '';
+    const char = source[index];
     if (char === '>') return index + 1;
     if (char === '-' || char === '*' || char === '+') {
-        return index + 1 >= end || isSpaceOrTab(source[index + 1]) ? index + 1 : -1;
+        return isFollowedBySpace(source, index + 1, end) ? index + 1 : -1;
     }
-    if (!isDigit(char)) return -1;
-    let digitsEnd = index;
-    while (digitsEnd < end && digitsEnd - index < 9 && isDigit(source[digitsEnd])) digitsEnd += 1;
-    return digitsEnd < end && (source[digitsEnd] === '.' || source[digitsEnd] === ')') ? digitsEnd + 1 : -1;
+    if (isDigit(char)) {
+        let digitsEnd = index;
+        while (digitsEnd < end && digitsEnd - index < 9 && isDigit(source[digitsEnd])) digitsEnd += 1;
+        const isOrdered = digitsEnd < end && (source[digitsEnd] === '.' || source[digitsEnd] === ')');
+        return isOrdered && isFollowedBySpace(source, digitsEnd + 1, end) ? digitsEnd + 1 : -1;
+    }
+    if (char === '[' && source[index + 1] === '^') {
+        const limit = Math.min(end, index + 2 + MAX_FOOTNOTE_LABEL);
+        let labelEnd = index + 2;
+        while (labelEnd < limit && source[labelEnd] !== ']' && !isSpaceOrTab(source[labelEnd])) labelEnd += 1;
+        const isDefinition = labelEnd > index + 2 && labelEnd + 1 < end
+            && source[labelEnd] === ']' && source[labelEnd + 1] === ':';
+        return isDefinition ? labelEnd + 2 : -1;
+    }
+    return -1;
 };
 
-const lineContainerNesting = (source, start, end) => {
+/** Length of the marker run starting at `index` and where it ends. */
+const markerRun = (source, index, end) => {
+    let markers = 0;
+    let cursor = index;
+    for (;;) {
+        const markerEnd = cursor < end ? containerMarkerEnd(source, cursor, end) : -1;
+        if (markerEnd === -1) return { markers, end: cursor };
+        markers += 1;
+        cursor = markerEnd;
+        while (cursor < end && isSpaceOrTab(source[cursor])) cursor += 1;
+    }
+};
+
+const lineContainerStats = (source, start, end) => {
     let columns = 0;
     let index = start;
     while (index < end && isSpaceOrTab(source[index])) {
         columns += source[index] === '\t' ? 4 - (columns % 4) : 1;
         index += 1;
     }
+    const indentDepth = Math.floor(columns / 2);
+    let depth = indentDepth;
     let markers = 0;
-    for (;;) {
-        const markerEnd = containerMarkerEnd(source, index, end);
-        if (markerEnd === -1) break;
-        markers += 1;
-        index = markerEnd;
-        while (index < end && isSpaceOrTab(source[index])) index += 1;
+    let atLineStart = true;
+    while (index < end) {
+        const run = markerRun(source, index, end);
+        if (run.markers) {
+            markers += run.markers;
+            depth = Math.max(depth, run.markers + (atLineStart ? indentDepth : 0));
+            index = run.end;
+        } else {
+            index += 1;
+        }
+        atLineStart = false;
     }
-    return { depth: Math.floor(columns / 2) + markers, markers };
+    return { depth, markers };
 };
 
 /** `{ depth, markers }`: the deepest line's nesting and the text's total container markers. */
@@ -182,13 +223,14 @@ export const containerStats = (source = '') => {
     let depth = 0;
     let markers = 0;
     let start = 0;
-    while (start <= source.length) {
-        const newline = source.indexOf('\n', start);
-        const end = newline === -1 ? source.length : newline;
-        const line = lineContainerNesting(source, start, end);
+    for (;;) {
+        let end = start;
+        while (end < source.length && !isLineEnd(source[end])) end += 1;
+        const line = lineContainerStats(source, start, end);
         depth = Math.max(depth, line.depth);
         markers += line.markers;
-        start = end + 1;
+        if (end >= source.length) break;
+        start = source[end] === '\r' && source[end + 1] === '\n' ? end + 2 : end + 1;
     }
     return { depth, markers };
 };

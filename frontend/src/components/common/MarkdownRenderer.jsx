@@ -4,13 +4,11 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeRaw from "rehype-raw";
 import DOMPurify from "dompurify";
+import { toJsxRuntime } from "hast-util-to-jsx-runtime";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import AccessibleSpoiler from "./Spoiler";
-import remarkCommunity, {
-    escapeLineStartSpoilers,
-    exceedsContainerLimits,
-    remarkNoRawHtml,
-    splitAlignedBlocks,
-} from "../forums/remarkCommunity";
+import { exceedsContainerLimits } from "../forums/remarkCommunity";
+import { useCommunityTree } from "../forums/useCommunityTree";
 
 const ReactMarkdown = lazy(() => import("react-markdown"));
 
@@ -392,31 +390,10 @@ const decodeHtmlEntities = (text = "") => {
 
 /*
  * mode="markdown": markdown only, no raw HTML anywhere (no rehype-raw, no HTML strings, no DOMPurify).
- * Community syntax comes from the remark plugins in components/forums/remarkCommunity.js; the
- * Tailwind classes are the legacy ones so both modes look the same.
+ * The tree comes from components/forums/communityMarkdownTree.js (remark plugins in remarkCommunity.js)
+ * under a parse time budget (useCommunityTree.js); the Tailwind classes are the legacy ones so both
+ * modes look the same.
  */
-const communitySafeProtocol = /^(https?|mailto)$/i;
-
-// react-markdown's defaultUrlTransform, limited to http(s)/mailto (plus relative URLs).
-const communityUrlTransform = (value = "") => {
-    const colon = value.indexOf(":");
-    const questionMark = value.indexOf("?");
-    const numberSign = value.indexOf("#");
-    const slash = value.indexOf("/");
-    if (
-        colon === -1 ||
-        (slash !== -1 && colon > slash) ||
-        (questionMark !== -1 && colon > questionMark) ||
-        (numberSign !== -1 && colon > numberSign) ||
-        communitySafeProtocol.test(value.slice(0, colon))
-    ) {
-        return value;
-    }
-    return "";
-};
-
-const communityRemarkPlugins = [remarkNoRawHtml, remarkGfm, remarkCommunity, remarkBreaks];
-
 // Legacy-only handlers (`span.is-spoiler`, `alignedblock`) are left out; the rest is shared.
 const { span: _legacySpan, alignedblock: _legacyAlignedBlock, ...sharedMarkdownComponents } = markdownComponents;
 
@@ -439,29 +416,24 @@ const communityComponents = {
     ),
 };
 
-/** Renders already-decoded community markdown; alignment blocks recurse with their inner markdown. */
-const CommunityMarkdown = ({ source }) =>
-    splitAlignedBlocks(source).map((segment, index) => {
-        if (segment.align) {
-            const alignmentClassName = alignedBlockClassNames[segment.align] || alignedBlockClassNames.left;
-            return (
-                <div key={index} className={`my-4 ${alignmentClassName}`}>
-                    <CommunityMarkdown source={segment.content} />
-                </div>
-            );
-        }
-        if (!segment.content.trim()) return null;
-        return (
-            <ReactMarkdown
-                key={index}
-                remarkPlugins={communityRemarkPlugins}
-                components={communityComponents}
-                urlTransform={communityUrlTransform}
-            >
-                {escapeLineStartSpoilers(segment.content)}
-            </ReactMarkdown>
-        );
+/**
+ * Community markdown from its hast tree (built in communityMarkdownTree.js, on the main thread for
+ * short text or in a worker under a time budget). Rendering the tree is what react-markdown does too.
+ * Plain text while a long text is parsing, or when it couldn't be parsed in time.
+ */
+const CommunityMarkdown = ({ source }) => {
+    const result = useCommunityTree(source);
+    if (!result.tree) return <PlainTextFallback source={source} />;
+    return toJsxRuntime(result.tree, {
+        Fragment,
+        jsx,
+        jsxs,
+        components: communityComponents,
+        ignoreInvalidStyle: true,
+        passKeys: true,
+        passNode: true,
     });
+};
 
 /** Community text the markdown parser couldn't handle, shown as typed. */
 const PlainTextFallback = ({ source }) => (
@@ -501,9 +473,7 @@ const MarkdownRenderer = ({ content, className = "", mode = "legacy" }) => {
                     <PlainTextFallback source={source} />
                 ) : (
                     <CommunityMarkdownBoundary key={source} source={source}>
-                        <Suspense fallback={<div className="prose prose-invert"><p>Loading...</p></div>}>
-                            <CommunityMarkdown source={source} />
-                        </Suspense>
+                        <CommunityMarkdown source={source} />
                     </CommunityMarkdownBoundary>
                 )}
             </div>

@@ -319,7 +319,9 @@ describe('ReviewCard', () => {
 
         await user.click(within(dialog).getByRole('button', { name: 'Reason' }));
         await user.click(within(dialog).getByRole('option', { name: 'Spam' }));
-        await user.type(within(dialog).getByLabelText('Note (optional)'), '  Same text on every anime  ');
+        // One paste instead of 28 keystrokes: same input, and the test stays fast on a busy machine.
+        await user.click(within(dialog).getByLabelText('Note (optional)'));
+        await user.paste('  Same text on every anime  ');
         await user.click(submit);
 
         expect(reviewApi.report).toHaveBeenCalledWith(7, { reason: 'spam', description: 'Same text on every anime' });
