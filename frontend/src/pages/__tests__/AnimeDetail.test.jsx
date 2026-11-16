@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AnimeDetail from '../AnimeDetail';
 import { animeApi, reviewApi } from '../../api/client';
+import { retryUnlessClientError } from '../../api/queries/retry';
 
 vi.mock('../../api/client', () => ({
     animeApi: {
@@ -148,13 +149,14 @@ const mockAnime = {
     staff_count: 0,
 };
 
-function createHarness(initialEntry = '/anime/frieren') {
+function createHarness(initialEntry = '/anime/frieren', queryDefaults = {}) {
     const queryClient = new QueryClient({
         defaultOptions: {
             queries: {
                 retry: false,
                 staleTime: 0,
                 gcTime: 0,
+                ...queryDefaults,
             },
         },
     });
@@ -391,5 +393,37 @@ describe('AnimeDetail list update invalidation', () => {
             const watchLink = screen.getByRole('link', { name: /watch/i });
             expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch');
         });
+    });
+});
+
+describe('AnimeDetail with the app retry policy (smoke finding S-2)', () => {
+    const appRetry = { retry: retryUnlessClientError, retryDelay: 0 };
+    const httpError = (status) => Object.assign(new Error(`HTTP ${status}`), { response: { status } });
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        animeApi.getRecommendations.mockResolvedValue({ data: [] });
+        reviewApi.getAll.mockResolvedValue({ data: { results: [] } });
+        reviewApi.getStats.mockResolvedValue({ data: {} });
+    });
+
+    it('asks for a missing slug once, then shows Not found', async () => {
+        animeApi.getBySlug.mockRejectedValue(httpError(404));
+        const { wrapper } = createHarness('/anime/missing', appRetry);
+
+        render(<AnimeDetail />, { wrapper });
+
+        expect(await screen.findByRole('heading', { name: 'Anime not found' })).toBeInTheDocument();
+        expect(animeApi.getBySlug).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries a server error once before showing the error state', async () => {
+        animeApi.getBySlug.mockRejectedValue(httpError(500));
+        const { wrapper } = createHarness('/anime/frieren', appRetry);
+
+        render(<AnimeDetail />, { wrapper });
+
+        expect(await screen.findByText('Couldn’t load this anime')).toBeInTheDocument();
+        expect(animeApi.getBySlug).toHaveBeenCalledTimes(2);
     });
 });
