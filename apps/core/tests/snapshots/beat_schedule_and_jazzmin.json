@@ -14,7 +14,7 @@
       "options": {
         "queue": "default"
       },
-      "schedule": "<crontab: 0 */6 * * * (m/h/dM/MY/d)>",
+      "schedule": "<crontab: 50 * * * * (m/h/dM/MY/d)>",
       "task": "apps.core.tasks.notifications.check_new_episodes"
     },
     "cleanup-old-notifications": {
