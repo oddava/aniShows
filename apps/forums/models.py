@@ -144,7 +144,7 @@ class Post(TimestampMixin, ModerationFields, Model):
         ]
 
     def __str__(self):
-        author = self.author.username if self.author_id else "deleted user"
+        author = self.author.username if self.author is not None else "deleted user"
         return f"Post by {author} in {self.thread.title}"
 
     def adjust_like_count(self, delta: int):

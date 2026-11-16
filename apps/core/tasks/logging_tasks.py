@@ -1,4 +1,4 @@
-"""Celery task wrappers for async request and audit logging."""
+"""Celery task wrappers for async request and exception logging."""
 
 from __future__ import annotations
 
@@ -18,20 +18,6 @@ def log_request_async(self, log_data):
             return {"status": "skipped", "reason": "missing_relation"}
         logger.exception(
             "Failed to create async request log", extra={"log_data": log_data_preview(log_data)}
-        )
-        raise self.retry(exc=exc, countdown=5)
-
-
-@observed_shared_task(retry_policy="quick")
-def log_audit_async(self, log_data):
-    try:
-        return CoreTaskService.create_audit_log(log_data)
-    except Exception as exc:
-        if is_missing_relation_error(exc):
-            logger.warning("Skipping async audit log because the relation is missing")
-            return {"status": "skipped", "reason": "missing_relation"}
-        logger.exception(
-            "Failed to create async audit log", extra={"log_data": log_data_preview(log_data)}
         )
         raise self.retry(exc=exc, countdown=5)
 

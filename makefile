@@ -8,7 +8,7 @@ ENV_FILE = .env
 ENV_EXAMPLE = .env.example
 
 .PHONY: help up down restart build ps logs web-logs celery-logs beat-logs \
-        front-logs db-logs mig migrate shell superuser test lint collectstatic \
+        front-logs db-logs mig migrate shell superuser test lint typecheck collectstatic \
         msg icomp import-anime sync-catalog sync-airing sync-metadata \
         sync-full sync-franchises sync-recs import-offline \
         import-offline-async import-offline-resume import-offline-full import-offline-full-async \
@@ -95,6 +95,9 @@ test:                           ## Run backend tests in parallel (ARGS="apps/use
 
 lint:                           ## Run linter (ruff)
 	docker compose run --rm --no-deps web /opt/venv/bin/python -m ruff check .
+
+typecheck:                      ## mypy: fail above the ceiling in scripts/check_mypy_ceiling.py
+	docker compose run --rm --no-deps web python scripts/check_mypy_ceiling.py
 
 bench-api:                      ## Time public API endpoints cold/warm against the dev DB (ARGS="--rounds 5 --json out.json")
 	docker compose run --rm web python scripts/bench_public_api.py $(ARGS)

@@ -22,8 +22,16 @@
 #
 # Gunicorn runs uvicorn workers, which serve both HTTP and WebSockets.
 # BACKEND_TAG pins the backend image (defaults to latest, CI also pushes sha-<commit>).
-# Memory limits default to the previous values; see docs/deploy/runbook.md for
-# the totals and a smaller profile for a shared host.
+# Footprint: the defaults are the lean shared-host profile, about 3 GB of limits
+# with the bundled db (one web replica with 2 gunicorn workers, celery
+# concurrency 1); docs/deploy/runbook.md has the table and a roomier profile.
+#
+# Restart: RESTART_POLICY, default unless-stopped. Docker backs off between
+# restarts (100 ms doubling up to 1 min), so a crash loop costs at most about
+# one restart a minute, and a stopped service stays stopped. on-failure:N caps
+# the count, but Docker does not restart a container that exited cleanly when
+# the host reboots (gunicorn and celery exit 0 on SIGTERM), so it needs a boot
+# hook (runbook); that is why it is not the default.
 
 x-logging: &logging
   # Docker's default json-file driver never rotates; on a shared host that
@@ -35,7 +43,7 @@ x-logging: &logging
 
 x-backend: &backend
   image: ghcr.io/oddava/anishows-backend:${BACKEND_TAG:-latest}
-  restart: always
+  restart: ${RESTART_POLICY:-unless-stopped}
   env_file: .env
   environment:
     DJANGO_ENV: production
@@ -51,6 +59,9 @@ x-backend: &backend
     AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
     AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
     PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+    # Lean profile: 2 gunicorn workers per web replica (gunicorn.conf.py would
+    # otherwise use the CPU count, 2..4). Only web reads it.
+    GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
     SENTRY_ENVIRONMENT: production
     # Only Caddy can reach the backend (it publishes no ports), and Caddy
     # sends exactly one X-Forwarded-For entry: the real client. Without this,
@@ -87,13 +98,13 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${WEB_MEMORY_LIMIT:-768M}
+          memory: ${WEB_MEMORY_LIMIT:-512M}
 
   celery:
     <<: *backend
     command: >
       celery -A root worker -l WARNING -O fair --pool=prefork
-      --concurrency=${CELERY_CONCURRENCY:-2}
+      --concurrency=${CELERY_CONCURRENCY:-1}
       --max-tasks-per-child=200 --max-memory-per-child=384000
       -Q critical,high_priority,default,notifications,batch,images,analytics,low_priority
     # No healthcheck: `celery inspect ping` boots a second Django process
@@ -103,7 +114,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${CELERY_MEMORY_LIMIT:-1G}
+          memory: ${CELERY_MEMORY_LIMIT:-640M}
 
   beat:
     <<: *backend
@@ -113,12 +124,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${BEAT_MEMORY_LIMIT:-256M}
+          memory: ${BEAT_MEMORY_LIMIT:-192M}
 
   db:
     profiles: [bundled-db]
     image: postgres:18-alpine
-    restart: always
+    restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
@@ -135,15 +146,15 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${DB_MEMORY_LIMIT:-1G}
+          memory: ${DB_MEMORY_LIMIT:-768M}
 
   redis:
     image: redis:7-alpine
-    restart: always
+    restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging
     command: >
       redis-server --requirepass ${REDIS_PASSWORD:-redispassword123}
-      --maxmemory ${REDIS_MAXMEMORY:-256mb} --maxmemory-policy allkeys-lru
+      --maxmemory ${REDIS_MAXMEMORY:-128mb} --maxmemory-policy allkeys-lru
       --appendonly yes --appendfsync everysec
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redispassword123}", "--no-auth-warning", "ping"]
@@ -156,11 +167,11 @@ services:
       resources:
         limits:
           # maxmemory plus room for the AOF-rewrite fork and client buffers.
-          memory: ${REDIS_MEMORY_LIMIT:-512M}
+          memory: ${REDIS_MEMORY_LIMIT:-256M}
 
   minio:
     image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    restart: always
+    restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging
     command: server /data --console-address ":9001"
     expose:
@@ -198,7 +209,7 @@ services:
 
   caddy:
     image: caddy:alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
-    restart: always
+    restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging
     # No host ports here: infra/compose/proxy-port.yml (proxy mode) or
     # public-ports.yml (public mode) adds them; tunnel mode reaches Caddy
@@ -252,12 +263,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${CADDY_MEMORY_LIMIT:-256M}
+          memory: ${CADDY_MEMORY_LIMIT:-128M}
 
   cloudflared:
     profiles: [tunnel]
     image: cloudflare/cloudflared:2026.10.0@sha256:9b49eed8f62806d5d45ddf59ecefb5710429598ea6d3fcccd2af938f621b2b07
-    restart: always
+    restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging
     # Remotely managed tunnel: the public hostnames and their service
     # (http://caddy:80) live in the Cloudflare dashboard; the token is the
@@ -286,7 +297,7 @@ services:
   umami_db:
     profiles: [analytics]
     image: postgres:${UMAMI_POSTGRES_VERSION:-17}-alpine
-    restart: always
+    restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging
     environment:
       POSTGRES_USER: ${UMAMI_DB_USER:-umami}
@@ -309,7 +320,7 @@ services:
   umami:
     profiles: [analytics]
     image: ghcr.io/umami-software/umami:postgresql-latest@sha256:e3f80c0625aad7179b49da27d475357cabb1068b8cacd9a792cfd6966888b123
-    restart: always
+    restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging
     environment:
       DATABASE_URL: postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami_db:5432/${UMAMI_DB_NAME:-umami}
@@ -327,7 +338,7 @@ services:
     build: ./backups
     image: anishows-backup:local
     container_name: anishows-backup
-    restart: always
+    restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging
     env_file: .env
     environment:

@@ -176,6 +176,14 @@
 		}
 	}
 
+	# robots.txt and the sitemap list the live catalog (apps/core/views/seo.py).
+	@seo path /robots.txt /sitemap.xml /sitemap-*.xml
+	handle @seo {
+		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
+			import django
+		}
+	}
+
 	# Django static (whitenoise)
 	handle /static/* {
 		reverse_proxy {$WEB_UPSTREAMS:web:8000} {

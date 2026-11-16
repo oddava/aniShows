@@ -98,9 +98,6 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 `apps.core.tasks.cleanup_tasks.cleanup_old_task_results`
 - Cleans up the custom `core.CeleryTaskResult` table.
 
-`apps.core.tasks.cleanup_tasks.cleanup_celery_backend`
-- Placeholder backend-cleanup task kept for compatibility.
-
 `apps.core.tasks.cleanup_tasks.health_check_workers`
 - Reports worker heartbeat health.
 
@@ -115,9 +112,6 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 
 `apps.core.tasks.logging_tasks.log_request_async`
 - Asynchronously persists request logs.
-
-`apps.core.tasks.logging_tasks.log_audit_async`
-- Asynchronously persists audit logs.
 
 `apps.core.tasks.logging_tasks.log_exception_async`
 - Asynchronously persists exception logs.

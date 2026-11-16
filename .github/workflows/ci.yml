@@ -73,6 +73,9 @@ jobs:
       - name: Check for missing migrations
         run: uv run python manage.py makemigrations --check --dry-run
 
+      - name: Mypy (no more errors than the recorded ceiling)
+        run: uv run python scripts/check_mypy_ceiling.py
+
       - name: Pytest
         run: uv run pytest -p no:cacheprovider -n auto --cov --cov-report=term:skip-covered
 

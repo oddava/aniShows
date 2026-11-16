@@ -70,6 +70,23 @@ def _is_recommendations_cache_fresh(cached_data, stale_after_hours: int = 24) ->
     return newest_created_at >= stale_before
 
 
+def _cache_get(key):
+    """The cached value, or None when the cache (Redis) is down: then rebuild from the DB."""
+    try:
+        return cache.get(key)
+    except CACHE_ERRORS:
+        logger.warning("Recommendations cache unavailable (read)", exc_info=True)
+        return None
+
+
+def _cache_call(method: str, *args) -> None:
+    """``cache.set``/``cache.delete``, best effort: a cache outage never fails the request."""
+    try:
+        getattr(cache, method)(*args)
+    except CACHE_ERRORS:
+        logger.warning("Recommendations cache unavailable (%s)", method, exc_info=True)
+
+
 # The debounce key G3's ``schedule_recommendations_debounced`` sets before it enqueues.
 RECO_PENDING_KEY = "reco_pending:{user_id}"
 
@@ -126,7 +143,7 @@ class RecommendationsViewSet(ViewSet):
         user = request.user
         can_view_adult = can_view_adult_content(user)
         cache_key = recommendations_cache_key(user.id)
-        cached = cache.get(cache_key)
+        cached = _cache_get(cache_key)
         if isinstance(cached, dict) and cached.get("adult") is can_view_adult:
             return Response(cached["items"][:limit])
 
@@ -142,7 +159,8 @@ class RecommendationsViewSet(ViewSet):
 
         if not fresh:
             _queue_refresh(user.id)
-        cache.set(
+        _cache_call(
+            "set",
             cache_key,
             {"adult": can_view_adult, "items": items},
             FRESH_CACHE_TTL if fresh else SHORT_CACHE_TTL,
@@ -182,5 +200,6 @@ class RecommendationsViewSet(ViewSet):
                 code="recommendation_not_found",
                 status_code=404,
             )
-        cache.delete(recommendations_cache_key(request.user.id))
+        # The dismissal is saved; with the cache down the stale page lapses on its TTL.
+        _cache_call("delete", recommendations_cache_key(request.user.id))
         return Response({"message": "Recommendation dismissed"})

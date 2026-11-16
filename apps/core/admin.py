@@ -310,7 +310,8 @@ class NotificationAdmin(admin.ModelAdmin):
         ("created_at", admin.DateFieldListFilter),
     ]
     search_fields = ["user__username", "title", "message"]
-    raw_id_fields = ["user"]
+    # Both are user FKs: a select box would load every account on each change page.
+    raw_id_fields = ["user", "actor"]
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
 

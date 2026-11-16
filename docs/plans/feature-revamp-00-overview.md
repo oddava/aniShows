@@ -480,7 +480,9 @@ On `revamp/base`: 1079 backend tests (the 1052 of 50dcfba + 23 stub tests + 4 se
 | ESLint | `cd frontend && npx eslint .` | clean |
 | Build | `cd frontend && NODE_OPTIONS=--max-old-space-size=4096 npx vite build` (on Windows `npm run build` fails on the POSIX env syntax; use this) | OK |
 
-**mypy rule:** no group may raise the count above **421**, measured with the exact command above. The prep commit
+**mypy rule:** no group may raise the count above **421**, measured with the exact command above.
+(Re-baselined on `release/anishows-rc`: the measured count is now the ceiling in
+`scripts/check_mypy_ceiling.py`, enforced in CI and by `make typecheck`.) The prep commit
 moved code without adding errors. The drop from 427 to 421 is mypy reporting each missing-stubs
 (`import-untyped`) note once per run, at the first import site, and the splits changed which site that is. Because
 of that, a refactor can shift the raw count by a few without any real change. If the number moves and you did not

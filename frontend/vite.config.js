@@ -125,6 +125,15 @@ export default defineConfig(({ mode }) => ({
         target: devApiTarget,
         changeOrigin: true,
       },
+      // robots.txt and the sitemap come from Django (apps/core/views/seo.py).
+      '/robots.txt': {
+        target: devApiTarget,
+        changeOrigin: true,
+      },
+      '/sitemap': {
+        target: devApiTarget,
+        changeOrigin: true,
+      },
     },
   },
   // Optimize dependencies

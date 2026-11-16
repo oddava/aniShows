@@ -63,7 +63,7 @@ a container uses (`scripts/deploy/prune_images.sh`; `PRUNE_IMAGES=0` turns it of
    - external/shared: set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`,
      `DB_SSLMODE=require` (or `verify-full` + `DB_SSLROOTCERT` mounted into the containers), and
      size the connection budget (below). Create the role and database first:
-     `CREATE ROLE anishows LOGIN PASSWORD '…' CONNECTION LIMIT 60; CREATE DATABASE anishows_db OWNER anishows;`
+     `CREATE ROLE anishows LOGIN PASSWORD '…' CONNECTION LIMIT 45; CREATE DATABASE anishows_db OWNER anishows;`
      For `verify-full`, put the server's CA on the host and set `DB_CA_FILE`, `DB_SSLROOTCERT=/etc/anishows/db-ca.pem`
      and `COMPOSE_EXTRA_FILES="infra/compose/db-ca.yml"` (it mounts the CA into web, celery, beat and backup).
      The app needs the `pg_trgm` extension (its migrations create it). On a managed server
@@ -134,19 +134,34 @@ The limits are caps, not reservations. Measured idle in the dry run with one gun
 ~190 MB per replica, celery ~175 MB, beat ~115 MB, minio ~110 MB, Postgres ~45–70 MB, backup ~45 MB,
 Caddy ~15 MB, Redis ~6 MB. Each extra gunicorn worker adds roughly 100–120 MB.
 
-| Service | Default limit | Shared-host profile | Variable |
+The defaults are the **lean** profile (about 3 GB of limits), sized for the shared host. The
+roomy profile is the previous defaults, for a host with spare memory; set its values in `.env`.
+
+| Service | Lean (default) | Roomy | Variable |
 |---|---|---|---|
-| web × `SCALE_WEB` (+1 during a roll) | 768M × 2 | 512M × 2, `GUNICORN_WORKERS=2` | `WEB_MEMORY_LIMIT` |
-| celery | 1G (concurrency 2) | 640M, `CELERY_CONCURRENCY=1` | `CELERY_MEMORY_LIMIT` |
-| beat | 256M | 192M | `BEAT_MEMORY_LIMIT` |
-| db (bundled only) | 1G | 0 with an external DB, else 768M | `DB_MEMORY_LIMIT` |
-| redis | 512M (`maxmemory` 256mb) | 256M, `REDIS_MAXMEMORY=128mb` | `REDIS_MEMORY_LIMIT` |
+| web × `SCALE_WEB` (+1 during a roll) | 512M × 1, `GUNICORN_WORKERS=2` | 768M × 2, `GUNICORN_WORKERS=2` | `WEB_MEMORY_LIMIT`, `SCALE_WEB` |
+| celery | 640M, `CELERY_CONCURRENCY=1` | 1G, `CELERY_CONCURRENCY=2` | `CELERY_MEMORY_LIMIT` |
+| beat | 192M | 256M | `BEAT_MEMORY_LIMIT` |
+| db (bundled only) | 768M | 1G | `DB_MEMORY_LIMIT` |
+| redis | 256M (`REDIS_MAXMEMORY=128mb`) | 512M (`256mb`) | `REDIS_MEMORY_LIMIT` |
 | minio | 256M | 256M | `MINIO_MEMORY_LIMIT` |
-| caddy | 256M | 128M | `CADDY_MEMORY_LIMIT` |
-| cloudflared (tunnel profile) | 128M | 128M | `CLOUDFLARED_MEMORY_LIMIT` |
+| caddy | 128M | 256M | `CADDY_MEMORY_LIMIT` |
+| cloudflared (tunnel mode only) | 128M | 128M | `CLOUDFLARED_MEMORY_LIMIT` |
 | backup | 256M | 256M | `BACKUP_MEMORY_LIMIT` |
-| umami + umami_db (analytics) | 512M + 256M | off | `UMAMI_*_MEMORY_LIMIT` |
-| **Total (bundled db, no analytics)** | **≈ 5.2 GB** (6.0 GB during a roll) | **≈ 3.0 GB** (3.5 GB during a roll; ≈ 2.3 GB with an external DB) | |
+| umami + umami_db (analytics) | off | 512M + 256M | `UMAMI_*_MEMORY_LIMIT` |
+| **Total (bundled db, no analytics)** | **≈ 3.0 GB** (3.5 GB during a roll; ≈ 2.2 GB with an external DB) | **≈ 5.0 GB** (5.8 GB during a roll) | |
+
+One web replica still deploys without downtime: the rolling restart starts the new replica and
+waits for it to be healthy before stopping the old one. It does mean a crashed web container is a
+short outage until Docker restarts it; use `SCALE_WEB=2` (+512M) if that matters more than memory.
+
+**Restart policy.** `RESTART_POLICY`, default `unless-stopped`: Docker waits between restarts
+(100 ms, doubling up to 1 minute), so a crash loop costs at most about one restart a minute, and a
+service stopped by hand stays stopped, even across a daemon restart. `on-failure:5` caps the
+count, but after a host reboot Docker brings back only containers that had exited with an error,
+and gunicorn and celery exit 0 on SIGTERM: the site would stay down. If you choose it, add a boot
+hook, e.g. a systemd unit that runs `scripts/deploy/compose.sh start` from the repo root after
+`docker.service`.
 
 Container logs rotate at 5 × 10 MB per container (`LOG_MAX_SIZE`, `LOG_MAX_FILE`).
 `docker image prune` after a deploy only removes images labelled `app.anishows.component`
@@ -161,10 +176,10 @@ connections ≤ DB_POOL_MAX_SIZE × (GUNICORN_WORKERS × (SCALE_WEB + 1) + CELER
               (+1 replica during a roll; +2 for the celery parent and beat)
 ```
 
-With the template (`DB_POOL_MAX_SIZE=5`, `GUNICORN_WORKERS=2`, `SCALE_WEB=2`, `CELERY_CONCURRENCY=2`):
-5 × (2 × 3 + 2 + 2) = 50, plus about 10 for migrations, backups and `manage.py` runs, so cap our
-share on the server at 60: `ALTER ROLE anishows CONNECTION LIMIT 60`. The shared-host profile
-(`CELERY_CONCURRENCY=1`) needs 45 + 10.
+With the template (lean: `DB_POOL_MAX_SIZE=5`, `GUNICORN_WORKERS=2`, `SCALE_WEB=1`,
+`CELERY_CONCURRENCY=1`): 5 × (2 × 2 + 1 + 2) = 35, plus about 10 for migrations, backups and
+`manage.py` runs, so cap our share on the server at 45: `ALTER ROLE anishows CONNECTION LIMIT 45`.
+The roomy profile (`SCALE_WEB=2`, `CELERY_CONCURRENCY=2`) needs 5 × (2 × 3 + 2 + 2) = 50 + 10 = 60.
 `core.W002` (`check --deploy`) warns when an external host runs without the pool. With the bundled
 db the same budget applies against Postgres' `max_connections` (100).
 

@@ -260,3 +260,48 @@ class RecommendationsDismissTests(RecommendationsViewTestBase):
     def test_dismiss_unknown_anime_is_404(self):
         response = self.client.post(f"{URL}999999/dismiss/")
         self.assertEqual(response.status_code, 404)
+
+
+class RecommendationsCacheDownTests(RecommendationsViewTestBase):
+    """G2: when the cache (Redis) fails, list and dismiss answer from the database (no 500).
+
+    Only the recommendations code's own cache is broken here: DRF's rate throttles
+    use the same Redis and still need it (a separate fail-open/closed decision).
+    """
+
+    def _cache_down(self):
+        from unittest.mock import MagicMock
+
+        from redis.exceptions import ConnectionError as RedisConnectionError
+
+        broken = MagicMock()
+        for method in ("get", "set", "delete"):
+            getattr(broken, method).side_effect = RedisConnectionError("cache down")
+        return (
+            patch("apps.animes.views.recommendations.cache", broken),
+            patch("apps.animes.services.recommendations.cache", broken),
+            patch("apps.animes.views.recommendations._queue_refresh", return_value=False),
+        )
+
+    def test_list_serves_stored_rows(self):
+        self._row(self._anime("Kept Show"))
+        get, set_, delete = self._cache_down()
+        with get, set_, delete:
+            response = self.client.get(URL)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual([item["anime"]["title"] for item in response.json()], ["Kept Show"])
+
+    def test_list_serves_the_trending_fallback(self):
+        get, set_, delete = self._cache_down()
+        with get, set_, delete:
+            response = self.client.get(URL)
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_dismiss_is_saved(self):
+        rec = self._row(self._anime("Dismissed Show"))
+        get, set_, delete = self._cache_down()
+        with get, set_, delete:
+            response = self.client.post(f"{URL}{rec.anime_id}/dismiss/")
+        self.assertEqual(response.status_code, 200, response.content)
+        rec.refresh_from_db()
+        self.assertTrue(rec.is_dismissed)

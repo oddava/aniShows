@@ -11,6 +11,9 @@ scripts/*
 !scripts/bench_public_api.py
 !scripts/seed_perf_catalog.py
 !scripts/explain_public_queries.py
+!scripts/check_mypy_ceiling.py
+# Deploy tooling (deploy-prod.sh sources it); scripts/* above would hide new files here.
+!scripts/deploy/
 pyvenv.cfg
 .venv
 pip-selfcheck.json

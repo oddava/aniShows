@@ -19,12 +19,6 @@ def cleanup_old_task_results(self, days: int = 7, batch_size: int = 1000):
         return result
 
 
-@observed_shared_task(retry_policy="none")
-def cleanup_celery_backend(self, days: int = 1):
-    # No-op kept only because the frozen ``apps.core.tasks`` package re-exports it.
-    return CoreTaskService.cleanup_celery_backend(days=days)
-
-
 @observed_shared_task(retry_policy="quick", time_limit_preset="quick")
 def health_check_workers(self):
     with retry_on_error(self, "Celery worker health check failed", countdown=30):

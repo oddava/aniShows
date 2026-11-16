@@ -39,7 +39,6 @@ TRACKING_ERRORS = (DatabaseError, TypeError, ValueError)
 UNTRACKED_TASKS: frozenset[str] = frozenset(
     {
         "apps.core.tasks.logging_tasks.log_request_async",
-        "apps.core.tasks.logging_tasks.log_audit_async",
         "apps.core.tasks.logging_tasks.log_exception_async",
         "apps.core.tasks.cleanup_tasks.collect_queue_metrics",
         "apps.core.tasks.cleanup_tasks.flush_forum_view_counts",

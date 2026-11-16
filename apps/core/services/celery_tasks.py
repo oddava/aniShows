@@ -89,14 +89,6 @@ class CoreTaskService:
         }
 
     @staticmethod
-    def cleanup_celery_backend(days: int = 1) -> dict:
-        logger.info(
-            "Skipping explicit backend cleanup because Celery backend retention is handled elsewhere",
-            extra={"days": days},
-        )
-        return {"status": "skipped", "reason": "automatic_cleanup_enabled", "days": days}
-
-    @staticmethod
     def prune_admin_records(*, batch_size: int = PRUNE_BATCH_SIZE) -> dict:
         """Apply the SystemLog/AuditLog retention rules; return the rows deleted per rule."""
         now = timezone.now()
@@ -296,15 +288,6 @@ class CoreTaskService:
 
         SystemLog.objects.create(**log_data)
         return {"status": "created", "model": "SystemLog"}
-
-    @staticmethod
-    def create_audit_log(log_data: dict) -> dict:
-        if not model_table_exists(AuditLog):
-            warn_missing_table_once(AuditLog._meta.db_table, "async audit logging")
-            return {"status": "skipped", "reason": "missing_table"}
-
-        AuditLog.objects.create(**log_data)
-        return {"status": "created", "model": "AuditLog"}
 
     # Notification tasks live in notification_tasks_service (G4). These keep the
     # old entry points working.

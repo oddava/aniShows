@@ -41,6 +41,7 @@ from django.db.models import Exists, OuterRef, Prefetch, Q, QuerySet, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
+from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
 from ...users.models import UserAnimeList, UserProfile
 from ..models import (
@@ -882,7 +883,11 @@ class RecommendationService:
             UserRecommendation.objects.filter(user_id=user.id, is_dismissed=False).delete()
             # ignore_conflicts keeps a dismissed row if one raced in meanwhile.
             saved = UserRecommendation.objects.bulk_create(rows, ignore_conflicts=True)
-        cache.delete(recommendations_cache_key(user.id))
+        try:
+            cache.delete(recommendations_cache_key(user.id))
+        except CACHE_ERRORS:
+            # The rows are saved; the cached page lapses on its own TTL.
+            logger.warning("Could not drop cached recommendations for user %s", user.id)
 
         logger.info("Generated %s recommendations for user %s", len(saved), user.id)
         return saved
@@ -925,10 +930,17 @@ class RecommendationService:
         adult setting; titles on the user's list or dismissed are dropped per request.
         """
         cache_key = FALLBACK_CACHE_KEY.format(adult=int(can_view_adult))
-        items = cache.get(cache_key)
+        try:
+            items = cache.get(cache_key)
+        except CACHE_ERRORS:
+            logger.warning("Recommendations fallback cache unavailable (read)", exc_info=True)
+            items = None
         if items is None:
             items = self._build_trending_fallback(can_view_adult=can_view_adult, request=request)
-            cache.set(cache_key, items, FALLBACK_CACHE_TTL)
+            try:
+                cache.set(cache_key, items, FALLBACK_CACHE_TTL)
+            except CACHE_ERRORS:
+                logger.warning("Recommendations fallback cache unavailable (write)", exc_info=True)
         if not items:
             return []
 

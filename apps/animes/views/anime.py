@@ -110,7 +110,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         return self._with_public_cache_control(response, request)
 
     @staticmethod
-    def _adult_gate_response(slug: str) -> Response:
+    def _adult_gate_response(slug: str | None) -> Response:
         response = error_response(
             "This title is marked 18+ by AniList. Turn on adult content to view it.",
             code=ADULT_GATE_CODE,

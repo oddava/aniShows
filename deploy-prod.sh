@@ -20,7 +20,7 @@
 # proxy mode, and no wide-open ADMIN_ALLOW_CIDRS (unless
 # ALLOW_WIDE_ADMIN_CIDRS=1). The deploy refuses to start otherwise.
 #
-# Env (from .env or the shell; the shell wins): SCALE_WEB (default 2),
+# Env (from .env or the shell; the shell wins): SCALE_WEB (default 1),
 # BACKEND_TAG / FRONTEND_TAG (default latest), DB_HOST (default db = bundled
 # Postgres), ANALYTICS_ENABLED (auto: on when UMAMI_DOMAIN is set),
 # TUNNEL_TOKEN, TUNNEL_EXTERNAL=1 (cloudflared runs outside this stack),
@@ -120,7 +120,7 @@ fi
 PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
 FRONTEND_IMAGE="ghcr.io/oddava/anishows-frontend:${FRONTEND_TAG}"
 FRONTEND_VOLUME="${PROJECT}_frontend_dist"
-SCALE_WEB="${SCALE_WEB:-2}"
+SCALE_WEB="${SCALE_WEB:-1}"
 [[ "$SCALE_WEB" =~ ^[1-9][0-9]*$ ]] || die "SCALE_WEB must be a positive integer"
 
 echo "Mode: ${CADDY_MODE}  domain: ${DOMAIN}  database: ${DB_HOST}  profiles: ${COMPOSE_PROFILES:-none}"

@@ -459,12 +459,11 @@ def seed(count: int, seed_value: int, reset: bool) -> None:
     AnimeStudio.objects.bulk_create(studio_links, batch_size=BATCH * 5)
     OfflineAnimeSyncState.objects.bulk_create(sync_states, batch_size=BATCH * 5)
 
-    # bulk_create skips Anime.save() and the genre signal, so derive the
-    # denormalized adult flag (D5) in one pass when the schema has it.
+    # The adult flag is AniList's isAdult (apps/animes/adult_content.py), which
+    # synthetic rows do not have: mark the Hentai-genre rows adult, as migration
+    # anime.0060 seeds real ones, so the adult filter still has rows to exclude.
     if any(field.name == "is_adult" for field in Anime._meta.concrete_fields):
-        from apps.animes.adult_content import adult_content_q
-
-        Anime.objects.filter(adult_content_q()).update(is_adult=True)
+        Anime.objects.filter(genres__slug="hentai").update(is_adult=True)
 
     # One public profile for the benchmark's profile endpoint.
     user, _ = get_user_model().objects.get_or_create(

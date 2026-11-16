@@ -260,13 +260,12 @@ def test_management_command_and_task_run_the_sync(monkeypatch):
     from apps.animes.tasks.adult_content import sync_adult_flags
 
     calls = []
-    monkeypatch.setattr(
-        adult_content,
-        "sync_adult_flags_from_anilist",
-        lambda **kwargs: (
-            calls.append(kwargs) or {"checked": 0, "payloads": 0, "flagged": 0, "cleared": 0}
-        ),
-    )
+
+    def fake_sync(**kwargs):
+        calls.append(kwargs)
+        return {"checked": 0, "payloads": 0, "flagged": 0, "cleared": 0}
+
+    monkeypatch.setattr(adult_content, "sync_adult_flags_from_anilist", fake_sync)
     monkeypatch.setattr(
         "apps.animes.management.commands.sync_adult_flags.sync_adult_flags_from_anilist",
         adult_content.sync_adult_flags_from_anilist,
