@@ -6,6 +6,7 @@ Provides different rate limits for different types of endpoints.
 import hashlib
 import math
 import time
+import unicodedata
 
 from django.conf import settings
 from django.core.cache import cache
@@ -156,6 +157,21 @@ class ChangeEmailRateThrottle(UserRateThrottle):
     scope = "change_email"
 
 
+def fold_identifier(identifier: str) -> str:
+    """Fold an identifier at least as far as the database's case-insensitive lookups.
+
+    Postgres folds some characters that ``str.lower()`` leaves alone: long s
+    (U+017F) and dotless i (U+0131) upper-case to ``S`` and ``I``, and dotted
+    capital I (U+0130) lower-cases to ``i``. Each such spelling would get its own
+    counter yet sign in to the same account.
+    Decomposing, dropping combining marks and round-tripping through upper case
+    merges them. Merging extra spellings into one counter is harmless here.
+    """
+    decomposed = unicodedata.normalize("NFKD", identifier.strip())
+    stripped = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return stripped.upper().lower()
+
+
 class LoginIdentifierThrottle:
     """Lock an identifier after repeated failed logins, whatever IP they come from (A09).
 
@@ -167,7 +183,7 @@ class LoginIdentifierThrottle:
     """
 
     def __init__(self, identifier: str):
-        digest = hashlib.sha256(identifier.strip().lower().encode()).hexdigest()
+        digest = hashlib.sha256(fold_identifier(identifier).encode()).hexdigest()
         self.count_key = f"throttle:login_identifier:{digest}:count"
         self.reset_key = f"throttle:login_identifier:{digest}:reset_at"
         self.max_failures = settings.LOGIN_IDENTIFIER_MAX_FAILURES

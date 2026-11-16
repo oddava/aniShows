@@ -161,3 +161,11 @@ class OAuthPopulateUserTests(TestCase):
     @patch("apps.users.adapters._random_suffix", return_value="beef")
     def test_nothing_usable_falls_back(self, _suffix):
         self.assertEqual(self._populate({"email": "me@example.com"}).username, "userbeef")
+
+
+class OAuthNameCharactersTests(TestCase):
+    def test_at_sign_is_dropped_so_the_username_stays_usable_at_sign_in(self):
+        from ..adapters import _name_candidate
+
+        self.assertEqual(_name_candidate("ann@home"), "annhome")
+        self.assertIsNone(_name_candidate("@@@"))

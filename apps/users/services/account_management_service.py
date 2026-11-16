@@ -188,6 +188,16 @@ def confirm_email_change(uidb64, token, new_email_encoded=None, email_service=No
     old_email = user.email
     try:
         with transaction.atomic():
+            # Two submits of one link (two tabs, a mail prefetcher) must not both
+            # apply it: lock the user, then re-check the token on fresh rows.
+            # (No select_related: FOR UPDATE cannot cover the outer join to the profile.)
+            user = User.objects.select_for_update().get(pk=user.pk)
+            profile = UserProfile.objects.get(user=user)
+            user.userprofile = profile  # the token covers its pending fields
+            if normalize_email(profile.pending_email) != new_email or not (
+                EmailChangeTokenGenerator(new_email).check_token(user, token)
+            ):
+                return invalid
             user.email = new_email
             user.save(update_fields=["email"])
             profile.email_verified = True

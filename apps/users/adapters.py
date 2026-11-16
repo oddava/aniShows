@@ -77,7 +77,8 @@ def _name_candidate(name: str | None) -> str | None:
     """A display name squeezed into username characters ("Mary Jane" -> "MaryJane")."""
     if not name:
         return None
-    return re.sub(r"[^\w.@+-]", "", name) or None
+    # No "@": a username containing one is read as an email at sign-in.
+    return re.sub(r"[^\w.+-]", "", name) or None
 
 
 def unique_oauth_username(*candidates: str | None) -> str:

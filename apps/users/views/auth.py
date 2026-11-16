@@ -292,11 +292,12 @@ class AuthViewSet(ViewSet):
     @action(detail=False, methods=["post"])
     def password_reset_confirm(self, request):
         """Confirm password reset with the new password."""
+        body = request_body(request)
         try:
             result = password_reset_confirm_flow(
-                request_body(request).get("uid"),
-                request_body(request).get("token"),
-                request_body(request).get("password"),
+                body.get("uid"),
+                body.get("token"),
+                body.get("password"),
             )
         except AuthFlowError as exc:
             return error_response(

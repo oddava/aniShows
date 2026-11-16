@@ -261,3 +261,42 @@ class SocialLinksOrderTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         stored = UserProfile.objects.get(user=user).social_links
         self.assertEqual([link["platform"] for link in stored], ["youtube", "github", "twitter"])
+
+
+LONG_S, DOTLESS_I, DOTTED_I, SHARP_S = chr(0x17F), chr(0x131), chr(0x130), chr(0xDF)
+
+
+class IdentifierFoldingTests(APITestCase):
+    """Spellings the database treats as equal share one lock counter (council r3)."""
+
+    def test_fold_matches_or_exceeds_database_case_folding(self):
+        from ..throttling import fold_identifier
+
+        for variant in (
+            "Chris@Gmail.com",
+            f"chri{LONG_S}@gma{DOTLESS_I}l.com",
+            " CHRIS@GMAIL.COM ",
+        ):
+            with self.subTest(variant=variant):
+                self.assertEqual(fold_identifier(variant), "chris@gmail.com")
+        self.assertEqual(fold_identifier(f"{DOTTED_I}van"), fold_identifier("ivan"))
+        self.assertEqual(fold_identifier(f"Stra{SHARP_S}e"), fold_identifier("STRASSE"))
+
+    def test_long_s_variants_do_not_get_fresh_counters(self):
+        User.objects.create_user(username="chris", email="chris@gmail.com", password="right-pass-1")
+        for attempt in range(10):
+            self.client.post(
+                reverse("token_obtain_pair"),
+                {"email": "chris@gmail.com", "password": "wrong"},
+                format="json",
+                REMOTE_ADDR=f"10.8.0.{attempt}",
+                **XHR,
+            )
+        response = self.client.post(
+            reverse("token_obtain_pair"),
+            {"email": f"chri{LONG_S}@gmail.com", "password": "wrong"},
+            format="json",
+            REMOTE_ADDR="10.8.1.1",
+            **XHR,
+        )
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
