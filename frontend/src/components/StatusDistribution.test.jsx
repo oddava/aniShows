@@ -45,7 +45,64 @@ describe('StatusDistribution', () => {
     });
 });
 
+describe('StatusDistribution sources (D-3)', () => {
+    it('reads AniList-style keys and labels them "On AniList"', () => {
+        render(
+            <StatusDistribution
+                anime={{
+                    status_distribution: {
+                        CURRENT: 40, REPEATING: 2, PLANNING: 11, PAUSED: 4, COMPLETED: 9, DROPPED: 6,
+                    },
+                }}
+            />
+        );
+
+        expect(screen.getByText('On AniList')).toBeInTheDocument();
+        expect(screen.getByText('42')).toBeInTheDocument();
+        expect(screen.getByText('11')).toBeInTheDocument();
+        expect(screen.getByText('4')).toBeInTheDocument();
+        expect(screen.getByText('9')).toBeInTheDocument();
+        expect(screen.getByText('6')).toBeInTheDocument();
+    });
+
+    it('renders an explicit distribution with its own label', () => {
+        render(
+            <StatusDistribution
+                anime={{ status_distribution: { watching: 999 } }}
+                distribution={{ watching: 3, completed: 1 }}
+                sourceLabel="On aniShows"
+            />
+        );
+
+        expect(screen.getByText('On aniShows')).toBeInTheDocument();
+        expect(screen.getByText('3')).toBeInTheDocument();
+        expect(screen.queryByText('999')).not.toBeInTheDocument();
+    });
+});
+
 describe('StatsTab', () => {
+    it('shows aniShows members next to AniList members when the payload has them', () => {
+        render(
+            <StatsTab
+                accentColor="#fff"
+                anime={{
+                    status_distribution: { CURRENT: 120, COMPLETED: 30 },
+                    site_status_distribution: { watching: 4, completed: 2, on_hold: 0, dropped: 0, plan_to_watch: 1 },
+                }}
+            />
+        );
+
+        expect(screen.getByText('On AniList')).toBeInTheDocument();
+        expect(screen.getByText('On aniShows')).toBeInTheDocument();
+    });
+
+    it('shows only the AniList card while site counts are absent', () => {
+        render(<StatsTab accentColor="#fff" anime={{ status_distribution: { watching: 1 } }} />);
+
+        expect(screen.getByText('On AniList')).toBeInTheDocument();
+        expect(screen.queryByText('On aniShows')).not.toBeInTheDocument();
+    });
+
     it('computes total members from site status distribution values only', () => {
         render(
             <StatsTab
