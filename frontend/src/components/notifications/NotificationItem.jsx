@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { X } from 'lucide-react';
+
 import { applyImageFallback, getImageUrl } from '../../utils/imageUtils';
 import logger from '../../utils/logger';
 import { formatDateTimeInUserTimezone } from '../../utils/dateUtils';
@@ -8,36 +11,32 @@ import {
 } from '../../utils/notificationUtils';
 import {
     formatRelativeTime,
-    getFollowerDisplayName,
     getFollowerInitials,
-    getNotificationThumbnail,
-    isFollowerNotification,
+    getNotificationVisual,
 } from './notificationDisplay';
 
 /**
- * One row of the notifications page: thumbnail (or follower initials), the
- * message with the actor and entity as links, and the relative time.
+ * One row of the notifications page: the anime cover or the actor's avatar
+ * (initials when there is none), the message with the actor and entity as
+ * links, the relative time and a delete button. Images come from the API
+ * payload only.
  */
 export default function NotificationItem({
     notification,
     index,
-    coverBySlug,
-    followerAvatarByUsername,
-    brokenThumbIds,
-    setBrokenThumbIds,
     handleNotificationOpen,
     markNotificationRead,
     setActionError,
     navigate,
+    onDelete,
+    isDeleting = false,
 }) {
-    const thumbnail = getNotificationThumbnail(notification, coverBySlug, followerAvatarByUsername);
+    const visual = getNotificationVisual(notification);
+    const [brokenAvatar, setBrokenAvatar] = useState(false);
     const { displayText, entity: highlightEntity, startIndex: highlightStart } = getHighlightEntityData(notification);
     const { username: actorUsername, startIndex: actorStart } = getActorUsernameData(notification);
     const hasHighlightedChunk = highlightStart >= 0;
     const target = getNotificationTarget(notification);
-    const followerNotification = isFollowerNotification(notification);
-    const followerName = getFollowerDisplayName(notification);
-    const brokenFollowerThumb = followerNotification && brokenThumbIds.has(notification.id);
     const exactTimestamp = formatDateTimeInUserTimezone(notification.created_at, {
         month: 'short',
         day: 'numeric',
@@ -51,8 +50,9 @@ export default function NotificationItem({
         : 'Notification image';
     const thumbnailFallback = getImageUrl(
         null,
-        notification?.data?.anime_title || notification?.data?.follower_username || 'Notification'
+        notification?.data?.anime_title || visual.name || 'Notification'
     );
+    const avatarName = visual.name || 'User';
 
     const handleEntityClick = async () => {
         await handleNotificationOpen(notification);
@@ -73,48 +73,38 @@ export default function NotificationItem({
     return (
         <div className="w-full">
             <div className="flex overflow-hidden rounded-md bg-dark-100/80">
-                {(thumbnail || followerNotification) && (
-                    <div
-                        className={`flex-shrink-0 ${followerNotification
-                            ? 'w-14 self-stretch sm:self-auto sm:w-16 sm:h-16'
-                            : 'w-14 h-20 sm:w-16 sm:h-24 bg-dark-50 flex items-center justify-center'
-                            }`}
-                    >
-                        {followerNotification ? (
-                            brokenFollowerThumb || !thumbnail ? (
-                                <div
-                                    className="w-full h-full bg-accent/15 flex items-center justify-center font-semibold text-accent-light"
-                                    aria-label={`${followerName} avatar fallback`}
-                                    title={followerName}
-                                >
-                                    {getFollowerInitials(followerName)}
-                                </div>
-                            ) : (
-                                <img
-                                    src={thumbnail}
-                                    alt={`${followerName} profile picture`}
-                                    onError={() => {
-                                        setBrokenThumbIds((prev) => {
-                                            const next = new Set(prev);
-                                            next.add(notification.id);
-                                            return next;
-                                        });
-                                    }}
-                                    className="w-full h-full object-cover"
-                                    loading={index < 8 ? 'eager' : 'lazy'}
-                                    decoding="async"
-                                />
-                            )
+                {visual.kind === 'avatar' && (
+                    <div className="flex-shrink-0 w-14 self-stretch sm:self-auto sm:w-16 sm:h-16">
+                        {brokenAvatar || !visual.url ? (
+                            <div
+                                className="w-full h-full bg-accent/15 flex items-center justify-center font-semibold text-accent-light"
+                                aria-label={`${avatarName} avatar fallback`}
+                                title={avatarName}
+                            >
+                                {getFollowerInitials(avatarName)}
+                            </div>
                         ) : (
                             <img
-                                src={thumbnail}
-                                alt={thumbnailAlt}
-                                onError={(event) => applyImageFallback(event, thumbnailFallback)}
-                                className="w-14 h-20 sm:w-16 sm:h-24 object-cover"
+                                src={visual.url}
+                                alt={`${avatarName} profile picture`}
+                                onError={() => setBrokenAvatar(true)}
+                                className="w-full h-full object-cover"
                                 loading={index < 8 ? 'eager' : 'lazy'}
                                 decoding="async"
                             />
                         )}
+                    </div>
+                )}
+                {visual.kind === 'cover' && (
+                    <div className="flex-shrink-0 w-14 h-20 sm:w-16 sm:h-24 bg-dark-50 flex items-center justify-center">
+                        <img
+                            src={visual.url}
+                            alt={thumbnailAlt}
+                            onError={(event) => applyImageFallback(event, thumbnailFallback)}
+                            className="w-14 h-20 sm:w-16 sm:h-24 object-cover"
+                            loading={index < 8 ? 'eager' : 'lazy'}
+                            decoding="async"
+                        />
                     </div>
                 )}
 
@@ -235,6 +225,18 @@ export default function NotificationItem({
                         {formatRelativeTime(notification.created_at)}
                     </span>
                 </div>
+                {onDelete && (
+                    <button
+                        type="button"
+                        onClick={() => onDelete(notification)}
+                        disabled={isDeleting}
+                        aria-label={`Delete notification: ${displayText.slice(0, 80)}`}
+                        title="Delete"
+                        className="flex-shrink-0 self-start m-1.5 p-1.5 rounded-md text-gray-500 hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                    >
+                        <X aria-hidden="true" className="w-4 h-4" />
+                    </button>
+                )}
             </div>
         </div>
     );

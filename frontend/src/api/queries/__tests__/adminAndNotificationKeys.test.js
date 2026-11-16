@@ -3,7 +3,6 @@ import { QueryClient } from '@tanstack/react-query';
 
 import { adminKeys, adminListUrl, adminQueries } from '../admin';
 import {
-    notificationImageQueries,
     notificationKeys,
     notificationQueries,
     parseNextPageNumber,
@@ -14,8 +13,8 @@ const mocks = vi.hoisted(() => ({
     getUnreadCount: vi.fn(),
     getAll: vi.fn(),
     getPreferences: vi.fn(),
-    getBySlug: vi.fn(),
-    getByUsername: vi.fn(),
+    getSubscriptions: vi.fn(),
+    getPushConfig: vi.fn(),
 }));
 
 vi.mock('../../client', () => ({
@@ -25,9 +24,9 @@ vi.mock('../../client', () => ({
         getUnreadCount: mocks.getUnreadCount,
         getAll: mocks.getAll,
         getPreferences: mocks.getPreferences,
+        getSubscriptions: mocks.getSubscriptions,
+        getPushConfig: mocks.getPushConfig,
     },
-    animeApi: { getBySlug: mocks.getBySlug },
-    authApi: { getByUsername: mocks.getByUsername },
 }));
 
 beforeEach(() => Object.values(mocks).forEach((mock) => mock.mockReset()));
@@ -138,15 +137,28 @@ describe('notificationKeys', () => {
         await expect(notificationQueries.preferences(1).queryFn()).resolves.toEqual({ email_enabled: true });
     });
 
-    it('looks up images and resolves a failed lookup to null', async () => {
-        mocks.getBySlug.mockResolvedValue({ data: { cover_image_medium: 'm.jpg', cover_image: 'c.jpg' } });
-        await expect(notificationImageQueries.animeCover('x').queryFn()).resolves.toBe('m.jpg');
-        mocks.getBySlug.mockRejectedValue(new Error('404'));
-        await expect(notificationImageQueries.animeCover('x').queryFn()).resolves.toBeNull();
+    it('adds the category to the feed key and request only when there is one', async () => {
+        expect(notificationKeys.feed(1, 30)).toEqual(['notifications', 1, 'feed', 30]);
+        expect(notificationKeys.feed(1, 30, 'replies')).toEqual(['notifications', 1, 'feed', 30, 'replies']);
+        expect(notificationQueries.feed(1, 30, 'replies').queryKey).toEqual(['notifications', 1, 'feed', 30, 'replies']);
 
-        mocks.getByUsername.mockResolvedValue({ data: { avatar: 'a.png' } });
-        await expect(notificationImageQueries.userAvatar('u').queryFn()).resolves.toBe('a.png');
-        mocks.getByUsername.mockRejectedValue(new Error('404'));
-        await expect(notificationImageQueries.userAvatar('u').queryFn()).resolves.toBeNull();
+        mocks.getAll.mockResolvedValue({ data: { results: [], next: null } });
+        await notificationQueries.feed(1, 30, 'replies').queryFn({ pageParam: 1 });
+        expect(mocks.getAll).toHaveBeenLastCalledWith({ page_size: 30, page: 1, category: 'replies' });
+    });
+
+    it('fetches devices and the push config', async () => {
+        expect(notificationKeys.devices(3)).toEqual(['notifications', 3, 'devices']);
+        expect(notificationKeys.pushConfig()).toEqual(['notifications', 'push-config']);
+
+        mocks.getSubscriptions.mockResolvedValue({ data: [{ id: 1 }] });
+        await expect(notificationQueries.devices(3).queryFn()).resolves.toEqual([{ id: 1 }]);
+        mocks.getSubscriptions.mockResolvedValue({ data: { results: [{ id: 2 }] } });
+        await expect(notificationQueries.devices(3).queryFn()).resolves.toEqual([{ id: 2 }]);
+
+        mocks.getPushConfig.mockResolvedValue({ data: { enabled: true, public_key: 'BKey' } });
+        await expect(notificationQueries.pushConfig().queryFn()).resolves.toEqual({ enabled: true, publicKey: 'BKey' });
+        mocks.getPushConfig.mockResolvedValue({ data: { enabled: true, public_key: '' } });
+        await expect(notificationQueries.pushConfig().queryFn()).resolves.toEqual({ enabled: false, publicKey: '' });
     });
 });

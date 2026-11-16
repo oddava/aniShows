@@ -32,6 +32,17 @@ const GENERIC_TITLES = new Set([
  * @returns {string}
  */
 export const getNotificationDisplayText = (notification) => {
+    const data = notification?.data || {};
+    // One row stands for several episodes of a show.
+    if (
+        notification?.notification_type === 'new_episode'
+        && data.grouped
+        && data.anime_title
+        && data.episode_number != null
+    ) {
+        return `New episodes of ${data.anime_title}, latest is Episode ${data.episode_number}`;
+    }
+
     let title = notification.title || '';
     let message = cleanNotificationMessage(notification.message);
     
@@ -139,6 +150,7 @@ export const getActorUsernameData = (notification) => {
         data.mentioner_username,
         data.liker_username,
         data.actor_username,
+        notification?.actor?.username,
     ].find((value) => typeof value === 'string' && value.trim());
 
     if (!usernameCandidate) {
@@ -158,10 +170,16 @@ export const getActorUsernameData = (notification) => {
     };
 };
 
+/** A same-origin app path (`/anime/x`), not a protocol-relative or absolute URL. */
+const isAppPath = (value) => typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
+
 /**
- * Returns the target URL for a notification.
+ * Returns the target URL for a notification: the server's `url` when it sent
+ * one, otherwise one worked out from `data` (older rows, WebSocket payloads).
  */
 export const getNotificationTarget = (notification) => {
+    if (isAppPath(notification?.url)) return notification.url;
+
     const data = notification?.data || {};
 
     if (data.anime_slug) return `/anime/${data.anime_slug}`;
@@ -171,8 +189,7 @@ export const getNotificationTarget = (notification) => {
     if (
         (notification.notification_type === 'forum_reply' ||
             notification.notification_type === 'forum_mention' ||
-            notification.notification_type === 'forum_like' ||
-            notification.notification_type === 'forum_thread_reply') &&
+            notification.notification_type === 'forum_like') &&
         data.thread_id
     ) {
         return `/forums/thread/${data.thread_id}`;

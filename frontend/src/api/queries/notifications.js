@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
-import { authApi, animeApi, notificationApi } from '../client';
+import { notificationApi } from '../client';
 
 /*
  * Notification keys. Everything sits under the signed-in user's id, so a
@@ -12,17 +12,22 @@ export const notificationKeys = {
     all: ['notifications'],
     forUser: (userId) => ['notifications', userId ?? 'anonymous'],
     unreadCount: (userId) => ['notifications', userId ?? 'anonymous', 'unread-count'],
-    /** The unread dropdown list (admin bell, NotificationBell). */
+    /** The unread dropdown list (admin bell). */
     unread: (userId) => ['notifications', userId ?? 'anonymous', 'unread'],
-    /** The /notifications page feed (infinite). */
-    feed: (userId, pageSize) => ['notifications', userId ?? 'anonymous', 'feed', pageSize],
+    /**
+     * The /notifications page feed (infinite). `category` is the server-side
+     * filter; without it the key is the same as before.
+     */
+    feed: (userId, pageSize, category) => (
+        category
+            ? ['notifications', userId ?? 'anonymous', 'feed', pageSize, category]
+            : ['notifications', userId ?? 'anonymous', 'feed', pageSize]
+    ),
     preferences: (userId) => ['notifications', userId ?? 'anonymous', 'preferences'],
-};
-
-/** Images the /notifications page looks up for items without an embedded one. */
-export const notificationImageKeys = {
-    animeCover: (slug) => ['notificationImages', 'animeCover', slug],
-    userAvatar: (username) => ['notificationImages', 'userAvatar', username],
+    /** This user's push devices. */
+    devices: (userId) => ['notifications', userId ?? 'anonymous', 'devices'],
+    /** Server push config (`{enabled, public_key}`), the same for everyone. */
+    pushConfig: () => ['notifications', 'push-config'],
 };
 
 /** The page number in a DRF `next` link, or null. */
@@ -47,10 +52,12 @@ export const notificationQueries = {
         queryKey: notificationKeys.unread(userId),
         queryFn: () => notificationApi.getAll({ is_read: false }).then((response) => response.data.results || []),
     }),
-    feed: (userId, pageSize) => infiniteQueryOptions({
-        queryKey: notificationKeys.feed(userId, pageSize),
+    feed: (userId, pageSize, category) => infiniteQueryOptions({
+        queryKey: notificationKeys.feed(userId, pageSize, category),
         queryFn: ({ pageParam }) => notificationApi
-            .getAll({ page_size: pageSize, page: pageParam })
+            .getAll(category
+                ? { page_size: pageSize, page: pageParam, category }
+                : { page_size: pageSize, page: pageParam })
             .then((response) => response.data),
         initialPageParam: 1,
         getNextPageParam: (lastPage) => parseNextPageNumber(lastPage?.next || null),
@@ -59,27 +66,20 @@ export const notificationQueries = {
         queryKey: notificationKeys.preferences(userId),
         queryFn: () => notificationApi.getPreferences().then((response) => response.data),
     }),
-};
-
-// A failed lookup resolves to null (no image), as the page always did.
-export const notificationImageQueries = {
-    animeCover: (slug) => queryOptions({
-        queryKey: notificationImageKeys.animeCover(slug),
-        queryFn: () => animeApi.getBySlug(slug).then(
-            (response) => {
-                const anime = response.data || {};
-                return anime.cover_image_small || anime.cover_image_medium || anime.cover_image || null;
-            },
-            () => null,
-        ),
-        staleTime: Infinity,
+    devices: (userId) => queryOptions({
+        queryKey: notificationKeys.devices(userId),
+        queryFn: () => notificationApi.getSubscriptions().then((response) => {
+            const data = response.data;
+            if (Array.isArray(data)) return data;
+            return Array.isArray(data?.results) ? data.results : [];
+        }),
     }),
-    userAvatar: (username) => queryOptions({
-        queryKey: notificationImageKeys.userAvatar(username),
-        queryFn: () => authApi.getByUsername(username).then(
-            (response) => response.data?.avatar || null,
-            () => null,
-        ),
-        staleTime: Infinity,
+    pushConfig: () => queryOptions({
+        queryKey: notificationKeys.pushConfig(),
+        queryFn: () => notificationApi.getPushConfig().then((response) => ({
+            enabled: Boolean(response.data?.enabled && response.data?.public_key),
+            publicKey: response.data?.public_key || '',
+        })),
+        staleTime: 5 * 60 * 1000,
     }),
 };
