@@ -26,8 +26,8 @@ from root.settings import base as base_settings
 from ...users.serializers.recommendations import UserRecommendationSerializer
 from ..models import UserRecommendation
 from ..services.recommendations import (
-    FALLBACK_CACHE_KEY,
     RecommendationService,
+    fallback_cache_key,
     recommendations_cache_key,
 )
 from ..tasks.recommendations import generate_recommendations
@@ -199,7 +199,7 @@ class RecommendationsReadTests(RecommendationsViewTestBase):
         self.client.force_authenticate(user=other)
         _, second_user_cold = self._get()
 
-        self.assertIsNotNone(cache.get(FALLBACK_CACHE_KEY.format(adult=0)))
+        self.assertIsNotNone(cache.get(fallback_cache_key(False)))
         self.assertLessEqual(second_user_cold, 5)
 
     def test_empty_result_is_cached_for_ten_minutes(self):
@@ -311,7 +311,17 @@ class RecommendationsRedisOutageTests(RecommendationsViewTestBase):
     """The whole default cache down, throttles included: still no 500 (G2)."""
 
     def test_list_and_dismiss_answer_with_the_default_cache_down(self):
+        from django.test import override_settings
         from redis.exceptions import ConnectionError as RedisConnectionError
+
+        from apps.core.services import admin_settings_service
+
+        # Production reads site settings through the cache (SiteControlMiddleware).
+        settings_cache = override_settings(ADMIN_SETTINGS_USE_CACHE=True)
+        settings_cache.enable()
+        self.addCleanup(settings_cache.disable)
+        admin_settings_service._clear_local_cached_settings()
+        self.addCleanup(admin_settings_service._clear_local_cached_settings)
 
         rec = self._row(self._anime("Outage Show"))
         down = RedisConnectionError("cache down")
@@ -330,3 +340,37 @@ class RecommendationsRedisOutageTests(RecommendationsViewTestBase):
         self.assertEqual(listed.status_code, 200, listed.content)
         self.assertEqual([item["anime"]["title"] for item in listed.json()], ["Outage Show"])
         self.assertEqual(dismissed.status_code, 200, dismissed.content)
+
+    def test_refresh_does_not_500_either(self):
+        from redis.exceptions import ConnectionError as RedisConnectionError
+
+        down = RedisConnectionError("cache down")
+        with (
+            patch.object(cache, "get", side_effect=down),
+            patch.object(cache, "set", side_effect=down),
+            patch.object(cache, "add", side_effect=down),
+            patch.object(cache, "delete", side_effect=down),
+            patch(
+                "apps.animes.views.recommendations.schedule_recommendations_debounced",
+                side_effect=down,
+            ),
+        ):
+            response = self.client.post(REFRESH_URL)
+        self.assertEqual(response.status_code, 503, response.content)
+
+
+class RecommendationsFollowCatalogVisibilityTests(RecommendationsViewTestBase):
+    def test_a_title_flagged_adult_leaves_a_cached_page_at_once(self):
+        from apps.animes.adult_content import apply_anilist_adult_flags
+
+        anime = self._anime("Soon Adult", anilist_id=424242)
+        self._row(anime)
+        first, _ = self._get()
+        self.assertEqual([item["anime"]["title"] for item in first.json()], ["Soon Adult"])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            apply_anilist_adult_flags([{"id": 424242, "isAdult": True}])
+
+        self._login()
+        second, _ = self._get()
+        self.assertNotIn("Soon Adult", [item["anime"]["title"] for item in second.json()])

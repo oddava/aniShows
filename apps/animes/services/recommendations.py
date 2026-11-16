@@ -99,9 +99,28 @@ FRANCHISE_RELATION_TYPES = frozenset(
 _NO_RANK = 1_000_000
 
 
+def _catalog_namespace() -> str:
+    """The public catalog's collection namespace (bumped when visibility changes)."""
+    from .public_anime_service import AnimePublicPayloadService
+
+    try:
+        return AnimePublicPayloadService.collection_cache_namespace()
+    except CACHE_ERRORS:
+        return "unavailable"  # the cache is down; the read or write after this fails too
+
+
 def recommendations_cache_key(user_id: int) -> str:
-    """Return the per-user cache key the API stores the served payload under."""
-    return f"user_recommendations:{user_id}"
+    """Return the per-user cache key the API stores the served payload under.
+
+    It carries the catalog namespace, so a title flagged adult or quarantined
+    since never comes back from a cached page.
+    """
+    return f"user_recommendations:{_catalog_namespace()}:{user_id}"
+
+
+def fallback_cache_key(can_view_adult: bool) -> str:
+    """The shared trending-fallback key, also under the catalog namespace."""
+    return f"{FALLBACK_CACHE_KEY.format(adult=int(can_view_adult))}:{_catalog_namespace()}"
 
 
 def can_view_adult_content(user) -> bool:
@@ -929,7 +948,7 @@ class RecommendationService:
         ``score`` and ``created_at`` are null. The shared part is cached for 10 min per
         adult setting; titles on the user's list or dismissed are dropped per request.
         """
-        cache_key = FALLBACK_CACHE_KEY.format(adult=int(can_view_adult))
+        cache_key = fallback_cache_key(can_view_adult)
         try:
             items = cache.get(cache_key)
         except CACHE_ERRORS:

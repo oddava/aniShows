@@ -141,6 +141,7 @@ case "$args" in
   *" pull "*) [ "${FAKE_STOP_AT_PULL:-0}" = 1 ] && exit 97 ;;
 esac
 case "$args" in
+  *" network inspect "*) [ -n "${FAKE_SUBNET:-}" ] && echo "${FAKE_SUBNET} " ;;
   *"{{.Image}}"*) echo "sha256:previous" ;;
   *" image inspect --format {{.Id}} "*)
     case "$args" in
@@ -406,6 +407,14 @@ class DeployScriptRefusalTests(SimpleTestCase):
         result, _ = self._run({**PROXY_ENV, "TRUSTED_PROXY_CIDRS": "10.250.250.0/28"})
         self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
 
+    def test_an_app_network_with_another_subnet_is_refused_before_changes(self):
+        result, calls = self._run(PROXY_ENV, shell_env={"FAKE_SUBNET": "172.19.0.0/16"})
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("has subnet 172.19.0.0/16, not APP_SUBNET 10.250.250.0/25", result.stdout)
+        self.assertNotIn(" pull ", calls)
+        result, _ = self._run(PROXY_ENV, shell_env={"FAKE_SUBNET": "10.250.250.0/25"})
+        self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
+
     def test_insecure_defaults_override_does_not_open_the_edge(self):
         result, calls = self._run(
             {**PROXY_ENV, "ADMIN_ALLOW_CIDRS": '"0.0.0.0/0 ::/0"'},
@@ -497,12 +506,21 @@ class DeployScriptFailureRecipeTests(SimpleTestCase):
         )
         self.assertIn("BACKEND_TAG=rollback FRONTEND_TAG=rollback SKIP_PULL=1", out)
 
-    def test_the_adult_rule_migration_queues_the_anilist_sync(self):
-        result, calls = self._run(FAKE_PLAN="anime.0060_adult_flag_from_anilist")
-        self.assertIn("exec -T web python manage.py sync_adult_flags --enqueue", calls)
-        self.assertIn("AniList adult-flag sync queued", result.stdout)
-        result, calls = self._run()
-        self.assertNotIn("sync_adult_flags", calls)
+    def test_the_adult_rule_sync_is_queued_by_the_new_image_once_live(self):
+        """After roll_web and the release record, in a one-off container of the new
+        image (the running web may still be the old release, or absent), and a
+        failure stops the run. The fake docker cannot complete a roll, so the
+        order is checked in the script itself.
+        """
+        script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+        enqueue = script.index("python manage.py sync_adult_flags --enqueue")
+        newline = chr(10)
+        self.assertGreater(enqueue, script.index(f"{newline}roll_web{newline}"))
+        self.assertGreater(enqueue, script.index('ok "release recorded'))
+        line = script[script.rindex(newline, 0, enqueue) : enqueue]
+        self.assertIn('"${COMPOSE[@]}" run --rm --no-deps -T web', line)
+        self.assertIn("|| die", script[enqueue : enqueue + 200])
+        self.assertIn('grep -q "0060_adult_flag_from_anilist" "$PLAN_FILE"', script)
 
     def test_no_schema_steps_without_migrations(self):
         result, _ = self._run(FAKE_EMPTY_PLAN="1")

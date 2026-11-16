@@ -113,26 +113,37 @@ class TestOwnership:
         notify.assert_not_called()
 
     def test_deleting_a_user_drops_cached_forum_pages_that_named_them(
-        self, make_user, make_thread, api_for, django_capture_on_commit_callbacks
+        self, make_user, make_thread, api_for, forum_category, django_capture_on_commit_callbacks
     ):
-        author, reader = make_user(), make_user()
+        """The page caches serve anonymous visitors only, so warm them anonymously."""
+        author = make_user()
         thread = make_thread(author)
         make_reply(thread, author)
-        client = api_for(reader)
-        # Warm the caches as an anonymous visitor would.
-        assert client.get(THREADS_URL).status_code == 200
-        assert client.get(_thread_url(thread)).status_code == 200
-        assert client.get(POSTS_URL, {"thread": thread.id}).status_code == 200
+        guest = api_for()
+        category_url = reverse("forums:category-detail", args=[forum_category.slug])
+        post_params = {"thread__id": thread.id}
+
+        def latest_author(body):
+            latest = body.get("latest_thread") or {}
+            return latest.get("author")
+
+        # Warm every cache that names the author, and prove it is cached.
+        assert guest.get(THREADS_URL).status_code == 200
+        assert guest.get(_thread_url(thread)).json()["author"]["username"] == author.username
+        posts = guest.get(POSTS_URL, post_params).json()
+        assert posts["results"][0]["author"]["username"] == author.username
+        assert latest_author(guest.get(category_url).json()) == author.username
 
         with django_capture_on_commit_callbacks(execute=True):
             author.delete()
 
-        listing = client.get(THREADS_URL).json()
-        rows = listing.get("results", listing)
-        assert all(row.get("author") is None for row in rows if row["id"] == thread.id)
-        assert client.get(_thread_url(thread)).json()["author"] is None
-        posts = client.get(POSTS_URL, {"thread": thread.id}).json()
-        assert all(row["author"] is None for row in posts.get("results", posts))
+        rows = guest.get(THREADS_URL).json()
+        rows = rows.get("results", rows)
+        assert [row["author"] for row in rows if row["id"] == thread.id] == [None]
+        assert guest.get(_thread_url(thread)).json()["author"] is None
+        posts = guest.get(POSTS_URL, post_params).json()
+        assert [row["author"] for row in posts["results"]] == [None]
+        assert latest_author(guest.get(category_url).json()) in (None, "")
 
 
 @pytest.mark.django_db

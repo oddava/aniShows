@@ -257,6 +257,15 @@ fi
 
 step "Compose configuration"
 "${COMPOSE[@]}" config -q || die "docker compose rejected the configuration"
+# The app network has a fixed subnet (APP_SUBNET) that both trust lists name.
+# A network created before that (or with another APP_SUBNET) keeps its old
+# subnet: then Caddy is outside TRUSTED_PROXY_CIDRS and the host proxy arrives
+# from another gateway. Stop before anything changes.
+existing_subnet="$(docker network inspect "${PROJECT}_default" --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' 2>/dev/null || true)"
+existing_subnet="${existing_subnet%% }"
+if [ -n "$existing_subnet" ] && [ "$existing_subnet" != "$APP_SUBNET" ]; then
+    die "Network ${PROJECT}_default has subnet ${existing_subnet}, not APP_SUBNET ${APP_SUBNET}. In a maintenance window: scripts/deploy/compose.sh down (volumes are kept), then rerun the deploy; or set APP_SUBNET=${existing_subnet} and adjust both trust lists."
+fi
 ok "valid (${COMPOSE_PROFILES:-no profiles})"
 
 # The image currently serving, for the rollback recipe.
@@ -400,13 +409,6 @@ ok "migrations applied"
 
 step "Workers and backups"
 "${COMPOSE[@]}" up -d --no-deps celery beat backup
-if grep -q "0060_adult_flag_from_anilist" "$PLAN_FILE"; then
-    # anime.0060 seeded is_adult; the worker now re-reads AniList's isAdult for
-    # the whole catalog (about one request per 50 titles, rate-limited).
-    "${COMPOSE[@]}" exec -T web python manage.py sync_adult_flags --enqueue \
-        && ok "AniList adult-flag sync queued" \
-        || warn "could not queue the adult-flag sync: run scripts/deploy/compose.sh exec web python manage.py sync_adult_flags"
-fi
 if [ "$ANALYTICS" = 1 ]; then
     "${COMPOSE[@]}" up -d --wait --no-deps umami_db
     "${COMPOSE[@]}" up -d --no-deps umami
@@ -593,6 +595,16 @@ state_tmp="${DEPLOYED_STATE_FILE}.tmp.$$"
 } >"$state_tmp"
 mv -f "$state_tmp" "$DEPLOYED_STATE_FILE"
 ok "release recorded in ${DEPLOYED_STATE_FILE}"
+
+if grep -q "0060_adult_flag_from_anilist" "$PLAN_FILE"; then
+    # anime.0060 seeded is_adult; the (new) worker now re-reads AniList's
+    # isAdult for the whole catalog (about one request per 50 titles,
+    # rate-limited). A one-off container of the new image queues it.
+    step "AniList adult-flag sync"
+    "${COMPOSE[@]}" run --rm --no-deps -T web python manage.py sync_adult_flags --enqueue \
+        || die "The release is live, but the adult-flag sync could not be queued. Run: scripts/deploy/compose.sh run --rm --no-deps web python manage.py sync_adult_flags --enqueue"
+    ok "AniList adult-flag sync queued"
+fi
 
 if [ "${PRUNE_IMAGES:-1}" = 1 ]; then
     step "Pruning old images (this project's only; current and previous kept)"

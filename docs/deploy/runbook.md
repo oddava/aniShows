@@ -151,6 +151,15 @@ roomy profile is the previous defaults, for a host with spare memory; set its va
 | umami + umami_db (analytics) | off | 512M + 256M | `UMAMI_*_MEMORY_LIMIT` |
 | **Total (bundled db, no analytics)** | **≈ 3.0 GB** (3.5 GB during a roll; ≈ 2.2 GB with an external DB) | **≈ 5.0 GB** (5.8 GB during a roll) | |
 
+Redis holds the cache, the Celery broker and the channel layer. Its policy is `volatile-lru`: only
+keys with a TTL (cache entries) are evicted, never the broker's queues; if memory fills with
+TTL-less keys, Redis refuses writes rather than silently dropping tasks (raise `REDIS_MAXMEMORY`
+and `REDIS_MEMORY_LIMIT` together if `INFO memory` shows it near the cap).
+
+The app network keeps a fixed subnet (`APP_SUBNET`). `deploy-prod.sh` refuses to run when an
+existing `<project>_default` network has another subnet (a stack created before this release):
+run `scripts/deploy/compose.sh down` in a maintenance window (volumes are kept) and deploy again.
+
 One web replica still deploys without downtime: the rolling restart starts the new replica and
 waits for it to be healthy before stopping the old one. It does mean a crashed web container is a
 short outage until Docker restarts it; use `SCALE_WEB=2` (+512M) if that matters more than memory.

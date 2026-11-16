@@ -7,6 +7,8 @@ from django.core.cache import cache
 from django.db import DatabaseError
 from django.db.utils import OperationalError, ProgrammingError
 
+from ...shared.errors import CACHE_ERRORS
+from ...shared.throttling import warn_cache_outage
 from ..models import AdminPanelSettings
 
 ADMIN_SETTINGS_CACHE_KEY = "admin:panel_settings:v1"
@@ -81,7 +83,10 @@ def _clear_local_cached_settings() -> None:
 def cache_admin_settings(payload: dict) -> None:
     """Write merged admin settings to shared cache and local micro-cache."""
     if _admin_settings_cache_enabled():
-        cache.set(ADMIN_SETTINGS_CACHE_KEY, payload, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
+        try:
+            cache.set(ADMIN_SETTINGS_CACHE_KEY, payload, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
+        except CACHE_ERRORS:
+            warn_cache_outage("admin settings write")
         _set_local_cached_settings(payload)
     else:
         _clear_local_cached_settings()
@@ -110,7 +115,12 @@ def get_admin_settings(*, force_refresh: bool = False) -> dict:
             return local_cached
 
     if use_cache and not force_refresh:
-        cached = cache.get(ADMIN_SETTINGS_CACHE_KEY)
+        try:
+            cached = cache.get(ADMIN_SETTINGS_CACHE_KEY)
+        except CACHE_ERRORS:
+            # Redis is down: read the database (every request asks for these).
+            warn_cache_outage("admin settings; reading the database")
+            cached = None
         if isinstance(cached, dict):
             _set_local_cached_settings(cached)
             return deepcopy(cached)

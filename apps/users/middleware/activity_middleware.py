@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
+from ...shared.throttling import warn_cache_outage
 
 # At most one profile write per user per minute.
 DB_UPDATE_THROTTLE = 60
@@ -38,7 +39,7 @@ class UserActivityMiddleware:
         except CACHE_ERRORS:
             # Redis is down: skip this best-effort stamp rather than turn every
             # signed-in response into a 500.
-            logger.warning("Activity throttle cache unavailable; not tracking", exc_info=True)
+            warn_cache_outage("activity stamp; not tracking")
             return
         if not first_in_window:
             return

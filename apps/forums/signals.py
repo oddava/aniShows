@@ -163,11 +163,19 @@ def capture_forum_threads_of_deleted_user(sender, instance, using=None, **kwargs
         .distinct()
     )
     instance._forum_thread_ids = thread_ids
+    # Category pages show their latest thread's author name.
+    instance._forum_category_slugs = set(
+        Category.objects.using(using)
+        .filter(threads__pk__in=thread_ids)
+        .values_list("slug", flat=True)
+        .distinct()
+    )
 
 
 @receiver(post_delete, sender=settings.AUTH_USER_MODEL)
 def invalidate_forum_caches_of_deleted_user(sender, instance, **kwargs):
     thread_ids: set[int] = getattr(instance, "_forum_thread_ids", set())
+    category_slugs: set[str] = getattr(instance, "_forum_category_slugs", set())
     if not thread_ids:
         return
 
@@ -175,6 +183,8 @@ def invalidate_forum_caches_of_deleted_user(sender, instance, **kwargs):
         for thread_id in thread_ids:
             invalidate_thread_detail_cache(thread_id)
             invalidate_post_list_cache(thread_id)
+        for slug in category_slugs:
+            invalidate_category_detail_cache(slug)
         invalidate_thread_list_cache()
         invalidate_category_list_cache()
 

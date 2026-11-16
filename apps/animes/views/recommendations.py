@@ -18,12 +18,12 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import IntegerField, Serializer
-from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.viewsets import ViewSet
 
 from ...core.api_errors import error_response
 from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ...shared.logger import logger
+from ...shared.throttling import ResilientScopedRateThrottle, ResilientUserRateThrottle
 from ...users.serializers.recommendations import UserRecommendationSerializer
 from ..services.recommendations import (
     STALE_AFTER_HOURS,
@@ -170,7 +170,7 @@ class RecommendationsViewSet(ViewSet):
     @action(
         detail=False,
         methods=["post"],
-        throttle_classes=[UserRateThrottle, ScopedRateThrottle],
+        throttle_classes=[ResilientUserRateThrottle, ResilientScopedRateThrottle],
         throttle_scope="strict_user",
     )
     def refresh(self, request):
