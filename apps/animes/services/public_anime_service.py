@@ -478,7 +478,8 @@ class AnimePublicPayloadService:
         number = positive_int(value)
         if number is None:
             return ""
-        return str(min(number, NoCountPagination.max_page_size))
+        number = min(number, NoCountPagination.max_page_size)
+        return "" if number == NoCountPagination.page_size else str(number)
 
     @classmethod
     def list_cache_key(cls, query_params, *, can_view_adult_content: bool) -> str:
@@ -838,11 +839,19 @@ def invalidate_anime_detail(slug: str) -> None:
     """Drop one anime's cached detail payload; every collection stays cached.
 
     For changes only the detail page shows (review counts, status counts,
-    synopsis...). Its cards in lists and shelves are untouched.
+    external links...). Its cards in lists and shelves are untouched (a synopsis
+    is on the shelves: use ``invalidate_public_collections`` too).
+
+    It runs at once: inside a transaction, call it from
+    ``transaction.on_commit``, or a reader can cache the old row again before
+    the commit.
     """
     invalidate_public_cache_keys(*AnimePublicPayloadService.detail_cache_keys(slug))
 
 
 def invalidate_public_collections() -> None:
-    """Invalidate every cached public collection (lists, shelves, browse rows, schedule)."""
+    """Invalidate every cached public collection (lists, shelves, browse rows, schedule).
+
+    Runs at once, like ``invalidate_anime_detail``: defer it to the commit.
+    """
     AnimePublicPayloadService.bump_collection_cache_namespace()

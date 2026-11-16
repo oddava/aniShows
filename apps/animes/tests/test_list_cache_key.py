@@ -148,7 +148,7 @@ def test_equivalent_parameters_share_a_key():
     assert _key("page=1") == _key("page=01") == _key("")
     assert _key("page=2") == _key("page=002")
     assert _key("page_size=200") == _key("page_size=201") == _key("page_size=999999")
-    assert _key("page_size=0") == _key("page_size=abc") == _key("")
+    assert _key("page_size=0") == _key("page_size=abc") == _key("page_size=20") == _key("")
     assert _key("min_rating=7") == _key("min_rating=7.0")
     assert _key("min_episodes=12") == _key("min_episodes=%2012")
     assert _key("year=2026&season=fall") == _key("year=02026&season=fall")
