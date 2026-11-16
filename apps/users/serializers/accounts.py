@@ -21,14 +21,12 @@ from rest_framework.serializers import (
     SerializerMethodField,
 )
 
-from ...animes.serializers.base import (
-    validate_image_content,
-)
 from ...animes.serializers_mixins import BadgesMixin, UserProfileMixin
 from ...shared.logger import logger
 from ...shared.text import HEX_COLOR_PATTERN, decode_escaped_html_entities
 from ..services.auth_service import AuthService
 from ..services.username_sanitizer import validate_username
+from ..utils.image_processing import ProfileImageError, normalize_profile_image
 
 __all__ = [
     "ALLOWED_BIO_ATTRIBUTES",
@@ -352,16 +350,22 @@ class UserProfileUpdateSerializer(Serializer):
             raise ValidationError(str(e))
 
     def validate_avatar(self, value):
-        """Validate avatar file size, type, and content."""
+        """Validate the avatar and re-encode it (WebP, no metadata, <= 512 px)."""
         if value is None:
             return value
-        return validate_image_content(value, MAX_AVATAR_SIZE, "Avatar")
+        try:
+            return normalize_profile_image(value, "avatar", max_size=MAX_AVATAR_SIZE)
+        except ProfileImageError as exc:
+            raise ValidationError(str(exc)) from exc
 
     def validate_banner(self, value):
-        """Validate banner file size, type, and content."""
+        """Validate the banner and re-encode it (WebP, no metadata, <= 2560 px wide)."""
         if value is None:
             return value
-        return validate_image_content(value, MAX_BANNER_SIZE, "Banner")
+        try:
+            return normalize_profile_image(value, "banner", max_size=MAX_BANNER_SIZE)
+        except ProfileImageError as exc:
+            raise ValidationError(str(exc)) from exc
 
 
 class RegisterSerializer(ModelSerializer):

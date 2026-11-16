@@ -11,10 +11,13 @@ from ..core.services.admin_settings_service import username_length_limits
 from ..shared.logger import logger
 from .services.user_queryset import filter_username_ci
 from .services.username_sanitizer import validate_username
+from .utils.image_processing import ProfileImageError, normalize_profile_image
 
 User = get_user_model()
 
 OAUTH_AVATAR_MAX_BYTES = 2 * 1024 * 1024
+# The download runs inside the login request, so keep it short (spec Q3 default).
+OAUTH_AVATAR_TIMEOUT_SECONDS = 3.0
 TRUSTED_GOOGLE_AVATAR_HOSTS = ("googleusercontent.com",)
 
 
@@ -33,7 +36,9 @@ def _download_google_avatar(url: str) -> bytes | None:
         logger.warning("Blocked untrusted OAuth avatar URL")
         return None
 
-    with httpx.stream("GET", url, timeout=10.0, follow_redirects=False) as response:
+    with httpx.stream(
+        "GET", url, timeout=OAUTH_AVATAR_TIMEOUT_SECONDS, follow_redirects=False
+    ) as response:
         if response.status_code != 200:
             return None
 
@@ -113,8 +118,14 @@ class MySocialAccountAdapter(DefaultSocialAccountAdapter):
                     logger.info(f"Downloading OAuth avatar for {user.username} from {picture_url}")
                     avatar_content = _download_google_avatar(picture_url)
                     if avatar_content:
-                        filename = f"avatar_{user.pk}.jpg"
-                        profile.avatar.save(filename, ContentFile(avatar_content), save=True)
+                        avatar = normalize_profile_image(
+                            ContentFile(avatar_content, name="google-avatar"),
+                            "avatar",
+                            max_size=OAUTH_AVATAR_MAX_BYTES,
+                        )
+                        profile.avatar.save(avatar.name or "avatar.webp", avatar, save=True)
+            except ProfileImageError:
+                logger.warning("Ignored an unusable OAuth avatar for %s", user.username)
             except Exception:
                 logger.exception("Failed to download OAuth avatar for %s", user.username)
 
