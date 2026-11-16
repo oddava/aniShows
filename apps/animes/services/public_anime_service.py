@@ -406,19 +406,31 @@ class AnimePublicPayloadService:
         )
         return CachedPayloadResult(data=data, cache_status=cache_status)
 
+    @staticmethod
+    def with_site_status_distribution(data):
+        """Add this site's list counts (D-3), computed per request, never cached here.
+
+        ``site_status_counts`` is G3's (``user_list_side_effects``); until it
+        exists the field is null and this costs nothing.
+        """
+        if not isinstance(data, dict) or "id" not in data:
+            return data
+        from . import user_list_side_effects
+
+        site_status_counts = getattr(user_list_side_effects, "site_status_counts", None)
+        return {
+            **data,
+            "site_status_distribution": (
+                site_status_counts(data["id"]) if site_status_counts is not None else None
+            ),
+        }
+
     @classmethod
     def get_detail_payload(cls, slug: str, request, query_service: AnimeQueryService):
-        cache_keys = cls.detail_cache_keys(slug)
-        primary_cache_key = cache_keys[0]
+        primary_cache_key = cls.detail_cache_key(slug)
         coverless_marker_key = f"{primary_cache_key}:coverless_checked"
-        cached_base = None
-        cache_hit_key = None
         cache_status = "hit"
-        for key in cache_keys:
-            cached_base = cache.get(key)
-            if cached_base is not None:
-                cache_hit_key = key
-                break
+        cached_base = cache.get(primary_cache_key)
 
         needs_refresh = cached_base is None
         if cached_base:
@@ -436,8 +448,8 @@ class AnimePublicPayloadService:
                 or cls.item_has_stale_imagekit_cache_urls(data)
             ):
                 needs_refresh = True
-                invalidate_public_cache_keys(*cache_keys)
-            elif cache_hit_key != primary_cache_key or cache_payload_changed:
+                invalidate_public_cache_keys(primary_cache_key)
+            elif cache_payload_changed:
                 ttl = 3600 if cls.has_cover_media(data) else 60
                 cache.set(primary_cache_key, data, ttl)
                 cache.set(public_cache_stale_key(primary_cache_key), data, ttl + 900)
@@ -468,12 +480,8 @@ class AnimePublicPayloadService:
             )
             if cache_status == "miss" and not cls.has_cover_media(data):
                 cache.set(coverless_marker_key, True, 60)
-            if cache_hit_key and cache_hit_key != primary_cache_key:
-                ttl = 3600 if cls.has_cover_media(data) else 60
-                # Rehydrate the legacy key that was actually requested so older readers converge.
-                cache.set(cache_hit_key, data, ttl)
-                cache.set(public_cache_stale_key(cache_hit_key), data, ttl + 900)
 
+        data = cls.with_site_status_distribution(data)
         if request.user.is_authenticated:
             data = cls.enrich_detail_payload_for_user(data, request.user)
 
