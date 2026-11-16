@@ -3,7 +3,8 @@
 ``is_adult`` is now AniList's ``Media.isAdult``. The catalog never stored that
 flag, so this seeds it from what tracks it:
 
-- the Hentai genre, which AniList assigns only to ``isAdult`` media;
+- the Hentai genre, which AniList assigns only to ``isAdult`` media, and
+  MAL's Erotica genre on older rows (hidden only until AniList answers);
 - a ``hentai`` tag, the offline catalog's mirror of the providers' adult flag
   (the same provisional rule new offline rows get, ``adult_content.py``).
 
@@ -22,6 +23,7 @@ from django.db import migrations
 from django.db.models import Exists, OuterRef, Q
 
 ANILIST_ADULT_GENRE_SLUG = "hentai"
+SEED_ADULT_GENRE_SLUGS = ["hentai", "erotica"]
 BATCH = 5000
 
 # 0054's rule, frozen, for the reverse direction only.
@@ -65,7 +67,7 @@ def _has_genre(anime_model, alias, **genre_filter):
 
 def _anilist_seed(anime_model, alias):
     hentai_tag = Q(tags__icontains=f'"{ANILIST_ADULT_GENRE_SLUG}"')
-    return Q(_has_genre(anime_model, alias, genre__slug=ANILIST_ADULT_GENRE_SLUG)) | hentai_tag
+    return Q(_has_genre(anime_model, alias, genre__slug__in=SEED_ADULT_GENRE_SLUGS)) | hentai_tag
 
 
 def _has_anilist_data(anime_model, alias):

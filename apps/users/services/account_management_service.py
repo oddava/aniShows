@@ -189,7 +189,12 @@ def confirm_email_change(uidb64, token, new_email_encoded=None, email_service=No
     if not EmailChangeTokenGenerator(new_email).check_token(user, token):
         return invalid
 
-    if AuthService().email_exists(new_email, exclude_pk=user.pk):
+    # Re-checked here: a link issued before another account took the address (or
+    # a username equal to it, which login would then shadow) must not apply.
+    auth_service = AuthService()
+    if auth_service.email_exists(new_email, exclude_pk=user.pk) or auth_service.username_exists(
+        new_email, exclude_pk=user.pk
+    ):
         return AccountManagementResult(
             payload={"error": "This email is already in use"},
             status_code=400,

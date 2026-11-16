@@ -414,6 +414,9 @@ class DeployScriptRefusalTests(SimpleTestCase):
         self.assertNotIn(" pull ", calls)
         result, _ = self._run(PROXY_ENV, shell_env={"FAKE_SUBNET": "10.250.250.0/25"})
         self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
+        # A daemon with IPv6 on adds a v6 subnet: only the IPv4 one is compared.
+        result, _ = self._run(PROXY_ENV, shell_env={"FAKE_SUBNET": "fd00:1::/64 10.250.250.0/25"})
+        self.assertEqual(result.returncode, 97, result.stdout + result.stderr)
 
     def test_insecure_defaults_override_does_not_open_the_edge(self):
         result, calls = self._run(

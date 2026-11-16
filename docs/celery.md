@@ -206,9 +206,10 @@ Beat schedules are defined in [root/settings/base.py](/home/oddava/Projects/aniS
 - daily at `04:30`
 - added in this refactor because it is explicitly a repair task for stale relation data
 
-`reconcile-adult-flags-daily`
-- `apps.animes.tasks.adult_content.reconcile_adult_flags`
-- daily at `03:40`
+`sync-adult-flags-weekly`
+- `apps.animes.tasks.adult_content.sync_adult_flags`
+- Wednesdays at `03:40`, `low_priority` queue
+- re-reads AniList's `isAdult` for the catalog, 2,000 rows per run; each run queues the next
 
 `generate-recommendations-daily`
 - `apps.animes.tasks.recommendations.generate_recommendations`

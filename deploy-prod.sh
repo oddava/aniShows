@@ -262,7 +262,8 @@ step "Compose configuration"
 # subnet: then Caddy is outside TRUSTED_PROXY_CIDRS and the host proxy arrives
 # from another gateway. Stop before anything changes.
 existing_subnet="$(docker network inspect "${PROJECT}_default" --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' 2>/dev/null || true)"
-existing_subnet="${existing_subnet%% }"
+# Only the IPv4 entry: a daemon with IPv6 on gives the network a v6 subnet too.
+existing_subnet="$(tr ' ' '\n' <<<"$existing_subnet" | grep -v ':' | grep -m1 . || true)"
 if [ -n "$existing_subnet" ] && [ "$existing_subnet" != "$APP_SUBNET" ]; then
     die "Network ${PROJECT}_default has subnet ${existing_subnet}, not APP_SUBNET ${APP_SUBNET}. In a maintenance window: scripts/deploy/compose.sh down (volumes are kept), then rerun the deploy; or set APP_SUBNET=${existing_subnet} and adjust both trust lists."
 fi

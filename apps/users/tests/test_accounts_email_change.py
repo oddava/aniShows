@@ -145,6 +145,21 @@ class PendingEmailTests(APITestCase):
         self.assertEqual(wrong.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(right.status_code, status.HTTP_200_OK)
 
+    def test_a_link_cannot_claim_an_address_that_became_someones_username(self):
+        """G1: an address equal to another (legacy, email-shaped) username would take
+        that username's sign-in over; a link issued before it existed must not apply.
+        """
+        self._request()
+        uid, token = self._link_parts()
+        # bulk_create skips the model's username validation, as a legacy row would.
+        User.objects.bulk_create([User(username="New@Example.com", email="legacy@example.com")])
+
+        response = self._confirm(uid, token)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "old@example.com")
+
     def test_a_token_without_any_pending_change_is_rejected(self):
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         token = EmailChangeTokenGenerator("new@example.com").make_token(self.user)

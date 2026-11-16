@@ -50,6 +50,9 @@ def notify_thread_subscribers(post_id: int) -> int:
     post = Post.objects.select_related("thread", "parent", "author").filter(pk=post_id).first()
     if post is None or post.is_removed or post.thread.is_removed or post.thread.is_locked:
         return 0
+    if post.author_id is None:
+        # The author deleted their account while this task waited (D-6).
+        return 0
     excluded = {post.author_id} | _directly_notified_user_ids(post)
     recipient_ids = list(
         ThreadSubscription.objects.filter(thread_id=post.thread_id, user__is_active=True)

@@ -102,13 +102,19 @@ def apply_anilist_adult_flags(payloads: Iterable[dict], *, using: str = "default
 
 
 def sync_adult_flags_from_anilist(
-    *, chunk_size: int = 500, limit: int | None = None, using: str = "default"
+    *,
+    chunk_size: int = 500,
+    limit: int | None = None,
+    after_pk: int = 0,
+    using: str = "default",
 ) -> dict:
     """Re-read ``isAdult`` from AniList for every row with an AniList or MAL ID.
 
     Uses the batched airing query (50 IDs per request, rate-limited by the
     client). A chunk whose request fails is skipped, not cleared: a missing
-    payload never makes a row visible. Returns totals and how many payloads came back.
+    payload never makes a row visible. Returns totals, how many payloads came
+    back, and ``last_pk`` (the last row checked; rows after it are for the next
+    call when ``limit`` stopped this one).
     """
     from .services.anilist import AniListService
 
@@ -116,13 +122,14 @@ def sync_adult_flags_from_anilist(
     queryset = (
         anime_model.objects.using(using)
         .exclude(anilist_id__isnull=True, mal_id__isnull=True)
+        .filter(pk__gt=after_pk)
         .order_by("pk")
         .values_list("pk", "anilist_id", "mal_id")
     )
     if limit:
         queryset = queryset[:limit]
     service = AniListService()
-    totals = {"checked": 0, "payloads": 0, "flagged": 0, "cleared": 0}
+    totals = {"checked": 0, "payloads": 0, "flagged": 0, "cleared": 0, "last_pk": after_pk}
     batch: list[tuple[int, int | None, int | None]] = []
 
     def flush():
@@ -134,6 +141,7 @@ def sync_adult_flags_from_anilist(
         totals["payloads"] += len(payloads)
         totals["flagged"] += changed["flagged"]
         totals["cleared"] += changed["cleared"]
+        totals["last_pk"] = batch[-1][0]
         batch.clear()
 
     for row in queryset.iterator(chunk_size=chunk_size):

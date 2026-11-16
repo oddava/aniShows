@@ -23,7 +23,11 @@ from rest_framework.viewsets import ViewSet
 from ...core.api_errors import error_response
 from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ...shared.logger import logger
-from ...shared.throttling import ResilientScopedRateThrottle, ResilientUserRateThrottle
+from ...shared.throttling import (
+    ResilientScopedRateThrottle,
+    ResilientUserRateThrottle,
+    warn_cache_outage,
+)
 from ...users.serializers.recommendations import UserRecommendationSerializer
 from ..services.recommendations import (
     STALE_AFTER_HOURS,
@@ -75,7 +79,7 @@ def _cache_get(key):
     try:
         return cache.get(key)
     except CACHE_ERRORS:
-        logger.warning("Recommendations cache unavailable (read)", exc_info=True)
+        warn_cache_outage("recommendations read")
         return None
 
 
@@ -84,7 +88,7 @@ def _cache_call(method: str, *args) -> None:
     try:
         getattr(cache, method)(*args)
     except CACHE_ERRORS:
-        logger.warning("Recommendations cache unavailable (%s)", method, exc_info=True)
+        warn_cache_outage(f"recommendations {method}")
 
 
 # The debounce key G3's ``schedule_recommendations_debounced`` sets before it enqueues.

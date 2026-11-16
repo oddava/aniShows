@@ -106,6 +106,11 @@ class TestOwnership:
         )
         assert nested.status_code == 201
 
+        # A subscriber notification queued before the deletion sends nothing.
+        from ..services.subscriptions import notify_thread_subscribers
+
+        assert notify_thread_subscribers(own_reply.pk) == 0
+
         # Likes on the deleted account's content work and notify nobody.
         with mock.patch("apps.forums.services.interactions.notify") as notify:
             assert client.post(_thread_url(own_thread, "like")).status_code in (200, 201)

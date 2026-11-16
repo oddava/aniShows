@@ -239,7 +239,13 @@ def test_sync_reads_the_flag_for_the_whole_catalog_in_chunks(monkeypatch):
 
     totals = sync_adult_flags_from_anilist(chunk_size=2)
 
-    assert totals == {"checked": 6, "payloads": 6, "flagged": 3, "cleared": 0}
+    assert totals == {
+        "checked": 6,
+        "payloads": 6,
+        "flagged": 3,
+        "cleared": 0,
+        "last_pk": mal_only.pk,
+    }
     assert flagged_ids() == {rows[1].pk, rows[3].pk, mal_only.pk, no_ids.pk}
     assert len(fake.calls) == 3  # 6 rows with IDs, 2 per chunk
 
@@ -264,7 +270,7 @@ def test_management_command_and_task_run_the_sync(monkeypatch):
 
     def fake_sync(**kwargs):
         calls.append(kwargs)
-        return {"checked": 0, "payloads": 0, "flagged": 0, "cleared": 0}
+        return {"checked": 0, "payloads": 0, "flagged": 0, "cleared": 0, "last_pk": 0}
 
     monkeypatch.setattr(adult_content, "sync_adult_flags_from_anilist", fake_sync)
     monkeypatch.setattr(
@@ -275,14 +281,14 @@ def test_management_command_and_task_run_the_sync(monkeypatch):
     call_command("sync_adult_flags", "--limit", "3")
     sync_adult_flags.apply()
 
-    assert calls == [{"limit": 3}, {}]
+    assert calls == [{"limit": 3}, {"after_pk": 0, "limit": 2000}]
 
     # --enqueue (what deploy-prod.sh runs) queues the task instead.
     from unittest import mock
 
-    with mock.patch.object(sync_adult_flags, "delay") as delay:
+    with mock.patch.object(sync_adult_flags, "apply_async") as apply_async:
         call_command("sync_adult_flags", "--enqueue")
-    delay.assert_called_once_with()
+    apply_async.assert_called_once_with(queue="low_priority")
 
 
 # ------------------------------------------------------- offline catalog
@@ -385,7 +391,13 @@ def test_migration_seeds_from_anilist_markers_and_keeps_unverified_rows(genres):
     with connection.schema_editor() as schema_editor:
         migration.seed_from_anilist_genre(django_apps, schema_editor)
     # AniList data and no marker: cleared. No AniList data: nothing is unhidden.
-    assert flagged_ids() == {hentai_genre.pk, offline_tagged.pk, offline_legacy.pk, plain.pk}
+    assert flagged_ids() == {
+        hentai_genre.pk,
+        erotica_only.pk,  # MAL's adult genre: hidden until AniList answers
+        offline_tagged.pk,
+        offline_legacy.pk,
+        plain.pk,
+    }
 
     # Reversing restores 0054's genre/tag rule.
     with connection.schema_editor() as schema_editor:
@@ -408,3 +420,39 @@ def test_exclusion_is_a_plain_flag_filter():
     sql = str(AnimeQueryService._exclude_adult_content(Anime.objects.all()).query)
     assert '"anime_anime"."is_adult"' in sql
     assert "?|" not in sql and "IN (SELECT" not in sql
+
+
+def test_the_task_runs_in_chunks_that_queue_the_next(monkeypatch):
+    """One worker process (lean profile) serves other queues between chunks."""
+    from unittest import mock
+
+    from apps.animes.tasks import adult_content as task_module
+
+    runs = iter(
+        [
+            {"checked": 2, "payloads": 2, "flagged": 0, "cleared": 0, "last_pk": 41},
+            {"checked": 1, "payloads": 1, "flagged": 0, "cleared": 0, "last_pk": 77},
+        ]
+    )
+    seen = []
+
+    def fake_sync(**kwargs):
+        seen.append(kwargs)
+        return next(runs)
+
+    monkeypatch.setattr(adult_content, "sync_adult_flags_from_anilist", fake_sync)
+    monkeypatch.setattr(task_module, "ROWS_PER_RUN", 2)
+    with mock.patch.object(task_module.sync_adult_flags, "apply_async") as apply_async:
+        task_module.sync_adult_flags.apply()
+    apply_async.assert_called_once_with(kwargs={"after_pk": 41}, queue="low_priority")
+    assert seen == [{"after_pk": 0, "limit": 2}]
+
+
+def test_the_sync_resumes_after_a_row():
+    first, second = make_anime(anilist_id=7301), make_anime(anilist_id=7302)
+    from unittest import mock
+
+    with mock.patch("apps.animes.services.anilist.AniListService", _FakeAniList([])) as fake:
+        totals = sync_adult_flags_from_anilist(after_pk=first.pk)
+    assert totals["checked"] == 1 and totals["last_pk"] == second.pk
+    assert fake.calls == [([7302], [])]

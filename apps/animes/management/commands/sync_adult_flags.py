@@ -23,7 +23,7 @@ class Command(BaseCommand):
         if options.get("enqueue"):
             from ...tasks.adult_content import sync_adult_flags
 
-            sync_adult_flags.delay()
+            sync_adult_flags.apply_async(queue="low_priority")
             self.stdout.write(self.style.SUCCESS("Queued the AniList adult-flag sync"))
             return
         totals = sync_adult_flags_from_anilist(limit=options.get("limit"))

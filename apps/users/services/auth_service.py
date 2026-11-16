@@ -219,6 +219,10 @@ class AuthService:
         if not login.is_existing:
             if allauth_account_settings.UNIQUE_EMAIL and self.email_exists(login.user.email):
                 raise ValidationError(_("User is already registered with this e-mail address."))
+            # An address equal to an existing (legacy, email-shaped) username would
+            # take that username's sign-in over (login resolves emails first).
+            if login.user.email and self.username_exists(login.user.email):
+                raise ValidationError(_("User is already registered with this e-mail address."))
 
             login.lookup()
             try:
