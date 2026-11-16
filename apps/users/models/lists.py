@@ -3,19 +3,24 @@
 from django.db.models import (
     CASCADE,
     BooleanField,
+    CheckConstraint,
+    F,
     ForeignKey,
     Index,
     JSONField,
     Model,
     OneToOneField,
+    Q,
     TextChoices,
 )
 from django.db.models.fields import (
+    BigIntegerField,
     CharField,
     DateField,
     DateTimeField,
     FloatField,
     IntegerField,
+    PositiveSmallIntegerField,
     TextField,
 )
 
@@ -25,6 +30,7 @@ __all__ = [
     "UserActivity",
     "UserAnimeList",
     "UserImportJob",
+    "UserListLink",
     "UserStats",
 ]
 
@@ -61,6 +67,20 @@ class UserAnimeList(Model):
             Index(fields=["user", "-updated_at"]),
             Index(fields=["user", "score"]),
             Index(fields=["anime", "score"]),
+        ]
+        constraints = [
+            CheckConstraint(
+                condition=Q(score__gte=0, score__lte=10),
+                name="lists_score_0_10",
+            ),
+            CheckConstraint(condition=Q(episodes_watched__gte=0), name="lists_episodes_nonneg"),
+            CheckConstraint(condition=Q(total_rewatches__gte=0), name="lists_rewatches_nonneg"),
+            CheckConstraint(
+                condition=Q(started_at__isnull=True)
+                | Q(finished_at__isnull=True)
+                | Q(finished_at__gte=F("started_at")),
+                name="lists_dates_ordered",
+            ),
         ]
 
     def __str__(self):
@@ -108,6 +128,11 @@ class UserImportJob(CreatedAtMixin, Model):
         processing = "processing", "Processing"
         completed = "completed", "Completed"
         failed = "failed", "Failed"
+        cancelled = "cancelled", "Cancelled"
+
+    class ImportMode(TextChoices):
+        full = "full", "Full"
+        incremental = "incremental", "Incremental"
 
     class ImportSource(TextChoices):
         myanimelist_api = "mal_api", "MyAnimeList API"
@@ -127,6 +152,16 @@ class UserImportJob(CreatedAtMixin, Model):
     source_identifier = CharField(max_length=255, blank=True)
     started_at = DateTimeField(null=True, blank=True)
     completed_at = DateTimeField(null=True, blank=True)
+    mode = CharField(max_length=12, choices=ImportMode.choices, default=ImportMode.full)
+    # Why the job failed, in words for the user (``errors`` keeps per-entry details).
+    failure_reason = TextField(blank=True, default="")
+    # Entries that could not be matched to the catalog: ``{title, mal_id, anilist_id, reason}``.
+    unmatched = JSONField(default=list, blank=True)
+    # Parsed entries for sources that upload a file (MAL XML), so a requeue still has them.
+    # Cleared when the job finishes.
+    payload = JSONField(null=True, blank=True)
+    # Refreshed on every progress flush; a processing job without one for hours is dead.
+    heartbeat_at = DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -179,3 +214,29 @@ class UserStats(Model):
     @property
     def calculated_days_watched(self):
         return round(self.total_minutes / 1440.0, 1)
+
+
+class UserListLink(Model):
+    """A user's linked external list (AniList, pull-only): "Sync now" and the opt-in daily sync."""
+
+    class Provider(TextChoices):
+        anilist = "anilist", "AniList"
+
+    user = OneToOneField("users.CustomUser", CASCADE, related_name="list_link")
+    provider = CharField(max_length=16, choices=Provider.choices, default=Provider.anilist)
+    external_username = CharField(max_length=50)
+    external_user_id = IntegerField(null=True, blank=True)
+    auto_sync = BooleanField(default=False)
+    # Largest AniList ``updatedAt`` (unix seconds) applied so far; incremental syncs stop there.
+    cursor_updated_at = BigIntegerField(null=True, blank=True)
+    last_synced_at = DateTimeField(null=True, blank=True)
+    last_error = CharField(max_length=255, blank=True, default="")
+    consecutive_failures = PositiveSmallIntegerField(default=0)
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [Index(fields=["auto_sync", "last_synced_at"])]
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.provider}:{self.external_username}"

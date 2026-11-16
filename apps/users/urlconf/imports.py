@@ -1,8 +1,10 @@
-"""Import/export routes (G3): list imports, import jobs, data export."""
+"""Import/export routes (G3): list imports, import jobs, the AniList link, data export."""
 
 from django.urls import path
 
 from ..views.import_export import (
+    AniListLinkView,
+    AniListSyncView,
     ImportExportViewSet,
     UserImportJobViewSet,
 )
@@ -20,6 +22,8 @@ urlpatterns = [
         ImportExportViewSet.as_view({"post": "import_anilist"}),
         name="import_anilist",
     ),
+    path("import/anilist/link/", AniListLinkView.as_view(), name="import_anilist_link"),
+    path("import/anilist/sync/", AniListSyncView.as_view(), name="import_anilist_sync"),
     path(
         "export/", ImportExportViewSet.as_view({"get": "export_user_data"}), name="export_user_data"
     ),

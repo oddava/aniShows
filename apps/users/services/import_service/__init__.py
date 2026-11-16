@@ -14,7 +14,9 @@ class ImportService:
 
         The username falls back to the job's ``source_identifier`` so a job
         re-queued with only its id (admin retry) still knows whose list to read.
+        An ``access_token`` kwarg (jobs queued before P0-5) is dropped unused.
         """
+        kwargs.pop("access_token", None)
         username = kwargs.get("username") or job.source_identifier
         if job.source == UserImportJob.ImportSource.myanimelist_api:
             return MyAnimeListAPIImporter(
@@ -25,10 +27,6 @@ class ImportService:
         elif job.source == UserImportJob.ImportSource.myanimelist_xml:
             return MyAnimeListXMLImporter(job=job, xml_content=kwargs.get("xml_content"))
         elif job.source == UserImportJob.ImportSource.anilist:
-            return AniListImporter(
-                job=job,
-                username=username,
-                access_token=kwargs.get("access_token"),
-            )
+            return AniListImporter(job=job, username=username)
         else:
             raise ValueError(f"Unknown import source: {job.source}")

@@ -25,13 +25,16 @@ import {
     insightsQueries,
     listKeys,
     listQueries,
+    listSummaryKeys,
     miniProfileKeys,
     profileKeys,
     profileQueries,
     recommendationKeys,
     reviewKeys,
     staffFavoriteKeys,
+    summaryToGenreRows,
     userKeys,
+    userQueries,
 } from '../user';
 import { forumKeys, forumQueries } from '../forums';
 import { adminBadgeKeys } from '../admin';
@@ -44,7 +47,7 @@ const mocks = vi.hoisted(() => ({
         getWatchEpisodes: vi.fn(),
     },
     authApi: { getByUsername: vi.fn(), getProfile: vi.fn() },
-    listApi: { getAll: vi.fn() },
+    listApi: { getAll: vi.fn(), summary: vi.fn() },
     forumsApi: { getThreads: vi.fn() },
 }));
 
@@ -116,6 +119,10 @@ describe('query keys keep the shapes the app used before the factory', () => {
         [listKeys.all, ['lists']],
         [listKeys.byStatus('kiyo', 'Watching'), ['lists', 'kiyo', 'Watching']],
         [listKeys.overview('kiyo', 'Watching'), ['lists', 'kiyo', 'Watching', 'overview']],
+        [listKeys.paged('kiyo', 'Watching', 'fri', '-score'), ['lists', 'kiyo', 'Watching', 'paged', 'fri', '-score']],
+        [listKeys.paged('kiyo', 'Watching', undefined, 'title'), ['lists', 'kiyo', 'Watching', 'paged', '', 'title']],
+        [listKeys.preview('kiyo', 'Watching', 10), ['lists', 'kiyo', 'Watching', 'preview', 10]],
+        [listSummaryKeys.byUser('kiyo'), ['lists', 'kiyo', 'summary']],
         [reviewKeys.all, ['reviews']],
         [reviewKeys.byUser('kiyo'), ['reviews', 'kiyo']],
         [reviewKeys.forAnime('frieren', 'helpful', null), ['reviews', 'frieren', 'helpful', null]],
@@ -212,6 +219,8 @@ describe('prefix invalidation still reaches the same cache entries', () => {
         seed(profileKeys.own);
         seed(listKeys.byStatus('kiyo', 'Watching'));
         seed(listKeys.overview('kiyo', 'Watching'));
+        seed(listKeys.paged('kiyo', 'Watching', '', '-updated_at'));
+        seed(listSummaryKeys.byUser('kiyo'));
         seed(userKeys.watching);
         seed(reviewKeys.byUser('kiyo'));
         seed(reviewKeys.forAnime('frieren', 'helpful', null));
@@ -228,6 +237,8 @@ describe('prefix invalidation still reaches the same cache entries', () => {
         expect(invalidated(profileKeys.own)).toBe(false);
         expect(invalidated(listKeys.byStatus('kiyo', 'Watching'))).toBe(true);
         expect(invalidated(listKeys.overview('kiyo', 'Watching'))).toBe(true);
+        expect(invalidated(listKeys.paged('kiyo', 'Watching', '', '-updated_at'))).toBe(true);
+        expect(invalidated(listSummaryKeys.byUser('kiyo'))).toBe(true);
         expect(invalidated(userKeys.watching)).toBe(false);
         expect(invalidated(reviewKeys.byUser('kiyo'))).toBe(true);
         expect(invalidated(reviewKeys.forAnime('frieren', 'helpful', null))).toBe(true);
@@ -301,18 +312,47 @@ describe('queryOptions call the same endpoints as the inline queryFns did', () =
         expect(mocks.listApi.getAll).toHaveBeenCalledWith({ status: 'Completed', username: 'kiyo' });
     });
 
-    it('insightsQueries.lists keeps going when one status fails', async () => {
-        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-        mocks.listApi.getAll.mockImplementation(({ status }) => (
-            status === 'Dropped'
-                ? Promise.reject(new Error('boom'))
-                : Promise.resolve({ data: { results: [{ status }] } })
-        ));
-        const result = await insightsQueries.lists('kiyo').queryFn(fnContext);
-        expect(result).toHaveLength(5);
-        expect(result.at(-1)).toEqual({ status: 'Dropped', items: [] });
-        expect(result[0]).toEqual({ status: 'Watching', items: [{ status: 'Watching' }] });
-        spy.mockRestore();
+    it('listQueries.paged asks the server for one page of 50, with search and ordering', async () => {
+        mocks.listApi.getAll.mockResolvedValue({ data: { count: 120, next: 'x?page=2', results: [{ id: 1 }] } });
+        const options = listQueries.paged('kiyo', 'Watching', 'fri', '-score');
+        await expect(options.queryFn({ ...fnContext, pageParam: 2 })).resolves.toMatchObject({ count: 120 });
+        expect(mocks.listApi.getAll).toHaveBeenCalledWith({
+            username: 'kiyo', status: 'Watching', ordering: '-score', page: 2, page_size: 50, q: 'fri',
+        });
+        expect(options.getNextPageParam({ next: 'x?page=2' }, [{}])).toBe(2);
+        expect(options.getNextPageParam({ next: null }, [{}, {}])).toBeUndefined();
+    });
+
+    it('listQueries.summary reads lists/summary/ (own list without a username)', async () => {
+        mocks.listApi.summary.mockResolvedValue({ data: { total: 3 } });
+        await expect(listQueries.summary('kiyo').queryFn(fnContext)).resolves.toEqual({ total: 3 });
+        expect(mocks.listApi.summary).toHaveBeenLastCalledWith({ username: 'kiyo' });
+        await listQueries.summary(undefined).queryFn(fnContext);
+        expect(mocks.listApi.summary).toHaveBeenLastCalledWith({});
+    });
+
+    it('insightsQueries.overviewLists shares the summary request and keeps genre counts', () => {
+        const options = insightsQueries.overviewLists('kiyo');
+        expect(options.queryKey).toEqual(listSummaryKeys.byUser('kiyo'));
+        const rows = options.select({ top_genres: [{ name: 'Action', slug: 'action', count: 3 }, { name: 'Drama', slug: 'drama', count: 1 }] });
+        const counts = {};
+        rows.forEach((row) => row.anime.genres.forEach((genre) => { counts[genre.name] = (counts[genre.name] || 0) + 1; }));
+        expect(counts).toEqual({ Action: 3, Drama: 1 });
+        expect(summaryToGenreRows(undefined)).toEqual([]);
+    });
+
+    it('userQueries.watching asks for six Watching entries', async () => {
+        mocks.listApi.getAll.mockResolvedValue({ data: { results: [{ id: 1 }] } });
+        await expect(userQueries.watching().queryFn(fnContext)).resolves.toEqual([{ id: 1 }]);
+        expect(mocks.listApi.getAll).toHaveBeenLastCalledWith({ status: 'Watching', page_size: 6 });
+    });
+
+    it('insightsQueries.watching is a ten-entry Watching preview', async () => {
+        mocks.listApi.getAll.mockResolvedValue({ data: { results: [] } });
+        const options = insightsQueries.watching('kiyo');
+        expect(options.queryKey).toEqual(listKeys.preview('kiyo', 'Watching', 10));
+        await options.queryFn(fnContext);
+        expect(mocks.listApi.getAll).toHaveBeenLastCalledWith({ username: 'kiyo', status: 'Watching', page_size: 10 });
     });
 
     it('forumQueries.threads drops an empty tag', async () => {

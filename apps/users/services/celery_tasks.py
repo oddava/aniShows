@@ -6,14 +6,22 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
-from ...animes.services.anilist import AniListService
 from ...shared.logger import logger
 from ..models import UserImportJob
 from .import_service import ImportService
 
 User = get_user_model()
+
+
+ACTIVE_IMPORT_STATUSES = (
+    UserImportJob.ImportStatus.pending,
+    UserImportJob.ImportStatus.processing,
+)
+STALLED_IMPORT_HOURS = 2
+UNEXPECTED_IMPORT_ERROR = "The import stopped because of an unexpected error. Please try again."
 
 
 class UserTaskService:
@@ -79,11 +87,15 @@ class UserTaskService:
                     )
                     return {"job_id": job_id, "status": "skipped", "reason": "job_completed"}
 
-                if job.status == UserImportJob.ImportStatus.failed:
+                if job.status in (
+                    UserImportJob.ImportStatus.failed,
+                    UserImportJob.ImportStatus.cancelled,
+                ):
                     logger.info(
-                        "Import job skipped because it is already failed", extra={"job_id": job_id}
+                        "Import job skipped because it already ended",
+                        extra={"job_id": job_id, "status": job.status},
                     )
-                    return {"job_id": job_id, "status": "skipped", "reason": "job_cancelled"}
+                    return {"job_id": job_id, "status": "skipped", "reason": f"job_{job.status}"}
 
                 if (
                     job.status == UserImportJob.ImportStatus.processing
@@ -109,25 +121,32 @@ class UserTaskService:
         # Metric objects swallow their own failures.
         from ...animes.services.metrics import USER_IMPORTS_PROCESSED
 
+        outcome = result.get("outcome")
         USER_IMPORTS_PROCESSED.labels(
             source=getattr(job, "source", "unknown"),
-            status="success",
+            status="success" if outcome == "completed" else "failure",
         ).inc()
 
-        logger.info("Import job completed", extra={"job_id": job_id})
+        logger.info("Import job finished", extra={"job_id": job_id, "outcome": outcome})
         return {"job_id": job_id, "status": "success", "result": result}
 
     @staticmethod
     def mark_import_job_failed(job_id: int, error_message: str) -> None:
+        """Fail a job the importer could not finish; never overwrites a cancel or a reason."""
         try:
             with transaction.atomic():
                 job = UserImportJob.objects.select_for_update().get(id=job_id)
+                if job.status not in ACTIVE_IMPORT_STATUSES:
+                    return
                 job.status = UserImportJob.ImportStatus.failed
+                job.completed_at = timezone.now()
                 errors = list(job.errors or [])
                 if not errors or errors[-1] != error_message:
                     errors.append(error_message)
-                job.errors = errors
-                job.save(update_fields=["status", "errors"])
+                job.errors = errors[-10:]
+                if not job.failure_reason:
+                    job.failure_reason = UNEXPECTED_IMPORT_ERROR
+                job.save(update_fields=["status", "completed_at", "errors", "failure_reason"])
         except UserImportJob.DoesNotExist:
             logger.warning(
                 "Import job disappeared before failure status could be stored",
@@ -144,55 +163,40 @@ class UserTaskService:
         ).inc()
 
     @staticmethod
-    def fetch_anime_by_external_id(
-        mal_id: int | None = None,
-        anilist_id: int | None = None,
-        title: str | None = None,
-    ) -> int | None:
-        service = AniListService(enable_caching=True, enable_rate_limiting=True)
+    def fail_stalled_import_jobs(hours: int = STALLED_IMPORT_HOURS) -> int:
+        """Fail ``processing`` jobs whose worker died (no heartbeat for ``hours``).
 
-        try:
-            if anilist_id:
-                logger.info("Fetching anime by AniList ID", extra={"anilist_id": anilist_id})
-                anime_data = service.get_anime_by_id(anilist_id)
-                if anime_data:
-                    anime = service.save_anime_to_db(anime_data)
-                    return anime.id
-
-            if mal_id:
-                logger.info("Fetching anime by MAL ID", extra={"mal_id": mal_id})
-                anime_data = service.search_by_mal_id(mal_id)
-                if anime_data:
-                    anime = service.save_anime_to_db(anime_data)
-                    return anime.id
-
-            if title:
-                logger.info("Searching anime by title", extra={"title": title})
-                results = service.search_anime(title)
-                if results:
-                    anime = service.save_anime_to_db(results[0])
-                    return anime.id
-
-            logger.warning(
-                "Anime lookup by external identifiers returned no result",
-                extra={"mal_id": mal_id, "anilist_id": anilist_id, "title": title},
-            )
-            return None
-        finally:
-            service.close()
+        Otherwise a killed worker leaves the job processing forever, and the
+        one-active-import limit blocks that user's imports for good.
+        """
+        cutoff = timezone.now() - timedelta(hours=hours)
+        stalled = UserImportJob.objects.filter(status=UserImportJob.ImportStatus.processing).filter(
+            Q(heartbeat_at__lt=cutoff)
+            | Q(heartbeat_at__isnull=True, started_at__lt=cutoff)
+            | Q(heartbeat_at__isnull=True, started_at__isnull=True, created_at__lt=cutoff)
+        )
+        failed = stalled.update(
+            status=UserImportJob.ImportStatus.failed,
+            completed_at=timezone.now(),
+            failure_reason="The import worker stopped. Run it again to continue.",
+        )
+        if failed:
+            logger.warning("Failed stalled import jobs", extra={"count": failed})
+        return failed
 
     @staticmethod
     def cleanup_old_import_jobs(days: int = 30) -> int:
+        UserTaskService.fail_stalled_import_jobs()
         cutoff_date = timezone.now() - timedelta(days=days)
         queryset = UserImportJob.objects.filter(
             created_at__lt=cutoff_date,
             status__in=[
                 UserImportJob.ImportStatus.completed,
                 UserImportJob.ImportStatus.failed,
+                UserImportJob.ImportStatus.cancelled,
             ],
         )
-        deleted_count = queryset.count()
-        queryset.delete()
+        deleted_count, _ = queryset.delete()
         logger.info(
             "Cleaned up old import jobs",
             extra={"deleted_count": deleted_count, "days": days},
@@ -205,8 +209,14 @@ class UserTaskService:
         cleanup_imports: bool = True,
         unverified_days: int = 7,
         import_days: int = 30,
+        sync_anilist: bool = True,
     ) -> dict:
-        from ..tasks import cleanup_old_import_jobs, cleanup_unverified_accounts
+        from ..tasks import (
+            cleanup_old_import_jobs,
+            cleanup_unverified_accounts,
+            flush_expired_auth_tokens,
+            sync_linked_anilist_lists,
+        )
 
         if int(unverified_days) < UserTaskService.MIN_UNVERIFIED_CLEANUP_DAYS:
             raise ValueError(
@@ -221,6 +231,13 @@ class UserTaskService:
             ).id
         if cleanup_imports:
             task_ids["import_cleanup"] = cleanup_old_import_jobs.delay(days=import_days).id
+        # G1 A20: expired JWT outstanding/blacklist rows; no beat entry of its own.
+        task_ids["auth_token_flush"] = flush_expired_auth_tokens.delay().id
+        if sync_anilist:
+            # Opt-in daily pull of linked AniList lists (D-5); every link starts with it off.
+            task_ids["anilist_sync"] = sync_linked_anilist_lists.apply_async(
+                queue="low_priority"
+            ).id
 
         logger.info(
             "Queued user maintenance workflow",
@@ -238,15 +255,17 @@ class UserTaskService:
         }
 
     @staticmethod
-    def update_user_stats(user_id: int | None = None) -> dict:
-        from django.db.models import Avg, Count, ExpressionWrapper, F, IntegerField, Q, Sum, Value
-        from django.db.models.functions import Coalesce
+    def sync_linked_anilist_lists() -> dict:
+        from .import_service.anilist_sync import sync_linked_lists
 
-        from ...animes.models import Review, ReviewVote, UserFavorite
-        from ..models import UserAnimeList, UserFollow, UserStats
+        return sync_linked_lists()
+
+    @staticmethod
+    def update_user_stats(user_id: int | None = None) -> dict:
+        """Refresh ``UserStats`` for one user, or for everyone seen in the last 30 days."""
+        from .stats_service import save_user_stats
 
         start_time = timezone.now()
-
         if user_id:
             user_ids = list(User.objects.filter(id=user_id).values_list("id", flat=True))
         else:
@@ -254,129 +273,17 @@ class UserTaskService:
             user_ids = list(
                 User.objects.filter(last_login__gte=thirty_days_ago).values_list("id", flat=True)
             )
-
-        total_users = len(user_ids)
         logger.info(
-            "Preparing user stats update", extra={"user_count": total_users, "user_id": user_id}
+            "Preparing user stats update", extra={"user_count": len(user_ids), "user_id": user_id}
         )
-
-        if total_users == 0:
-            return {
-                "updated_count": 0,
-                "total_users": 0,
-                "duration_seconds": (timezone.now() - start_time).total_seconds(),
-            }
-
-        followers_counts = {
-            row["following_id"]: row["total"]
-            for row in UserFollow.objects.filter(following_id__in=user_ids)
-            .values("following_id")
-            .annotate(total=Count("id"))
-        }
-        following_counts = {
-            row["follower_id"]: row["total"]
-            for row in UserFollow.objects.filter(follower_id__in=user_ids)
-            .values("follower_id")
-            .annotate(total=Count("id"))
-        }
-        minutes_expr = ExpressionWrapper(
-            F("episodes_watched") * Coalesce(F("anime__duration_minutes"), Value(0)),
-            output_field=IntegerField(),
-        )
-        anime_stats_map = {
-            row["user_id"]: row
-            for row in UserAnimeList.objects.filter(user_id__in=user_ids)
-            .values("user_id")
-            .annotate(
-                anime_count=Count("id", distinct=True),
-                episodes_watched_total=Coalesce(Sum("episodes_watched"), 0),
-                mean_score=Avg("score", filter=Q(score__gt=0)),
-                total_minutes=Coalesce(Sum(minutes_expr), 0),
-            )
-        }
-        favorites_counts = {
-            row["user_id"]: row["total"]
-            for row in UserFavorite.objects.filter(user_id__in=user_ids)
-            .values("user_id")
-            .annotate(total=Count("id"))
-        }
-        reviews_counts = {
-            row["user_id"]: row["total"]
-            for row in Review.objects.filter(user_id__in=user_ids)
-            .values("user_id")
-            .annotate(total=Count("id"))
-        }
-        resonance_counts = {
-            row["review__user_id"]: row["total"]
-            for row in ReviewVote.objects.filter(
-                review__user_id__in=user_ids,
-                vote_type=ReviewVote.VoteType.HELPFUL,
-            )
-            .values("review__user_id")
-            .annotate(total=Count("id"))
-        }
-
-        existing_stats_map = {
-            stats.user_id: stats for stats in UserStats.objects.filter(user_id__in=user_ids)
-        }
-        now = timezone.now()
-        to_create = []
-        to_update = []
-
-        for uid in user_ids:
-            anime_data = anime_stats_map.get(uid, {})
-            total_minutes = int(anime_data.get("total_minutes") or 0)
-            data = {
-                "followers_count": int(followers_counts.get(uid, 0)),
-                "following_count": int(following_counts.get(uid, 0)),
-                "anime_count": int(anime_data.get("anime_count") or 0),
-                "episodes_watched": int(anime_data.get("episodes_watched_total") or 0),
-                "total_minutes": total_minutes,
-                "days_watched": round(total_minutes / 1440.0, 1),
-                "mean_score": anime_data.get("mean_score"),
-                "favorites_count": int(favorites_counts.get(uid, 0)),
-                "reviews_count": int(reviews_counts.get(uid, 0)),
-                "resonance_count": int(resonance_counts.get(uid, 0)),
-                "last_updated": now,
-            }
-
-            stats = existing_stats_map.get(uid)
-            if stats is None:
-                to_create.append(UserStats(user_id=uid, is_active=True, **data))
-            else:
-                for field, value in data.items():
-                    setattr(stats, field, value)
-                to_update.append(stats)
-
-        if to_create:
-            UserStats.objects.bulk_create(to_create, batch_size=500)
-        if to_update:
-            UserStats.objects.bulk_update(
-                to_update,
-                [
-                    "followers_count",
-                    "following_count",
-                    "anime_count",
-                    "episodes_watched",
-                    "total_minutes",
-                    "days_watched",
-                    "mean_score",
-                    "favorites_count",
-                    "reviews_count",
-                    "resonance_count",
-                    "last_updated",
-                ],
-                batch_size=500,
-            )
-
+        updated = save_user_stats(user_ids)
         duration = (timezone.now() - start_time).total_seconds()
         logger.info(
-            "Updated user stats",
-            extra={"updated_count": len(user_ids), "duration_seconds": duration},
+            "Updated user stats", extra={"updated_count": updated, "duration_seconds": duration}
         )
         return {
-            "updated_count": len(user_ids),
-            "total_users": total_users,
+            "updated_count": updated,
+            "total_users": len(user_ids),
             "duration_seconds": duration,
         }
 

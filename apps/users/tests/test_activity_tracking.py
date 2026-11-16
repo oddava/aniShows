@@ -8,11 +8,14 @@ Tests cover:
 - Privacy filtering for heatmap and feed
 """
 
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TransactionTestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APIClient, APITestCase
 
 from ...animes.models import Anime
 from ..models import UserActivity, UserAnimeList
@@ -116,8 +119,17 @@ class ActivitySignalTests(TransactionTestCase):
         self.assertEqual(activity.old_episodes, 3)
         self.assertEqual(activity.new_episodes, 6)
 
-    def test_rapid_distinct_progress_updates_not_deduped(self):
-        """Distinct rapid progress updates should produce separate activities."""
+    def _progress_rows(self):
+        return list(
+            UserActivity.objects.filter(
+                user=self.user,
+                anime=self.anime,
+                activity_type=UserActivity.ActivityType.PROGRESS,
+            ).order_by("created_at", "id")
+        )
+
+    def test_binge_progress_updates_coalesce_into_one_row(self):
+        """+1 clicks within 30 minutes extend one PROGRESS row (spec 3 P1-7)."""
         entry = UserAnimeList.objects.create(
             user=self.user,
             anime=self.anime,
@@ -126,21 +138,86 @@ class ActivitySignalTests(TransactionTestCase):
         )
         UserActivity.objects.all().delete()
 
+        for episodes in (1, 2, 3):
+            entry.episodes_watched = episodes
+            entry.save()
+
+        rows = self._progress_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0].old_episodes, rows[0].new_episodes), (0, 3))
+
+    def test_progress_after_the_window_starts_a_new_row(self):
+        entry = UserAnimeList.objects.create(
+            user=self.user,
+            anime=self.anime,
+            status=UserAnimeList.UserAnimeStatus.watching,
+            episodes_watched=0,
+        )
+        UserActivity.objects.all().delete()
         entry.episodes_watched = 1
+        entry.save()
+        UserActivity.objects.update(created_at=timezone.now() - timedelta(minutes=31))
+
+        entry.episodes_watched = 2
+        entry.save()
+
+        rows = self._progress_rows()
+        self.assertEqual([(r.old_episodes, r.new_episodes) for r in rows], [(0, 1), (1, 2)])
+
+    def test_progress_that_nets_to_zero_removes_the_row(self):
+        entry = UserAnimeList.objects.create(
+            user=self.user,
+            anime=self.anime,
+            status=UserAnimeList.UserAnimeStatus.watching,
+            episodes_watched=4,
+        )
+        UserActivity.objects.all().delete()
+
+        entry.episodes_watched = 5
+        entry.save()
+        entry.episodes_watched = 4
+        entry.save()
+
+        self.assertEqual(self._progress_rows(), [])
+
+    def test_other_activity_breaks_the_coalescing(self):
+        entry = UserAnimeList.objects.create(
+            user=self.user,
+            anime=self.anime,
+            status=UserAnimeList.UserAnimeStatus.watching,
+            episodes_watched=0,
+        )
+        UserActivity.objects.all().delete()
+        entry.episodes_watched = 1
+        entry.save()
+        entry.status = UserAnimeList.UserAnimeStatus.on_hold
         entry.save()
         entry.episodes_watched = 2
         entry.save()
 
-        activities = list(
-            UserActivity.objects.filter(
-                user=self.user,
-                anime=self.anime,
-                activity_type=UserActivity.ActivityType.PROGRESS,
-            ).order_by("created_at")
+        self.assertEqual(len(self._progress_rows()), 2)
+
+    def test_coalesced_progress_keeps_heatmap_totals(self):
+        from django.core.cache import cache
+
+        from ..services.cache import get_user_heatmap_cache_key
+
+        entry = UserAnimeList.objects.create(
+            user=self.user,
+            anime=self.anime,
+            status=UserAnimeList.UserAnimeStatus.watching,
+            episodes_watched=0,
         )
-        self.assertEqual(len(activities), 2)
-        self.assertEqual((activities[0].old_episodes, activities[0].new_episodes), (0, 1))
-        self.assertEqual((activities[1].old_episodes, activities[1].new_episodes), (1, 2))
+        UserActivity.objects.all().delete()
+        for episodes in (1, 2, 3, 4):
+            entry.episodes_watched = episodes
+            entry.save()
+        cache.delete(get_user_heatmap_cache_key(self.user.id))
+
+        client = APIClient()
+        response = client.get(reverse("activity-heatmap"), {"username": self.user.username})
+
+        self.assertEqual(sum(day["count"] for day in response.data), 4)
 
     def test_activity_on_completion(self):
         """Changing status to Completed creates a COMPLETED activity."""
@@ -457,3 +534,65 @@ class ActivityFeedAPITests(APITestCase):
         results = response.data.get("results", response.data)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["activity_type"], "progress")
+
+    def _status_filter_rows(self):
+        at = UserActivity.ActivityType
+        UserActivity.objects.bulk_create(
+            [
+                UserActivity(
+                    user=self.user, anime=self.anime, activity_type=at.ADDED, new_status="Watching"
+                ),
+                UserActivity(
+                    user=self.user,
+                    anime=self.anime,
+                    activity_type=at.COMPLETED,
+                    old_status="Watching",
+                    new_status="Completed",
+                ),
+                UserActivity(
+                    user=self.user,
+                    anime=self.anime,
+                    activity_type=at.REMOVED,
+                    old_status="Completed",
+                ),
+                UserActivity(
+                    user=self.user,
+                    anime=self.anime,
+                    activity_type=at.STATUS_CHANGE,
+                    old_status="Completed",
+                    new_status="On Hold",
+                ),
+            ]
+        )
+
+    def _feed(self, **params):
+        response = self.client.get(
+            reverse("activity-list"), {"username": self.user.username, **params}
+        )
+        return response
+
+    def test_feed_status_filter_returns_rows_for_that_status(self):
+        self._status_filter_rows()
+
+        completed = self._feed(status="Completed")
+        watching = self._feed(status="Watching")
+        planning = self._feed(status="Plan to Watch")
+
+        self.assertEqual(completed.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            sorted(row["activity_type"] for row in completed.data["results"]),
+            ["completed", "removed"],
+        )
+        self.assertEqual([row["activity_type"] for row in watching.data["results"]], ["added"])
+        self.assertEqual(planning.data["results"], [])
+
+    def test_feed_status_and_type_combine(self):
+        self._status_filter_rows()
+
+        response = self._feed(status="Completed", type="removed")
+
+        self.assertEqual([row["activity_type"] for row in response.data["results"]], ["removed"])
+
+    def test_feed_rejects_unknown_status_and_type(self):
+        self.assertEqual(self._feed(status="watching").status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._feed(type="binge").status_code, status.HTTP_400_BAD_REQUEST)

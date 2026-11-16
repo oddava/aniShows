@@ -3,23 +3,71 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { getApiErrorMessage } from '../api/errors';
 import { useNavigate } from 'react-router-dom';
 import { importExportApi } from '../api/client';
-import { importJobKeys, importJobQueries } from '../api/queries/importJobs';
+import {
+    ACTIVE_IMPORT_STATUSES,
+    FINISHED_IMPORT_STATUSES,
+    anilistLinkKeys,
+    anilistLinkQueries,
+    importJobKeys,
+    importJobQueries,
+} from '../api/queries/importJobs';
+import { listKeys } from '../api/queries/lists';
+import { profileKeys, userKeys } from '../api/queries/profile';
 import { useFreshError, useReportError } from '../hooks/useQueryErrorReport';
 import { useAuth } from '../context/AuthContext';
 import { formatDateTimeInUserTimezone } from '../utils/dateUtils';
 import logger from '../utils/logger';
 import {
-    Upload, 
-    Globe, 
-    FileText, 
-    RefreshCw, 
-    CheckCircle, 
-    AlertCircle, 
+    Upload,
+    Globe,
+    FileText,
+    RefreshCw,
+    CheckCircle,
+    AlertCircle,
     Clock,
     ChevronDown,
     ChevronUp,
-    X
+    X,
+    Link2,
 } from 'lucide-react';
+
+const MAX_XML_UPLOAD_BYTES = 10 * 1024 * 1024;
+const XML_FILE_PATTERN = /\.(xml|xml\.gz|gz)$/i;
+
+/** Why a picked file cannot be uploaded, or null when it can. */
+export const validateXmlFile = (file) => {
+    if (!file || !XML_FILE_PATTERN.test(file.name)) {
+        return 'Please select a MyAnimeList export (.xml or .xml.gz)';
+    }
+    if (file.size > MAX_XML_UPLOAD_BYTES) {
+        return 'File size must be less than 10MB';
+    }
+    return null;
+};
+
+/** The reason a job stopped: the fatal reason, else the last error recorded. */
+export const jobFailureMessage = (job) => (
+    job?.failure_reason || job?.errors?.[job.errors.length - 1] || 'Unknown error'
+);
+
+const UNMATCHED_REASON_LABELS = {
+    not_in_catalog_yet: 'Not in the catalog yet (run the import again later)',
+    not_found: 'Not found on AniList',
+    unknown_status: 'Unknown list status',
+    invalid: 'Invalid entry',
+};
+
+/** Sources whose import can be started again from the username alone. */
+const RERUNNABLE_SOURCES = ['mal_api', 'anilist'];
+
+const isActiveJob = (job) => ACTIVE_IMPORT_STATUSES.includes(job?.status);
+
+/** Everything an import may have changed: lists (and their summaries), the own profile, Home's shelf. */
+const refreshListViews = (queryClient) => Promise.all([
+    queryClient.invalidateQueries({ queryKey: listKeys.all }),
+    queryClient.invalidateQueries({ queryKey: profileKeys.own }),
+    queryClient.invalidateQueries({ queryKey: userKeys.watching }),
+]);
 
 /**
  * The jobs list with the polled jobs folded in: a polled job missing from the
@@ -108,21 +156,28 @@ const ImportPage = () => {
         [jobsQuery.data, jobsQuery.dataUpdatedAt, polledJobIds, polledResults],
     );
 
-    // Announce each polled job once, when it finishes.
+    // Announce each polled job once, when it finishes, and refresh what it changed
+    // (a failed or cancelled job may still have written some entries).
     const announcedJobs = useRef(new Set());
     useEffect(() => {
         polledResults.forEach((result) => {
             const job = result.data;
             if (!job || announcedJobs.current.has(job.id)) return;
+            if (!FINISHED_IMPORT_STATUSES.includes(job.status)) return;
+            announcedJobs.current.add(job.id);
+            refreshListViews(queryClient);
+            queryClient.invalidateQueries({ queryKey: anilistLinkKeys.forUser(userId) });
             if (job.status === 'completed') {
-                announcedJobs.current.add(job.id);
                 setSuccess(`Import completed! Imported: ${job.imported_entries}${job.fetched_entries ? ', Fetched: ' + job.fetched_entries : ''}, Skipped: ${job.skipped_entries}`);
-            } else if (job.status === 'failed') {
-                announcedJobs.current.add(job.id);
-                setError(`Import failed: ${job.errors?.[0] || 'Unknown error'}`);
+            } else if (job.status === 'cancelled') {
+                setSuccess(`Import cancelled. ${job.processed_entries} of ${job.total_entries} entries were processed.`);
+            } else {
+                setError(`Import failed: ${jobFailureMessage(job)}`);
             }
         });
-    }, [polledResults]);
+    }, [polledResults, queryClient, userId]);
+
+    const hasActiveJob = jobs.some(isActiveJob);
 
     const fetchJobs = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: importJobKeys.list(userId) });
@@ -131,6 +186,13 @@ const ImportPage = () => {
     const pollJobStatus = useCallback((jobId) => {
         setPolledJobIds((ids) => (ids.includes(jobId) ? ids : [...ids, jobId]));
     }, []);
+
+    // Jobs that were already running when the page opened (started before a reload,
+    // from another tab, or the daily AniList sync) are polled the same way, so their
+    // cards, Cancel and the Sync/Run again buttons follow them to the end.
+    useEffect(() => {
+        (jobsQuery.data ?? EMPTY_JOBS).filter(isActiveJob).forEach((job) => pollJobStatus(job.id));
+    }, [jobsQuery.data, pollJobStatus]);
 
     const cancelMutation = useMutation({
         mutationFn: (jobId) => importExportApi.cancelImportJob(jobId),
@@ -148,29 +210,40 @@ const ImportPage = () => {
         }
     };
 
+    /** Start a username import (`mal_api` or `anilist`); true when it was queued. */
+    const startUsernameImport = async (source, username) => {
+        setLoading(true);
+        setError('');
+        setSuccess('');
+
+        try {
+            const response = source === 'anilist'
+                ? await importExportApi.importAniList(username)
+                : await importExportApi.importMAL(username);
+            setSuccess('Import started! You can monitor the progress below.');
+            trackJob(response.data.job_id);
+            return true;
+        } catch (err) {
+            setError(getApiErrorMessage(err, 'Failed to start import'));
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const trackJob = (jobId) => {
+        fetchJobs();
+        if (jobId) pollJobStatus(jobId);
+    };
+
     const handleMALImport = async (e) => {
         e.preventDefault();
         if (!malUsername.trim()) {
             setError('Please enter a MyAnimeList username');
             return;
         }
-
-        setLoading(true);
-        setError('');
-        setSuccess('');
-
-        try {
-            const response = await importExportApi.importMAL(malUsername.trim());
-            const { job_id } = response.data;
-            
-            setSuccess('Import started! You can monitor the progress below.');
-            fetchJobs();
-            pollJobStatus(job_id);
+        if (await startUsernameImport('mal_api', malUsername.trim())) {
             setMalUsername('');
-        } catch (err) {
-            setError(getApiErrorMessage(err, 'Failed to start import'));
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -180,35 +253,23 @@ const ImportPage = () => {
             setError('Please enter an AniList username');
             return;
         }
-
-        setLoading(true);
-        setError('');
-        setSuccess('');
-
-        try {
-            const response = await importExportApi.importAniList(anilistUsername.trim());
-            const { job_id } = response.data;
-            
-            setSuccess('Import started! You can monitor the progress below.');
-            fetchJobs();
-            pollJobStatus(job_id);
+        if (await startUsernameImport('anilist', anilistUsername.trim())) {
             setAnilistUsername('');
-        } catch (err) {
-            setError(getApiErrorMessage(err, 'Failed to start import'));
-        } finally {
-            setLoading(false);
         }
     };
 
+    const handleRunAgain = (job) => startUsernameImport(job.source, job.source_identifier);
+
     const handleFileSelect = (e) => {
         const file = e.target.files[0];
-        if (file && file.name.endsWith('.xml')) {
-            setSelectedFile(file);
-            setError('');
-        } else {
-            setError('Please select a valid XML file');
+        const fileError = validateXmlFile(file);
+        if (fileError) {
+            setError(fileError);
             setSelectedFile(null);
+            return;
         }
+        setSelectedFile(file);
+        setError('');
     };
 
     const handleXMLImport = async (e) => {
@@ -224,11 +285,8 @@ const ImportPage = () => {
 
         try {
             const response = await importExportApi.importMALXML(selectedFile);
-            const { job_id } = response.data;
-            
             setSuccess('Import started! You can monitor the progress below.');
-            fetchJobs();
-            pollJobStatus(job_id);
+            trackJob(response.data.job_id);
             setSelectedFile(null);
             // Reset file input
             e.target.reset();
@@ -238,34 +296,6 @@ const ImportPage = () => {
             setLoading(false);
         }
     };
-
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'completed':
-                return <CheckCircle className="w-5 h-5 text-green-500" />;
-            case 'failed':
-                return <AlertCircle className="w-5 h-5 text-red-500" />;
-            case 'processing':
-                return <RefreshCw className="w-5 h-5 text-accent animate-spin" />;
-            default:
-                return <Clock className="w-5 h-5 text-yellow-500" />;
-        }
-    };
-
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'completed':
-                return 'bg-green-500/10 text-green-400 border border-green-500/20';
-            case 'failed':
-                return 'bg-red-500/10 text-red-400 border border-red-500/20';
-            case 'processing':
-                return 'bg-accent/10 text-accent border border-accent/20';
-            default:
-                return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20';
-        }
-    };
-
-    const canCancel = (status) => status === 'pending' || status === 'processing';
 
     if (!user) return null;
 
@@ -381,17 +411,18 @@ const ImportPage = () => {
                                 Import from MyAnimeList XML Export
                             </h3>
                             <p className="text-sm text-gray-400 mb-4">
-                                Export your list from MyAnimeList (List {'->'} Export List) and upload the XML file here.
-                                This works even for private lists.
+                                Export your list from MyAnimeList (List {'->'} Export List) and upload the file here,
+                                as it downloads (.xml.gz) or unpacked (.xml). This works even for private lists.
                             </p>
                             <div className="space-y-4">
                                 <div className="border-2 border-dashed border-gray-700 rounded-lg p-6 sm:p-8 text-center hover:border-accent/50 transition-colors bg-dark-50/50">
                                     <input
                                         type="file"
-                                        accept=".xml"
+                                        accept=".xml,.gz,application/xml,application/gzip"
                                         onChange={handleFileSelect}
                                         className="hidden"
                                         id="xml-file"
+                                        data-testid="xml-file-input"
                                         disabled={loading}
                                     />
                                     <label 
@@ -400,7 +431,7 @@ const ImportPage = () => {
                                     >
                                         <Upload className="w-10 h-10 sm:w-12 sm:h-12 text-gray-500 mb-3 sm:mb-4" />
                                         <span className="text-gray-300 text-sm sm:text-base px-2">
-                                            {selectedFile ? selectedFile.name : 'Click to select XML file'}
+                                            {selectedFile ? selectedFile.name : 'Click to select an .xml or .xml.gz file'}
                                         </span>
                                         <span className="text-xs sm:text-sm text-gray-500 mt-2">
                                             Maximum file size: 10MB
@@ -434,7 +465,8 @@ const ImportPage = () => {
                                 Import from AniList
                             </h3>
                             <p className="text-sm text-gray-400 mb-4">
-                                Enter your AniList username to import your anime list.
+                                Enter your AniList username to import your anime list once. The list must be public.
+                                To keep it in sync, link your account below instead.
                             </p>
                             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                                 <input
@@ -469,6 +501,14 @@ const ImportPage = () => {
                 </div>
             </div>
 
+            <AniListLinkCard
+                userId={userId}
+                hasActiveJob={hasActiveJob}
+                onJobStarted={trackJob}
+                onSuccess={setSuccess}
+                onError={setError}
+            />
+
             {/* Import Jobs */}
             {jobs.length > 0 && (
                 <div className="bg-dark-100 rounded-xl sm:rounded-2xl border border-gray-800 overflow-hidden">
@@ -477,113 +517,16 @@ const ImportPage = () => {
                     </div>
                     <div className="divide-y divide-gray-800">
                         {jobs.map((job) => (
-                            <div key={job.id} className="p-3 sm:p-4">
-                                <div 
-                                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
-                                    onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
-                                >
-                                    <div className="flex items-center gap-3 sm:gap-4">
-                                        {getStatusIcon(job.status)}
-                                        <div className="min-w-0">
-                                            <p className="font-medium text-white text-sm sm:text-base">{job.source_display}</p>
-                                            <p className="text-xs sm:text-sm text-gray-500">
-                                                {formatDateTimeInUserTimezone(job.created_at, {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    year: 'numeric',
-                                                    hour: 'numeric',
-                                                    minute: '2-digit',
-                                                    timeZoneName: 'short',
-                                                })}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                                        {/* Cancel button for pending/processing */}
-                                        {canCancel(job.status) && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleCancelJob(job.id);
-                                                }}
-                                                disabled={cancellingJob === job.id}
-                                                className="px-2 sm:px-3 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs sm:text-sm hover:bg-yellow-500/20 transition-colors disabled:opacity-50 flex items-center gap-1"
-                                            >
-                                                {cancellingJob === job.id ? (
-                                                    <>
-                                                        <RefreshCw className="w-3 h-3 animate-spin" />
-                                                        <span className="hidden sm:inline">Cancelling...</span>
-                                                        <span className="sm:hidden">...</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <X className="w-3 h-3" />
-                                                        <span className="hidden sm:inline">Cancel</span>
-                                                    </>
-                                                )}
-                                            </button>
-                                        )}
-                                        
-                                        <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(job.status)}`}>
-                                            <span className="hidden sm:inline">{job.status_display}</span>
-                                            <span className="sm:hidden">{job.status.charAt(0).toUpperCase() + job.status.slice(1)}</span>
-                                        </span>
-                                        {job.status === 'processing' && (
-                                            <span className="text-xs sm:text-sm text-gray-400">
-                                                {job.progress_percentage}%
-                                            </span>
-                                        )}
-                                        {expandedJob === job.id ? (
-                                            <ChevronUp className="w-5 h-5 text-gray-500" />
-                                        ) : (
-                                            <ChevronDown className="w-5 h-5 text-gray-500" />
-                                        )}
-                                    </div>
-                                </div>
-                                
-                                {expandedJob === job.id && (
-                                    <div className="mt-4 pt-4 border-t border-gray-800">
-                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4">
-                                            <div className="text-center p-2 sm:p-3 bg-dark-50 rounded-lg border border-gray-800">
-                                                <p className="text-xl sm:text-2xl font-bold text-white">{job.total_entries}</p>
-                                                <p className="text-xs sm:text-sm text-gray-400">Total</p>
-                                            </div>
-                                            <div className="text-center p-2 sm:p-3 bg-green-500/10 rounded-lg border border-green-500/20">
-                                                <p className="text-xl sm:text-2xl font-bold text-green-400">{job.imported_entries}</p>
-                                                <p className="text-xs sm:text-sm text-gray-400">Imported</p>
-                                            </div>
-                                            <div className="text-center p-2 sm:p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-                                                <p className="text-xl sm:text-2xl font-bold text-yellow-400">{job.skipped_entries}</p>
-                                                <p className="text-xs sm:text-sm text-gray-400">Skipped</p>
-                                            </div>
-                                            <div className="text-center p-2 sm:p-3 bg-red-500/10 rounded-lg border border-red-500/20">
-                                                <p className="text-xl sm:text-2xl font-bold text-red-400">{job.failed_entries}</p>
-                                                <p className="text-xs sm:text-sm text-gray-400">Failed</p>
-                                            </div>
-                                        </div>
-                                        
-                                        {job.source_identifier && (
-                                            <p className="text-sm text-gray-400 mb-2">
-                                                <span className="text-gray-300">Source:</span> {job.source_identifier}
-                                            </p>
-                                        )}
-                                        
-                                        {job.errors?.length > 0 && (
-                                            <div className="mt-2">
-                                                <p className="text-sm font-medium text-red-400 mb-1">Errors:</p>
-                                                <ul className="text-sm text-red-400 list-disc list-inside">
-                                                    {job.errors.slice(0, 5).map((err, idx) => (
-                                                        <li key={idx}>{err}</li>
-                                                    ))}
-                                                    {job.errors.length > 5 && (
-                                                        <li>...and {job.errors.length - 5} more</li>
-                                                    )}
-                                                </ul>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                            <ImportJobCard
+                                key={job.id}
+                                job={job}
+                                expanded={expandedJob === job.id}
+                                onToggle={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
+                                onCancel={() => handleCancelJob(job.id)}
+                                cancelling={cancellingJob === job.id}
+                                onRunAgain={() => handleRunAgain(job)}
+                                runAgainDisabled={loading || hasActiveJob}
+                            />
                         ))}
                     </div>
                 </div>
@@ -591,5 +534,395 @@ const ImportPage = () => {
         </div>
     );
 };
+
+const STATUS_ICONS = {
+    completed: <CheckCircle className="w-5 h-5 text-green-500" />,
+    failed: <AlertCircle className="w-5 h-5 text-red-500" />,
+    cancelled: <X className="w-5 h-5 text-gray-400" />,
+    processing: <RefreshCw className="w-5 h-5 text-accent animate-spin" />,
+    pending: <Clock className="w-5 h-5 text-yellow-500" />,
+};
+
+const STATUS_COLORS = {
+    completed: 'bg-green-500/10 text-green-400 border border-green-500/20',
+    failed: 'bg-red-500/10 text-red-400 border border-red-500/20',
+    cancelled: 'bg-gray-500/10 text-gray-400 border border-gray-500/20',
+    processing: 'bg-accent/10 text-accent border border-accent/20',
+    pending: 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20',
+};
+
+const statusLabel = (job) => job.status_display || (job.status.charAt(0).toUpperCase() + job.status.slice(1));
+
+function ImportJobCard({ job, expanded, onToggle, onCancel, cancelling, onRunAgain, runAgainDisabled }) {
+    const active = isActiveJob(job);
+    const canRunAgain = !active && RERUNNABLE_SOURCES.includes(job.source) && !!job.source_identifier;
+    const progress = Math.min(Math.max(Number(job.progress_percentage) || 0, 0), 100);
+    const unmatched = Array.isArray(job.unmatched) ? job.unmatched : [];
+
+    return (
+        <div className="p-3 sm:p-4" data-testid={`import-job-${job.id}`}>
+            <div
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
+                onClick={onToggle}
+            >
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                    {STATUS_ICONS[job.status] || STATUS_ICONS.pending}
+                    <div className="min-w-0">
+                        <p className="font-medium text-white text-sm sm:text-base">
+                            {job.source_display}
+                            {job.mode === 'incremental' && <span className="ml-2 text-xs text-gray-500">Sync</span>}
+                        </p>
+                        <p className="text-xs sm:text-sm text-gray-500">
+                            {formatDateTimeInUserTimezone(job.created_at, {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                timeZoneName: 'short',
+                            })}
+                        </p>
+                        {job.status === 'failed' && (
+                            <p className="text-xs sm:text-sm text-red-400 mt-1">{jobFailureMessage(job)}</p>
+                        )}
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    {active && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onCancel();
+                            }}
+                            disabled={cancelling}
+                            className="px-2 sm:px-3 py-1 bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 rounded-lg text-xs sm:text-sm hover:bg-yellow-500/20 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        >
+                            {cancelling ? (
+                                <>
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                    <span>Cancelling...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <X className="w-3 h-3" />
+                                    <span>Cancel</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+                    {canRunAgain && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRunAgain();
+                            }}
+                            disabled={runAgainDisabled}
+                            className="px-2 sm:px-3 py-1 bg-dark-50 text-gray-300 border border-gray-700 rounded-lg text-xs sm:text-sm hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                        >
+                            <RefreshCw className="w-3 h-3" />
+                            <span>Run again</span>
+                        </button>
+                    )}
+
+                    <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${STATUS_COLORS[job.status] || STATUS_COLORS.pending}`}>
+                        {statusLabel(job)}
+                    </span>
+                    {job.status === 'processing' && (
+                        <span className="text-xs sm:text-sm text-gray-400">
+                            {progress}%
+                        </span>
+                    )}
+                    {expanded ? (
+                        <ChevronUp className="w-5 h-5 text-gray-500" />
+                    ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-500" />
+                    )}
+                </div>
+            </div>
+
+            {active && (
+                <div className="mt-3">
+                    <div
+                        className="h-1.5 bg-dark-200 rounded-full overflow-hidden"
+                        role="progressbar"
+                        aria-label="Import progress"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progress}
+                    >
+                        <div className="h-full bg-accent-dark transition-[width] duration-500" style={{ width: `${progress}%` }} />
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                        {job.processed_entries} of {job.total_entries || '?'} entries
+                    </p>
+                </div>
+            )}
+
+            {expanded && (
+                <div className="mt-4 pt-4 border-t border-gray-800">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4">
+                        <div className="text-center p-2 sm:p-3 bg-dark-50 rounded-lg border border-gray-800">
+                            <p className="text-xl sm:text-2xl font-bold text-white">{job.total_entries}</p>
+                            <p className="text-xs sm:text-sm text-gray-400">Total</p>
+                        </div>
+                        <div className="text-center p-2 sm:p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                            <p className="text-xl sm:text-2xl font-bold text-green-400">{job.imported_entries}</p>
+                            <p className="text-xs sm:text-sm text-gray-400">Imported</p>
+                        </div>
+                        <div className="text-center p-2 sm:p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
+                            <p className="text-xl sm:text-2xl font-bold text-yellow-400">{job.skipped_entries}</p>
+                            <p className="text-xs sm:text-sm text-gray-400">Skipped</p>
+                        </div>
+                        <div className="text-center p-2 sm:p-3 bg-red-500/10 rounded-lg border border-red-500/20">
+                            <p className="text-xl sm:text-2xl font-bold text-red-400">{job.failed_entries}</p>
+                            <p className="text-xs sm:text-sm text-gray-400">Failed</p>
+                        </div>
+                    </div>
+
+                    {job.source_identifier && (
+                        <p className="text-sm text-gray-400 mb-2">
+                            <span className="text-gray-300">Source:</span> {job.source_identifier}
+                        </p>
+                    )}
+                    {job.skipped_entries > 0 && (
+                        <p className="text-xs text-gray-500 mb-2">
+                            Skipped entries were unchanged, or edited here more recently than on the source.
+                        </p>
+                    )}
+
+                    {unmatched.length > 0 && (
+                        <details className="mt-2">
+                            <summary className="text-sm font-medium text-gray-300 cursor-pointer">
+                                {unmatched.length} {unmatched.length === 1 ? 'title' : 'titles'} not matched
+                            </summary>
+                            <ul className="mt-2 space-y-1 text-sm text-gray-400">
+                                {unmatched.map((item, idx) => (
+                                    <li key={`${item.anilist_id || item.mal_id || item.title}-${idx}`}>
+                                        <span className="text-gray-300">{item.title || 'Untitled'}</span>
+                                        <span className="text-gray-500"> · {UNMATCHED_REASON_LABELS[item.reason] || item.reason}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </details>
+                    )}
+
+                    {job.errors?.length > 0 && (
+                        <div className="mt-2">
+                            <p className="text-sm font-medium text-red-400 mb-1">Errors:</p>
+                            <ul className="text-sm text-red-400 list-disc list-inside">
+                                {job.errors.slice(0, 5).map((err, idx) => (
+                                    <li key={idx}>{err}</li>
+                                ))}
+                                {job.errors.length > 5 && (
+                                    <li>...and {job.errors.length - 5} more</li>
+                                )}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function Switch({ checked, onChange, disabled, label }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            aria-label={label}
+            onClick={() => onChange(!checked)}
+            disabled={disabled}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border p-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-100
+            ${checked ? 'border-accent bg-accent-dark' : 'border-gray-700 bg-dark-50'}
+            ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+        >
+            <span className={`h-5 w-5 rounded-full bg-white transition-transform duration-200 ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+        </button>
+    );
+}
+
+/** Re-render once `isoTime` has passed (the sync cooldown ending). */
+function useNowUntil(isoTime) {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const until = isoTime ? new Date(isoTime).getTime() : 0;
+        const wait = until - Date.now();
+        if (!(wait > 0)) return undefined;
+        const timer = setTimeout(() => setNow(Date.now()), Math.min(wait + 500, 2 ** 31 - 1));
+        return () => clearTimeout(timer);
+    }, [isoTime]);
+    return now;
+}
+
+const formatSyncTime = (iso) => formatDateTimeInUserTimezone(iso, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+});
+
+/** Linked AniList account: pull-only sync (link, Sync now, opt-in daily sync, unlink). */
+function AniListLinkCard({ userId, hasActiveJob, onJobStarted, onSuccess, onError }) {
+    const queryClient = useQueryClient();
+    const linkQuery = useQuery({ ...anilistLinkQueries.forUser(userId), enabled: !!userId, retry: false });
+    const link = linkQuery.data;
+    const [username, setUsername] = useState('');
+    const [autoSync, setAutoSync] = useState(false);
+    const now = useNowUntil(link?.sync_available_at);
+
+    const refreshLink = () => queryClient.invalidateQueries({ queryKey: anilistLinkKeys.forUser(userId) });
+
+    const saveMutation = useMutation({
+        mutationFn: (values) => importExportApi.saveAniListLink(values).then((res) => res.data),
+        onSuccess: (data) => {
+            refreshLink();
+            if (data?.job_id) {
+                onJobStarted(data.job_id);
+                onSuccess('AniList linked. Importing your list now.');
+            } else if (data?.import_error?.detail) {
+                onError(`AniList linked, but the import could not start: ${data.import_error.detail}`);
+            }
+        },
+        onError: (err) => onError(getApiErrorMessage(err, 'Failed to link AniList')),
+    });
+    const syncMutation = useMutation({
+        mutationFn: () => importExportApi.syncAniList().then((res) => res.data),
+        onSuccess: (data) => {
+            refreshLink();
+            onJobStarted(data?.job_id);
+            onSuccess('Sync started. Only entries changed on AniList are fetched.');
+        },
+        onError: (err) => {
+            refreshLink();
+            onError(getApiErrorMessage(err, 'Failed to start sync'));
+        },
+    });
+    const unlinkMutation = useMutation({
+        mutationFn: () => importExportApi.unlinkAniList(),
+        onSuccess: () => {
+            refreshLink();
+            onSuccess('AniList unlinked. Your list was kept.');
+        },
+        onError: (err) => onError(getApiErrorMessage(err, 'Failed to unlink AniList')),
+    });
+    const busy = saveMutation.isPending || syncMutation.isPending || unlinkMutation.isPending;
+
+    if (!userId || linkQuery.isLoading || linkQuery.isError) return null;
+
+    const handleLink = (e) => {
+        e.preventDefault();
+        if (!username.trim()) {
+            onError('Please enter an AniList username');
+            return;
+        }
+        saveMutation.mutate({ username: username.trim(), autoSync });
+    };
+
+    const availableAt = link?.sync_available_at ? new Date(link.sync_available_at).getTime() : 0;
+    const coolingDown = availableAt > now;
+    const syncBlockedReason = hasActiveJob
+        ? 'An import is already running.'
+        : coolingDown
+            ? `Available again at ${formatSyncTime(link.sync_available_at)}.`
+            : '';
+
+    return (
+        <div className="bg-dark-100 rounded-2xl border border-gray-800 p-4 sm:p-6 mb-8" data-testid="anilist-link-card">
+            <h2 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                <Link2 className="w-5 h-5 text-gray-400" />
+                Linked AniList
+            </h2>
+
+            {!link?.linked ? (
+                <form onSubmit={handleLink}>
+                    <p className="text-sm text-gray-400 mb-4">
+                        Link your AniList username to import your public list now and pull changes later.
+                        Nothing is ever written to AniList.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <input
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            placeholder="AniList username"
+                            aria-label="AniList username to link"
+                            className="flex-1 px-4 py-2 bg-dark-50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                            disabled={busy}
+                        />
+                        <button
+                            type="submit"
+                            disabled={busy}
+                            className="px-6 py-2 bg-accent-dark text-dark font-semibold rounded-lg hover:bg-accent-dark/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <Link2 className="w-4 h-4" />
+                            Link
+                        </button>
+                    </div>
+                    <div className="mt-4 flex items-center gap-3">
+                        <Switch checked={autoSync} onChange={setAutoSync} disabled={busy} label="Sync daily" />
+                        <span className="text-sm text-gray-400">Sync daily</span>
+                    </div>
+                </form>
+            ) : (
+                <div className="space-y-4">
+                    <div className="text-sm text-gray-400 space-y-1">
+                        <p>
+                            <span className="text-gray-300">Username:</span> {link.username}
+                        </p>
+                        <p>
+                            <span className="text-gray-300">Last synced:</span>{' '}
+                            {link.last_synced_at ? formatSyncTime(link.last_synced_at) : 'Never'}
+                        </p>
+                        {link.last_error && (
+                            <p className="text-red-400">{link.last_error}</p>
+                        )}
+                        {link.auto_sync_paused && (
+                            <p className="text-yellow-400">
+                                Daily sync is paused after 5 failed syncs in a row. Turn it on again to resume.
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <Switch
+                            checked={!!link.auto_sync && !link.auto_sync_paused}
+                            onChange={(next) => saveMutation.mutate({ username: link.username, autoSync: next })}
+                            disabled={busy}
+                            label="Sync daily"
+                        />
+                        <span className="text-sm text-gray-400">Sync daily</span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => syncMutation.mutate()}
+                            disabled={busy || !!syncBlockedReason}
+                            className="px-6 py-2 bg-accent-dark text-dark font-semibold rounded-lg hover:bg-accent-dark/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+                            Sync now
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => unlinkMutation.mutate()}
+                            disabled={busy}
+                            className="px-4 py-2 bg-dark-50 text-gray-300 border border-gray-700 rounded-lg text-sm hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Unlink
+                        </button>
+                        {syncBlockedReason && (
+                            <span className="text-xs text-gray-500">{syncBlockedReason}</span>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default ImportPage;

@@ -3,6 +3,7 @@ import api from '../httpClient';
 
 export const importExportApi = {
     importMAL: (username) => api.post('/import/mal/', { username }),
+    /** A MyAnimeList export, `.xml` or `.xml.gz`. */
     importMALXML: (file) => {
         const formData = new FormData();
         formData.append('file', file);
@@ -10,16 +11,23 @@ export const importExportApi = {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
     },
-    importAniList: (username, accessToken = null) => api.post('/import/anilist/', {
-        username,
-        access_token: accessToken,
-    }),
+    /** Public AniList lists only: no access token is ever sent. */
+    importAniList: (username) => api.post('/import/anilist/', { username }),
     getImportJobs: () => api.get('/import/jobs/'),
     getImportJobStatus: (jobId) => api.get(`/import/jobs/${jobId}/`),
     cancelImportJob: (jobId) => api.post(`/import/jobs/${jobId}/cancel/`),
+    /** Linked AniList account (pull-only sync). */
+    getAniListLink: () => api.get('/import/anilist/link/'),
+    saveAniListLink: ({ username, autoSync }) => api.put('/import/anilist/link/', {
+        username,
+        auto_sync: autoSync,
+    }),
+    unlinkAniList: () => api.delete('/import/anilist/link/'),
+    syncAniList: () => api.post('/import/anilist/sync/'),
     exportData: (format = 'json') => api.get('/export/', {
         params: { type: format },
         responseType: 'blob',
     }),
-    exportDataJSON: () => api.get('/export/json/'),
+    /** The JSON export as an object, for the preview: `response.data.data`. */
+    exportDataJSON: () => api.get('/export/', { params: { type: 'json', download: 'false' } }),
 };

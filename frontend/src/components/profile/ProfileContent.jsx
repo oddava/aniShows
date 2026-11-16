@@ -1,7 +1,6 @@
 import React, { Suspense } from 'react';
 import { Lock } from 'lucide-react';
 import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
-import ProfileStats from './ProfileStats';
 import FriendsTab from './FriendsTab';
 import ActivityTab from './tabs/ActivityTab';
 import AnimeListTab from './tabs/AnimeListTab';

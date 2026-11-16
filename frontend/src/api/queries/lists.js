@@ -1,25 +1,48 @@
 // Query keys and options owned by G3 Lists (feature-revamp seams).
-import { queryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
 import { activityApi, listApi, reviewApi } from '../client';
 import { userKeys } from './profile';
 
 /*
- * Query keys for users, profiles, lists, favourites, reviews and activity.
+ * Query keys for lists, list summaries, activity and insights.
  *
  * The first element of each key is what invalidation matches on, so it is
  * kept exactly as it was: e.g. invalidating `listKeys.all` (['lists']) still
- * covers every `listKeys.byStatus(...)` and `listKeys.overview(...)` entry,
- * and `profileKeys.all` (['profile']) covers every `profileKeys.byUsername(...)`.
+ * covers every `listKeys.byStatus(...)`, `listKeys.overview(...)`, paged list
+ * and `listSummaryKeys.byUser(...)` entry.
  */
 
-const LIST_STATUSES = ['Watching', 'Completed', 'Plan to Watch', 'On Hold', 'Dropped'];
+export const LIST_STATUSES = ['Watching', 'Completed', 'Plan to Watch', 'On Hold', 'Dropped'];
+
+/** Server-side orderings of `GET lists/` (`ordering=`), default first. */
+export const LIST_ORDERINGS = [
+    { value: '-updated_at', label: 'Recently updated' },
+    { value: 'title', label: 'Title' },
+    { value: '-score', label: 'Score' },
+    { value: '-progress', label: 'Progress' },
+    { value: 'started_at', label: 'Start date' },
+    { value: '-finished_at', label: 'Finish date' },
+];
+
+export const LIST_PAGE_SIZE = 50;
+
 const resultsOrData = (res) => res.data.results || res.data || [];
+const usernameParam = (username) => (username ? { username } : {});
 
 export const listKeys = {
     all: ['lists'],
     byStatus: (username, status) => ['lists', username, status],
     overview: (username, status) => ['lists', username, status, 'overview'],
+    /** The profile list tab: every page of one status, filtered and sorted on the server. */
+    paged: (username, status, search, ordering) => ['lists', username, status, 'paged', search || '', ordering],
+    /** A short first page (Insights' "Progress" card). */
+    preview: (username, status, pageSize) => ['lists', username, status, 'preview', pageSize],
+};
+
+/** Under `['lists']`, so every list invalidation also refreshes the summary. */
+export const listSummaryKeys = {
+    byUser: (username) => ['lists', username, 'summary'],
 };
 
 export const activityKeys = {
@@ -28,20 +51,23 @@ export const activityKeys = {
 };
 
 export const insightsKeys = {
-    /** ProfileInsights: one entry per status. */
+    /** Kept for compatibility; Insights now reads `listSummaryKeys` and `listKeys.preview`. */
     lists: (username) => ['profile-insights-lists', username],
-    /** OverviewTab: all statuses flattened. */
+    /** Kept for compatibility; `insightsQueries.overviewLists` now shares the summary key. */
     overviewLists: (username) => ['insights-lists', username],
     reviews: (username) => ['insights-reviews', username],
 };
 
 export const userQueries = {
+    /** Home "continue watching": the six most recently updated Watching entries. */
     watching: () => queryOptions({
         queryKey: userKeys.watching,
-        queryFn: () => listApi.getAll({ status: 'Watching', sort: '-updated_at', limit: 6 })
-            .then((res) => res.data.results || res.data),
+        queryFn: () => listApi.getAll({ status: 'Watching', page_size: 6 }).then(resultsOrData),
     }),
 };
+
+/** `next` page number for DRF page responses, counted from the pages loaded so far. */
+const nextListPage = (lastPage, allPages) => (lastPage?.next ? allPages.length + 1 : undefined);
 
 export const listQueries = {
     byStatus: (username, status) => queryOptions({
@@ -57,6 +83,29 @@ export const listQueries = {
             page_size: pageSize,
         }).then(resultsOrData),
     }),
+    /** All of one status, `LIST_PAGE_SIZE` per page; pages are DRF `{count, next, results}`. */
+    paged: (username, status, search, ordering) => infiniteQueryOptions({
+        queryKey: listKeys.paged(username, status, search, ordering),
+        queryFn: ({ pageParam }) => listApi.getAll({
+            username,
+            status,
+            ordering,
+            page: pageParam,
+            page_size: LIST_PAGE_SIZE,
+            ...(search ? { q: search } : {}),
+        }).then((res) => res.data),
+        initialPageParam: 1,
+        getNextPageParam: nextListPage,
+    }),
+    preview: (username, status, pageSize) => queryOptions({
+        queryKey: listKeys.preview(username, status, pageSize),
+        queryFn: () => listApi.getAll({ username, status, page_size: pageSize }).then(resultsOrData),
+    }),
+    /** Counts, totals, score histogram and top genres: `GET lists/summary/`. */
+    summary: (username) => queryOptions({
+        queryKey: listSummaryKeys.byUser(username),
+        queryFn: () => listApi.summary(usernameParam(username)).then((res) => res.data),
+    }),
 };
 
 export const activityQueries = {
@@ -66,37 +115,24 @@ export const activityQueries = {
     }),
 };
 
+/**
+ * Compatibility adapter for G1's OverviewTab genre sidebar, which counts
+ * `item.anime.genres[].name` over a flat array of list rows. Rebuilds an array
+ * with the same genre counts from the summary's `top_genres`, so the sidebar
+ * reflects the whole list (not page 1 of each status) and shares the summary
+ * request. Remove once OverviewTab reads `listQueries.summary` (G1 request).
+ */
+export const summaryToGenreRows = (summary) => (summary?.top_genres || []).flatMap((genre) => {
+    const row = { anime: { genres: [{ name: genre.name, slug: genre.slug }] } };
+    return Array(Math.max(Number(genre.count) || 0, 0)).fill(row);
+});
+
 export const insightsQueries = {
-    lists: (username) => queryOptions({
-        queryKey: insightsKeys.lists(username),
-        queryFn: async () => {
-            const results = await Promise.all(
-                LIST_STATUSES.map((status) =>
-                    listApi.getAll({ status, username }).then((res) => {
-                        const items = res.data?.results || res.data || [];
-                        return {
-                            status,
-                            items: Array.isArray(items) ? items : [],
-                        };
-                    }).catch((err) => {
-                        console.error(`Failed to fetch list for status ${status}:`, err);
-                        return { status, items: [] };
-                    }),
-                ),
-            );
-            return results;
-        },
-    }),
+    /** Insights' "Progress" card: the ten most recently updated Watching entries. */
+    watching: (username) => listQueries.preview(username, 'Watching', 10),
     overviewLists: (username) => queryOptions({
-        queryKey: insightsKeys.overviewLists(username),
-        queryFn: async () => {
-            const results = await Promise.all(
-                LIST_STATUSES.map((status) =>
-                    listApi.getAll({ status, username }).then(resultsOrData),
-                ),
-            );
-            return results.flat();
-        },
+        ...listQueries.summary(username),
+        select: summaryToGenreRows,
     }),
     reviews: (username) => queryOptions({
         queryKey: insightsKeys.reviews(username),

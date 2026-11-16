@@ -232,16 +232,15 @@ class DuplicateEntryTests(APITestCase):
         self.client.force_authenticate(user=self.user)
 
     def test_cannot_add_duplicate_entry(self):
-        """Test that adding the same anime twice fails."""
-        # First add
+        """A second POST for the same anime updates the entry (upsert): one row, 200."""
         data = {"anime_id": self.anime.id, "status": "Watching"}
         response1 = self.client.post(self.list_url, data)
         self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
 
-        # Try to add again
-        data2 = {"anime_id": self.anime.id, "status": "Completed"}
+        data2 = {"anime_id": self.anime.id, "status": "On Hold"}
         response2 = self.client.post(self.list_url, data2)
-        # Should fail due to unique_together constraint
-        self.assertIn(
-            response2.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_409_CONFLICT]
-        )
+
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        self.assertEqual(response2.data["id"], response1.data["id"])
+        self.assertEqual(response2.data["status"], "On Hold")
+        self.assertEqual(UserAnimeList.objects.filter(user=self.user, anime=self.anime).count(), 1)

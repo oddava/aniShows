@@ -46,9 +46,12 @@ export default function StatsTab({
     episodeRatings = [],
     isEpisodeRatingsLoading = false,
 }) {
+    // D-3: `status_distribution` is AniList's; `site_status_distribution` (when the
+    // payload has it) is aniShows' own lists.
     const totalPlatformMembers = getStatusDistributionTotal(
         normalizeStatusDistribution(anime?.status_distribution)
     );
+    const siteDistribution = anime?.site_status_distribution;
     const scoreLabel = anime?.rating != null
         ? (anime?.anilist_id ? 'on AniList' : '/ 10')
         : '';
@@ -79,6 +82,7 @@ export default function StatsTab({
                     label="Total Members"
                     value={formatCompactCount(totalPlatformMembers)}
                     accentColor={chartAccent}
+                    subtext="on AniList"
                 />
                 <StatCard
                     icon={Star}
@@ -201,6 +205,12 @@ export default function StatsTab({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <StatusDistribution anime={anime} />
+                {siteDistribution ? (
+                    <StatusDistribution
+                        distribution={siteDistribution}
+                        sourceLabel="On aniShows"
+                    />
+                ) : null}
 
                 <div className="bg-dark-100/50 rounded-2xl p-6 border border-gray-800">
                     <div className="flex items-center gap-2 mb-4">

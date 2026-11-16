@@ -3,6 +3,8 @@ from rest_framework import status
 
 from ..models import EpisodeRating
 
+MAX_EPISODE_NUMBER_UNKNOWN_TOTAL = 10000
+
 
 class EpisodeRatingSummaryService:
     """Build public episode rating aggregates with optional user-private values."""
@@ -101,3 +103,6 @@ class EpisodeRatingCommandService:
             raise ValueError(
                 f"Episode number cannot exceed the known episode count ({anime.episode_count})."
             )
+        if episode_number > MAX_EPISODE_NUMBER_UNKNOWN_TOTAL:
+            # Same bound as list progress when the count is not known yet.
+            raise ValueError(f"Episode number cannot exceed {MAX_EPISODE_NUMBER_UNKNOWN_TOTAL}.")
