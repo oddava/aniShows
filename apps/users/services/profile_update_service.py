@@ -163,13 +163,17 @@ def _handle_username_change(user, validated_data, *, profile=None) -> None:
     if not new_username or new_username == user.username:
         return
 
-    if not is_username_change_allowed():
-        raise ValidationError({"username": "Username changes are currently disabled."})
-
     try:
         normalized_username = validate_username(new_username)
     except DjangoValidationError as exc:
         raise ValidationError({"username": list(exc.messages)}) from exc
+    # " bob" or fullwidth "bob" normalise to the current name: not a rename,
+    # so no cooldown is spent.
+    if normalized_username == user.username:
+        return
+
+    if not is_username_change_allowed():
+        raise ValidationError({"username": "Username changes are currently disabled."})
 
     if profile is None:
         profile, _ = UserProfile.objects.select_for_update().get_or_create(user=user)

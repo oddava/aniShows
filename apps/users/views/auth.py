@@ -144,7 +144,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 identifier_throttle.release_attempt()
             raise
         if identifier_throttle is not None:
-            identifier_throttle.reset()
+            # Only this attempt's slot: earlier failures expire with the window.
+            identifier_throttle.release_attempt()
         return move_refresh_to_cookie(response)
 
 

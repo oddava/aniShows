@@ -132,17 +132,16 @@ class LoginIdentifierThrottleTests(APITestCase):
             self._login("wrong", "10.0.3.1").status_code, status.HTTP_429_TOO_MANY_REQUESTS
         )
 
-    def test_success_resets_the_counter(self):
+    def test_success_releases_only_its_own_slot(self):
         for attempt in range(9):
             self._login("wrong", f"10.0.4.{attempt}")
         self.assertEqual(
             self._login("right-password-1", "10.0.4.99").status_code, status.HTTP_200_OK
         )
-        for attempt in range(9):
-            self.assertEqual(
-                self._login("wrong", f"10.0.5.{attempt}").status_code,
-                status.HTTP_401_UNAUTHORIZED,
-            )
+        # The 9 failures still count (they expire with the window): one more
+        # failure is allowed, the next attempt is locked.
+        self.assertEqual(self._login("wrong", "10.0.5.1").status_code, 401)
+        self.assertEqual(self._login("wrong", "10.0.5.2").status_code, 429)
 
     def test_other_identifiers_are_unaffected(self):
         for attempt in range(10):
@@ -280,7 +279,9 @@ class IdentifierFoldingTests(APITestCase):
             with self.subTest(variant=variant):
                 self.assertEqual(fold_identifier(variant), "chris@gmail.com")
         self.assertEqual(fold_identifier(f"{DOTTED_I}van"), fold_identifier("ivan"))
-        self.assertEqual(fold_identifier(f"Stra{SHARP_S}e"), fold_identifier("STRASSE"))
+        # Different accounts in the database stay apart (no upper() round trip).
+        self.assertNotEqual(fold_identifier(f"Stra{SHARP_S}e"), fold_identifier("STRASSE"))
+        self.assertNotEqual(fold_identifier(chr(0x3C2)), fold_identifier(chr(0x3C3)))
         # Accented letters stay distinct: they are different usernames.
         self.assertNotEqual(fold_identifier("Jos" + chr(0xE9)), fold_identifier("Jose"))
         self.assertEqual(fold_identifier("K" + chr(0x212A)), "kk")  # Kelvin sign
@@ -328,3 +329,28 @@ class LoginLockBurstTests(APITestCase):
             )
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIsNone(LoginIdentifierThrottle("slot").begin_attempt())
+
+
+class CollidingAccountsLockTests(APITestCase):
+    """A second account cannot clear another account's lock (council r6 finding 1)."""
+
+    def test_logging_in_as_strasse_does_not_unlock_strasze(self):
+        victim = f"Stra{SHARP_S}e".lower()
+        User.objects.create_user(username=victim, email="v@example.com", password="victim-pass-1")
+        User.objects.create_user(username="strasse", email="a@example.com", password="attacker-p-1")
+
+        def login(username, password, ip):
+            return self.client.post(
+                reverse("token_obtain_pair"),
+                {"username": username, "password": password},
+                format="json",
+                REMOTE_ADDR=ip,
+                **XHR,
+            )
+
+        for attempt in range(10):
+            login(victim, "wrong", f"10.7.0.{attempt}")
+        self.assertEqual(login("strasse", "attacker-p-1", "10.7.1.1").status_code, 200)
+        self.assertEqual(
+            login(victim, "wrong", "10.7.1.2").status_code, status.HTTP_429_TOO_MANY_REQUESTS
+        )

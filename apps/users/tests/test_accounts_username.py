@@ -178,3 +178,21 @@ class RenameNormalisationTests(TestCase):
         fullwidth_bob = "".join(chr(0xFEE0 + ord(char)) for char in "bob")
         with self.assertRaises(DRFValidationError):
             update_user_profile(other, {"username": fullwidth_bob})
+
+
+class EmailShapedUsernameTests(TestCase):
+    def test_new_usernames_cannot_be_email_addresses(self):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from ..services.username_sanitizer import validate_username
+
+        with self.assertRaisesMessage(DjangoValidationError, "cannot be an email address"):
+            validate_username("ann@home.com")
+        self.assertEqual(validate_username("ann@home"), "ann@home")  # not an address
+
+    def test_normalising_to_the_current_name_spends_no_cooldown(self):
+        user = User.objects.create_user(username="bob", email="bob@example.com", password="x")
+        update_user_profile(user, {"username": " bob"})
+        update_user_profile(user, {"username": "".join(chr(0xFEE0 + ord(c)) for c in "bob")})
+        user.userprofile.refresh_from_db()
+        self.assertIsNone(user.userprofile.last_username_change)

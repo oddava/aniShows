@@ -159,30 +159,32 @@ class ChangeEmailRateThrottle(UserRateThrottle):
 
 
 def fold_identifier(identifier: str) -> str:
-    """Fold an identifier at least as far as the database's case-insensitive lookups.
+    """Fold an identifier the way the database's case-insensitive lookups do.
 
-    Postgres folds some characters that ``str.lower()`` leaves alone: long s
-    (U+017F) and dotless i (U+0131) upper-case to ``S`` and ``I``, and dotted
-    capital I (U+0130) lower-cases to ``i``. Each such spelling would get its own
-    counter yet sign in to the same account. NFKC (compatibility forms such as
-    long s, Kelvin sign), mapping U+0130 to ``I`` and a round trip through upper
-    case merge them, while accented letters stay distinct, as they are distinct
-    usernames. It still merges a few spellings the database keeps apart (sharp s
-    and "ss", ligatures, fullwidth letters); sharing a counter there is harmless
-    under R5, where anyone can lock any identifier anyway.
+    NFKC first (it turns long s, the Kelvin sign and fullwidth letters into
+    plain ones, as create_user does for usernames), then the two Turkish i's
+    that ``str.lower()`` leaves apart from the database (U+0130 lower-cases to
+    ``i`` in Postgres; U+0131 upper-cases to ``I`` in email ``iexact``), then
+    ``lower()``. No upper-case round trip: that would also merge sharp s with
+    "ss" and final sigma with sigma, which are different accounts. Accented
+    letters stay distinct for the same reason.
     """
-    composed = unicodedata.normalize("NFKC", identifier.strip()).replace("\u0130", "I")
-    return composed.upper().lower()
+    composed = unicodedata.normalize("NFKC", identifier.strip())
+    return composed.replace("\u0130", "i").replace("\u0131", "i").lower()
 
 
 class LoginIdentifierThrottle:
     """Lock an identifier after repeated failed logins, whatever IP they come from (A09).
 
     ``LoginRateThrottle`` limits per IP only, so guessing spread over many IPs was
-    unbounded. This counts *failures* per normalised identifier (stored as a
-    SHA-256, never in clear) in a fixed window; a success clears the count, so the
-    owner can still sign in once the lock ends. Locking a known name out for the
-    window is the accepted trade-off (spec R5).
+    unbounded. This counts login *attempts* per folded identifier (stored as a
+    SHA-256, never in clear) in a fixed window, before the password check, and
+    refuses them over LOGIN_IDENTIFIER_MAX_FAILURES. A failure stays counted; a
+    400 or a success releases only its own slot, so failures always expire with
+    their window: a success never clears them (one spelling shared by two
+    accounts must not let one account's login reset the other's lock).
+    Locking a known identifier out for the window is the accepted trade-off
+    (spec R5).
     """
 
     def __init__(self, identifier: str):
@@ -215,10 +217,6 @@ class LoginIdentifierThrottle:
         return max(1, math.ceil(reset_at - time.time()))
 
     def release_attempt(self) -> None:
-        """Uncount an attempt that never reached the password check (a 400)."""
+        """Uncount an attempt that did not fail the password check (a 400, a success)."""
         with contextlib.suppress(ValueError):  # the window expired meanwhile
             cache.decr(self.count_key)
-
-    def reset(self) -> None:
-        """A successful login clears the identifier's count."""
-        cache.delete_many([self.count_key, self.reset_key])
