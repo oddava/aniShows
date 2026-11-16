@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useCallback } from 'react';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import SEO from '../components/SEO';
 import ImageCropModal from '../components/ImageCropModal';
-import SettingsTabs from '../components/settings/SettingsTabs';
+import SettingsTabs, {
+    settingsPanelId,
+    settingsTabId,
+    visibleSettingsTabs,
+} from '../components/settings/SettingsTabs';
 import ProfileTab from '../components/settings/ProfileTab';
 import BadgesTab from '../components/settings/BadgesTab';
 import AccountTab from '../components/settings/AccountTab';
@@ -16,7 +20,21 @@ import useNotificationPreferences from '../components/settings/useNotificationPr
 export default function Settings() {
     const { user, isAuthenticated, loading, refreshProfile, logout } = useAuth();
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState('profile');
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // The open tab lives in ?tab= so it can be linked to. Unknown values, and
+    // Badges for a user without badges, fall back to Profile.
+    const requestedTab = searchParams.get('tab');
+    const activeTab = visibleSettingsTabs(user).some((tab) => tab.key === requestedTab)
+        ? requestedTab
+        : 'profile';
+    const setActiveTab = useCallback((tab) => {
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            next.set('tab', tab);
+            return next;
+        }, { replace: true });
+    }, [setSearchParams]);
 
     // Each tab's state lives here, not in the tab, so it survives tab switches.
     const profile = useProfileSettings({ user, refreshProfile, queryClient });
@@ -31,13 +49,6 @@ export default function Settings() {
         setBannerFile,
         setBannerPreviewUrl,
     } = profile;
-
-    // Redirect from badges tab if user has no badges
-    useEffect(() => {
-        if (activeTab === 'badges' && user && !user.total_badges_count) {
-            setActiveTab('profile');
-        }
-    }, [activeTab, user]);
 
     if (loading) {
         return (
@@ -65,24 +76,30 @@ export default function Settings() {
                     {/* Tabs */}
                     <SettingsTabs user={user} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-                    {/* Profile Tab */}
-                    {activeTab === 'profile' && <ProfileTab user={user} profile={profile} />}
+                    <div
+                        role="tabpanel"
+                        id={settingsPanelId(activeTab)}
+                        aria-labelledby={settingsTabId(activeTab)}
+                    >
+                        {/* Profile Tab */}
+                        {activeTab === 'profile' && <ProfileTab user={user} profile={profile} />}
 
-                    {/* Badges Tab */}
-                    {activeTab === 'badges' && <BadgesTab />}
+                        {/* Badges Tab */}
+                        {activeTab === 'badges' && <BadgesTab />}
 
-                    {/* Account Tab */}
-                    {activeTab === 'account' && (
-                        <AccountTab
-                            user={user}
-                            account={account}
-                            isPrivate={profile.isPrivate}
-                            handlePrivacyToggle={profile.handlePrivacyToggle}
-                        />
-                    )}
+                        {/* Account Tab */}
+                        {activeTab === 'account' && (
+                            <AccountTab
+                                user={user}
+                                account={account}
+                                isPrivate={profile.isPrivate}
+                                handlePrivacyToggle={profile.handlePrivacyToggle}
+                            />
+                        )}
 
-                    {/* Notifications Tab */}
-                    {activeTab === 'notifications' && <NotificationsTab notifications={notifications} />}
+                        {/* Notifications Tab */}
+                        {activeTab === 'notifications' && <NotificationsTab notifications={notifications} />}
+                    </div>
                 </div>
             </div>
 

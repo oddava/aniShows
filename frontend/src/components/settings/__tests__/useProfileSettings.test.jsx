@@ -89,6 +89,28 @@ describe('useProfileSettings', () => {
         ]);
     });
 
+    it('sends remove_avatar, counts it as a change and resets it after saving', async () => {
+        const { result } = setup();
+
+        act(() => result.current.setRemoveAvatar(true));
+        await act(() => result.current.handleSaveProfile());
+
+        expect(authApi.updateProfile).toHaveBeenCalledTimes(1);
+        const formData = sentFormData();
+        expect(formData.get('remove_avatar')).toBe('true');
+        expect(formData.has('avatar')).toBe(false);
+        expect(result.current.removeAvatar).toBe(false);
+    });
+
+    it('does not send remove_avatar when it was not asked for', async () => {
+        const { result } = setup();
+
+        act(() => result.current.setBio('new bio'));
+        await act(() => result.current.handleSaveProfile());
+
+        expect(sentFormData().has('remove_avatar')).toBe(false);
+    });
+
     it('shows the envelope detail instead of "detail: ..."', async () => {
         authApi.updateProfile.mockRejectedValue({
             response: {

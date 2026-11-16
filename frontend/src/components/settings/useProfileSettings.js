@@ -33,6 +33,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
     const [avatarFile, setAvatarFile] = useState(null);
     const [bannerFile, setBannerFile] = useState(null);
     const [removeBanner, setRemoveBanner] = useState(false);
+    const [removeAvatar, setRemoveAvatar] = useState(false);
     const [socialLinks, setSocialLinks] = useState([]);
     const [isPrivate, setIsPrivate] = useState(false);
     const [profilePrimaryColor, setProfilePrimaryColor] = useState(DEFAULT_PROFILE_PRIMARY_COLOR);
@@ -162,7 +163,8 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             normalizedSelectedTimezone !== normalizedCurrentTimezone ||
             avatarFile !== null ||
             bannerFile !== null ||
-            removeBanner
+            removeBanner ||
+            removeAvatar
         );
 
         if (!hasChanges) {
@@ -194,6 +196,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
                 formData.append('preferred_timezone', normalizedSelectedTimezone);
             }
             if (avatarFile) formData.append('avatar', avatarFile);
+            else if (removeAvatar) formData.append('remove_avatar', 'true');
             if (bannerFile) formData.append('banner', bannerFile);
             if (removeBanner) formData.append('remove_banner', 'true');
 
@@ -216,6 +219,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             setAvatarPreviewUrl(null);
             setBannerPreviewUrl(null);
             setRemoveBanner(false);
+            setRemoveAvatar(false);
 
             // Use PATCH response as source of truth to avoid stale re-fetch fallback
             if (updatedProfile && typeof updatedProfile === 'object') {
@@ -260,6 +264,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
         setAvatarFile,
         setBannerFile,
         removeBanner, setRemoveBanner,
+        removeAvatar, setRemoveAvatar,
         socialLinks, setSocialLinks,
         isPrivate,
         profilePrimaryColor, setProfilePrimaryColor,
