@@ -1,5 +1,6 @@
-import { Loader, Star, Tv, X } from 'lucide-react';
+import { Check, CheckCheck, Loader, Star, Tv, X } from 'lucide-react';
 import CustomSelect from './common/CustomSelect';
+import useListEntryMutation from '../hooks/useListEntryMutation';
 
 const RATING_OPTIONS = ['5.0', '4.5', '4.0', '3.5', '3.0', '2.5', '2.0', '1.5', '1.0', '0.5'];
 
@@ -18,7 +19,16 @@ export default function EpisodesTab({
     onClearEpisodeRating,
     onLoadMore,
     onRetry,
+    listEntry,
 }) {
+    // G2 passes `listEntry` (the anime's `user_list_status`); until then read it off the anime.
+    const resolvedEntry = listEntry !== undefined ? listEntry : anime?.user_list_status;
+    const { entry, setProgress, isPending: isProgressPending } = useListEntryMutation({
+        anime: { id: anime?.id, slug: anime?.slug, episode_count: anime?.episode_count },
+        entry: resolvedEntry,
+    });
+    const watchedThrough = entry.id ? entry.episodes_watched || 0 : 0;
+    const canTrackProgress = Boolean(isAuthenticated && anime?.id);
     const duration = anime?.duration_minutes || 24;
     const resolvedCount = Number.isFinite(totalCount) && totalCount > 0 ? totalCount : episodes.length;
 
@@ -71,6 +81,7 @@ export default function EpisodesTab({
                     const ratingCount = Number(episode.rating_count || 0);
                     const userRatingValue = episode.user_rating != null ? String(episode.user_rating) : '';
                     const isRatingPending = ratingPendingEpisodeNumber === episode.number;
+                    const isWatched = episode.number <= watchedThrough;
 
                     return (
                         <article
@@ -109,6 +120,15 @@ export default function EpisodesTab({
                                             {episode.aired && <span className="flex-shrink-0">{episode.aired}</span>}
                                             {episode.aired && <span className="flex-shrink-0">•</span>}
                                             <span className="flex-shrink-0">{duration}m</span>
+                                            {isWatched && (
+                                                <>
+                                                    <span className="flex-shrink-0">•</span>
+                                                    <span className="inline-flex flex-shrink-0 items-center gap-1 font-semibold text-gray-300">
+                                                        <Check className="h-3 w-3" aria-hidden="true" />
+                                                        Watched
+                                                    </span>
+                                                </>
+                                            )}
                                         </div>
                                         {publicAverage != null && ratingCount > 0 && (
                                             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs">
@@ -126,6 +146,18 @@ export default function EpisodesTab({
 
                                 {isAuthenticated && (
                                     <div className="flex shrink-0 self-center items-center gap-1.5 sm:gap-2">
+                                        {canTrackProgress && episode.number !== watchedThrough && (
+                                            <button
+                                                type="button"
+                                                disabled={isProgressPending}
+                                                onClick={() => setProgress(episode.number)}
+                                                className="inline-flex h-8 sm:h-9 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-dark-100 px-2 sm:px-2.5 text-xs font-semibold text-gray-400 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                                                aria-label={`Watched through here (episode ${episode.number})`}
+                                            >
+                                                <CheckCheck className="h-4 w-4" aria-hidden="true" />
+                                                <span className="hidden sm:inline">Watched through here</span>
+                                            </button>
+                                        )}
                                         <label htmlFor={`episode-rating-${episode.number}`} className="sr-only">
                                             Rate episode {episode.number}
                                         </label>
