@@ -1,332 +1,249 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
+import { AlertTriangle, Search, Star, Trash2 } from 'lucide-react';
+
 import api from '../../api/client';
 import { adminKeys } from '../../api/queries/admin';
 import CustomSelect from '../../components/common/CustomSelect';
+import ErrorState from '../../components/common/ErrorState';
+import AdminPagination from './components/AdminPagination';
+import { useConfirm } from './components/ConfirmDialog';
+import DataTable from './components/DataTable';
+import Modal from './components/Modal';
 import { getAdminErrorMessage, useAdminList, useAdminMutation } from './hooks/useAdminQuery';
+import useDebouncedValue from './hooks/useDebouncedValue';
 
+const ratingClass = (rating) => (rating >= 8 ? 'text-emerald-400' : rating >= 5 ? 'text-amber-300' : 'text-red-400');
+const truncate = (text, length) => (text && text.length > length ? `${text.slice(0, length)}…` : text);
+
+/** All reviews, for staff moderation. Reported ones are handled in the moderation queue. */
 const AdminReviews = () => {
     const [search, setSearch] = useState('');
+    const debouncedSearch = useDebouncedValue(search.trim());
     const [page, setPage] = useState(1);
-    const [filters, setFilters] = useState({
-        has_spoilers: '',
-        min_rating: '',
-        max_rating: '',
-        ordering: '-created_at',
-    });
+    const [filters, setFilters] = useState({ has_spoilers: '', min_rating: '' });
+    const [ordering, setOrdering] = useState('-created_at');
     const [selectedReview, setSelectedReview] = useState(null);
+    const [confirm, confirmDialog] = useConfirm();
 
-    const {
-        items: reviews,
-        totalPages,
-        isFetching: loading,
-        error: queryError,
-        refetch,
-    } = useAdminList({
+    const list = useAdminList({
         resource: 'reviews',
         params: {
             page,
-            ...(search && { search }),
+            ...(debouncedSearch && { search: debouncedSearch }),
             ...(filters.has_spoilers && { has_spoilers: filters.has_spoilers }),
             ...(filters.min_rating && { min_rating: filters.min_rating }),
-            ...(filters.max_rating && { max_rating: filters.max_rating }),
-            ordering: filters.ordering,
+            ordering,
         },
         page,
         setPage,
         errorLog: 'Failed to fetch reviews:',
     });
-    const error = queryError ? getAdminErrorMessage(queryError, 'Failed to load reviews') : null;
 
     const deleteMutation = useAdminMutation(
         (reviewId) => api.delete(`/admin/reviews/${reviewId}/`),
-        { invalidate: [adminKeys.resource('reviews')] },
+        { invalidate: [adminKeys.resource('reviews'), adminKeys.moderation()] },
     );
 
-    const handleSearch = (e) => {
-        e.preventDefault();
-        if (page === 1) refetch();
-        else setPage(1);
+    const changeFilter = (key, value) => {
+        setFilters((f) => ({ ...f, [key]: value }));
+        setPage(1);
     };
 
-    const deleteReview = async (reviewId) => {
-        if (!confirm('Are you sure you want to delete this review?')) {
-            return;
-        }
+    const deleteReview = async (review) => {
+        setSelectedReview(null);
+        const ok = await confirm({
+            title: 'Delete this review?',
+            message: `${review.user?.username}'s review of ${review.anime?.title} is removed for everyone. This cannot be undone.`,
+            confirmLabel: 'Delete review',
+            destructive: true,
+        });
+        if (!ok) return;
         try {
-            await deleteMutation.mutateAsync(reviewId);
-            setSelectedReview(null);
+            await deleteMutation.mutateAsync(review.id);
+            toast.success('Review deleted');
         } catch (err) {
-            alert(err.response?.data?.detail || 'Failed to delete review');
+            toast.error(getAdminErrorMessage(err, 'Failed to delete review'));
         }
     };
 
-    const viewReviewDetails = async (reviewId) => {
-        try {
-            const response = await api.get(`/admin/reviews/${reviewId}/`);
-            setSelectedReview(response.data);
-        } catch (err) {
-            alert(err.response?.data?.detail || 'Failed to load review details');
-        }
-    };
-
-    const getRatingColor = (rating) => {
-        if (rating >= 8) return 'success';
-        if (rating >= 5) return 'warning';
-        return 'danger';
-    };
-
-    if (error && !loading) {
-        return (
-            <div className="admin-empty">
-                <div className="admin-empty-icon">⚠️</div>
-                <h3 className="admin-empty-title">Error</h3>
-                <p className="admin-empty-text">{error}</p>
-            </div>
-        );
-    }
+    const columns = [
+        {
+            key: 'user',
+            title: 'User',
+            render: (review) => (
+                <Link to={`/u/${review.user.username}`} className="text-violet-300 hover:text-violet-200 font-medium">
+                    {review.user.username}
+                </Link>
+            ),
+        },
+        {
+            key: 'anime',
+            title: 'Anime',
+            render: (review) => (
+                <Link to={`/anime/${review.anime.slug}`} className="text-white/80 hover:text-white">
+                    {truncate(review.anime.title, 30)}
+                </Link>
+            ),
+        },
+        {
+            key: 'rating',
+            title: 'Rating',
+            sortable: true,
+            render: (review) => (
+                <span className={`inline-flex items-center gap-1 ${ratingClass(review.rating)}`}>
+                    <Star size={12} aria-hidden="true" /> {review.rating}/10
+                </span>
+            ),
+        },
+        {
+            key: 'text',
+            title: 'Preview',
+            render: (review) => (review.text
+                ? <span className="text-white/60 text-sm">{truncate(review.text, 60)}</span>
+                : <span className="text-white/40 italic">No text</span>),
+        },
+        {
+            key: 'has_spoilers',
+            title: 'Flags',
+            render: (review) => (review.has_spoilers ? (
+                <span className="inline-flex items-center gap-1 text-xs text-amber-300">
+                    <AlertTriangle size={12} aria-hidden="true" /> Spoilers
+                </span>
+            ) : null),
+        },
+        {
+            key: 'created_at',
+            title: 'Date',
+            sortable: true,
+            render: (review) => <span className="text-white/50 text-sm">{new Date(review.created_at).toLocaleDateString()}</span>,
+        },
+        {
+            key: 'actions',
+            title: 'Actions',
+            render: (review) => (
+                <button
+                    type="button"
+                    onClick={() => deleteReview(review)}
+                    aria-label={`Delete review by ${review.user.username}`}
+                    className="inline-flex items-center justify-center w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-white/5 text-gray-300 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                >
+                    <Trash2 size={16} aria-hidden="true" />
+                </button>
+            ),
+        },
+    ];
 
     return (
-        <div>
-            <h1 className="admin-page-title" style={{ marginBottom: '1.5rem' }}>
-                Review Moderation
-            </h1>
-
-            <div className="admin-table-container">
-                <div className="admin-table-header">
-                    <div className="admin-table-actions" style={{ width: '100%', justifyContent: 'space-between' }}>
-                        <form onSubmit={handleSearch} className="admin-search">
-                            <span className="admin-search-icon">🔍</span>
-                            <input
-                                type="text"
-                                placeholder="Search reviews..."
-                                value={search}
-                                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                            />
-                        </form>
-
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <CustomSelect
-                                value={filters.has_spoilers}
-                                onChange={(nextValue) => { setFilters((f) => ({ ...f, has_spoilers: nextValue })); setPage(1); }}
-                                options={[
-                                    { value: '', label: 'All Reviews' },
-                                    { value: 'true', label: 'With Spoilers' },
-                                    { value: 'false', label: 'No Spoilers' },
-                                ]}
-                                triggerClassName="admin-btn admin-btn-secondary px-3 py-2 text-[0.85rem] bg-dark-100"
-                                menuClassName="z-[280]"
-                                ariaLabel="Filter reviews by spoiler"
-                            />
-
-                            <CustomSelect
-                                value={filters.min_rating}
-                                onChange={(nextValue) => { setFilters((f) => ({ ...f, min_rating: nextValue })); setPage(1); }}
-                                options={[
-                                    { value: '', label: 'Min Rating' },
-                                    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => ({
-                                        value: String(rating),
-                                        label: `>= ${rating}`,
-                                    })),
-                                ]}
-                                triggerClassName="admin-btn admin-btn-secondary px-3 py-2 text-[0.85rem] bg-dark-100"
-                                menuClassName="z-[280]"
-                                ariaLabel="Minimum review rating"
-                            />
-
-                            <CustomSelect
-                                value={filters.ordering}
-                                onChange={(nextValue) => { setFilters((f) => ({ ...f, ordering: nextValue })); setPage(1); }}
-                                options={[
-                                    { value: '-created_at', label: 'Newest First' },
-                                    { value: 'created_at', label: 'Oldest First' },
-                                    { value: '-rating', label: 'Highest Rating' },
-                                    { value: 'rating', label: 'Lowest Rating' },
-                                ]}
-                                triggerClassName="admin-btn admin-btn-secondary px-3 py-2 text-[0.85rem] bg-dark-100"
-                                menuClassName="z-[280]"
-                                ariaLabel="Sort reviews"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {loading ? (
-                    <div className="admin-loading">
-                        <div className="admin-spinner"></div>
-                        <p>Loading reviews...</p>
-                    </div>
-                ) : (
-                    <>
-                        <table className="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>User</th>
-                                    <th>Anime</th>
-                                    <th>Rating</th>
-                                    <th>Preview</th>
-                                    <th>Flags</th>
-                                    <th>Date</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {reviews.map((review) => (
-                                    <tr key={review.id}>
-                                        <td>
-                                            <Link to={`/u/${review.user.username}`} style={{ color: 'var(--color-accent-light)', textDecoration: 'none', fontWeight: '500' }}>
-                                                {review.user.username}
-                                            </Link>
-                                        </td>
-                                        <td>
-                                            <Link to={`/anime/${review.anime.slug}`} style={{ color: 'rgba(255,255,255,0.8)', textDecoration: 'none' }}>
-                                                {review.anime.title.length > 25 ? review.anime.title.substring(0, 25) + '...' : review.anime.title}
-                                            </Link>
-                                        </td>
-                                        <td>
-                                            <span className={`admin-badge ${getRatingColor(review.rating)}`}>
-                                                ⭐ {review.rating}/10
-                                            </span>
-                                        </td>
-                                        <td style={{ maxWidth: '200px', color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
-                                            {review.text ? (
-                                                review.text.length > 50 ? review.text.substring(0, 50) + '...' : review.text
-                                            ) : (
-                                                <span style={{ fontStyle: 'italic', opacity: 0.5 }}>No text</span>
-                                            )}
-                                        </td>
-                                        <td>
-                                            {review.has_spoilers && (
-                                                <span className="admin-badge warning">⚠️ Spoilers</span>
-                                            )}
-                                        </td>
-                                        <td style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>
-                                            {new Date(review.created_at).toLocaleDateString()}
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                                <button
-                                                    onClick={() => viewReviewDetails(review.id)}
-                                                    className="admin-btn admin-btn-icon"
-                                                    title="View Full Review"
-                                                >
-                                                    👁️
-                                                </button>
-                                                <button
-                                                    onClick={() => deleteReview(review.id)}
-                                                    className="admin-btn admin-btn-icon"
-                                                    title="Delete Review"
-                                                    style={{ color: '#ef4444' }}
-                                                >
-                                                    🗑️
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {reviews.length === 0 && (
-                                    <tr>
-                                        <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.4)' }}>
-                                            No reviews found
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-
-                        {totalPages > 1 && (
-                            <div className="admin-pagination">
-                                <div className="admin-pagination-info">
-                                    Page {page} of {totalPages}
-                                </div>
-                                <div className="admin-pagination-buttons">
-                                    <button
-                                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                                        disabled={page === 1}
-                                        className="admin-btn admin-btn-secondary"
-                                        style={{ padding: '0.4rem 0.75rem' }}
-                                    >
-                                        ← Prev
-                                    </button>
-                                    <button
-                                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                        disabled={page === totalPages}
-                                        className="admin-btn admin-btn-secondary"
-                                        style={{ padding: '0.4rem 0.75rem' }}
-                                    >
-                                        Next →
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </>
-                )}
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-2xl font-bold text-white">Reviews</h1>
+                <p className="text-sm text-white/50 mt-1">
+                    Every review on the site. Reported reviews wait in the <Link to="/admin/moderation" className="text-violet-300 hover:text-violet-200">moderation queue</Link>.
+                </p>
             </div>
 
-            {/* Review Detail Modal */}
-            {selectedReview && (
-                <div className="admin-modal-overlay" onClick={() => setSelectedReview(null)}>
-                    <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="admin-modal-header">
-                            <h3 className="admin-modal-title">Review Details</h3>
-                            <button
-                                onClick={() => setSelectedReview(null)}
-                                className="admin-btn admin-btn-icon"
-                            >
-                                ✕
-                            </button>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
+                <div className="relative w-full md:w-96">
+                    <Search size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                    <input
+                        type="search"
+                        aria-label="Search reviews"
+                        placeholder="Search reviews..."
+                        value={search}
+                        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                        className="w-full pl-9 pr-4 py-2 bg-white/10 border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-violet-500"
+                    />
+                </div>
+                <div className="flex gap-3">
+                    <CustomSelect
+                        value={filters.has_spoilers}
+                        onChange={(next) => changeFilter('has_spoilers', next)}
+                        options={[
+                            { value: '', label: 'All reviews' },
+                            { value: 'true', label: 'With spoilers' },
+                            { value: 'false', label: 'No spoilers' },
+                        ]}
+                        triggerClassName="bg-white/5 py-2 pl-3 pr-3 text-sm"
+                        ariaLabel="Filter reviews by spoiler"
+                    />
+                    <CustomSelect
+                        value={filters.min_rating}
+                        onChange={(next) => changeFilter('min_rating', next)}
+                        options={[
+                            { value: '', label: 'Any rating' },
+                            ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => ({ value: String(rating), label: `${rating}+` })),
+                        ]}
+                        triggerClassName="bg-white/5 py-2 pl-3 pr-3 text-sm"
+                        ariaLabel="Minimum review rating"
+                    />
+                </div>
+            </div>
+
+            {list.error && !list.isFetching ? (
+                <ErrorState
+                    title="Couldn’t load reviews"
+                    message={getAdminErrorMessage(list.error, 'Failed to load reviews')}
+                    onRetry={() => list.refetch()}
+                />
+            ) : (
+                <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                    <DataTable
+                        columns={columns}
+                        data={list.items}
+                        loading={list.isFetching && list.items.length === 0}
+                        ordering={ordering}
+                        onSort={(next) => { setOrdering(next); setPage(1); }}
+                        onView={setSelectedReview}
+                        rowLabel={(review) => `review by ${review.user.username}`}
+                        emptyMessage="No reviews found"
+                    />
+                    <AdminPagination page={page} totalPages={list.totalPages} onPageChange={setPage} />
+                </div>
+            )}
+
+            <Modal isOpen={selectedReview !== null} onClose={() => setSelectedReview(null)} title="Review details">
+                {selectedReview && (
+                    <div className="space-y-4">
+                        <dl className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <dt className="text-white/50">User</dt>
+                                <dd className="text-white">{selectedReview.user.username}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-white/50">Anime</dt>
+                                <dd><Link to={`/anime/${selectedReview.anime.slug}`} className="text-violet-300 hover:text-violet-200">{selectedReview.anime.title}</Link></dd>
+                            </div>
+                            <div>
+                                <dt className="text-white/50">Rating</dt>
+                                <dd className={ratingClass(selectedReview.rating)}>{selectedReview.rating}/10{selectedReview.has_spoilers ? ' · contains spoilers' : ''}</dd>
+                            </div>
+                            <div>
+                                <dt className="text-white/50">Posted</dt>
+                                <dd className="text-white/80">{new Date(selectedReview.created_at).toLocaleString()}</dd>
+                            </div>
+                        </dl>
+                        <div className="bg-black/30 rounded-lg p-4 text-white/85 max-h-60 overflow-y-auto whitespace-pre-wrap break-words text-sm">
+                            {selectedReview.text || 'No review text provided.'}
                         </div>
-                        <div className="admin-modal-body">
-                            <div style={{ marginBottom: '1rem' }}>
-                                <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '0.25rem' }}>User</div>
-                                <div style={{ fontWeight: '500' }}>{selectedReview.user.username}</div>
-                            </div>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '0.25rem' }}>Anime</div>
-                                <Link to={`/anime/${selectedReview.anime.slug}`} style={{ color: 'var(--color-accent-light)', textDecoration: 'none' }}>
-                                    {selectedReview.anime.title}
-                                </Link>
-                            </div>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '0.25rem' }}>Rating</div>
-                                <span className={`admin-badge ${getRatingColor(selectedReview.rating)}`}>
-                                    ⭐ {selectedReview.rating}/10
-                                </span>
-                                {selectedReview.has_spoilers && (
-                                    <span className="admin-badge warning" style={{ marginLeft: '0.5rem' }}>⚠️ Contains Spoilers</span>
-                                )}
-                            </div>
-                            <div style={{ marginBottom: '1rem' }}>
-                                <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginBottom: '0.25rem' }}>Review Text</div>
-                                <div style={{
-                                    background: 'rgba(0,0,0,0.3)',
-                                    padding: '1rem',
-                                    borderRadius: '8px',
-                                    color: 'rgba(255,255,255,0.85)',
-                                    maxHeight: '200px',
-                                    overflowY: 'auto',
-                                    whiteSpace: 'pre-wrap'
-                                }}>
-                                    {selectedReview.text || 'No review text provided.'}
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>
-                                <span>Created: {new Date(selectedReview.created_at).toLocaleString()}</span>
-                                <span>•</span>
-                                <span>Updated: {new Date(selectedReview.updated_at).toLocaleString()}</span>
-                            </div>
-                        </div>
-                        <div className="admin-modal-footer">
-                            <button onClick={() => setSelectedReview(null)} className="admin-btn admin-btn-secondary">
+                        <div className="flex justify-end gap-3">
+                            <button type="button" onClick={() => setSelectedReview(null)} className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20">
                                 Close
                             </button>
-                            <button onClick={() => deleteReview(selectedReview.id)} className="admin-btn admin-btn-danger">
-                                🗑️ Delete Review
+                            <button
+                                type="button"
+                                onClick={() => deleteReview(selectedReview)}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30"
+                            >
+                                <Trash2 size={16} aria-hidden="true" /> Delete review
                             </button>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+            </Modal>
+
+            {confirmDialog}
         </div>
     );
 };
