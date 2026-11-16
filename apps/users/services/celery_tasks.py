@@ -6,15 +6,23 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
-from ...animes.services.anilist import AniListService
 from ...shared.logger import logger
 from ..models import UserImportJob
 from .import_service import ImportService
 from .user_queryset import get_annotated_user_queryset
 
 User = get_user_model()
+
+
+ACTIVE_IMPORT_STATUSES = (
+    UserImportJob.ImportStatus.pending,
+    UserImportJob.ImportStatus.processing,
+)
+STALLED_IMPORT_HOURS = 2
+UNEXPECTED_IMPORT_ERROR = "The import stopped because of an unexpected error. Please try again."
 
 
 class UserTaskService:
@@ -80,11 +88,15 @@ class UserTaskService:
                     )
                     return {"job_id": job_id, "status": "skipped", "reason": "job_completed"}
 
-                if job.status == UserImportJob.ImportStatus.failed:
+                if job.status in (
+                    UserImportJob.ImportStatus.failed,
+                    UserImportJob.ImportStatus.cancelled,
+                ):
                     logger.info(
-                        "Import job skipped because it is already failed", extra={"job_id": job_id}
+                        "Import job skipped because it already ended",
+                        extra={"job_id": job_id, "status": job.status},
                     )
-                    return {"job_id": job_id, "status": "skipped", "reason": "job_cancelled"}
+                    return {"job_id": job_id, "status": "skipped", "reason": f"job_{job.status}"}
 
                 if (
                     job.status == UserImportJob.ImportStatus.processing
@@ -110,25 +122,32 @@ class UserTaskService:
         # Metric objects swallow their own failures.
         from ...animes.services.metrics import USER_IMPORTS_PROCESSED
 
+        outcome = result.get("outcome")
         USER_IMPORTS_PROCESSED.labels(
             source=getattr(job, "source", "unknown"),
-            status="success",
+            status="success" if outcome == "completed" else "failure",
         ).inc()
 
-        logger.info("Import job completed", extra={"job_id": job_id})
+        logger.info("Import job finished", extra={"job_id": job_id, "outcome": outcome})
         return {"job_id": job_id, "status": "success", "result": result}
 
     @staticmethod
     def mark_import_job_failed(job_id: int, error_message: str) -> None:
+        """Fail a job the importer could not finish; never overwrites a cancel or a reason."""
         try:
             with transaction.atomic():
                 job = UserImportJob.objects.select_for_update().get(id=job_id)
+                if job.status not in ACTIVE_IMPORT_STATUSES:
+                    return
                 job.status = UserImportJob.ImportStatus.failed
+                job.completed_at = timezone.now()
                 errors = list(job.errors or [])
                 if not errors or errors[-1] != error_message:
                     errors.append(error_message)
-                job.errors = errors
-                job.save(update_fields=["status", "errors"])
+                job.errors = errors[-10:]
+                if not job.failure_reason:
+                    job.failure_reason = UNEXPECTED_IMPORT_ERROR
+                job.save(update_fields=["status", "completed_at", "errors", "failure_reason"])
         except UserImportJob.DoesNotExist:
             logger.warning(
                 "Import job disappeared before failure status could be stored",
@@ -145,55 +164,40 @@ class UserTaskService:
         ).inc()
 
     @staticmethod
-    def fetch_anime_by_external_id(
-        mal_id: int | None = None,
-        anilist_id: int | None = None,
-        title: str | None = None,
-    ) -> int | None:
-        service = AniListService(enable_caching=True, enable_rate_limiting=True)
+    def fail_stalled_import_jobs(hours: int = STALLED_IMPORT_HOURS) -> int:
+        """Fail ``processing`` jobs whose worker died (no heartbeat for ``hours``).
 
-        try:
-            if anilist_id:
-                logger.info("Fetching anime by AniList ID", extra={"anilist_id": anilist_id})
-                anime_data = service.get_anime_by_id(anilist_id)
-                if anime_data:
-                    anime = service.save_anime_to_db(anime_data)
-                    return anime.id
-
-            if mal_id:
-                logger.info("Fetching anime by MAL ID", extra={"mal_id": mal_id})
-                anime_data = service.search_by_mal_id(mal_id)
-                if anime_data:
-                    anime = service.save_anime_to_db(anime_data)
-                    return anime.id
-
-            if title:
-                logger.info("Searching anime by title", extra={"title": title})
-                results = service.search_anime(title)
-                if results:
-                    anime = service.save_anime_to_db(results[0])
-                    return anime.id
-
-            logger.warning(
-                "Anime lookup by external identifiers returned no result",
-                extra={"mal_id": mal_id, "anilist_id": anilist_id, "title": title},
-            )
-            return None
-        finally:
-            service.close()
+        Otherwise a killed worker leaves the job processing forever, and the
+        one-active-import limit blocks that user's imports for good.
+        """
+        cutoff = timezone.now() - timedelta(hours=hours)
+        stalled = UserImportJob.objects.filter(status=UserImportJob.ImportStatus.processing).filter(
+            Q(heartbeat_at__lt=cutoff)
+            | Q(heartbeat_at__isnull=True, started_at__lt=cutoff)
+            | Q(heartbeat_at__isnull=True, started_at__isnull=True, created_at__lt=cutoff)
+        )
+        failed = stalled.update(
+            status=UserImportJob.ImportStatus.failed,
+            completed_at=timezone.now(),
+            failure_reason="The import worker stopped. Run it again to continue.",
+        )
+        if failed:
+            logger.warning("Failed stalled import jobs", extra={"count": failed})
+        return failed
 
     @staticmethod
     def cleanup_old_import_jobs(days: int = 30) -> int:
+        UserTaskService.fail_stalled_import_jobs()
         cutoff_date = timezone.now() - timedelta(days=days)
         queryset = UserImportJob.objects.filter(
             created_at__lt=cutoff_date,
             status__in=[
                 UserImportJob.ImportStatus.completed,
                 UserImportJob.ImportStatus.failed,
+                UserImportJob.ImportStatus.cancelled,
             ],
         )
-        deleted_count = queryset.count()
-        queryset.delete()
+        deleted_count, _ = queryset.delete()
         logger.info(
             "Cleaned up old import jobs",
             extra={"deleted_count": deleted_count, "days": days},
@@ -206,8 +210,13 @@ class UserTaskService:
         cleanup_imports: bool = True,
         unverified_days: int = 7,
         import_days: int = 30,
+        sync_anilist: bool = True,
     ) -> dict:
-        from ..tasks import cleanup_old_import_jobs, cleanup_unverified_accounts
+        from ..tasks import (
+            cleanup_old_import_jobs,
+            cleanup_unverified_accounts,
+            sync_linked_anilist_lists,
+        )
 
         if int(unverified_days) < UserTaskService.MIN_UNVERIFIED_CLEANUP_DAYS:
             raise ValueError(
@@ -222,6 +231,11 @@ class UserTaskService:
             ).id
         if cleanup_imports:
             task_ids["import_cleanup"] = cleanup_old_import_jobs.delay(days=import_days).id
+        if sync_anilist:
+            # Opt-in daily pull of linked AniList lists (D-5); every link starts with it off.
+            task_ids["anilist_sync"] = sync_linked_anilist_lists.apply_async(
+                queue="low_priority"
+            ).id
 
         logger.info(
             "Queued user maintenance workflow",
@@ -237,6 +251,12 @@ class UserTaskService:
             "cleanup_unverified": cleanup_unverified,
             "cleanup_imports": cleanup_imports,
         }
+
+    @staticmethod
+    def sync_linked_anilist_lists() -> dict:
+        from .import_service.anilist_sync import sync_linked_lists
+
+        return sync_linked_lists()
 
     @staticmethod
     def update_user_stats(user_id: int | None = None) -> dict:

@@ -1,137 +1,80 @@
-from typing import Dict, List, Tuple
+"""MyAnimeList XML export import (``.xml`` or ``.xml.gz``).
 
-from defusedxml import ElementTree
-from django.utils import timezone
+The view parses the upload once (``parse_mal_xml``) and stores compact entries on the
+job (``UserImportJob.payload``), so the file never travels through the broker and an
+admin requeue of the job still has its data.
+"""
 
-from ....shared.logger import logger
-from ...models import UserImportJob
-from .base import BaseImporter, MALStatusMapper
+from __future__ import annotations
+
+import gzip
+import io
+import zlib
+from typing import TYPE_CHECKING, Any
+
+from defusedxml import DefusedXmlException, ElementTree
+
+from .base import BaseImporter, ImportSourceError
+from .entries import ImportedEntry, mal_xml_entry
+
+if TYPE_CHECKING:
+    from ...models import UserImportJob
+
+# Upload limit (compressed or not) and the most a gzip may expand to.
+MAX_XML_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_XML_DECOMPRESSED_BYTES = 20 * 1024 * 1024
+GZIP_MAGIC = b"\x1f\x8b"
+_READ_CHUNK = 64 * 1024
+
+
+class XMLImportError(ValueError):
+    def __init__(self, message: str, code: str):
+        super().__init__(message)
+        self.code = code
+
+
+def read_upload(raw: bytes) -> bytes:
+    """The XML bytes of an upload, gunzipped (bounded, streamed) when it is a gzip file."""
+    if not raw.startswith(GZIP_MAGIC):
+        return raw
+    out = io.BytesIO()
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(raw)) as stream:
+            while chunk := stream.read(_READ_CHUNK):
+                out.write(chunk)
+                if out.tell() > MAX_XML_DECOMPRESSED_BYTES:
+                    raise XMLImportError(
+                        "The file is too large once decompressed (20 MB at most).",
+                        "xml_file_too_large",
+                    )
+    except (OSError, EOFError, zlib.error) as exc:
+        raise XMLImportError("The file is not a valid gzip archive.", "invalid_xml_file") from exc
+    return out.getvalue()
+
+
+def parse_mal_xml(content: bytes | str) -> list[ImportedEntry]:
+    try:
+        root = ElementTree.fromstring(content)
+    except (ElementTree.ParseError, DefusedXmlException) as exc:
+        raise XMLImportError("Invalid XML file format", "invalid_xml_file") from exc
+    return [mal_xml_entry(element) for element in root.findall("anime")]
 
 
 class MyAnimeListXMLImporter(BaseImporter):
-    """Import from MyAnimeList XML export file"""
+    source_name = "mal_xml"
 
-    def __init__(self, job: UserImportJob, xml_content: str):
-        super().__init__(job)
+    def __init__(self, job: UserImportJob, xml_content: str | None = None, **kwargs: Any):
+        super().__init__(job, **kwargs)
+        # ``xml_content`` only for jobs queued before the payload field existed.
         self.xml_content = xml_content
 
-    def parse_xml(self) -> List[Dict]:
-        """Parse MAL XML export and return list of entries"""
-        entries = []
-
-        try:
-            root = ElementTree.fromstring(self.xml_content)
-
-            for anime_elem in root.findall("anime"):
-                entry = {
-                    "mal_id": self._get_int(anime_elem, "series_animedb_id"),
-                    "title": self._get_text(anime_elem, "series_title"),
-                    "status": self._get_text(anime_elem, "my_status"),
-                    "score": self._get_int(anime_elem, "my_score"),
-                    "episodes_watched": self._get_int(anime_elem, "my_watched_episodes"),
-                }
-                entries.append(entry)
-
-        except ElementTree.ParseError as e:
-            logger.warning("Error parsing XML: %s", e)
-            raise ValueError("Invalid XML file format")
-
-        return entries
-
-    def _get_text(self, elem, tag: str) -> str | None:
-        """Safely get text from XML element"""
-        child = elem.find(tag)
-        return child.text if child is not None else None
-
-    def _get_int(self, elem, tag: str) -> int:
-        """Safely get integer from XML element"""
-        text = self._get_text(elem, tag)
-        try:
-            return int(text) if text else 0
-        except ValueError:
-            return 0
-
-    def import_entry(self, entry_data: Dict) -> Tuple[bool, str]:
-        """Import a single entry from MAL XML data"""
-        mal_id = entry_data.get("mal_id")
-        title = entry_data.get("title")
-
-        # Map status
-        mal_status = entry_data.get("status")
-        status = MALStatusMapper.XML_MAPPING.get(mal_status)
-        if not status:
-            return False, f"Unknown status: {mal_status}"
-
-        score = entry_data.get("score", 0)
-        episodes_watched = entry_data.get("episodes_watched", 0)
-
-        # Try to get or fetch anime (SYNCHRONOUS)
-        anime = self.get_or_fetch_anime_sync(
-            mal_id=mal_id,
-            title=title,
-            allow_title_search=False,
-        )
-
-        if not anime:
-            return False, f"Anime not found or could not be fetched (MAL ID: {mal_id})"
-
-        return self.save_entry(anime, status, score, episodes_watched)
-
-    def run(self):
-        """Run the import process"""
-        self.job.status = UserImportJob.ImportStatus.processing
-        self.job.save(update_fields=["status"])
-
-        try:
-            # Parse XML
-            entries = self.parse_xml()
-            self.job.total_entries = len(entries)
-            self.job.save(update_fields=["total_entries"])
-
-            logger.info(
-                f"Starting XML import of {len(entries)} entries for user {self.user.username}"
-            )
-
-            # Import each entry
-            for entry in entries:
-                try:
-                    success, message = self.import_entry(entry)
-
-                    if success or "Updated" in message:
-                        self.imported_count += 1
-                    elif "Skipped" in message:
-                        self.skipped_count += 1
-                    else:
-                        self.failed_count += 1
-                        self.errors.append(f"{entry.get('title', 'Unknown')}: {message}")
-
-                except Exception as e:
-                    self.failed_count += 1
-                    self.errors.append(f"{entry.get('title', 'Unknown')}: {str(e)}")
-                    logger.exception("Error importing entry %s", entry.get("title"))
-
-                self.update_job_progress()
-
-            # Final flush of progress
-            self.update_job_progress(force=True)
-            self.trigger_post_import_refresh()
-
-            # Mark as completed
-            self.job.status = UserImportJob.ImportStatus.completed
-            self.job.completed_at = timezone.now()
-            self.job.save(update_fields=["status", "completed_at"])
-
-            logger.info(
-                f"XML Import completed for {self.user.username}: "
-                f"{self.imported_count} imported, {self.fetched_count} fetched, "
-                f"{self.skipped_count} skipped, {self.failed_count} failed"
-            )
-
-        except Exception as e:
-            logger.exception("Import failed for job %s", self.job.id)
-            self.job.status = UserImportJob.ImportStatus.failed
-            self.job.errors.append(str(e))
-            self.job.save(update_fields=["status", "errors"])
-            raise
-        finally:
-            self._cleanup()
+    def load_entries(self) -> list[ImportedEntry]:
+        payload = self.job.payload or {}
+        if isinstance(payload, dict) and isinstance(payload.get("entries"), list):
+            return [ImportedEntry.from_payload(item) for item in payload["entries"]]
+        if self.xml_content:
+            try:
+                return parse_mal_xml(self.xml_content)
+            except XMLImportError as exc:
+                raise ImportSourceError(str(exc)) from exc
+        raise ImportSourceError("The uploaded file is no longer available. Upload it again.")

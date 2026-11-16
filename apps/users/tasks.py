@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import httpx
+from celery.exceptions import SoftTimeLimitExceeded
 from django.conf import settings
 from django.core.cache import cache
 from django.db import close_old_connections
 from django.db.utils import InterfaceError, OperationalError
 
 from ..shared.celery import observed_shared_task, retry_on_error
-from ..shared.errors import iter_exception_chain
 from ..shared.logger import logger
 from ..shared.task_lock import cache_lock
 from .services.celery_tasks import UserTaskService
 
 RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
-RETRYABLE_HTTP_STATUS_CODES = {429, 500, 502, 503, 504}
 
 
 def _stats_refresh_cache_key(user_id: int) -> str:
@@ -61,25 +59,13 @@ def _can_retry(task, exc: Exception) -> bool:
     return task.request.retries < max_retries and max_retries > 0
 
 
-def _is_retryable_external_error(exc: Exception) -> bool:
-    for current in iter_exception_chain(exc):
-        if isinstance(current, RETRYABLE_DB_ERRORS):
-            return True
-        if isinstance(current, (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError)):
-            return True
-        if isinstance(current, httpx.HTTPStatusError) and current.response is not None:
-            if current.response.status_code in RETRYABLE_HTTP_STATUS_CODES:
-                return True
-    return False
-
-
 @observed_shared_task(retry_policy="standard")
 def cleanup_unverified_accounts(self, days: int = 7):
     with retry_on_error(self, "Unverified account cleanup failed", extra={"days": days}):
         return UserTaskService.cleanup_unverified_accounts(days=days)
 
 
-@observed_shared_task(retry_policy="standard")
+@observed_shared_task(retry_policy="standard", time_limit_preset="long")
 def process_import_job(self, job_id: int, **kwargs):
     try:
         return UserTaskService.process_import_job(
@@ -87,38 +73,16 @@ def process_import_job(self, job_id: int, **kwargs):
             allow_processing_resume=self.request.retries > 0,
             **kwargs,
         )
+    except SoftTimeLimitExceeded:
+        # The importer already failed the job with how far it got; never retried.
+        logger.warning("Import job hit its time limit", extra={"job_id": job_id})
+        raise
     except Exception as exc:
         logger.exception("Import job processing failed", extra={"job_id": job_id})
         if isinstance(exc, RETRYABLE_DB_ERRORS) and _can_retry(self, exc):
             close_old_connections()
             raise self.retry(exc=exc, countdown=60)
         UserTaskService.mark_import_job_failed(job_id=job_id, error_message=str(exc))
-        raise
-
-
-@observed_shared_task(retry_policy="external_api")
-def fetch_anime_by_external_id(
-    self,
-    mal_id: int | None = None,
-    anilist_id: int | None = None,
-    title: str | None = None,
-):
-    try:
-        anime_id = UserTaskService.fetch_anime_by_external_id(
-            mal_id=mal_id,
-            anilist_id=anilist_id,
-            title=title,
-        )
-        return {"anime_id": anime_id, "mal_id": mal_id, "anilist_id": anilist_id, "title": title}
-    except Exception as exc:
-        logger.exception(
-            "External anime fetch failed",
-            extra={"mal_id": mal_id, "anilist_id": anilist_id, "title": title},
-        )
-        if _is_retryable_external_error(exc) and _can_retry(self, exc):
-            if isinstance(exc, RETRYABLE_DB_ERRORS):
-                close_old_connections()
-            raise self.retry(exc=exc, countdown=60)
         raise
 
 
@@ -136,6 +100,7 @@ def run_user_maintenance_workflow(
     cleanup_imports: bool = True,
     unverified_days: int = 7,
     import_days: int = 30,
+    sync_anilist: bool = True,
 ):
     with retry_on_error(self, "User maintenance workflow failed to queue"):
         return UserTaskService.run_user_maintenance_workflow(
@@ -143,7 +108,14 @@ def run_user_maintenance_workflow(
             cleanup_imports=cleanup_imports,
             unverified_days=unverified_days,
             import_days=import_days,
+            sync_anilist=sync_anilist,
         )
+
+
+@observed_shared_task(retry_policy="none", time_limit_preset="long")
+def sync_linked_anilist_lists(self):
+    """The daily pull of opted-in linked AniList lists (queued by the maintenance workflow)."""
+    return UserTaskService.sync_linked_anilist_lists()
 
 
 @observed_shared_task(retry_policy="standard", time_limit_preset="quick")

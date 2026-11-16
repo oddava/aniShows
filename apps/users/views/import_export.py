@@ -1,4 +1,3 @@
-from defusedxml import ElementTree
 from django.conf import settings
 from django.http import HttpResponse
 from rest_framework import status
@@ -6,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet, ViewSet
 
 from ...animes.serializers.imports import UserImportJobSerializer
@@ -20,57 +20,44 @@ from ..services.import_job_service import (
     create_mal_xml_import_job,
     is_valid_import_username,
 )
+from ..services.import_service import anilist_sync
+from ..services.import_service.mal_xml import (
+    MAX_XML_UPLOAD_BYTES,
+    XMLImportError,
+    parse_mal_xml,
+    read_upload,
+)
 
-# Max XML file size (10MB)
-MAX_XML_SIZE = 10 * 1024 * 1024
+ACCEPTED_XML_SUFFIXES = (".xml", ".xml.gz", ".gz")
+INVALID_USERNAME = (
+    "Invalid username format. Use alphanumeric characters, underscores, or hyphens only."
+)
+
+
+def _username_error(username):
+    if not username:
+        return error_response(
+            "Username is required",
+            code="missing_username",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+    if not is_valid_import_username(username):
+        return error_response(
+            INVALID_USERNAME, code="invalid_username", status_code=status.HTTP_400_BAD_REQUEST
+        )
+    return None
 
 
 class ImportExportViewSet(ViewSet):
-    """
-    ViewSet for handling importing and exporting of user anime lists.
-    Consolidates previously separate APIViews for MAL, AniList, and Exports.
-    """
+    """Starts list imports (MAL username, MAL XML, AniList username) and serves exports."""
 
     permission_classes = [IsAuthenticated, VerifiedEmailForWrites]
 
-    def _validate_xml_entry_count(self, xml_content: str):
-        try:
-            root = ElementTree.fromstring(xml_content)
-        except ElementTree.ParseError:
-            return error_response(
-                "Invalid XML file format",
-                code="invalid_xml_file",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        max_xml_entries = settings.MAX_IMPORT_XML_ENTRIES
-        entry_count = len(root.findall("anime"))
-        if entry_count > max_xml_entries:
-            return error_response(
-                f"XML import contains too many entries. Maximum allowed: {max_xml_entries}.",
-                code="xml_entry_limit_exceeded",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        return None
-
     @action(detail=False, methods=["post"])
     def import_mal(self, request):
-        """Start MAL import from username"""
         username = request.data.get("username")
-
-        if not username:
-            return error_response(
-                "Username is required",
-                code="missing_username",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not is_valid_import_username(username):
-            return error_response(
-                "Invalid username format. Use alphanumeric characters, underscores, or hyphens only.",
-                code="invalid_username",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+        if error := _username_error(username):
+            return error
         result = create_mal_import_job(request.user, username)
         return api_response(
             result.payload, status_code=result.status_code, default_code="mal_import_failed"
@@ -78,26 +65,21 @@ class ImportExportViewSet(ViewSet):
 
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def import_mal_xml(self, request):
-        """Upload and import MAL XML file"""
-        if "file" not in request.FILES:
+        """Upload a MAL export (``.xml`` or ``.xml.gz``); it is parsed here, once."""
+        upload = request.FILES.get("file")
+        if upload is None:
             return error_response(
                 "XML file is required",
                 code="missing_xml_file",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-
-        file = request.FILES["file"]
-
-        # Validate file type
-        if not file.name.endswith(".xml"):
+        if not upload.name.lower().endswith(ACCEPTED_XML_SUFFIXES):
             return error_response(
-                "File must be an XML file",
+                "File must be a MyAnimeList export (.xml or .xml.gz)",
                 code="invalid_xml_file",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-
-        # Validate file size (max 10MB) - prevent DoS via large files
-        if file.size > MAX_XML_SIZE:
+        if upload.size > MAX_XML_UPLOAD_BYTES:
             return error_response(
                 "File size must be less than 10MB",
                 code="xml_file_too_large",
@@ -105,19 +87,19 @@ class ImportExportViewSet(ViewSet):
             )
 
         try:
-            xml_content = file.read().decode("utf-8")
-        except UnicodeDecodeError:
+            entries = parse_mal_xml(read_upload(upload.read()))
+        except XMLImportError as exc:
+            return error_response(str(exc), code=exc.code, status_code=status.HTTP_400_BAD_REQUEST)
+
+        max_entries = settings.MAX_IMPORT_XML_ENTRIES
+        if len(entries) > max_entries:
             return error_response(
-                "File must be valid UTF-8 encoded XML",
-                code="invalid_xml_encoding",
+                f"XML import contains too many entries. Maximum allowed: {max_entries}.",
+                code="xml_entry_limit_exceeded",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        xml_entry_error = self._validate_xml_entry_count(xml_content)
-        if xml_entry_error:
-            return xml_entry_error
-
-        result = create_mal_xml_import_job(request.user, file.name, xml_content)
+        result = create_mal_xml_import_job(request.user, upload.name, entries)
         return api_response(
             result.payload,
             status_code=result.status_code,
@@ -126,33 +108,11 @@ class ImportExportViewSet(ViewSet):
 
     @action(detail=False, methods=["post"])
     def import_anilist(self, request):
-        """Start AniList import from username"""
+        """Import a public AniList list by username. An ``access_token`` field is ignored."""
         username = request.data.get("username")
-        access_token = request.data.get("access_token")  # Optional
-
-        if not username:
-            return error_response(
-                "Username is required",
-                code="missing_username",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if not is_valid_import_username(username):
-            return error_response(
-                "Invalid username format. Use alphanumeric characters, underscores, or hyphens only.",
-                code="invalid_username",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Sanitize access_token if provided (basic length check)
-        if access_token and len(str(access_token)) > 1000:
-            return error_response(
-                "Access token is too long",
-                code="access_token_too_long",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        result = create_anilist_import_job(request.user, username, access_token)
+        if error := _username_error(username):
+            return error
+        result = create_anilist_import_job(request.user, username)
         return api_response(
             result.payload,
             status_code=result.status_code,
@@ -183,11 +143,58 @@ class ImportExportViewSet(ViewSet):
         return response
 
 
+class AniListLinkView(APIView):
+    """``GET/PUT/DELETE import/anilist/link/``: the linked AniList username (pull-only)."""
+
+    permission_classes = [IsAuthenticated, VerifiedEmailForWrites]
+
+    def get(self, request):
+        return Response(
+            anilist_sync.link_payload(anilist_sync.get_link(request.user), request.user)
+        )
+
+    def put(self, request):
+        username = request.data.get("username")
+        if error := _username_error(username):
+            return error
+        auto_sync = request.data.get("auto_sync", False)
+        if not isinstance(auto_sync, bool):
+            return error_response(
+                "auto_sync must be true or false",
+                code="invalid_auto_sync",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(anilist_sync.save_link(request.user, username, auto_sync))
+
+    def delete(self, request):
+        anilist_sync.delete_link(request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AniListSyncView(APIView):
+    """``POST import/anilist/sync/``: fetch only what changed on AniList since the last sync."""
+
+    permission_classes = [IsAuthenticated, VerifiedEmailForWrites]
+
+    def post(self, request):
+        result = anilist_sync.request_sync(request.user)
+        payload = dict(result.payload)
+        # ``api_response`` keeps only detail/code/errors on a 4xx; the cooldown also
+        # tells the client when to try again (body and the standard header).
+        retry_after = payload.pop("retry_after", None)
+        response = api_response(
+            payload,
+            status_code=result.status_code,
+            default_code="anilist_sync_failed",
+            headers={"Retry-After": str(retry_after)} if retry_after is not None else None,
+        )
+        if retry_after is not None:
+            response.data["retry_after"] = retry_after
+        return response
+
+
 class UserImportJobViewSet(ReadOnlyModelViewSet):
-    """
-    ViewSet for listing and retrieving import job statuses.
-    Read-only but includes a cancel action.
-    """
+    """The signed-in user's import jobs, with a cancel action."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = UserImportJobSerializer
@@ -197,17 +204,8 @@ class UserImportJobViewSet(ReadOnlyModelViewSet):
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
-        """Cancel a pending or processing import job"""
-        try:
-            job = self.get_object()
-        except UserImportJob.DoesNotExist:
-            return error_response(
-                "Job not found or access denied",
-                code="import_job_not_found",
-                status_code=status.HTTP_404_NOT_FOUND,
-            )
-
-        result = cancel_import_job(job)
+        """Cancel a pending or processing import job (404 for someone else's)."""
+        result = cancel_import_job(self.get_object())
         return api_response(
             result.payload,
             status_code=result.status_code,
