@@ -12,7 +12,7 @@ import SectionHeader from '../components/common/SectionHeader';
 import ErrorState from '../components/common/ErrorState';
 import HeroSearch from '../components/home/HeroSearch';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
-import { animeKeys, animeQueries, scheduleQueries } from '../api/queries/anime';
+import { animeQueries, patchAnimeListStatus, scheduleQueries } from '../api/queries/anime';
 import { listKeys, userQueries } from '../api/queries/user';
 import { recommendationMutations, recommendationQueries } from '../api/queries/recommendations';
 
@@ -120,9 +120,13 @@ export default function Home() {
 
         setHeroListLoading(true);
         try {
-            await listApi.add({ anime_id: heroAnime.id, status: 'Plan to Watch' });
+            const response = await listApi.add({ anime_id: heroAnime.id, status: 'Plan to Watch' });
             setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
-            queryClient.invalidateQueries({ queryKey: animeKeys.all });
+            patchAnimeListStatus(queryClient, heroAnime.id, {
+                id: response?.data?.id ?? null,
+                status: 'Plan to Watch',
+                episodes_watched: 0,
+            });
             queryClient.invalidateQueries({ queryKey: listKeys.all });
         } catch (error) {
             if (error.response?.status === 400 || error.response?.status === 409) {

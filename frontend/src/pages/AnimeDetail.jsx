@@ -16,7 +16,7 @@ import {
 } from '../utils/imageUtils';
 import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import logger from '../utils/logger';
-import { animeKeys, animeQueries } from '../api/queries/anime';
+import { animeKeys, animeQueries, patchAnimeListStatus } from '../api/queries/anime';
 import { favoriteKeys, listKeys, profileKeys, userKeys } from '../api/queries/user';
 import { DEFAULT_TAB_ID, TABS, getTabByPath, getTabHref } from '../components/animeDetail/animeDetailTabs';
 import TabButton from '../components/animeDetail/TabButton';
@@ -137,12 +137,13 @@ export default function AnimeDetail() {
             };
         });
 
-        queryClient.invalidateQueries({ queryKey: animeKeys.all });
-        queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
+        // Every other cached card for this title (grids, shelves, schedule) gets
+        // the new status in place instead of a refetch of everything (B20).
+        patchAnimeListStatus(queryClient, anime?.id, nextEntry);
         queryClient.invalidateQueries({ queryKey: userKeys.watching });
         queryClient.invalidateQueries({ queryKey: listKeys.all });
         queryClient.invalidateQueries({ queryKey: profileKeys.own });
-    }, [animeDetailQueryKey, queryClient]);
+    }, [anime?.id, animeDetailQueryKey, queryClient]);
 
     useEffect(() => {
         setIsBannerLoaded(false);

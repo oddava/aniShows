@@ -218,9 +218,15 @@ describe('AnimeDetail list update invalidation', () => {
         reviewApi.getStats.mockResolvedValue({ data: { total_reviews: 0 } });
     });
 
-    it('invalidates anime/list caches when status selector reports an update', async () => {
+    it('patches cached cards and invalidates list caches when status selector reports an update', async () => {
         const { queryClient, wrapper } = createHarness();
         const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+        // A Browse grid page that shows the same title (B20: patched, not refetched).
+        const gridKey = ['anime', 'list', 'grid'];
+        queryClient.setQueryDefaults(gridKey, { gcTime: Infinity });
+        queryClient.setQueryData(gridKey, {
+            results: [{ id: 1, user_list_status: null }, { id: 2, user_list_status: null }],
+        });
 
         render(<AnimeDetail />, { wrapper });
 
@@ -240,8 +246,11 @@ describe('AnimeDetail list update invalidation', () => {
                 .map(([arg]) => JSON.stringify(arg?.queryKey))
                 .filter(Boolean);
 
-            expect(keys).toContain(JSON.stringify(['anime']));
-            expect(keys).toContain(JSON.stringify(['anime', 'frieren', 77]));
+            expect(keys).not.toContain(JSON.stringify(['anime']));
+            expect(queryClient.getQueryData(gridKey).results).toEqual([
+                { id: 1, user_list_status: { id: 1, status: 'Watching' } },
+                { id: 2, user_list_status: null },
+            ]);
             expect(keys).toContain(JSON.stringify(['user', 'list', 'watching']));
             expect(keys).toContain(JSON.stringify(['lists']));
             expect(keys).toContain(JSON.stringify(['ownProfile']));
