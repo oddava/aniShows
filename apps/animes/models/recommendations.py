@@ -63,7 +63,7 @@ class UserRecommendation(TimestampMixin, Model):
     def __str__(self):
         return f"{self.user.username} - {self.anime.title} ({self.score})"
 
-    def get_reason_display_text(self):
+    def get_reason_display_text(self) -> str:
         if self.reason == self.RecommendationReason.GENRE_MATCH:
             genres = self.reason_metadata.get("matched_genres", [])
             if genres:
@@ -73,6 +73,9 @@ class UserRecommendation(TimestampMixin, Model):
             studio = self.reason_metadata.get("studio", "this studio")
             return f"From {studio}, which you seem to enjoy"
         if self.reason == self.RecommendationReason.BECAUSE_YOU_LIKED:
+            sequel_of = self.reason_metadata.get("sequel_of")
+            if sequel_of:
+                return f"Next in {sequel_of}"
             source = self.reason_metadata.get("source_anime", "a similar anime")
             return f"Because you liked {source}"
         if self.reason == self.RecommendationReason.SIMILAR_USERS:
