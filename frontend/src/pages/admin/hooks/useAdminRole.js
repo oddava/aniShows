@@ -8,5 +8,5 @@ import { useAuth } from '../../../context/AuthContext';
 export default function useAdminRole() {
     const { user } = useAuth();
     const isSuperuser = Boolean(user?.is_superuser);
-    return { isSuperuser, isStaff: isSuperuser || Boolean(user?.is_staff) };
+    return { userId: user?.id ?? null, isSuperuser, isStaff: isSuperuser || Boolean(user?.is_staff) };
 }

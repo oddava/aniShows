@@ -12,7 +12,11 @@ import '../admin.css';
 
 const ICON_SIZE = 20;
 
-/** Sidebar sections. `superuserOnly` items are hidden from staff (the API refuses them). */
+/**
+ * Sidebar sections. `superuserOnly` items are hidden from staff (the API refuses
+ * them). Logs stays visible: staff read its Audit tab, only superusers the
+ * request logs (IPs, user agents).
+ */
 export const buildNavSections = ({ isSuperuser }) => [
     {
         title: 'Overview',
@@ -50,7 +54,7 @@ export const buildNavSections = ({ isSuperuser }) => [
         items: [
             { path: '/admin/system', icon: Activity, label: 'System' },
             { path: '/admin/import-jobs', icon: UploadCloud, label: 'Catalog imports' },
-            { path: '/admin/logs', icon: FileText, label: 'Logs', superuserOnly: true },
+            { path: '/admin/logs', icon: FileText, label: 'Logs' },
             { path: '/admin/settings', icon: Settings, label: 'Settings' },
             { path: '/django-admin/', icon: ShieldAlert, label: 'Django admin', external: true },
         ],
