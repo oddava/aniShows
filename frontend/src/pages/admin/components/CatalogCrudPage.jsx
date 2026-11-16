@@ -5,7 +5,8 @@ import { toast } from 'react-hot-toast';
 
 import api from '../../../api/client';
 import { adminKeys } from '../../../api/queries/admin';
-import { useAdminList, useAdminMutation } from '../hooks/useAdminQuery';
+import ErrorState from '../../../components/common/ErrorState';
+import { getAdminErrorMessage, useAdminList, useAdminMutation } from '../hooks/useAdminQuery';
 import useAdminRole from '../hooks/useAdminRole';
 import useDebouncedValue from '../hooks/useDebouncedValue';
 import AdminPagination from './AdminPagination';
@@ -64,7 +65,6 @@ export default function CatalogCrudPage({
   toForm,
   toPayload = (form) => form,
   rowActions,
-  forceDeleteParam = false,
 }) {
   const { isSuperuser } = useAdminRole();
   const [search, setSearch] = useState('');
@@ -77,7 +77,7 @@ export default function CatalogCrudPage({
   const [formData, setFormData] = useState(emptyForm);
   const [confirm, confirmDialog] = useConfirm();
 
-  const { items, totalPages, isFetching: loading } = useAdminList({
+  const { items, totalPages, isFetching: loading, error: loadError, refetch } = useAdminList({
     resource,
     params: {
       page,
@@ -100,7 +100,6 @@ export default function CatalogCrudPage({
     entityType,
     noun: plural,
     invalidate,
-    extra: forceDeleteParam ? { force: true } : {},
     onError: (message) => toast.error(message),
   });
 
@@ -219,6 +218,13 @@ export default function CatalogCrudPage({
         />
       )}
 
+      {loadError ? (
+        <ErrorState
+          title={`Couldn’t load ${plural}`}
+          message={getAdminErrorMessage(loadError, `Failed to load ${plural}`)}
+          onRetry={() => refetch()}
+        />
+      ) : (
       <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
         <DataTable
           columns={tableColumns}
@@ -233,6 +239,7 @@ export default function CatalogCrudPage({
         />
         <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
+      )}
 
       <Modal
         isOpen={isModalOpen}
@@ -286,5 +293,4 @@ CatalogCrudPage.propTypes = {
   toForm: PropTypes.func.isRequired,
   toPayload: PropTypes.func,
   rowActions: PropTypes.func,
-  forceDeleteParam: PropTypes.bool,
 };

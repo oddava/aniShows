@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { adminBadgeApi } from '../../api/client';
 import { Search, Plus, Edit2, Trash2, UserPlus } from 'lucide-react';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import ErrorState from '../../components/common/ErrorState';
 import { adminBadgeKeys, adminBadgeQueries } from '../../api/queries/admin';
 import { AVAILABLE_COLORS, AVAILABLE_ICONS } from './components/badges/badgeOptions';
 import BadgeFormModal from './components/badges/BadgeFormModal';
@@ -31,14 +32,16 @@ export default function AdminBadges() {
     const [holdersPage, setHoldersPage] = useState(1);
     const [revokingUserIds, setRevokingUserIds] = useState(new Set());
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, error: loadError, refetch } = useQuery({
         ...adminBadgeQueries.list(page, debouncedSearch),
         placeholderData: keepPreviousData,
     });
 
+    // One user search per pause in typing, not per keystroke.
+    const debouncedUserTerm = useDebouncedValue(searchUserTerm.trim());
     const { data: usersData } = useQuery({
-        ...adminBadgeQueries.userSearch(searchUserTerm),
-        enabled: searchUserTerm.length >= 2,
+        ...adminBadgeQueries.userSearch(debouncedUserTerm),
+        enabled: debouncedUserTerm.length >= 2,
     });
 
     const [formError, setFormError] = useState(null);
@@ -188,6 +191,13 @@ export default function AdminBadges() {
                     </div>
                 </div>
 
+                {loadError ? (
+                    <ErrorState
+                        title="Couldn’t load badges"
+                        message={loadError.response?.data?.detail || 'Failed to load badges'}
+                        onRetry={() => refetch()}
+                    />
+                ) : (
                 <div className="bg-dark-200 border border-dark-300 rounded-xl overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
@@ -300,6 +310,7 @@ export default function AdminBadges() {
                         </table>
                     </div>
                 </div>
+                )}
 
                 {/* Create/Edit Modal */}
                 {isSuperuser && isModalOpen && (

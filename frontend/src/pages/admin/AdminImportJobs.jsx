@@ -9,7 +9,8 @@ import Modal from './components/Modal';
 import { toast } from 'react-hot-toast';
 import logger from '../../utils/logger';
 import CustomSelect from '../../components/common/CustomSelect';
-import { useAdminList, useAdminMutation } from './hooks/useAdminQuery';
+import ErrorState from '../../components/common/ErrorState';
+import { getAdminErrorMessage, useAdminList, useAdminMutation } from './hooks/useAdminQuery';
 import useAdminRole from './hooks/useAdminRole';
 import { formatDuration, getProgressPercent, getStatusBadge } from './components/importJobs/importJobFormat';
 import ImportJobDetails from './components/importJobs/ImportJobDetails';
@@ -46,7 +47,7 @@ const AdminImportJobs = () => {
     { value: 'cancelled', label: 'Cancelled' },
   ];
 
-  const { items: jobs, totalPages, isFetching: loading, refetch } = useAdminList({
+  const { items: jobs, totalPages, isFetching: loading, refetch, error: loadError } = useAdminList({
     resource: 'import-jobs',
     params: {
       page,
@@ -278,17 +279,25 @@ const AdminImportJobs = () => {
       </div>
 
       {/* Data Table */}
-      <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-        <DataTable
-          columns={columns}
-          data={jobs}
-          loading={loading}
-          selectable={false}
-          emptyMessage="No import jobs found"
+      {loadError ? (
+        <ErrorState
+          title="Couldn’t load import jobs"
+          message={getAdminErrorMessage(loadError, 'Failed to load import jobs')}
+          onRetry={() => refetch()}
         />
+      ) : (
+        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+          <DataTable
+            columns={columns}
+            data={jobs}
+            loading={loading}
+            selectable={false}
+            emptyMessage="No import jobs found"
+          />
 
-        <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />
-      </div>
+          <AdminPagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      )}
 
       {/* Job Details Modal */}
       <Modal

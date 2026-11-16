@@ -59,14 +59,16 @@ describe('AdminGenres', () => {
         expect(getMock).toHaveBeenCalledWith('/admin/genres/?page=1', expect.anything());
     });
 
-    it('toasts a failed load once and leaves the loading state', async () => {
+    it('toasts a failed load once and shows an error state, not an empty list', async () => {
         getMock.mockRejectedValue({ response: { status: 500 } });
         renderPage();
 
         await waitFor(() => expect(toastError).toHaveBeenCalledWith('Failed to load genres'));
-        await waitFor(() => expect(screen.queryByText('Loading data...')).toBeNull());
+        expect(await screen.findByText('Couldn’t load genres', {}, { timeout: 5000 })).toBeInTheDocument();
         expect(toastError).toHaveBeenCalledTimes(1);
-        expect(screen.getByText('No genres found')).toBeInTheDocument();
+        expect(screen.queryByText('Loading data...')).toBeNull();
+        expect(screen.queryByText('No genres found')).toBeNull();
+        expect(screen.getByRole('button', { name: /Retry|Try again/ })).toBeInTheDocument();
     });
 
     it('confirms in a dialog, then deletes and refetches', async () => {
