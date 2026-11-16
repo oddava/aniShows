@@ -28,6 +28,7 @@ import RecommendationsSidebar from '../components/animeDetail/RecommendationsSid
 import useAnimeDetailTabData from '../components/animeDetail/useAnimeDetailTabData';
 import useNearViewport from '../components/animeDetail/useNearViewport';
 import useAnimeReviews from '../components/animeDetail/useAnimeReviews';
+import AdultContentGate, { isAdultGateError } from '../components/animeDetail/AdultContentGate';
 import ErrorState from '../components/common/ErrorState';
 import useScrollFade from '../hooks/useScrollFade';
 import InformationBox from '../components/InformationBox';
@@ -158,6 +159,9 @@ export default function AnimeDetail() {
 
     // Loading & Error states
     if (isLoading) return <AnimeDetailSkeleton />;
+
+    // An 18+ title for a viewer who has not opted in (D-2): an opt-in gate, not a 404.
+    if (isError && isAdultGateError(error)) return <AdultContentGate onEnabled={() => refetch()} />;
 
     const isNotFound = !isError || error?.response?.status === 404;
     if (isError || !anime) {

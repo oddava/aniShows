@@ -14,6 +14,7 @@ import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
 import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
 import { forumQueries } from '../../api/queries/forums';
+import { DeletedAuthorAvatar, DeletedAuthorName } from '../../components/forums/DeletedAuthor';
 
 // List items carry a server-made `excerpt` (markup and spoilers stripped); `content` is a fallback.
 const getThreadPreview = (thread) => {
@@ -103,17 +104,26 @@ const ThreadCard = memo(({ thread }) => {
                     <div className="flex min-w-0 flex-wrap items-center gap-3">
                         <div onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-2">
-                                <MiniProfileHoverCard user={thread.author}>
-                                    <Link to={`/u/${thread.author?.username}`} className="shrink-0">
-                                        <Avatar user={thread.author} size="xs" />
-                                    </Link>
-                                </MiniProfileHoverCard>
-                                <Link
-                                    to={`/u/${thread.author?.username}`}
-                                    className="truncate text-sm font-semibold text-[var(--forums-accent-text)] transition-colors hover:text-[var(--forums-accent-text-hover)]"
-                                >
-                                    {thread.author?.username}
-                                </Link>
+                                {thread.author ? (
+                                    <>
+                                        <MiniProfileHoverCard user={thread.author}>
+                                            <Link to={`/u/${thread.author.username}`} className="shrink-0">
+                                                <Avatar user={thread.author} size="xs" />
+                                            </Link>
+                                        </MiniProfileHoverCard>
+                                        <Link
+                                            to={`/u/${thread.author.username}`}
+                                            className="truncate text-sm font-semibold text-[var(--forums-accent-text)] transition-colors hover:text-[var(--forums-accent-text-hover)]"
+                                        >
+                                            {thread.author.username}
+                                        </Link>
+                                    </>
+                                ) : (
+                                    <>
+                                        <DeletedAuthorAvatar size="xs" />
+                                        <DeletedAuthorName className="truncate text-sm italic forums-meta-text" />
+                                    </>
+                                )}
                             </div>
                         </div>
                         <span className="forums-meta-text">•</span>

@@ -32,6 +32,9 @@ VAPID = {"VAPID_PUBLIC_KEY": "pub", "VAPID_PRIVATE_KEY": "priv"}
 ENQUEUE = "apps.core.services.notification_delivery.enqueue_delivery"
 
 
+# These tests cover email delivery, so their users have episode emails on
+# (D-4 makes them opt-in for new users; see test_notification_preferences).
+@override_settings(NEW_USER_EMAIL_EPISODES=True)
 class NotifyApiTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -219,6 +222,9 @@ class NotifyApiTests(TestCase):
         self.assertEqual(Notification.objects.count(), 1)
 
 
+# These tests cover email delivery, so their users have episode emails on
+# (D-4 makes them opt-in for new users; see test_notification_preferences).
+@override_settings(NEW_USER_EMAIL_EPISODES=True)
 class DeliveryRaceTests(TestCase):
     """Interleavings found by the council (Sol r1)."""
 

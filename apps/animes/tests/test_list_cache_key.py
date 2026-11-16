@@ -42,6 +42,7 @@ def catalog(db):
         title="Adult Title", slug="adult-title", synopsis="x", member_count=850_000
     )
     adult.genres.add(hentai)
+    Anime.objects.filter(pk=adult.pk).update(is_adult=True)  # AniList's isAdult
     return {"safe": safe, "other": other, "adult": adult}
 
 

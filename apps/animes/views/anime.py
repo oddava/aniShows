@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.cache import patch_vary_headers
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import APIException
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
@@ -37,6 +38,15 @@ from ..services.public_anime_service import (
     AnimeQueryService,
 )
 from ..services.watch_episodes import AnimeWatchEpisodeService
+
+# D-2: what a viewer who has not opted in gets for an adult title's direct link.
+ADULT_GATE_CODE = "adult_content_opt_in_required"
+
+
+class AdultContentHidden(APIException):
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "This title is marked 18+ by AniList. Turn on adult content to view it."
+    default_code = ADULT_GATE_CODE
 
 
 class AnimeViewSet(ReadOnlyModelViewSet):
@@ -89,14 +99,37 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 code="anime_not_found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
+        if result.data.get("is_adult") and not self.query_service.can_view_adult_content(
+            request.user
+        ):
+            # D-2 (owner decision): an opt-in gate, not a 404, so shared links keep
+            # working. Nothing about the title is sent; the shared cached payload
+            # is untouched, so opted-in viewers still get it from the cache.
+            return self._adult_gate_response(slug)
         response = self._with_cache_status_header(Response(result.data), result.cache_status)
         return self._with_public_cache_control(response, request)
 
+    @staticmethod
+    def _adult_gate_response(slug: str) -> Response:
+        response = error_response(
+            "This title is marked 18+ by AniList. Turn on adult content to view it.",
+            code=ADULT_GATE_CODE,
+            status_code=status.HTTP_403_FORBIDDEN,
+            errors={"slug": [slug]},
+        )
+        # The answer depends on who asks: never stored by a shared cache.
+        response["Cache-Control"] = "private, no-store"
+        return response
+
     def _get_action_anime(self, slug: str) -> Anime:
-        return get_object_or_404(
+        anime = get_object_or_404(
             Anime.public_queryset().only(*self.query_service.ACTION_ANIME_ONLY_FIELDS),
             slug=slug,
         )
+        if anime.is_adult and not self.query_service.can_view_adult_content(self.request.user):
+            # The detail page's tabs and actions follow its gate (D-2).
+            raise AdultContentHidden
+        return anime
 
     def list(self, request, *args, **kwargs):
         # One cached page per parameters and adult-content setting, shared by

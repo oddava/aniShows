@@ -198,6 +198,9 @@ class PushApiTests(APITestCase):
         self.assertEqual(list(PushSubscription.objects.values_list("pk", flat=True)), [theirs.pk])
 
 
+# These tests cover email delivery, so their users have episode emails on
+# (D-4 makes them opt-in for new users; see test_notification_preferences).
+@override_settings(NEW_USER_EMAIL_EPISODES=True)
 class EmailUnsubscribeApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user("mail", "m@example.com", "pw-123456")

@@ -15,7 +15,7 @@ from django.utils.text import slugify
 
 from ...shared.logger import logger
 from ...shared.public_cache import invalidate_public_cache_keys
-from ..adult_content import tags_are_adult
+from ..adult_content import offline_entry_is_provisionally_adult
 from ..models import Anime, AnimeStudio, Studio
 from . import offline_catalog_parsing as parsing
 from .metadata_health import PLACEHOLDER_SYNOPSIS
@@ -51,7 +51,6 @@ OFFLINE_UPDATE_FIELDS = [
     "synonyms",
     "producers",
     "tags",
-    "is_adult",
     "source_urls",
     "offline_db_payload",
     "offline_db_last_seen_at",
@@ -136,8 +135,9 @@ class OfflineCatalogPersistence(OfflineCatalogMatcher):
                             synonyms=parsing.merged_list([], entry.synonyms),
                             producers=parsing.merged_list([], entry.producers),
                             tags=parsing.merged_list([], entry.tags),
-                            # bulk_create skips Anime.save(); no genres exist yet.
-                            is_adult=tags_are_adult(parsing.merged_list([], entry.tags)),
+                            # No AniList payload yet: hidden until AniList reports
+                            # when the entry is tagged hentai (adult_content.py).
+                            is_adult=offline_entry_is_provisionally_adult(entry.tags),
                             source_urls=parsing.merged_list([], entry.source_urls),
                             offline_db_payload=entry.raw,
                             offline_db_last_seen_at=seen_at,
@@ -381,11 +381,8 @@ class OfflineCatalogPersistence(OfflineCatalogMatcher):
         anime.provider_ids = provider_ids
         anime.synonyms = parsing.merged_list(anime.synonyms, entry.synonyms)
         anime.producers = parsing.merged_list(anime.producers, entry.producers)
+        # is_adult is AniList's flag (adult_content.py): an update never touches it.
         anime.tags = parsing.merged_list(anime.tags, entry.tags)
-        # Tags only grow here and bulk_update skips Anime.save(), so an adult tag
-        # can only turn the flag on (genre-based flags are already set).
-        if not anime.is_adult and tags_are_adult(anime.tags):
-            anime.is_adult = True
         anime.source_urls = parsing.merged_list(anime.source_urls, entry.source_urls)
         anime.offline_db_payload = entry.raw
         anime.offline_db_last_seen_at = seen_at

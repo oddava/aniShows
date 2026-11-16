@@ -18,7 +18,9 @@ TYPES = Notification.NotificationType
 EMAIL = "apps.users.services.email_service.send_email_task.delay"
 
 
-@override_settings(FRONTEND_URL="https://anishows.example")
+# These tests cover email delivery, so their users have episode emails on
+# (D-4 makes them opt-in for new users; see test_notification_preferences).
+@override_settings(FRONTEND_URL="https://anishows.example", NEW_USER_EMAIL_EPISODES=True)
 class EpisodeEmailTests(TestCase):
     def setUp(self):
         cache.clear()

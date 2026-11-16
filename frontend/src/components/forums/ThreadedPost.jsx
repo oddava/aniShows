@@ -4,6 +4,7 @@ import { Heart, MessageCircle, Pencil, Trash2, ChevronDown, ChevronUp, CornerDow
 import { formatDistanceToNow } from 'date-fns';
 import Avatar from './Avatar';
 import MiniProfileHoverCard from '../common/MiniProfileHoverCard';
+import { DeletedAuthorAvatar, DeletedAuthorName, DELETED_AUTHOR_LABEL } from './DeletedAuthor';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import RichTextEditor from './RichTextEditor';
 import EditedMarker from './EditedMarker';
@@ -126,7 +127,7 @@ const ThreadedPost = ({
                     ) : (
                         <>
                             <Avatar user={author} size="sm" />
-                            <span className="text-sm font-medium text-gray-300">{username}</span>
+                            <span className="text-sm font-medium text-gray-300">{username || DELETED_AUTHOR_LABEL}</span>
                         </>
                     )}
                     {isOP && !showPlaceholder && (
@@ -192,16 +193,24 @@ const ThreadedPost = ({
                         {/* Header */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3">
                             <div className="flex items-center gap-3.5">
-                                <MiniProfileHoverCard user={author}>
-                                    <Link to={`/u/${username}`} className="shrink-0">
-                                        <Avatar user={author} />
-                                    </Link>
-                                </MiniProfileHoverCard>
+                                {author ? (
+                                    <MiniProfileHoverCard user={author}>
+                                        <Link to={`/u/${username}`} className="shrink-0">
+                                            <Avatar user={author} />
+                                        </Link>
+                                    </MiniProfileHoverCard>
+                                ) : (
+                                    <DeletedAuthorAvatar />
+                                )}
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <Link to={`/u/${username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">
-                                            {username}
-                                        </Link>
+                                        {author ? (
+                                            <Link to={`/u/${username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">
+                                                {username}
+                                            </Link>
+                                        ) : (
+                                            <DeletedAuthorName />
+                                        )}
                                         {isOP && (
                                             <span className="text-[9px] font-extrabold uppercase text-accent bg-accent/10 px-1.5 py-0.5 rounded tracking-wider">Author</span>
                                         )}
@@ -341,14 +350,14 @@ const ThreadedPost = ({
                                     <div className="flex items-center gap-2 text-xs text-gray-400">
                                         <CornerDownRight size={12} />
                                         <span>Replying to</span>
-                                        <span className="font-medium text-accent-light">@{username}</span>
+                                        <span className="font-medium text-accent-light">{username ? `@${username}` : DELETED_AUTHOR_LABEL}</span>
                                     </div>
                                 </div>
 
                                 <RichTextEditor
                                     value={replyContent}
                                     onChange={setReplyContent}
-                                    placeholder={`Reply to @${username}...`}
+                                    placeholder={username ? `Reply to @${username}...` : 'Write a reply...'}
                                     className="mb-3"
                                 />
                                 <div className="flex justify-end gap-2">

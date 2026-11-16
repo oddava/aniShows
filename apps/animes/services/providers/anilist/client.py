@@ -48,6 +48,7 @@ MEDIA_FIELDS = """
         title { romaji english native }
         synonyms
         format status episodes averageScore popularity duration
+        isAdult
         startDate { year month day }
         endDate { year month day }
         season seasonYear
@@ -86,13 +87,15 @@ MEDIA_FIELDS = """
         }
     """
 
-# The schedule and status fields the hourly airing refresh needs. Small enough
-# to fetch a whole page of shows per request.
+# The schedule and status fields the hourly airing refresh needs, plus isAdult
+# for the weekly adult-flag sync (adult_content.py). Small enough to fetch a
+# whole page of shows per request.
 AIRING_FIELDS = """
         id
         idMal
         title { romaji english native }
         format status episodes
+        isAdult
         startDate { year month day }
         endDate { year month day }
         season seasonYear

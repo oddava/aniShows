@@ -462,6 +462,7 @@ def test_studios_lists_only_studios_with_a_public_non_adult_anime(api_client):
     adult_only = create_studio(name="Adult Studio")
     adult = create_anime(title="Adult Show")
     adult.genres.add(create_genre(name="Hentai", slug="hentai"))
+    type(adult).objects.filter(pk=adult.pk).update(is_adult=True)  # AniList's isAdult
     adult.studios.add(adult_only)
     hidden_only = create_studio(name="Hidden Studio")
     hidden = create_anime(title="Hidden Show")

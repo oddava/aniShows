@@ -52,6 +52,7 @@ def catalog():
     other = _airing("safe-tuesday", "Tuesday")
     adult = _airing("adult-monday", "Monday")
     adult.genres.add(hentai)
+    Anime.objects.filter(pk=adult.pk).update(is_adult=True)  # AniList's isAdult
     return {"safe": safe, "other": other, "adult": adult}
 
 

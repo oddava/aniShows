@@ -75,7 +75,10 @@ class Thread(TimestampMixin, ModerationFields, Model):
     # Mention notifications sent for this thread across all its edits (capped).
     mentions_notified = PositiveSmallIntegerField(default=0)
     title = CharField(max_length=255, db_index=True)
-    author = ForeignKey("users.CustomUser", CASCADE, related_name="forum_threads")
+    # D-6: a deleted account's threads stay, shown as by "deleted user" (author NULL).
+    author = ForeignKey(
+        "users.CustomUser", SET_NULL, null=True, blank=True, related_name="forum_threads"
+    )
     content = TextField()
     is_pinned = BooleanField(default=False, db_index=True)
     is_locked = BooleanField(default=False)
@@ -114,7 +117,10 @@ class Post(TimestampMixin, ModerationFields, Model):
     MAX_DEPTH = 10
 
     thread = ForeignKey(Thread, CASCADE, related_name="posts")
-    author = ForeignKey("users.CustomUser", CASCADE, related_name="forum_posts")
+    # D-6: a deleted account's posts stay, shown as by "deleted user" (author NULL).
+    author = ForeignKey(
+        "users.CustomUser", SET_NULL, null=True, blank=True, related_name="forum_posts"
+    )
     # The author deleted it (shown as "[deleted]"), as opposed to a moderator removal.
     removed_by_author = BooleanField(default=False)
     # Mention notifications sent for this post across all its edits (capped).
@@ -138,7 +144,8 @@ class Post(TimestampMixin, ModerationFields, Model):
         ]
 
     def __str__(self):
-        return f"Post by {self.author.username} in {self.thread.title}"
+        author = self.author.username if self.author_id else "deleted user"
+        return f"Post by {author} in {self.thread.title}"
 
     def adjust_like_count(self, delta: int):
         self.__class__.objects.filter(pk=self.pk).update(

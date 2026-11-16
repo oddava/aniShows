@@ -1,10 +1,9 @@
-"""``Anime.is_adult`` must always equal the old adult-content rule (D5).
+"""``Anime.is_adult`` is AniList's ``Media.isAdult``, and nothing else (owner decision).
 
-The old rule ran on every public query as two ``NOT IN`` subqueries: an adult
-genre slug, or ``tags ?| ADULT_TAGS``. ``old_rule_ids()`` below is that rule,
-copied from the pre-D5 ``_exclude_adult_content``; every test changes genres or
-tags in one of the ways the app does and then checks that the stored flags
-match it exactly.
+Genres and tags no longer decide it: the old genre/tag rule hid mainstream shows
+such as *The Apothecary Diaries* (thematic tags like "prostitution"). The flag
+comes from AniList payloads, the weekly sync, and (only until AniList reports)
+the offline catalog's ``hentai`` tag on a newly created row.
 """
 
 import importlib
@@ -16,12 +15,12 @@ import pytest
 from django.apps import apps as django_apps
 from django.db import connection
 
+from apps.animes import adult_content
 from apps.animes.adult_content import (
-    ADULT_GENRE_SLUGS,
-    ADULT_TAGS,
-    is_adult_content,
-    refresh_adult_flags,
-    tags_are_adult,
+    anilist_is_adult,
+    apply_anilist_adult_flags,
+    offline_entry_is_provisionally_adult,
+    sync_adult_flags_from_anilist,
 )
 from apps.animes.models import Anime, Genre
 from apps.animes.services.anilist import AniListService
@@ -37,20 +36,8 @@ def _no_side_effect_tasks(monkeypatch):
     monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
 
 
-def old_rule_ids() -> set[int]:
-    by_genre = Anime.objects.filter(genres__slug__in=ADULT_GENRE_SLUGS).values_list("pk", flat=True)
-    by_tag = Anime.objects.filter(tags__has_any_keys=sorted(ADULT_TAGS)).values_list(
-        "pk", flat=True
-    )
-    return set(by_genre) | set(by_tag)
-
-
 def flagged_ids() -> set[int]:
     return set(Anime.objects.filter(is_adult=True).values_list("pk", flat=True))
-
-
-def assert_flags_match_old_rule():
-    assert flagged_ids() == old_rule_ids()
 
 
 _counter = iter(range(1, 10_000))
@@ -70,227 +57,243 @@ def make_anime(**fields) -> Anime:
 def genres():
     return {
         slug: Genre.objects.get_or_create(slug=slug, defaults={"name": slug.title()})[0]
-        for slug in ("hentai", "erotica", "action", "hentai-adjacent")
+        for slug in ("hentai", "erotica", "drama")
     }
 
 
-# ------------------------------------------------------------------ tags
+# ------------------------------------------------- genres and tags do nothing
 
 
-@pytest.mark.parametrize("tag", sorted(ADULT_TAGS))
-def test_every_adult_tag_flags_the_row(tag):
-    anime = make_anime(tags=["drama", tag])
-    assert anime.is_adult is True
-    assert_flags_match_old_rule()
+def test_thematic_tags_and_adult_genres_no_longer_flag_a_row(genres):
+    # The Apothecary Diaries carries tags the old rule treated as adult.
+    apothecary = make_anime(title="The Apothecary Diaries", tags=["prostitution", "succubus"])
+    tagged = make_anime(tags=["nsfw", "sex"])
+    tagged.genres.add(genres["hentai"], genres["erotica"])
+    tagged.save()
+
+    assert flagged_ids() == set()
+    apothecary.refresh_from_db()
+    assert apothecary.is_adult is False
+
+
+def test_removing_genres_or_tags_never_clears_anilists_flag(genres):
+    anime = make_anime(is_adult=True, tags=["nsfw"])
+    anime.genres.add(genres["hentai"])
+    anime.genres.clear()
+    anime.tags = []
+    anime.save()
+    genres["hentai"].delete()
+
+    assert flagged_ids() == {anime.pk}
+
+
+# ------------------------------------------------------- AniList payloads
 
 
 @pytest.mark.parametrize(
-    "tags",
+    ("payload", "expected"),
     [
-        [],
-        ["drama", "romance"],
-        ["NSFW"],  # the rule is case-sensitive
-        [" nsfw"],
-        ["sexy", "sex-ed"],  # substrings do not count
-        [["nsfw"]],  # nested values are not elements
-        [1, None, True],
-        {"other": "nsfw"},  # object values are not keys
-        "drama",
-        7,
+        ({"isAdult": True}, True),
+        ({"isAdult": False}, False),
+        ({}, None),
+        ({"isAdult": None}, None),
+        ({"isAdult": "true"}, None),
+        (None, None),
     ],
 )
-def test_tags_that_the_old_rule_did_not_match(tags):
-    anime = make_anime(tags=tags)
-    assert anime.is_adult is False
-    assert_flags_match_old_rule()
+def test_anilist_is_adult_reads_only_a_real_boolean(payload, expected):
+    assert anilist_is_adult(payload) is expected
 
 
-@pytest.mark.parametrize("tags", [{"nsfw": True}, "nsfw", ["drama", "sex toys"]])
-def test_json_shapes_the_old_rule_matched(tags):
-    # ``?|`` matches object keys and a bare string as well as array elements.
-    anime = make_anime(tags=tags)
-    assert anime.is_adult is True
-    assert_flags_match_old_rule()
-
-
-def test_saving_new_tags_updates_the_flag_both_ways():
-    anime = make_anime(tags=["drama"])
-    anime.tags = ["nsfw"]
-    anime.save()
-    assert_flags_match_old_rule()
-    assert flagged_ids() == {anime.pk}
-
-    anime.tags = ["drama"]
-    anime.save(update_fields=["tags"])
-    assert_flags_match_old_rule()
-    assert flagged_ids() == set()
-
-
-def test_tags_saved_with_update_fields_persist_the_flag():
-    anime = make_anime(tags=["drama"])
-    anime.tags = ["incest"]
-    anime.save(update_fields=["tags"])
-    anime.refresh_from_db()
-    assert anime.is_adult is True
-    assert_flags_match_old_rule()
-
-
-def test_save_without_tags_in_update_fields_leaves_the_flag_alone():
-    anime = make_anime(tags=["nsfw"])
-    Anime.objects.filter(pk=anime.pk).update(tags=["drama"])  # bypasses save()
-    anime.title = "Renamed"
-    anime.save(update_fields=["title"])
-    anime.refresh_from_db()
-    assert anime.is_adult is True  # unchanged: tags were not part of this save
-
-
-def test_dropping_adult_tags_keeps_the_flag_for_an_adult_genre(genres):
-    anime = make_anime(tags=["nsfw"])
-    anime.genres.add(genres["hentai"])
-    anime.tags = ["drama"]
-    anime.save()
-    assert anime.is_adult is True
-    assert_flags_match_old_rule()
-
-
-def test_deferred_tags_do_not_touch_the_flag():
-    anime = make_anime(tags=["nsfw"])
-    loaded = Anime.objects.only("id", "title").get(pk=anime.pk)
-    loaded.title = "Only title"
-    loaded.save()
-    assert_flags_match_old_rule()
-
-
-# ---------------------------------------------------------------- genres
-
-
-@pytest.mark.parametrize("slug", sorted(ADULT_GENRE_SLUGS))
-def test_adding_an_adult_genre_flags_the_row(genres, slug):
-    anime = make_anime()
-    anime.genres.add(genres["action"], genres[slug])
-    assert_flags_match_old_rule()
-    assert flagged_ids() == {anime.pk}
-
-
-def test_a_similar_genre_slug_is_not_adult(genres):
-    anime = make_anime()
-    anime.genres.add(genres["hentai-adjacent"])
-    assert_flags_match_old_rule()
-    assert flagged_ids() == set()
-
-
-def test_removing_setting_and_clearing_genres(genres):
-    anime = make_anime()
-    anime.genres.add(genres["hentai"], genres["erotica"])
-    anime.genres.remove(genres["hentai"])
-    assert flagged_ids() == {anime.pk}  # still erotica
-    anime.genres.set([genres["action"]])
-    assert flagged_ids() == set()
-    anime.genres.set([genres["erotica"]])
-    assert flagged_ids() == {anime.pk}
-    anime.genres.clear()
-    assert flagged_ids() == set()
-    assert_flags_match_old_rule()
-
-
-def test_reverse_side_add_remove_and_clear(genres):
-    first, second, other = make_anime(), make_anime(), make_anime(tags=["nsfw"])
-    genres["hentai"].anime.add(first, second, other)
-    assert flagged_ids() == {first.pk, second.pk, other.pk}
-    genres["hentai"].anime.remove(first)
-    assert flagged_ids() == {second.pk, other.pk}
-    genres["hentai"].anime.clear()
-    assert flagged_ids() == {other.pk}  # its tag still makes it adult
-    genres["action"].anime.add(first)
-    assert_flags_match_old_rule()
-
-
-def test_renaming_a_genre_slug_to_and_from_adult(genres):
-    anime = make_anime()
-    anime.genres.add(genres["action"])
-    genre = genres["action"]
-    genre.slug = "hentai-renamed"
-    genre.save()
-    assert flagged_ids() == set()
-
-    genres["hentai"].slug = "hentai-old"
-    genres["hentai"].save()
-    genre.slug = "hentai"
-    genre.save()
-    assert flagged_ids() == {anime.pk}
-
-    genre.slug = "action"
-    genre.save()
-    assert flagged_ids() == set()
-    assert_flags_match_old_rule()
-
-
-def test_deleting_an_adult_genre_clears_its_flags(genres):
-    adult_by_genre, adult_by_tag = make_anime(), make_anime(tags=["rape"])
-    genres["erotica"].anime.add(adult_by_genre, adult_by_tag)
-    genres["erotica"].delete()
-    assert flagged_ids() == {adult_by_tag.pk}
-    assert_flags_match_old_rule()
-
-
-# --------------------------------------------------- write paths and reads
-
-
-def test_provider_payload_marks_adult_rows():
+def test_provider_payload_carries_anilists_flag_both_ways():
     service = AniListService(enable_caching=False, enable_rate_limiting=False)
     try:
-        adult_by_genre = service._prepare_anime_data(
-            {"genres": ["Hentai"], "tags": []}, "A", "", "a"
+        adult = service._prepare_anime_data({"isAdult": True, "genres": []}, "A", "", "a")
+        general = service._prepare_anime_data(
+            {"isAdult": False, "genres": ["Hentai"], "tags": [{"name": "NSFW"}]}, "B", "", "b"
         )
-        adult_by_tag = service._prepare_anime_data(
-            {"genres": ["Drama"], "tags": [{"name": "  NSFW "}]}, "B", "", "b"
-        )
-        plain = service._prepare_anime_data({"genres": ["Drama"], "tags": []}, "C", "", "c")
-        broken = service._prepare_anime_data({"genres": 5}, "D", "", "d")
+        missing = service._prepare_anime_data({"genres": ["Hentai"]}, "C", "", "c")
     finally:
         resolve(service.close())
-    assert adult_by_genre["is_adult"] is True
-    assert adult_by_tag["is_adult"] is True
-    # Not proof of "not adult": the key is left out so updates keep the stored flag.
-    assert "is_adult" not in plain
-    assert "is_adult" not in broken
+    assert adult["is_adult"] is True
+    assert general["is_adult"] is False
+    # No isAdult: the key is left out, so an update keeps the stored flag.
+    assert "is_adult" not in missing
 
 
-def test_provider_create_and_update_paths(genres):
+def test_provider_create_and_update_paths():
     service = AniListService(enable_caching=False, enable_rate_limiting=False)
     item = {
         "id": 777001,
-        "title": {"english": "Provider Adult Show"},
-        "genres": ["Hentai"],
-        "tags": [],
-        "format": "OVA",
+        "title": {"english": "Provider Show"},
+        "genres": ["Drama"],
+        "tags": [{"name": "Prostitution"}],
+        "format": "TV",
         "status": "FINISHED",
+        "isAdult": False,
     }
     try:
         anime = service.save_anime_to_db(item)
-        assert_flags_match_old_rule()
+        assert flagged_ids() == set()
+
+        service.save_anime_to_db({**item, "isAdult": True})
         assert flagged_ids() == {anime.pk}
 
-        # A later payload without the genre: genres only accumulate, so the
-        # stored hentai link (and the flag) stay, as with the old rule.
-        service.save_anime_to_db({**item, "genres": ["Drama"]})
-        assert_flags_match_old_rule()
+        # A payload without the field (an older query) leaves it alone.
+        payload = {key: value for key, value in item.items() if key != "isAdult"}
+        service.save_anime_to_db(payload)
         assert flagged_ids() == {anime.pk}
 
-        # Explicit tags on another show flag it through the same path.
-        tagged = service.save_anime_to_db(
-            {
-                **item,
-                "id": 777002,
-                "title": {"english": "Tagged"},
-                "genres": ["Drama"],
-                "tags": [{"name": "Incest"}],
-            }
-        )
-        assert flagged_ids() == {anime.pk, tagged.pk}
-        assert_flags_match_old_rule()
+        service.save_anime_to_db(item)
+        assert flagged_ids() == set()
     finally:
         resolve(service.close())
+
+
+def test_the_queries_ask_anilist_for_the_flag():
+    from apps.animes.services.providers.anilist.client import AIRING_FIELDS, MEDIA_FIELDS
+
+    assert "isAdult" in MEDIA_FIELDS.split()
+    assert "isAdult" in AIRING_FIELDS.split()
+
+
+# ------------------------------------------------------- sync from AniList
+
+
+def test_apply_flags_by_anilist_then_mal_id(django_capture_on_commit_callbacks, monkeypatch):
+    by_anilist = make_anime(anilist_id=5001)
+    by_mal = make_anime(mal_id=6001)
+    cleared = make_anime(anilist_id=5002, is_adult=True)
+    untouched = make_anime(anilist_id=5003, is_adult=True)
+    invalidated = []
+    monkeypatch.setattr(
+        adult_content, "_invalidate_public_caches", lambda slugs, using: invalidated.extend(slugs)
+    )
+
+    result = apply_anilist_adult_flags(
+        [
+            {"id": 5001, "isAdult": True},
+            {"idMal": 6001, "isAdult": True},
+            {"id": 5002, "isAdult": False},
+            {"id": 5003},  # no flag: skipped, never cleared
+            {"id": 9999, "isAdult": True},  # not in the catalog
+        ]
+    )
+
+    assert result == {"flagged": 2, "cleared": 1}
+    assert flagged_ids() == {by_anilist.pk, by_mal.pk, untouched.pk}
+    assert sorted(invalidated) == sorted([by_anilist.slug, by_mal.slug, cleared.slug])
+
+
+def test_changed_rows_drop_their_cached_public_payloads(django_capture_on_commit_callbacks):
+    from unittest import mock
+
+    anime = make_anime(anilist_id=5101)
+    with (
+        mock.patch(
+            "apps.animes.services.public_anime_service."
+            "AnimePublicPayloadService.bump_collection_cache_namespace"
+        ) as bump,
+        mock.patch("apps.animes.signals._invalidate_anime_public_caches") as drop,
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        apply_anilist_adult_flags([{"id": 5101, "isAdult": True}])
+
+    bump.assert_called_once()
+    drop.assert_called_once_with(anime.slug, bump_namespace=False)
+
+
+class _FakeAniList:
+    def __init__(self, payloads, fail_ids=()):
+        self.payloads = payloads
+        self.fail_ids = set(fail_ids)
+        self.calls = []
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    def get_airing_by_ids(self, *, anilist_ids=(), mal_ids=()):
+        self.calls.append((list(anilist_ids), list(mal_ids)))
+        if self.fail_ids & set(anilist_ids):
+            return []  # a failed request: no payloads
+        wanted = set(anilist_ids)
+        wanted_mal = set(mal_ids)
+        return [
+            payload
+            for payload in self.payloads
+            if payload.get("id") in wanted or payload.get("idMal") in wanted_mal
+        ]
+
+
+def test_sync_reads_the_flag_for_the_whole_catalog_in_chunks(monkeypatch):
+    rows = [make_anime(anilist_id=7000 + n) for n in range(5)]
+    mal_only = make_anime(mal_id=8001)
+    no_ids = make_anime(is_adult=True)
+    fake = _FakeAniList(
+        [{"id": 7001, "isAdult": True}, {"id": 7003, "isAdult": True}]
+        + [{"id": 7000 + n, "isAdult": False} for n in (0, 2, 4)]
+        + [{"idMal": 8001, "isAdult": True}]
+    )
+    monkeypatch.setattr("apps.animes.services.anilist.AniListService", fake)
+
+    totals = sync_adult_flags_from_anilist(chunk_size=2)
+
+    assert totals == {"checked": 6, "payloads": 6, "flagged": 3, "cleared": 0}
+    assert flagged_ids() == {rows[1].pk, rows[3].pk, mal_only.pk, no_ids.pk}
+    assert len(fake.calls) == 3  # 6 rows with IDs, 2 per chunk
+
+
+def test_a_failed_chunk_never_makes_a_row_visible(monkeypatch):
+    adult = make_anime(anilist_id=7101, is_adult=True)
+    fake = _FakeAniList([{"id": 7101, "isAdult": False}], fail_ids={7101})
+    monkeypatch.setattr("apps.animes.services.anilist.AniListService", fake)
+
+    totals = sync_adult_flags_from_anilist()
+
+    assert totals["cleared"] == 0
+    assert flagged_ids() == {adult.pk}
+
+
+def test_management_command_and_task_run_the_sync(monkeypatch):
+    from django.core.management import call_command
+
+    from apps.animes.tasks.adult_content import sync_adult_flags
+
+    calls = []
+    monkeypatch.setattr(
+        adult_content,
+        "sync_adult_flags_from_anilist",
+        lambda **kwargs: (
+            calls.append(kwargs) or {"checked": 0, "payloads": 0, "flagged": 0, "cleared": 0}
+        ),
+    )
+    monkeypatch.setattr(
+        "apps.animes.management.commands.sync_adult_flags.sync_adult_flags_from_anilist",
+        adult_content.sync_adult_flags_from_anilist,
+    )
+
+    call_command("sync_adult_flags", "--limit", "3")
+    sync_adult_flags.apply()
+
+    assert calls == [{"limit": 3}, {}]
+
+
+# ------------------------------------------------------- offline catalog
+
+
+@pytest.mark.parametrize(
+    ("tags", "expected"),
+    [
+        (["drama", "hentai"], True),
+        (["drama", " Hentai "], True),
+        ("hentai", True),
+        (["prostitution", "nsfw", "sex"], False),
+        (None, False),
+        ([1, None], False),
+    ],
+)
+def test_offline_provisional_flag_reads_only_the_hentai_tag(tags, expected):
+    assert offline_entry_is_provisionally_adult(tags) is expected
 
 
 def _offline_entry(**overrides):
@@ -328,74 +331,66 @@ def _run_offline_import(*entries):
         Path(handle.name).unlink(missing_ok=True)
 
 
-def test_offline_import_creates_and_updates_flags():
+def test_offline_import_hides_hentai_until_anilist_reports_and_never_overrides_it():
     _run_offline_import(
-        _offline_entry(),
+        _offline_entry(tags=["drama", "prostitution"]),
         _offline_entry(
             title="Offline Explicit Show",
             sources=["https://anilist.co/anime/880002", "https://myanimelist.net/anime/880002"],
-            tags=["drama", "NSFW", "nsfw"],  # deduped case-insensitively: "NSFW" is kept
+            tags=["hentai"],
         ),
     )
-    assert_flags_match_old_rule()
-    assert flagged_ids() == set()
+    general = Anime.objects.get(anilist_id=880001)
+    explicit = Anime.objects.get(anilist_id=880002)
+    assert flagged_ids() == {explicit.pk}
 
-    _run_offline_import(_offline_entry(tags=["drama", "netorare"]))
-    assert_flags_match_old_rule()
-    assert flagged_ids() == {Anime.objects.get(anilist_id=880001).pk}
-
-
-def test_refresh_adult_flags_repairs_drifted_rows(genres):
-    by_genre, by_tag, plain = make_anime(), make_anime(tags=["nsfw"]), make_anime()
-    by_genre.genres.add(genres["hentai"])
-    Anime.objects.update(is_adult=False)
-    Anime.objects.filter(pk=plain.pk).update(is_adult=True)
-
-    changed = refresh_adult_flags([by_genre.pk, by_tag.pk, plain.pk])
-
-    assert changed == 3
-    assert_flags_match_old_rule()
-    assert refresh_adult_flags([by_genre.pk, by_tag.pk, plain.pk]) == 0
+    # AniList reports: its flag wins, and a later offline update keeps it.
+    apply_anilist_adult_flags([{"id": 880001, "isAdult": True}, {"id": 880002, "isAdult": False}])
+    _run_offline_import(
+        _offline_entry(tags=["drama"]),
+        _offline_entry(
+            title="Offline Explicit Show",
+            sources=["https://anilist.co/anime/880002", "https://myanimelist.net/anime/880002"],
+            tags=["hentai"],
+        ),
+    )
+    assert flagged_ids() == {general.pk}
 
 
-def test_backfill_migration_matches_the_old_rule(genres):
-    by_genre, by_tag, both = make_anime(), make_anime(tags=["sex"]), make_anime(tags=["nsfw"])
-    plain = make_anime(tags=["drama"])
-    genres["erotica"].anime.add(by_genre, both)
-    Anime.objects.update(is_adult=False)
-    Anime.objects.filter(pk=plain.pk).update(is_adult=True)
+# ------------------------------------------------------- migration and reads
 
-    migration = importlib.import_module("apps.animes.migrations.0054_backfill_anime_is_adult")
-    assert set(migration.ADULT_TAGS) == ADULT_TAGS
-    assert set(migration.ADULT_GENRE_SLUGS) == ADULT_GENRE_SLUGS
+
+def test_migration_seeds_from_the_hentai_genre_only(genres):
+    hentai, erotica_only = make_anime(), make_anime()
+    tags_only, plain = make_anime(tags=["nsfw", "prostitution"]), make_anime(is_adult=True)
+    hentai.genres.add(genres["hentai"])
+    erotica_only.genres.add(genres["erotica"])
+    Anime.objects.filter(pk__in=[erotica_only.pk, tags_only.pk]).update(is_adult=True)
+
+    migration = importlib.import_module("apps.animes.migrations.0060_adult_flag_from_anilist")
     with connection.schema_editor() as schema_editor:
-        migration.backfill_is_adult(django_apps, schema_editor)
+        migration.seed_from_anilist_genre(django_apps, schema_editor)
+    assert flagged_ids() == {hentai.pk}
+    assert not Anime.objects.get(pk=plain.pk).is_adult
 
-    assert flagged_ids() == {by_genre.pk, by_tag.pk, both.pk}
-    assert_flags_match_old_rule()
+    # Reversing restores 0054's genre/tag rule.
+    with connection.schema_editor() as schema_editor:
+        migration.restore_legacy_rule(django_apps, schema_editor)
+    assert flagged_ids() == {hentai.pk, erotica_only.pk, tags_only.pk}
 
 
-def test_public_list_hides_exactly_the_old_rule_rows(client, genres):
-    visible = make_anime(title="Visible Show")
-    hidden_genre, hidden_tag = make_anime(), make_anime(tags=["futanari"])
-    hidden_genre.genres.add(genres["hentai"])
+def test_public_list_hides_exactly_the_flagged_rows(client):
+    visible = make_anime(title="The Apothecary Diaries", tags=["prostitution"])
+    hidden = make_anime(is_adult=True)
 
     response = client.get("/api/v1/anime/?page_size=50")
 
     ids = {item["id"] for item in response.json()["results"]}
     assert visible.pk in ids
-    assert not ids & old_rule_ids()
-    assert old_rule_ids() == {hidden_genre.pk, hidden_tag.pk}
+    assert hidden.pk not in ids
 
 
 def test_exclusion_is_a_plain_flag_filter():
     sql = str(AnimeQueryService._exclude_adult_content(Anime.objects.all()).query)
     assert '"anime_anime"."is_adult"' in sql
     assert "?|" not in sql and "IN (SELECT" not in sql
-
-
-def test_python_rule_matches_the_tags_rule():
-    assert is_adult_content(["hentai"], []) is True
-    assert is_adult_content(["action"], ["nsfw"]) is True
-    assert is_adult_content(None, None) is False
-    assert tags_are_adult(None) is False

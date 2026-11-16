@@ -359,7 +359,7 @@ class ListFilterMixin:
 
     @staticmethod
     def _exclude_adult_content(queryset):
-        # ``is_adult`` stores the genre/tag rule (see ``adult_content.py``, D5).
+        # ``is_adult`` is AniList's Media.isAdult (see ``adult_content.py``).
         return queryset.filter(is_adult=False)
 
     @staticmethod

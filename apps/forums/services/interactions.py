@@ -217,7 +217,8 @@ def _notify_reply_target(post: Post, author) -> None:
     else:
         recipient_id = post.parent.author_id
         data.update(parent_post_id=post.parent.pk, reason="parent")
-    if recipient_id != author.id:
+    # A deleted account (author NULL, D-6) has nobody to tell.
+    if recipient_id is not None and recipient_id != author.id:
         notify(
             recipient_id,
             "forum_reply",

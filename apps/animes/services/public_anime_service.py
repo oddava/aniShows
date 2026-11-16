@@ -21,7 +21,6 @@ from ...shared.public_cache import (
     public_cache_stale_key,
 )
 from ...users.models import UserAnimeList
-from ..adult_content import ADULT_GENRE_SLUGS, ADULT_TAGS
 from ..models import Anime, AnimeCharacter, AnimeStaff, UserFavorite
 from .anilist import TRANSIENT_ERROR_CODES, AniListService
 from .public_query.fields import QueryFieldsMixin
@@ -39,8 +38,6 @@ from .public_query.shelves import ShelfMixin
 from .public_query.sorting import SortingMixin
 
 __all__ = [
-    "ADULT_GENRE_SLUGS",
-    "ADULT_TAGS",
     "MAX_RATING",
     "MIN_RATING",
     "MIN_SEARCH_LENGTH",

@@ -89,10 +89,15 @@ def _description(category: Category) -> str:
         return category.description
     # Follows the D-4 setting, so the copy never promises less or more than is sent.
     plan_to_watch = getattr(settings, "PLAN_TO_WATCH_ALERTS", "all")
+    in_app_only = getattr(settings, "PLAN_TO_WATCH_ALERT_CHANNELS", "in_app") != "all"
+    suffix = " (Plan to Watch: in the app only)" if in_app_only else ""
     if plan_to_watch == "all":
-        return "New episodes of shows in your Watching and Plan to Watch lists"
+        return f"New episodes of shows in your Watching and Plan to Watch lists{suffix}"
     if plan_to_watch == "premiere":
-        return "New episodes of shows you're watching, and premieres of shows you plan to watch"
+        return (
+            "New episodes of shows you're watching, and premieres of shows you plan to watch"
+            f"{suffix}"
+        )
     return "New episodes of shows in your Watching list"
 
 

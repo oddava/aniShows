@@ -148,6 +148,9 @@ needs CREATEDB. Without it, restore the dump directly as the owner:
 
 ### Off-site copies
 
+Decided for the first deploy: local backups plus `make prod-verify-backup`; the off-site target
+is still to be chosen, so `BACKUP_REMOTE` ships empty and nothing is uploaded until it is set.
+
 Backups on the same disk as the database do not survive the host. Set `BACKUP_REMOTE` to an
 [rclone](https://rclone.org) remote path and configure the remote with `RCLONE_CONFIG_<NAME>_*`
 variables in `.env` (no config file needed). After every successful backup the container copies

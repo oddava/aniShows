@@ -84,7 +84,7 @@ def recent_episode_events(window_start, now) -> dict[int, dict[str, Any]]:
 
 
 def _candidates(anime_id: int, episode: int):
-    """``(user_id, email_ok, has_push)`` for list entries that should hear about ``episode``."""
+    """``(user_id, email, email_verified, has_push, status)`` for entries that should hear about ``episode``."""
     from ...users.models import UserAnimeList
 
     statuses = UserAnimeList.UserAnimeStatus
@@ -106,6 +106,7 @@ def _candidates(anime_id: int, episode: int):
             "user__email",
             "user__userprofile__email_verified",
             "has_push",
+            "status",
         )
     )
 
@@ -122,18 +123,28 @@ def notify_episode(anime, episode: int, aired_at) -> dict[str, int]:
     user_ids = [row[0] for row in rows]
     preferences = prefs.preferences_for(user_ids)
     push_configured = PushService.is_configured()
+    from ...users.models import UserAnimeList  # users imports core: import late
+
+    # D-4: plan-to-watch entries are told in the app only, unless set to "all".
+    planned_in_app_only = getattr(settings, "PLAN_TO_WATCH_ALERT_CHANNELS", "in_app") != "all"
     buckets: dict[tuple[bool, bool], list[int]] = defaultdict(list)
-    for user_id, email, email_verified, has_push in rows:
+    for user_id, email, email_verified, has_push, status in rows:
         user_prefs = preferences[user_id]
         if not prefs.wants(user_prefs, notification_types.EPISODES, prefs.IN_APP):
             continue
+        in_app_only = planned_in_app_only and status == UserAnimeList.UserAnimeStatus.plan_to_watch
         push = (
-            push_configured
+            not in_app_only
+            and push_configured
             and has_push
             and prefs.wants(user_prefs, notification_types.EPISODES, prefs.PUSH)
         )
         email_ok = bool(email and email_verified)
-        mail = email_ok and prefs.wants(user_prefs, notification_types.EPISODES, prefs.EMAIL)
+        mail = (
+            not in_app_only
+            and email_ok
+            and prefs.wants(user_prefs, notification_types.EPISODES, prefs.EMAIL)
+        )
         buckets[(push, mail)].append(user_id)
     if not buckets:
         return {"recipients": 0, "created_or_updated": 0}

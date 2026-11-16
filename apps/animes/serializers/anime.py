@@ -307,6 +307,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "title",
             "title_jp",
             "slug",
+            "is_adult",
             "synopsis",
             "cover_image",
             "cover_image_small",

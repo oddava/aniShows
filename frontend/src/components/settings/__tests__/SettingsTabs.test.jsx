@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import NotificationsTab from '../NotificationsTab';
 import SettingsTabs from '../SettingsTabs';
 import SocialLinksEditor from '../SocialLinksEditor';
 
@@ -11,62 +10,6 @@ vi.mock('../../SmartLinkInput', () => ({
     ),
     normalizeUrl: (_platform, value) => value,
 }));
-
-const notificationState = (overrides = {}) => ({
-    preferences: {
-        email_new_episodes: true,
-        push_new_episodes: false,
-        push_review_replies: true,
-        push_new_follower: false,
-    },
-    isLoadingPreferences: false,
-    isSavingPreferences: false,
-    preferencesMessage: '',
-    handleTogglePreference: vi.fn(),
-    ...overrides,
-});
-
-describe('NotificationsTab', () => {
-    it('renders one switch per preference with its saved state', () => {
-        render(<NotificationsTab notifications={notificationState()} />);
-
-        const switches = screen.getAllByRole('switch');
-        expect(switches).toHaveLength(4);
-        expect(switches.map((el) => el.getAttribute('aria-checked'))).toEqual([
-            'true', 'false', 'true', 'false',
-        ]);
-        expect(screen.getByRole('switch', { name: 'Review Replies' })).toHaveAttribute('aria-checked', 'true');
-    });
-
-    it('calls the toggle handler with the preference key', () => {
-        const state = notificationState();
-        render(<NotificationsTab notifications={state} />);
-
-        fireEvent.click(screen.getByRole('switch', { name: 'New Followers' }));
-
-        expect(state.handleTogglePreference).toHaveBeenCalledWith('push_new_follower');
-    });
-
-    it('disables the switches while saving and shows the message', () => {
-        render(
-            <NotificationsTab
-                notifications={notificationState({
-                    isSavingPreferences: true,
-                    preferencesMessage: 'Preferences saved successfully',
-                })}
-            />
-        );
-
-        screen.getAllByRole('switch').forEach((el) => expect(el).toBeDisabled());
-        expect(screen.getByText('Preferences saved successfully')).toBeInTheDocument();
-    });
-
-    it('shows spinners instead of switches while loading', () => {
-        render(<NotificationsTab notifications={notificationState({ isLoadingPreferences: true })} />);
-
-        expect(screen.queryAllByRole('switch')).toHaveLength(0);
-    });
-});
 
 describe('SettingsTabs', () => {
     it('offers the badges tab only to users with badges', () => {

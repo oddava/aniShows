@@ -233,7 +233,7 @@ function ReviewQueue() {
                                         <Link to={`/anime/${row.anime?.slug}`} className="font-medium text-white hover:text-violet-300">
                                             {row.anime?.title}
                                         </Link>
-                                        <span className="text-white/50">by {row.author?.username}</span>
+                                        <span className="text-white/50">by {row.author?.username ?? 'deleted user'}</span>
                                         <span className="text-white/50">{row.rating}/10</span>
                                         {row.has_spoilers && (
                                             <span className="inline-flex items-center gap-1 text-xs text-amber-300">
@@ -337,7 +337,7 @@ function ForumQueue() {
                                 {row.target_url ? (
                                     <Link to={row.target_url} className="font-medium text-white hover:text-violet-300">Forum post</Link>
                                 ) : <span className="font-medium text-white">Forum post</span>}
-                                <span className="text-white/50">by {typeof row.author === 'string' ? row.author : row.author?.username}</span>
+                                <span className="text-white/50">by {(typeof row.author === 'string' ? row.author : row.author?.username) ?? 'deleted user'}</span>
                             </div>
                             <p className="text-sm text-white/80 break-words">{row.snippet}</p>
                             <ReasonChips counts={row.reasons} />

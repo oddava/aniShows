@@ -146,5 +146,12 @@ class EnvTemplateTests(SimpleTestCase):
         self.assertEqual(self.entries["CADDY_MODE"], (True, "proxy"))
         self.assertEqual(self.entries["DRF_NUM_PROXIES"], (True, "1"))
         self.assertEqual(self.entries["BACKUP_KEEP"], (True, "7"))
+        # Owner decisions: D-1 (the SPA is JWT-only) and G7 Q1 (HSTS opt-ins off).
+        self.assertEqual(self.entries["API_SESSION_AUTH_ENABLED"], (True, "False"))
+        self.assertEqual(self.entries["SECURE_HSTS_INCLUDE_SUBDOMAINS"], (True, "False"))
+        self.assertEqual(self.entries["SECURE_HSTS_PRELOAD"], (True, "False"))
+        # No permissive trust defaults: placeholders or empty only.
+        self.assertTrue(self.entries["TRUSTED_PROXY_CIDRS"][1].startswith("<"))
+        self.assertEqual(self.entries["ADMIN_ALLOW_CIDRS"], (True, ""))
         for name in ("VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "ADMIN_ALLOW_CIDRS"):
             self.assertIn(name, self.entries)

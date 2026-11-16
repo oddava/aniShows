@@ -15,6 +15,7 @@ import Avatar from '../../components/forums/Avatar';
 import { ForumCategoryPageSkeleton } from '../../components/forums/ForumSkeletons';
 import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
 import { forumQueries } from '../../api/queries/forums';
+import { DeletedAuthorAvatar, DeletedAuthorName } from '../../components/forums/DeletedAuthor';
 
 const CATEGORY_DOT_COLORS = [
     'var(--forums-accent)',
@@ -112,17 +113,26 @@ const ThreadRow = memo(({ thread }) => {
                     <div className="flex min-w-0 flex-wrap items-center gap-3">
                         <div onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-2">
-                                <MiniProfileHoverCard user={thread.author}>
-                                    <Link to={`/u/${thread.author?.username}`} className="shrink-0">
-                                        <Avatar user={thread.author} size="xs" />
-                                    </Link>
-                                </MiniProfileHoverCard>
-                                <Link
-                                    to={`/u/${thread.author?.username}`}
-                                    className="truncate text-sm font-semibold text-[var(--forums-accent-text)] transition-colors hover:text-[var(--forums-accent-text-hover)]"
-                                >
-                                    {thread.author?.username}
-                                </Link>
+                                {thread.author ? (
+                                    <>
+                                        <MiniProfileHoverCard user={thread.author}>
+                                            <Link to={`/u/${thread.author.username}`} className="shrink-0">
+                                                <Avatar user={thread.author} size="xs" />
+                                            </Link>
+                                        </MiniProfileHoverCard>
+                                        <Link
+                                            to={`/u/${thread.author.username}`}
+                                            className="truncate text-sm font-semibold text-[var(--forums-accent-text)] transition-colors hover:text-[var(--forums-accent-text-hover)]"
+                                        >
+                                            {thread.author.username}
+                                        </Link>
+                                    </>
+                                ) : (
+                                    <>
+                                        <DeletedAuthorAvatar size="xs" />
+                                        <DeletedAuthorName className="truncate text-sm italic forums-meta-text" />
+                                    </>
+                                )}
                             </div>
                         </div>
                         <span className="forums-meta-text">•</span>

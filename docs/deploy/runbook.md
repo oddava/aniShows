@@ -173,9 +173,11 @@ db the same budget applies against Postgres' `max_connections` (100).
 | # | Decision | Where |
 |---|---|---|
 | G7 Q1 ✓ | HSTS on (1 year); `includeSubDomains` and `preload` **off** by default (they cover every subdomain, and preload is hard to undo). Each is an env flag. | `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD` |
-| G7 Q2 ⚑ | Off-site backup target: Hetzner Object Storage (S3), a Storage Box (SFTP), or none. | `BACKUP_REMOTE`, `RCLONE_CONFIG_*` |
+| G7 Q2 ✓ / ⚑ | Decided: local backups (daily, `BACKUP_KEEP`) plus `make prod-verify-backup`. Off-site stays documented and env-driven; **target still to be chosen** (Hetzner Object Storage, a Storage Box, …). Unset = no upload. | `BACKUP_REMOTE`, `RCLONE_CONFIG_*` |
 | D-9 ⚑ | Real CIDRs for `/metrics`, readiness, `/django-admin/`. Default: **closed** (empty = 403 for every client); wide-open values are refused unless `ALLOW_WIDE_ADMIN_CIDRS=1`. | `ADMIN_ALLOW_CIDRS` |
-| D-1 | Session auth flag (G1). | G1 settings |
-| D-2, D-4, D-6 | Adult direct links, email defaults, deleted users' forum posts. | specs 2, 4, 5 |
-| D-8 | Drop the `django_celery_beat` tables at first deploy? | manual SQL after the deploy |
-| adult rule | `ADULT_RULE` legacy → anilist? | integrator |
+| D-1 ✓ | API session auth **off** in production: the SPA is JWT-only (Bearer access token, httpOnly refresh cookie). The Django admin keeps its own session. | `API_SESSION_AUTH_ENABLED=False` (template) |
+| Adult rule ✓ | Adult = AniList `Media.isAdult` only (genres/tags no longer count, so e.g. *The Apothecary Diaries* is visible). Migration `anime.0060` seeds it from the Hentai genre; **run `scripts/deploy/compose.sh exec web python manage.py sync_adult_flags` once after the first deploy** (≈ 1 request per 50 titles); a weekly task keeps it in sync. | `apps/animes/adult_content.py` |
+| D-2 ✓ | Adult titles are hidden from lists, search, shelves and recommendations unless the viewer opted in; a direct link shows an opt-in gate (`403 adult_content_opt_in_required`), not a 404. | `views/anime.py`, `AdultContentGate.jsx` |
+| D-4 ✓ | Episode emails are opt-in for new users; Plan to Watch alerts are in-app only (no push/email) by default. Existing users keep their migrated preferences. | `root/settings/features/notifications.py` |
+| D-6 ✓ | Deleting an account keeps its forum threads and posts, shown as by "deleted user" (`author` SET_NULL, migration `forums.0011`). | `apps/forums/models.py` |
+| D-8 ✓ | `django_celery_beat` removed (app and package); migration `core.0014` drops its unused tables (`IF EXISTS`; the pre-migrate backup keeps a copy). | — |

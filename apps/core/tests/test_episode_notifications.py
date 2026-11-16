@@ -154,12 +154,49 @@ class EpisodeFanOutTests(TestCase):
         self._run()
         self.assertEqual(self._rows(user), [])
 
+    def _verified(self, user):
+        profile = user.userprofile
+        profile.email_verified = True
+        profile.save(update_fields=["email_verified"])
+        return user
+
+    def test_new_users_get_no_episode_email_by_default(self):
+        # D-4: episode emails are opt-in.
+        user = self._verified(self._entry())
+        with patch("apps.core.services.episode_notifications.enqueue_delivery"):
+            episode_notifications.notify_episode(self.anime, 6, self.now)
+        (row,) = self._rows(user)
+        self.assertTrue(row.is_email_sent)  # nothing pending
+
+    def test_plan_to_watch_is_told_in_the_app_only_by_default(self):
+        # D-4: a planner who opted in to email and push still gets only the in-app row.
+        watcher = self._verified(self._entry(STATUS.watching))
+        planner = self._verified(self._entry(STATUS.plan_to_watch))
+        for user in (watcher, planner):
+            notification_preferences.update_preferences(
+                user.pk, {"episodes": {"email": True, "push": True}}
+            )
+        with patch("apps.core.services.episode_notifications.enqueue_delivery"):
+            episode_notifications.notify_episode(self.anime, 6, self.now)
+        (planned,) = self._rows(planner)
+        self.assertTrue(planned.is_email_sent and planned.is_push_sent)
+        (watched,) = self._rows(watcher)
+        self.assertFalse(watched.is_email_sent)
+
+        Notification.objects.all().delete()
+        with (
+            override_settings(PLAN_TO_WATCH_ALERT_CHANNELS="all"),
+            patch("apps.core.services.episode_notifications.enqueue_delivery"),
+        ):
+            episode_notifications.notify_episode(self.anime, 6, self.now)
+        self.assertFalse(self._rows(planner)[0].is_email_sent)
+
     def test_email_is_pending_only_for_verified_users_who_want_it(self):
         verified, unverified, opted_out = self._entry(), self._entry(), self._entry()
         for user in (verified, opted_out):
-            profile = user.userprofile
-            profile.email_verified = True
-            profile.save(update_fields=["email_verified"])
+            self._verified(user)
+        for user in (verified, unverified):
+            notification_preferences.update_preferences(user.pk, {"episodes": {"email": True}})
         notification_preferences.update_preferences(opted_out.pk, {"episodes": {"email": False}})
         with patch("apps.core.services.episode_notifications.enqueue_delivery") as enqueue:
             episode_notifications.notify_episode(self.anime, 6, self.now)

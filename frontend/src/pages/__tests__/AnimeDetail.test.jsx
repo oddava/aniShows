@@ -557,6 +557,20 @@ describe('AnimeDetail with the app retry policy (smoke finding S-2)', () => {
         expect(animeApi.getBySlug).toHaveBeenCalledTimes(1);
     });
 
+    it('shows the 18+ opt-in gate, asked once, for an adult title (D-2)', async () => {
+        animeApi.getBySlug.mockRejectedValue(Object.assign(httpError(403), {
+            response: { status: 403, data: { code: 'adult_content_opt_in_required' } },
+        }));
+        const { wrapper } = createHarness('/anime/explicit-show', appRetry);
+
+        render(<AnimeDetail />, { wrapper });
+
+        expect(await screen.findByRole('heading', { name: '18+ title' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Show adult content' })).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Anime not found' })).not.toBeInTheDocument();
+        expect(animeApi.getBySlug).toHaveBeenCalledTimes(1);
+    });
+
     it('retries a server error once before showing the error state', async () => {
         animeApi.getBySlug.mockRejectedValue(httpError(500));
         const { wrapper } = createHarness('/anime/frieren', appRetry);

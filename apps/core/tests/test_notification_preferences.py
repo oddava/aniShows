@@ -20,9 +20,14 @@ class PreferenceServiceTests(TestCase):
         self.assertEqual(prefs.get_preferences(self.user.pk), prefs.defaults())
         self.assertFalse(prefs.defaults()["likes"]["push"])
 
-    @override_settings(NEW_USER_EMAIL_EPISODES=False)
-    def test_new_user_email_default_is_a_setting(self):
+    def test_episode_email_is_opt_in_by_default(self):
+        # Owner decision D-4.
         self.assertFalse(prefs.defaults()["episodes"]["email"])
+        self.assertTrue(prefs.defaults()["episodes"]["in_app"])
+
+    @override_settings(NEW_USER_EMAIL_EPISODES=True)
+    def test_new_user_email_default_is_a_setting(self):
+        self.assertTrue(prefs.defaults()["episodes"]["email"])
 
     def test_normalize_drops_unknown_keys_and_merges_defaults(self):
         stored = {

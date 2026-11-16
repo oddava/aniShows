@@ -63,18 +63,46 @@ class TestOwnership:
         assert client.patch(_post_url(post), {"content": "x"}, format="json").status_code == 403
         assert client.delete(_post_url(post)).status_code == 403
 
-    def test_deleting_a_user_deletes_their_threads_and_posts(self, make_user, make_thread):
-        """D-6: account deletion keeps cascading to forum content."""
+    def test_deleting_a_user_keeps_their_threads_and_posts_as_deleted_user(
+        self, make_user, make_thread, api_for
+    ):
+        """D-6 (owner decision): content stays; the author becomes "deleted user"."""
         author, other = make_user(), make_user()
         own_thread = make_thread(author)
+        others_reply = make_reply(own_thread, other)
         other_thread = make_thread(other)
-        make_reply(other_thread, author)
+        own_reply = make_reply(other_thread, author)
+        reply_to_own = make_reply(other_thread, other, parent=own_reply)
 
         author.delete()
 
-        assert not Thread.objects.filter(pk=own_thread.pk).exists()
-        assert not Post.objects.filter(author_id=author.id).exists()
-        assert Thread.objects.filter(pk=other_thread.pk).exists()
+        own_thread.refresh_from_db()
+        own_reply.refresh_from_db()
+        assert own_thread.author_id is None and own_reply.author_id is None
+        # Everyone else's replies under the deleted account's thread survive.
+        assert Post.objects.filter(pk__in=[others_reply.pk, reply_to_own.pk]).count() == 2
+        assert "deleted user" in str(own_reply)
+
+        client = api_for(other)
+        thread_body = client.get(_thread_url(own_thread)).json()
+        assert thread_body["author"] is None
+        posts = client.get(POSTS_URL, {"thread": other_thread.id}).json()
+        rows = posts.get("results", posts)
+        by_id = {row["id"]: row for row in rows}
+        assert by_id[own_reply.pk]["author"] is None
+        assert by_id[own_reply.pk]["content"] == "reply"
+
+        # Replying under a deleted account's thread or post notifies nobody, and works.
+        reply = client.post(
+            POSTS_URL, {"thread": own_thread.id, "content": "still here"}, format="json"
+        )
+        assert reply.status_code == 201
+        nested = client.post(
+            POSTS_URL,
+            {"thread": other_thread.id, "parent": own_reply.id, "content": "and here"},
+            format="json",
+        )
+        assert nested.status_code == 201
 
 
 @pytest.mark.django_db

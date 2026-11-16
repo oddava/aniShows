@@ -208,7 +208,9 @@ class ComposeHasNoPermissiveTrustDefaultsTests(SimpleTestCase):
         self.assertRegex(self.text, r"TRUSTED_PROXY_CIDRS: \$\{TRUSTED_PROXY_CIDRS:\?")
 
     def test_caddy_trusts_loopback_only_by_default(self):
-        self.assertIn("CADDY_TRUSTED_PROXIES: ${CADDY_TRUSTED_PROXIES:-127.0.0.1/8 ::1/128}", self.text)
+        self.assertIn(
+            "CADDY_TRUSTED_PROXIES: ${CADDY_TRUSTED_PROXIES:-127.0.0.1/8 ::1/128}", self.text
+        )
 
     def test_operator_gate_defaults_closed(self):
         self.assertIn("ADMIN_ALLOW_CIDRS: ${ADMIN_ALLOW_CIDRS:-100::/64}", self.text)

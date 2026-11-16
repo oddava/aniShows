@@ -94,13 +94,6 @@
       "schedule": "<crontab: 15 * * * * (m/h/dM/MY/d)>",
       "task": "apps.core.tasks.cleanup_tasks.health_check_workers"
     },
-    "reconcile-adult-flags-daily": {
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: 40 3 * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.adult_content.reconcile_adult_flags"
-    },
     "reconcile-offline-catalog-sync-hourly": {
       "kwargs": {
         "anime_ids": [],
@@ -122,6 +115,13 @@
       },
       "schedule": "<crontab: */10 * * * * (m/h/dM/MY/d)>",
       "task": "apps.core.tasks.notifications.send_pending_notifications"
+    },
+    "sync-adult-flags-weekly": {
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 40 3 * * 3 (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.adult_content.sync_adult_flags"
     },
     "sync-airing-schedule-daily": {
       "kwargs": {

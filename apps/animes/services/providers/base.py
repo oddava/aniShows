@@ -13,10 +13,9 @@ from zoneinfo import ZoneInfo
 import httpx
 from django.db import IntegrityError
 from django.utils import timezone
-from django.utils.text import slugify
 
 from ....shared.logger import logger
-from ...adult_content import is_adult_content
+from ...adult_content import anilist_is_adult
 from ...models import Anime
 
 UNIQUE_ANIME_FIELDS = ("anilist_id", "mal_id", "slug")
@@ -329,17 +328,11 @@ class CatalogProviderBase:
             "provider_ids": item.get("providerIds") or {},
             "source_urls": item.get("sourceUrls") or [],
         }
-        # A payload can prove a show is adult, but not that it isn't: genres
-        # only accumulate, so the stored row may still have an adult genre this
-        # payload lacks. Anime.save() and the genre signal settle the rest.
-        genres = item.get("genres")
-        genre_slugs = (
-            [slugify(name) for name in genres if isinstance(name, str)]
-            if isinstance(genres, list)
-            else []
-        )
-        if is_adult_content(genre_slugs, tags):
-            anime_data["is_adult"] = True
+        # The adult rule is AniList's own flag (adult_content.py), both ways.
+        # A payload without it leaves the stored flag alone.
+        is_adult = anilist_is_adult(item)
+        if is_adult is not None:
+            anime_data["is_adult"] = is_adult
         return anime_data
 
     def _apply_recent_airing_transition(self, anime: Anime, anime_data: dict) -> None:

@@ -165,6 +165,7 @@
       }
     ],
     "id": "int",
+    "is_adult": "bool",
     "is_favorite": "bool",
     "member_count": "int",
     "next_airing_date": "str",
@@ -306,6 +307,7 @@
       }
     ],
     "id": "int",
+    "is_adult": "bool",
     "is_favorite": "bool",
     "member_count": "int",
     "next_airing_date": "str",

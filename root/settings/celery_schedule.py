@@ -101,9 +101,10 @@ def _catalog_entries(
             },
             "options": {"queue": "low_priority"},
         },
-        "reconcile-adult-flags-daily": {
-            "task": "apps.animes.tasks.adult_content.reconcile_adult_flags",
-            "schedule": crontab(hour=3, minute=40),  # Daily at 3:40 AM
+        # Re-read AniList's isAdult for the whole catalog (adult_content.py).
+        "sync-adult-flags-weekly": {
+            "task": "apps.animes.tasks.adult_content.sync_adult_flags",
+            "schedule": crontab(day_of_week=3, hour=3, minute=40),  # Wednesday 3:40 AM
             "options": {"queue": "low_priority"},
         },
         "update-relation-slugs-daily": {

@@ -150,7 +150,8 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "django_filters",
-    "django_celery_beat",
+    # django_celery_beat is gone (D-8): beat runs the default file scheduler, and
+    # core 0014 drops its unused tables.
     "corsheaders",
     "allauth",
     "allauth.account",

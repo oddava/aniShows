@@ -6,6 +6,7 @@ import RichTextEditor from './RichTextEditor';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import Avatar from './Avatar';
 import MiniProfileHoverCard from '../common/MiniProfileHoverCard';
+import { DeletedAuthorAvatar, DeletedAuthorName } from './DeletedAuthor';
 import EditedMarker from './EditedMarker';
 import ModerateMenu, { promptRemovalReason } from './ModerateMenu';
 
@@ -82,16 +83,24 @@ export default function ThreadOriginalPost({
             <div className="bg-accent/[0.02] rounded-[20px] p-4 border border-accent/20 shadow-sm shadow-accent/5 relative">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3">
                     <div className="flex items-center gap-3.5">
-                        <MiniProfileHoverCard user={thread.author}>
-                            <Link to={`/u/${thread.author.username}`} className="shrink-0">
-                                <Avatar user={thread.author} />
-                            </Link>
-                        </MiniProfileHoverCard>
+                        {thread.author ? (
+                            <MiniProfileHoverCard user={thread.author}>
+                                <Link to={`/u/${thread.author.username}`} className="shrink-0">
+                                    <Avatar user={thread.author} />
+                                </Link>
+                            </MiniProfileHoverCard>
+                        ) : (
+                            <DeletedAuthorAvatar />
+                        )}
                         <div>
                             <div className="flex items-center gap-2">
-                                <Link to={`/u/${thread.author.username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">
-                                    {thread.author.username}
-                                </Link>
+                                {thread.author ? (
+                                    <Link to={`/u/${thread.author.username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">
+                                        {thread.author.username}
+                                    </Link>
+                                ) : (
+                                    <DeletedAuthorName />
+                                )}
                                 <span className="text-[9px] font-extrabold uppercase text-accent bg-accent/10 px-1.5 py-0.5 rounded tracking-wider">Author</span>
                             </div>
                             <span className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium mt-0.5">
@@ -121,7 +130,7 @@ export default function ThreadOriginalPost({
                             </button>
                         )}
                         {isStaff && <ModerateMenu actions={moderateActions} />}
-                        {isOwner(thread.author.username) && (
+                        {thread.author && isOwner(thread.author.username) && (
                             <div className="flex items-center gap-1 mr-1">
                                 <button
                                     onClick={() => { setEditingThread(true); setEditThreadContent(thread.content); }}

@@ -1,10 +1,11 @@
-"""Nightly safety net for ``Anime.is_adult`` (see ``apps/animes/adult_content.py``)."""
+"""Weekly re-read of AniList's ``isAdult`` (see ``apps/animes/adult_content.py``)."""
 
-from ...shared.celery import observed_shared_task, retry_on_error
+from ...shared.celery import observed_shared_task
 from .. import adult_content
 
 
-@observed_shared_task(retry_policy="standard", time_limit_preset="standard")
-def reconcile_adult_flags(self):
-    with retry_on_error(self, "Adult flag reconcile failed"):
-        return adult_content.reconcile_adult_flags()
+# No retry: a failed request skips its chunk (never clears a flag), and next
+# week's run, or any metadata refresh of the row, catches up.
+@observed_shared_task(retry_policy="none", time_limit_preset="long")
+def sync_adult_flags(self):
+    return adult_content.sync_adult_flags_from_anilist()

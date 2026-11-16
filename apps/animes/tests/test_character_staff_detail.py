@@ -68,6 +68,7 @@ def people(db):
     public = Anime.objects.create(title="Public Show", slug="public-show", synopsis="x")
     adult = Anime.objects.create(title="Adult Show", slug="adult-show", synopsis="x")
     adult.genres.add(hentai)
+    Anime.objects.filter(pk=adult.pk).update(is_adult=True)  # AniList's isAdult
     hidden = Anime.objects.create(title="Hidden Show", slug="hidden-show", synopsis="x")
     OfflineAnimeSyncState.objects.create(
         anime=hidden,

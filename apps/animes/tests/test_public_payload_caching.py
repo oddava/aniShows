@@ -30,6 +30,7 @@ class AdultContentShelfTests(APITestCase):
             status=Anime.AnimeStatus.finished,
         )
         self.adult.genres.add(hentai)
+        Anime.objects.filter(pk=self.adult.pk).update(is_adult=True)  # AniList's isAdult
         self.safe = Anime.objects.create(
             title="Safe Hit",
             slug="safe-hit",

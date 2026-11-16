@@ -27,12 +27,16 @@ from ..base import REST_FRAMEWORK
 # ``manage.py generate_vapid_keys``.
 VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "")
 
-# Owner decision D-4 (overview section 11), defaults = today's behaviour:
-# - new users get episode emails unless they turn them off (True = today);
-# - plan-to-watch entries get every episode ("all" = today) or only the premiere
-#   ("premiere"). Watching entries always get every episode.
-NEW_USER_EMAIL_EPISODES = True
+# Owner decision D-4 (decided):
+# - new-episode emails are opt-in: a user without saved preferences gets none
+#   (existing users keep what the G4 migration copied from their old flags);
+# - plan-to-watch entries hear about every episode ("all"; "premiere" = episode 1
+#   only), but in the app only: no push and no email for them ("in_app"; "all" =
+#   the same channels as Watching). Watching entries always get every episode
+#   on every channel the user chose.
+NEW_USER_EMAIL_EPISODES = False
 PLAN_TO_WATCH_ALERTS = "all"
+PLAN_TO_WATCH_ALERT_CHANNELS = "in_app"
 
 # One-click email unsubscribe (anonymous, token-authenticated) is throttled per IP.
 _throttle_rates = _cast("dict[str, str]", REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"])
