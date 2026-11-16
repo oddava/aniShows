@@ -1,5 +1,6 @@
 """Google login: JWT only, no Django session left behind (A05, D-1)."""
 
+from typing import Any
 from unittest.mock import patch
 
 from django.conf import settings
@@ -21,7 +22,8 @@ from ..views.users import UserProfileView
 
 User = get_user_model()
 
-XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+# Any-valued so mypy does not map it onto APIClient.post(follow: bool).
+XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 GOOGLE_URL = "/api/v1/auth/google/"  # not reverse(): allauth registers the same name
 JWT = "rest_framework_simplejwt.authentication.JWTAuthentication"
 SESSION = "rest_framework.authentication.SessionAuthentication"
@@ -97,7 +99,7 @@ class SessionAuthFlagTests(SimpleTestCase):
 
     def test_default_is_on(self):
         self.assertTrue(settings.API_SESSION_AUTH_ENABLED)
-        self.assertIn(SESSION, settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"])
+        self.assertIn(SESSION, list(settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]))
 
 
 class SessionAuthFlagBehaviourTests(APITestCase):
@@ -116,7 +118,8 @@ class SessionAuthFlagBehaviourTests(APITestCase):
         classes = [
             import_string(name)
             for name in _authentication_classes(
-                settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"], session_enabled=False
+                list(settings.REST_FRAMEWORK["DEFAULT_AUTHENTICATION_CLASSES"]),
+                session_enabled=False,
             )
         ]
         with patch.object(UserProfileView, "authentication_classes", classes):
@@ -194,7 +197,7 @@ class LoginCsrfTests(APITestCase):
         self.assertNotIn(REFRESH_COOKIE_NAME, response.cookies)
 
     def test_endpoints_reject_a_missing_header_and_a_foreign_origin(self):
-        cases = (
+        cases: tuple[tuple[str, dict[str, Any]], ...] = (
             (reverse("token_obtain_pair"), {"username": "victim", "password": "pw-12345678"}),
             (GOOGLE_URL, {"code": "abc"}),
             ("/api/v1/verify-email/MQ/token/", {}),

@@ -1,5 +1,7 @@
 """Registration needs an email; auth-flow bodies never 500 on odd input (A01, A02)."""
 
+from typing import Any
+
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.urls import reverse
@@ -8,7 +10,8 @@ from rest_framework.test import APITestCase
 
 User = get_user_model()
 
-XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+# Any-valued so mypy does not map it onto APIClient.post(follow: bool).
+XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 
 class RegistrationEmailTests(APITestCase):

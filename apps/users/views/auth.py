@@ -5,7 +5,7 @@ from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed, Throttled, ValidationError
-from rest_framework.fields import CharField, EmailField
+from rest_framework.fields import CharField, EmailField, Field
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -48,7 +48,7 @@ User = get_user_model()
 LOGIN_IDENTIFIER_REQUIRED = "Enter a username or email."
 
 
-class _StrictStringMixin:
+class _StrictStringMixin(Field):
     """Reject non-string input instead of coercing it (DRF turns ``5`` into ``"5"``)."""
 
     def to_internal_value(self, data):

@@ -1,5 +1,6 @@
 """Usernames are unique and looked up ignoring case (A13)."""
 
+from typing import Any
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -9,6 +10,7 @@ from django.http import Http404
 from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.test import APITestCase
 
 from ..adapters import unique_oauth_username
@@ -18,7 +20,8 @@ from ..services.profile_visibility import get_visible_user_or_404
 
 User = get_user_model()
 
-XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+# Any-valued so mypy does not map it onto APIClient.post(follow: bool).
+XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 
 class UsernameConstraintTests(TestCase):
@@ -71,7 +74,7 @@ class CaseInsensitiveLookupTests(APITestCase):
 
     def test_rename_refuses_a_case_variant_of_another_user(self):
         other = User.objects.create_user(username="carol", email="c@example.com", password="x")
-        with self.assertRaises(Exception) as ctx:
+        with self.assertRaises(DRFValidationError) as ctx:
             update_user_profile(other, {"username": "BOB"})
         self.assertIn("already taken", str(ctx.exception.detail))
 

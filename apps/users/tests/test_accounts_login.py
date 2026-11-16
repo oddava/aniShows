@@ -1,5 +1,6 @@
 """POST auth/login/ never 500s and does not reveal which identifiers exist (A35, S-3)."""
 
+from typing import Any
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -10,7 +11,8 @@ from rest_framework.test import APITestCase
 
 User = get_user_model()
 
-XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+# Any-valued so mypy does not map it onto APIClient.post(follow: bool).
+XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 
 class LoginIdentifierTests(APITestCase):

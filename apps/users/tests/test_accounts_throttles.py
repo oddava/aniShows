@@ -1,6 +1,7 @@
 """Throttles on account endpoints (A03, A09)."""
 
 import json
+from typing import Any
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -85,7 +86,8 @@ class SocialLinksThrottleTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
-XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+# Any-valued so mypy does not map it onto APIClient.post(follow: bool).
+XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 
 class LoginIdentifierThrottleTests(APITestCase):
@@ -203,6 +205,7 @@ class ScopedThrottleTests(APITestCase):
         from root.settings import base
 
         rates = base.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+        assert isinstance(rates, dict)
         self.assertEqual(rates["resend_verification"], "3/hour")
         self.assertEqual(rates["change_email"], "5/hour")
         self.assertEqual(settings.LOGIN_IDENTIFIER_MAX_FAILURES, 10)

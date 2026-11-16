@@ -2,7 +2,7 @@ import time
 
 from botocore.exceptions import EndpointConnectionError
 from django.contrib.auth import get_user_model
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import Throttled, ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -61,7 +61,7 @@ class UserProfileView(APIView):
 
         throttle = throttling.SocialLinksRateThrottle()
         if not throttle.allow_request(request, self):
-            self.throttled(request, throttle.wait())
+            raise Throttled(wait=throttle.wait())
         return data
 
     def get(self, request):

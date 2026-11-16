@@ -1,5 +1,6 @@
 """Refresh-cookie auth flow, slim JWT claims and WebSocket tickets."""
 
+from typing import Any
 from unittest.mock import patch
 
 from asgiref.sync import async_to_sync, sync_to_async
@@ -19,7 +20,8 @@ from ..views.social_auth import SocialLoginView
 
 User = get_user_model()
 
-XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+# Any-valued so mypy does not map it onto APIClient.post(follow: bool).
+XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 
 class RefreshCookieFlowTests(APITestCase):
