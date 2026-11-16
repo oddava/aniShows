@@ -260,6 +260,17 @@ class PushSubscriptionViewSet(GenericViewSet):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
+        if data.get("refresh"):
+            refreshed = PushService.refresh_subscription(
+                request.user, data["endpoint"], data["p256dh"], data["auth"]
+            )
+            if refreshed is None:
+                return error_response(
+                    "Subscription not found",
+                    code="push_subscription_not_found",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+            return Response({"status": "refreshed", "id": refreshed.id})
         subscription = PushService.subscribe_user(
             user=request.user,
             endpoint=data["endpoint"],

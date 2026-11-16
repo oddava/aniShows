@@ -131,8 +131,10 @@ class PushSubscription(CreatedAtMixin, Model):
 
     is_active = BooleanField(default=True)
     last_used = DateTimeField(null=True, blank=True)
-    # Consecutive transient failures (429/5xx/timeouts); reset on success.
+    # Consecutive failed sends and when the current run of failures began; both
+    # reset on success and on re-subscribe.
     failure_count = PositiveIntegerField(default=0)
+    failing_since = DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

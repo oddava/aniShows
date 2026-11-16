@@ -148,6 +148,27 @@ class PushApiTests(APITestCase):
         self.assertTrue(row.is_active)
         self.assertEqual(row.failure_count, 0)
 
+    def test_refresh_reactivates_an_existing_row_only(self):
+        endpoint = "https://fcm.googleapis.com/fcm/send/refresh"
+        self._subscribe(endpoint)
+        PushSubscription.objects.update(is_active=False, failure_count=5)
+        response = self._subscribe(endpoint, refresh=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(PushSubscription.objects.get().is_active)
+
+        # Removed from another device: the daily re-sync must not bring it back.
+        PushSubscription.objects.all().delete()
+        self.assertEqual(self._subscribe(endpoint, refresh=True).status_code, 404)
+        self.assertFalse(PushSubscription.objects.exists())
+
+    def test_refresh_never_moves_another_accounts_row(self):
+        endpoint = "https://fcm.googleapis.com/fcm/send/theirs"
+        self.client.force_authenticate(self.other)
+        self._subscribe(endpoint)
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self._subscribe(endpoint, refresh=True).status_code, 404)
+        self.assertEqual(PushSubscription.objects.get().user, self.other)
+
     def test_list_hides_endpoints(self):
         self._subscribe("https://fcm.googleapis.com/fcm/send/a")
         rows = self.client.get(reverse("push_subscribe")).json()
@@ -209,7 +230,8 @@ class EmailUnsubscribeApiTests(APITestCase):
         self.assertTrue(self._email_on())
 
     def test_a_non_object_body_is_400_not_500(self):
-        for body in ([], "x", 3):
+        bodies: tuple[object, ...] = ([], "x", 3)
+        for body in bodies:
             with self.subTest(body=body):
                 self.assertEqual(self.client.post(self.url, body, format="json").status_code, 400)
 

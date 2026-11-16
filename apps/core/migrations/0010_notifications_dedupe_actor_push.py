@@ -243,4 +243,9 @@ class Migration(migrations.Migration):
             name="failure_count",
             field=models.PositiveIntegerField(default=0),
         ),
+        migrations.AddField(
+            model_name="pushsubscription",
+            name="failing_since",
+            field=models.DateTimeField(blank=True, null=True),
+        ),
     ]

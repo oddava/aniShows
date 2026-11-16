@@ -1,5 +1,6 @@
 import importlib
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -90,13 +91,23 @@ class MigrationBackfillKeyTests(TestCase):
                 is_read=is_read,
             )
 
+        # Another user's rows land in a different chunk and keep their own keys.
+        Notification.objects.create(
+            user=follower,
+            notification_type="new_episode",
+            title="t",
+            message="m",
+            data={"anime_id": 1, "episode_number": 2},
+        )
         ep_a = make("new_episode", {"anime_id": 1, "episode_number": 2})
         ep_b = make("new_episode", {"anime_id": 1, "episode_number": 2})
         like_old = make("review_like", {"review_id": 4, "liker_user_ids": [follower.pk]})
         like_new = make("review_like", {"review_id": 4, "liker_user_ids": [999999]})
         follow = make("new_follower", {"follower_id": follower.pk})
 
-        migration_0010.backfill_notification_keys(apps, _NoopSchemaEditor())
+        # One user per chunk: keys are per user, so chunking must not change the result.
+        with patch.object(migration_0010, "USERS_PER_CHUNK", 1):
+            migration_0010.backfill_notification_keys(apps, _NoopSchemaEditor())
 
         rows = {n.pk: n for n in Notification.objects.all()}
         self.assertEqual(rows[ep_a.pk].dedupe_key, "new_episode:1:2")
@@ -108,6 +119,7 @@ class MigrationBackfillKeyTests(TestCase):
         self.assertEqual(rows[like_old.pk].actor_id, follower.pk)
         self.assertIsNone(rows[like_new.pk].actor_id)  # unknown user ids are not linked
         self.assertEqual(rows[follow.pk].actor_id, follower.pk)
+        self.assertEqual(Notification.objects.get(user=follower).dedupe_key, "new_episode:1:2")
 
 
 class _NoopSchemaEditor:

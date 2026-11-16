@@ -1,7 +1,7 @@
 """Notification serializers (G4 Notifications), moved out of the view module."""
 
 from rest_framework.exceptions import ValidationError
-from rest_framework.fields import CharField, JSONField, SerializerMethodField
+from rest_framework.fields import BooleanField, CharField, JSONField, SerializerMethodField
 from rest_framework.serializers import ModelSerializer, Serializer
 
 from ...core.models import Notification, PushSubscription
@@ -72,10 +72,21 @@ class PushSubscriptionSerializer(ModelSerializer):
     auth = CharField(required=True, max_length=255)
     device_type = CharField(default="browser")
     device_info = JSONField(required=False, default=dict)
+    # The app's daily re-sync: only re-activate an existing row, never create one.
+    refresh = BooleanField(required=False, default=False)
 
     class Meta:
         model = PushSubscription
-        fields = ["id", "endpoint", "p256dh", "auth", "device_type", "device_info", "created_at"]
+        fields = [
+            "id",
+            "endpoint",
+            "p256dh",
+            "auth",
+            "device_type",
+            "device_info",
+            "refresh",
+            "created_at",
+        ]
 
     def validate_endpoint(self, value):
         # The worker POSTs to this URL; only public HTTPS push services qualify.

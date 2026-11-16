@@ -10,7 +10,8 @@ from typing import Any
 
 import requests  # type: ignore[import-untyped]
 from django.conf import settings
-from django.db.models import F
+from django.db.models import F, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from pywebpush import WebPushException, webpush
 
@@ -19,9 +20,9 @@ from ..models import Notification, PushSubscription
 from . import notification_types
 
 PUSH_TIMEOUT_SECONDS = 10
-# A subscription is dropped after this many consecutive failures, and only once it has
-# not delivered for FAILURE_GRACE: a burst (several rows sent in one sweep while the
-# push service rate-limits, or a short VAPID mistake) never drops a working device.
+# A subscription is dropped after this many consecutive failures, and only once they have
+# lasted FAILURE_GRACE: a burst (several rows sent in one sweep while the push service
+# rate-limits, or a short VAPID mistake) never drops a device, however rarely it is used.
 MAX_TRANSIENT_FAILURES = 5
 FAILURE_GRACE = timedelta(hours=24)
 PUSH_BODY_MAX_CHARS = 180
@@ -61,12 +62,25 @@ def build_payload(notification: Notification, *, unread_count: int) -> str:
         "notification_id": notification.pk,
         "unread_count": max(int(unread_count), 0),
     }
-    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    encoded = _encode(payload)
     if len(encoded.encode()) > PUSH_PAYLOAD_MAX_BYTES:
-        # Only an absurd URL can get here (title and body are capped): fall back.
+        # A huge URL: fall back to the list page.
         payload["url"] = "/notifications"
-        encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        encoded = _encode(payload)
+    # Multi-byte text (emoji, CJK) can still exceed the budget: trim the body, then the
+    # title, against the encoded size until it fits.
+    for key, floor in (("body", 0), ("title", 1)):
+        while len(encoded.encode()) > PUSH_PAYLOAD_MAX_BYTES and len(payload[key]) > floor:
+            overflow = len(encoded.encode()) - PUSH_PAYLOAD_MAX_BYTES
+            # Each character is at most 4 bytes in UTF-8: drop enough, never too few.
+            keep = max(floor, len(payload[key]) - max(1, overflow // 4) - 1)
+            payload[key] = payload[key][:keep].rstrip() + ("…" if keep else "")
+            encoded = _encode(payload)
     return encoded
+
+
+def _encode(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 class PushService:
@@ -156,7 +170,7 @@ class PushService:
             return PushResult.FAILED
 
         PushSubscription.objects.filter(pk=subscription.pk).update(
-            last_used=timezone.now(), failure_count=0
+            last_used=timezone.now(), failure_count=0, failing_since=None
         )
         return PushResult.SENT
 
@@ -167,13 +181,15 @@ class PushService:
 
     @classmethod
     def _record_failure(cls, subscription: PushSubscription, reason: str) -> PushResult:
-        """Count a failed send; RETRY, or GONE once the device has been failing for a day."""
+        """Count a failed send; RETRY, or GONE once the device has failed for a whole day."""
+        now = timezone.now()
         PushSubscription.objects.filter(pk=subscription.pk).update(
-            failure_count=F("failure_count") + 1
+            failure_count=F("failure_count") + 1,
+            failing_since=Coalesce(F("failing_since"), Value(now)),
         )
         row = (
             PushSubscription.objects.filter(pk=subscription.pk)
-            .values("failure_count", "last_used", "created_at")
+            .values("failure_count", "failing_since")
             .first()
         )
         if row is None:
@@ -184,10 +200,8 @@ class PushService:
             subscription.pk,
             row["failure_count"],
         )
-        last_success = row["last_used"] or row["created_at"]
-        if (
-            row["failure_count"] >= MAX_TRANSIENT_FAILURES
-            and last_success < timezone.now() - FAILURE_GRACE
+        if row["failure_count"] >= MAX_TRANSIENT_FAILURES and row["failing_since"] < now - (
+            FAILURE_GRACE
         ):
             cls._deactivate(subscription)
             return PushResult.GONE
@@ -253,12 +267,29 @@ class PushService:
                 "device_info": device_info or {},
                 "is_active": True,
                 "failure_count": 0,
+                "failing_since": None,
             },
         )
         logger.info(
             "Push subscription %s for user %s", "created" if created else "updated", user.pk
         )
         return subscription
+
+    @classmethod
+    def refresh_subscription(
+        cls, user, endpoint: str, p256dh: str, auth: str
+    ) -> PushSubscription | None:
+        """Re-activate this user's existing row for ``endpoint``; None when there is none.
+
+        The app's daily re-sync uses this, so it can revive a device dropped after
+        failures but never resurrect one the user removed (its row was deleted).
+        """
+        updated = PushSubscription.objects.filter(user=user, endpoint=endpoint).update(
+            p256dh=p256dh, auth=auth, is_active=True, failure_count=0, failing_since=None
+        )
+        if not updated:
+            return None
+        return PushSubscription.objects.get(user=user, endpoint=endpoint)
 
     @classmethod
     def unsubscribe_user(cls, user, endpoint: str) -> bool:

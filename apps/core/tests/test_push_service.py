@@ -103,9 +103,9 @@ class PushTransportTests(TestCase):
         self.subscription.refresh_from_db()
         self.assertIsNotNone(self.subscription.last_used)
 
-    def _age_device(self, hours):
+    def _failing_for(self, hours):
         PushSubscription.objects.filter(pk=self.subscription.pk).update(
-            created_at=timezone.now() - timedelta(hours=hours), last_used=None
+            failing_since=timezone.now() - timedelta(hours=hours)
         )
 
     @patch("apps.core.services.push_service.webpush")
@@ -129,8 +129,10 @@ class PushTransportTests(TestCase):
         self.assertEqual(self.subscription.failure_count, 2)  # 413 is the payload's fault
 
     @patch("apps.core.services.push_service.webpush")
-    def test_a_burst_of_429s_never_drops_a_recently_working_device(self, mock_webpush):
-        PushSubscription.objects.filter(pk=self.subscription.pk).update(last_used=timezone.now())
+    def test_a_burst_of_429s_never_drops_a_device_however_rarely_used(self, mock_webpush):
+        PushSubscription.objects.filter(pk=self.subscription.pk).update(
+            last_used=timezone.now() - timedelta(days=30)
+        )
         mock_webpush.side_effect = _http_error(429)
         for _ in range(8):
             self.assertIs(self._send(), PushResult.RETRY)
@@ -140,9 +142,10 @@ class PushTransportTests(TestCase):
 
     @patch("apps.core.services.push_service.webpush")
     def test_a_device_failing_for_over_a_day_is_dropped_after_five(self, mock_webpush):
-        self._age_device(hours=25)
         mock_webpush.side_effect = _http_error(429)
-        for attempt in range(1, 5):
+        self.assertIs(self._send(), PushResult.RETRY)
+        self._failing_for(hours=25)
+        for attempt in range(2, 5):
             self.assertIs(self._send(), PushResult.RETRY)
             self.subscription.refresh_from_db()
             self.assertEqual(self.subscription.failure_count, attempt)
@@ -161,6 +164,7 @@ class PushTransportTests(TestCase):
         self.assertIs(self._send(), PushResult.SENT)
         self.subscription.refresh_from_db()
         self.assertEqual(self.subscription.failure_count, 0)
+        self.assertIsNone(self.subscription.failing_since)
 
     @override_settings(VAPID_SUBJECT="", DEFAULT_FROM_EMAIL="AniShows <hello@anishows.example>")
     def test_vapid_sub_is_parsed_from_a_display_name_address(self):
@@ -174,6 +178,15 @@ class PushTransportTests(TestCase):
         self.notification.data = {"anime_id": 7, "anime_slug": "a" * 2000}
         payload = json.loads(build_payload(self.notification, unread_count=0))
         self.assertEqual(payload["url"], "/notifications")
+
+    def test_multibyte_text_is_trimmed_to_the_byte_budget(self):
+        self.notification.title = "🎉" * 300
+        self.notification.message = "日本語🎌" * 400
+        raw = build_payload(self.notification, unread_count=1)
+        self.assertLessEqual(len(raw.encode()), 1024)
+        payload = json.loads(raw)
+        self.assertTrue(payload["title"])
+        self.assertEqual(payload["url"], "/anime/jojo")
 
     @override_settings(VAPID_PUBLIC_KEY="", VAPID_PRIVATE_KEY="")
     def test_not_configured_without_keys(self):
