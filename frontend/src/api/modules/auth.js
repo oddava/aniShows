@@ -22,7 +22,8 @@ export const authApi = {
     requestPasswordReset: (email) => api.post('/auth/password-reset/', { email }),
     resetPassword: (uid, token, password) =>
         api.post('/auth/password-reset-confirm/', { uid, token, password }),
-    verifyEmail: (uid, token) => api.post(`/verify-email/${uid}/${token}/`),
+    // Body, not path: the token stays out of access logs (A14).
+    verifyEmail: (uid, token) => api.post('/verify-email/', { uid, token }),
     resendVerification: (email) => api.post('/auth/resend-verification/', { email }),
     changeEmail: (data) => api.post('/auth/change-email/', data),
     // `newEmail` only for links sent before pending_email (one release).

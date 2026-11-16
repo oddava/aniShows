@@ -17,7 +17,7 @@ export default function ConfirmEmailChange() {
     const uid = linkParams?.uid;
     const token = linkParams?.token;
     const new_email = linkParams?.new_email;
-    const { isAuthenticated, refreshProfile } = useAuth();
+    const { isAuthenticated, logout } = useAuth();
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('Confirming your new email address...');
     // The link is single-use; never submit it twice (StrictMode, auth changes).
@@ -34,12 +34,10 @@ export default function ConfirmEmailChange() {
                 // Decode base64 email for display if needed (but API handles token validation)
                 await authApi.confirmEmailChange(uid, token, new_email);
 
+                // The change signed out every device, this one too: end the
+                // local session now so "Sign in" works instead of bouncing.
                 if (isAuthenticated) {
-                    try {
-                        await refreshProfile();
-                    } catch {
-                        // The email change succeeded; a stale local profile refresh should not fail the page.
-                    }
+                    await logout();
                 }
 
                 setStatus('success');
@@ -59,7 +57,7 @@ export default function ConfirmEmailChange() {
             setStatus('error');
             setMessage('Invalid verification link.');
         }
-    }, [uid, token, new_email, isRedirecting, isAuthenticated, refreshProfile]);
+    }, [uid, token, new_email, isRedirecting, isAuthenticated, logout]);
 
     return (
         <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4">

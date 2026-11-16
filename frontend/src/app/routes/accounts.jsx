@@ -3,16 +3,18 @@ import React from 'react';
 import { Route } from 'react-router-dom';
 
 import lazyWithRetry from '../lazyWithRetry';
+// Emailed-token pages load eagerly: their URL clean-up then runs in the first
+// commit, before the async analytics script can track the token URL (A14).
+import VerifyEmail from '../../pages/VerifyEmail';
+import ConfirmEmailChange from '../../pages/ConfirmEmailChange';
+import PasswordResetConfirm from '../../pages/PasswordResetConfirm';
 
 const Profile = lazyWithRetry(() => import('../../pages/Profile'));
 const Settings = lazyWithRetry(() => import('../../pages/Settings'));
 const Login = lazyWithRetry(() => import('../../pages/Auth').then((module) => ({ default: module.Login })));
 const Register = lazyWithRetry(() => import('../../pages/Auth').then((module) => ({ default: module.Register })));
-const VerifyEmail = lazyWithRetry(() => import('../../pages/VerifyEmail'));
 const VerificationPending = lazyWithRetry(() => import('../../pages/VerificationPending'));
-const ConfirmEmailChange = lazyWithRetry(() => import('../../pages/ConfirmEmailChange'));
 const PasswordReset = lazyWithRetry(() => import('../../pages/PasswordReset'));
-const PasswordResetConfirm = lazyWithRetry(() => import('../../pages/PasswordResetConfirm'));
 const GoogleCallback = lazyWithRetry(() => import('../../pages/GoogleCallback'));
 const Terms = lazyWithRetry(() => import('../../pages/Terms'));
 const Privacy = lazyWithRetry(() => import('../../pages/Privacy'));

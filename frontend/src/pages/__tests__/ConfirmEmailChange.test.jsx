@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import ConfirmEmailChange from '../ConfirmEmailChange';
 import { authApi } from '../../api/client';
 
-const refreshProfileMock = vi.fn();
+const logoutMock = vi.fn();
 
 vi.mock('../../api/client', () => ({
     authApi: {
@@ -15,7 +15,7 @@ vi.mock('../../api/client', () => ({
 vi.mock('../../context/AuthContext', () => ({
     useAuth: () => ({
         isAuthenticated: true,
-        refreshProfile: refreshProfileMock,
+        logout: logoutMock,
     }),
 }));
 
@@ -45,9 +45,9 @@ describe('ConfirmEmailChange', () => {
         vi.clearAllMocks();
     });
 
-    it('refreshes auth profile after successful email confirmation', async () => {
+    it('signs out locally after a successful email confirmation', async () => {
         authApi.confirmEmailChange.mockResolvedValue({ data: { message: 'ok' } });
-        refreshProfileMock.mockResolvedValue({});
+        logoutMock.mockResolvedValue(undefined);
 
         renderAt('/confirm-email-change/Nw/token123/anVzdGNvZGVyckBnbWFpbC5jb20');
 
@@ -60,7 +60,7 @@ describe('ConfirmEmailChange', () => {
         });
 
         await waitFor(() => {
-            expect(refreshProfileMock).toHaveBeenCalledTimes(1);
+            expect(logoutMock).toHaveBeenCalledTimes(1);
         });
 
         expect(screen.getByText('Email Updated!')).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe('ConfirmEmailChange', () => {
 
     it('confirms a {uid, token} link and strips it from the address bar', async () => {
         authApi.confirmEmailChange.mockResolvedValue({ data: { message: 'ok' } });
-        refreshProfileMock.mockResolvedValue({});
+        logoutMock.mockResolvedValue(undefined);
 
         renderAt('/confirm-email-change/Nw/token123');
 
