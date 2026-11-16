@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
 
 // Parse ALLOWED_HOSTS from environment variable
 const allowedHosts = process.env.ALLOWED_HOSTS
@@ -9,7 +8,6 @@ const allowedHosts = process.env.ALLOWED_HOSTS
 
 // Deployment timestamp for cache busting and debugging
 const deploymentTime = new Date().toISOString()
-const enablePWA = process.env.VITE_ENABLE_PWA === 'true'
 // Dev proxy targets. Default to the docker-compose service names; override to
 // point the dev server at a backend running elsewhere (e.g. a local mock).
 const devApiTarget = process.env.DEV_API_TARGET || 'http://web:8000'
@@ -38,50 +36,17 @@ export default defineConfig(({ mode }) => ({
       transformIndexHtml(html) {
         return html.replace(
           '</head>',
-          `  <meta name="deployment-time" content="${deploymentTime}">\n  <meta name="pwa-enabled" content="${enablePWA ? 'true' : 'false'}">\n  </head>`
+          `  <meta name="deployment-time" content="${deploymentTime}">\n  </head>`
         )
       }
     },
-    // PWA support is opt-in in production to avoid stale SW asset incidents.
-    enablePWA && VitePWA({
-      registerType: 'autoUpdate',
-      workbox: {
-        // Activate new SW immediately without waiting for tabs to close
-        skipWaiting: true,
-        clientsClaim: true,
-        cleanupOutdatedCaches: true,
-        // Don't pre-cache HTML - let the browser always fetch index.html from network
-        // so Caddy's no-cache headers work and new deployments are seen immediately
-        globPatterns: ['**/*.{js,css,ico,png,svg,webp}'],
-        // SPA navigation fallback
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/django-admin\//, /^\/media\//, /^\/static\//],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/.*\.(?:png|jpg|jpeg|gif|webp|svg)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'images',
-              expiration: {
-                maxEntries: 500,
-                maxAgeSeconds: 30 * 24 * 60 * 60, // 30 days
-              },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/.*\/api\/v1\/.*/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 24 * 60 * 60, // 24 hours
-              },
-            },
-          },
-        ],
-      },
-    }),
+    // No Workbox/VitePWA service worker (C-INT-7). The only service worker is the
+    // web-push worker, public/service-worker.js, registered at scope `/` by
+    // components/notifications/pushClient.js. A second worker at `/` would
+    // replace it (one registration per scope) and turn push off, and the old
+    // `api-cache` rule kept authenticated /api/v1 responses in CacheStorage for
+    // 24 h, past logout. public/boot.js still unregisters any leftover worker
+    // and purges those caches on old installs.
     // Bundle analyzer - only loaded when needed
     mode === 'analyze' && (async () => {
       const { visualizer } = await import('rollup-plugin-visualizer')

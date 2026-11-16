@@ -16,6 +16,7 @@ import {
     syncStoredTimeZonePreference,
 } from '../utils/dateUtils';
 import logger from '../utils/logger';
+import { detachOnLogout } from '../components/notifications/pushClient';
 import { clearUserContext, setUserContext } from '../sentry';
 
 const AuthContext = createContext(null);
@@ -167,9 +168,11 @@ export function AuthProvider({ children }) {
     }, []);
 
     const logout = useCallback(async () => {
-        // Integrator, at G4's merge (C-G1-3): `await detachOnLogout()` from
-        // components/notifications/pushClient.js goes here, before the
-        // session is cleared. It is best effort and bounded at 1.5 s.
+        // C-G1-3: unsubscribe this browser from web push and delete its server
+        // row while the session can still authenticate that call, so the next
+        // person on this device doesn't get this account's pushes. Best effort:
+        // it never throws and is bounded at 1.5 s.
+        await detachOnLogout();
         try {
             // Blacklists the refresh token and clears its cookie.
             await authApi.logout();
