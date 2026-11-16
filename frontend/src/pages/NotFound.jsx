@@ -4,7 +4,7 @@ import SEO from '../components/SEO';
 export default function NotFound() {
     return (
         <>
-            <SEO page="notFound" />
+            <SEO page="notFound" noIndex />
             <div className="min-h-[60vh] flex items-center justify-center px-4 py-16">
                 <div className="ui-empty-state w-full max-w-lg">
                     <p className="section-title mb-3">404</p>
