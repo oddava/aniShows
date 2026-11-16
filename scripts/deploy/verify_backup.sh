@@ -17,6 +17,7 @@ set -euo pipefail
 
 # shellcheck source=scripts/deploy/env.sh
 source scripts/deploy/env.sh
+load_deployed_state
 load_env_file .env
 PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
 NETWORK="${VERIFY_NETWORK:-${PROJECT}_default}"

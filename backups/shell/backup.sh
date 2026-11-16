@@ -4,7 +4,6 @@ set -Eeuo pipefail
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 TYPE="${1:-manual}" # manual, daily, weekly, pre-restore, pre-migrate
-LOCK_DIR="$BACKUP_DIR/.backup.lock"
 # Backups of each group (regular, pre-restore, pre-migrate) to keep, the new
 # one included. Pre-migrate dumps (deploy-prod.sh, before a schema change) are
 # rotated on their own, so daily backups never push them out.
@@ -30,7 +29,6 @@ MEDIA_RSYNC_PASSES="${BACKUP_MEDIA_RSYNC_PASSES:-2}"
 # BACKUP_REMOTE_KEEP_DAYS are deleted from the remote.
 REMOTE="${BACKUP_REMOTE:-}"
 LOCK_WAIT_SECONDS="${BACKUP_LOCK_WAIT_SECONDS:-0}"
-LOCK_STALE_SECONDS="${BACKUP_LOCK_STALE_SECONDS:-21600}"
 # Written after every successful scheduled/manual backup; healthcheck.sh reads it.
 SUCCESS_MARKER="$BACKUP_DIR/.last-success"
 # libpq treats an empty PGSSLROOTCERT as a path; unset means its default.
@@ -39,7 +37,6 @@ REMOTE_KEEP_DAYS="${BACKUP_REMOTE_KEEP_DAYS:-30}"
 
 CURRENT_BACKUP_DIR=""
 WORK_DIR=""
-LOCK_ACQUIRED=0
 
 log() {
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"
@@ -48,9 +45,6 @@ log() {
 cleanup() {
     if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
         rm -rf "$WORK_DIR"
-    fi
-    if [ "$LOCK_ACQUIRED" = "1" ] && [ -d "$LOCK_DIR" ]; then
-        rm -rf "$LOCK_DIR"
     fi
 }
 trap cleanup EXIT
@@ -62,50 +56,17 @@ require_command() {
     fi
 }
 
+# The lock lives in lock.sh (an flock shared with restore.sh across containers).
+# shellcheck source=backups/shell/lock.sh
+source "$(dirname "$0")/lock.sh"
+
 acquire_lock() {
     if [ "$SKIP_LOCK" = "1" ]; then
         return
     fi
-
     # BACKUP_LOCK_WAIT_SECONDS > 0 waits for a running backup to finish
     # (deploy-prod.sh's pre-migrate dump vs the nightly) instead of failing.
-    local waited=0
-    while ! mkdir "$LOCK_DIR" 2>/dev/null; do
-        if reclaim_stale_lock; then
-            break
-        fi
-        if [ "$waited" -ge "$LOCK_WAIT_SECONDS" ]; then
-            echo "Error: Another backup/restore operation is currently running (lock: $LOCK_DIR)." >&2
-            exit 1
-        fi
-        [ "$waited" -eq 0 ] && log "Waiting up to ${LOCK_WAIT_SECONDS}s for the running backup/restore to finish..."
-        sleep 10
-        waited=$((waited + 10))
-    done
-    LOCK_ACQUIRED=1
-    printf '%s %s\n' "$$" "$(hostname 2>/dev/null || echo unknown)" >"$LOCK_DIR/owner"
-}
-
-# A killed run (OOM, SIGKILL on redeploy) never removes its lock. Take it over
-# when its owner is gone: a process of this container that no longer runs, or
-# (since another container's processes cannot be checked: the backup daemon
-# vs a `compose run` of the deploy) a lock older than BACKUP_LOCK_STALE_SECONDS.
-reclaim_stale_lock() {
-    local owner_pid owner_host lock_age
-    read -r owner_pid owner_host <"$LOCK_DIR/owner" 2>/dev/null || return 1
-    if [ "$owner_host" = "$(hostname 2>/dev/null || echo unknown)" ]; then
-        if kill -0 "$owner_pid" 2>/dev/null; then
-            return 1
-        fi
-    else
-        lock_age=$(( $(date +%s) - $(stat -c %Y "$LOCK_DIR" 2>/dev/null || date +%s) ))
-        if [ "$lock_age" -lt "$LOCK_STALE_SECONDS" ]; then
-            return 1
-        fi
-    fi
-    echo "Warning: removing stale lock left by PID $owner_pid on $owner_host." >&2
-    rm -rf "$LOCK_DIR"
-    mkdir "$LOCK_DIR" 2>/dev/null
+    acquire_backup_lock "$LOCK_WAIT_SECONDS"
 }
 
 assert_numeric_positive() {
@@ -305,7 +266,6 @@ main() {
     assert_numeric_positive "$KEEP" "BACKUP_KEEP"
     assert_numeric_positive "$KEEP_PRE_MIGRATE" "BACKUP_KEEP_PRE_MIGRATE"
     assert_numeric_positive "$REMOTE_KEEP_DAYS" "BACKUP_REMOTE_KEEP_DAYS"
-    assert_numeric_positive "$LOCK_STALE_SECONDS" "BACKUP_LOCK_STALE_SECONDS"
     [[ "$LOCK_WAIT_SECONDS" =~ ^[0-9]+$ ]] || { echo "Error: BACKUP_LOCK_WAIT_SECONDS must be a number." >&2; exit 1; }
 
     mkdir -p "$BACKUP_DIR"

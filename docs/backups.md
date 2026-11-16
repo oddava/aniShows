@@ -172,4 +172,4 @@ Hetzner Storage Box (SFTP): `RCLONE_CONFIG_OFFSITE_TYPE=sftp`, `..._HOST=<user>.
 Use a bucket/user that can write only this prefix, and turn on versioning or object lock on the
 bucket if the provider offers it (a compromised host can otherwise delete its own off-site copies).
 The cron job reads these variables from `/app/cron.env` (0600), written when the container starts:
-after changing them, `docker compose -f docker-compose.prod.yml up -d backup`.
+after changing them, `scripts/deploy/compose.sh up -d --no-deps backup`.

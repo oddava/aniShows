@@ -237,6 +237,23 @@ class SentryScrubTests(SimpleTestCase):
         self.assertNotIn("Authorization", scrubbed["data"])
         self.assertEqual(scrubbed["data"]["headers"], [["Accept", "*/*"]])
 
+    def test_referer_carrying_a_token_is_redacted(self):
+        event = {
+            "request": {
+                "url": "https://anishows.com/api/v1/auth/password-reset-confirm/",
+                "headers": {"Referer": "https://anishows.com/reset-password/MQ/tok-123/"},
+            }
+        }
+        scrub_sentry_event(event)
+        self.assertEqual(
+            event["request"]["headers"]["Referer"], "https://anishows.com/reset-password/<redacted>"
+        )
+        crumb = {"data": {"headers": [["Referer", "/verify-email/a/b"], ["Accept", "*/*"]]}}
+        scrub_sentry_breadcrumb(crumb)
+        self.assertEqual(
+            crumb["data"]["headers"], [["Referer", "/verify-email/<redacted>"], ["Accept", "*/*"]]
+        )
+
     def test_event_breadcrumbs_are_scrubbed_too(self):
         event = {"breadcrumbs": {"values": [{"message": "GET /reset-password/a/b"}]}}
         scrub_sentry_event(event)

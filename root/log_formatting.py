@@ -141,23 +141,33 @@ class JsonFormatter(logging.Formatter):
 # ---------------------------------------------------------------------------
 
 
+# Headers whose value can carry a URL with a token (a page's own address).
+URL_HEADERS = frozenset({"referer", "origin", "location"})
+
+
+def _scrub_header_value(name: Any, value: Any) -> Any:
+    if str(name).lower() in URL_HEADERS and isinstance(value, str):
+        return redact_url(value)
+    return value
+
+
 def _scrub_headers(headers: Any) -> Any:
     if isinstance(headers, Mapping):
         return {
-            name: value
+            name: _scrub_header_value(name, value)
             for name, value in headers.items()
             if str(name).lower() not in SENSITIVE_HEADERS
         }
     if isinstance(headers, list):  # [[name, value], ...]
-        return [
-            pair
-            for pair in headers
-            if not (
-                isinstance(pair, list | tuple)
-                and pair
-                and str(pair[0]).lower() in SENSITIVE_HEADERS
-            )
-        ]
+        scrubbed = []
+        for pair in headers:
+            if isinstance(pair, list | tuple) and pair:
+                if str(pair[0]).lower() in SENSITIVE_HEADERS:
+                    continue
+                if len(pair) == 2:
+                    pair = [pair[0], _scrub_header_value(pair[0], pair[1])]
+            scrubbed.append(pair)
+        return scrubbed
     return headers
 
 

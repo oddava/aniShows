@@ -37,17 +37,9 @@ ok()   { echo -e "${GREEN}    $*${NC}"; }
 warn() { echo -e "${YELLOW}    $*${NC}"; }
 die()  { echo -e "${RED}    $*${NC}"; exit 1; }
 
-# .env parsing and everything CADDY_MODE decides (profiles, override files,
-# Caddy's site address / trusted peers / HSTS) live in scripts/deploy/env.sh,
-# shared with scripts/deploy/compose.sh so manual commands match the deploy.
-# shellcheck source=scripts/deploy/env.sh
-source scripts/deploy/env.sh
-load_env_file .env
-
-command -v docker >/dev/null || die "docker is not installed"
-
 # -----------------------------------------------------------------------------
-# Deploy log: everything below is also written to backups-data/deploy-logs/.
+# Deploy log: everything below, .env errors included, is also written to
+# backups-data/deploy-logs/ (DEPLOY_LOG_DIR from the shell only).
 # -----------------------------------------------------------------------------
 DEPLOY_TS="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_DIR="${DEPLOY_LOG_DIR:-backups-data/deploy-logs}"
@@ -56,6 +48,23 @@ LOG_FILE="$LOG_DIR/deploy-${DEPLOY_TS}.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 echo "Deploy log: $LOG_FILE"
 
+# .env parsing and everything CADDY_MODE decides (profiles, override files,
+# Caddy's site address / trusted peers / HSTS) live in scripts/deploy/env.sh,
+# shared with scripts/deploy/compose.sh so manual commands match the deploy.
+# The deploy itself takes its image tags from the shell/.env (not from the
+# deployed-state file, which it writes at the end).
+# shellcheck source=scripts/deploy/env.sh
+source scripts/deploy/env.sh
+# The release that is live now (for the rollback recipe and the image prune).
+PREV_BACKEND_TAG="$(grep -m1 '^BACKEND_TAG=' "$DEPLOYED_STATE_FILE" 2>/dev/null | cut -d= -f2- || true)"
+PREV_FRONTEND_TAG="$(grep -m1 '^FRONTEND_TAG=' "$DEPLOYED_STATE_FILE" 2>/dev/null | cut -d= -f2- || true)"
+load_env_file .env
+BACKEND_TAG="${BACKEND_TAG:-latest}"
+FRONTEND_TAG="${FRONTEND_TAG:-latest}"
+export BACKEND_TAG FRONTEND_TAG
+
+command -v docker >/dev/null || die "docker is not installed"
+
 # -----------------------------------------------------------------------------
 # Mode, profiles and compose files (scripts/deploy/env.sh)
 # -----------------------------------------------------------------------------
@@ -63,12 +72,19 @@ resolve_deploy_mode
 if [ "$TUNNEL_IN_STACK" = 1 ] && is_placeholder_value "${TUNNEL_TOKEN:-}"; then
     die "CADDY_MODE=tunnel needs a real TUNNEL_TOKEN (or TUNNEL_EXTERNAL=1 when cloudflared runs outside this stack)"
 fi
-if [ "$CADDY_MODE" = public ] && [ "$DOMAIN" != localhost ] && is_placeholder_value "${CADDY_ACME_EMAIL:-x}"; then
-    die "Public mode needs a real CADDY_ACME_EMAIL for certificate registration"
+if [ "$CADDY_MODE" = public ] && [ "$DOMAIN" != localhost ]; then
+    if is_placeholder_value "${CADDY_ACME_EMAIL:-}" || [[ "${CADDY_ACME_EMAIL}" == *.local ]]; then
+        die "Public mode needs a real CADDY_ACME_EMAIL for certificate registration"
+    fi
+fi
+if [ "${TUNNEL_EXTERNAL:-0}" = 1 ] && [ "$TRUSTED_PROXIES_EXPLICIT" != 1 ]; then
+    # With cloudflared outside this stack Caddy cannot know its address, and
+    # the private_ranges default lets any container choose its client IP.
+    die "TUNNEL_EXTERNAL=1 needs CADDY_TRUSTED_PROXIES set to that cloudflared's address or subnet (plus 127.0.0.1/8 ::1/128); see docs/deploy/tunnel.md"
 fi
 
 PROJECT="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}"
-FRONTEND_IMAGE="ghcr.io/oddava/anishows-frontend:${FRONTEND_TAG:-latest}"
+FRONTEND_IMAGE="ghcr.io/oddava/anishows-frontend:${FRONTEND_TAG}"
 FRONTEND_VOLUME="${PROJECT}_frontend_dist"
 SCALE_WEB="${SCALE_WEB:-2}"
 [[ "$SCALE_WEB" =~ ^[1-9][0-9]*$ ]] || die "SCALE_WEB must be a positive integer"
@@ -246,7 +262,9 @@ PLAN_FILE="$LOG_DIR/deploy-${DEPLOY_TS}-migrate-plan.txt"
     || { cat "$PLAN_FILE"; die "migrate --plan failed (database unreachable?)"; }
 cat "$PLAN_FILE"
 PRE_MIGRATE_BACKUP=""
+PLAN_HAS_CHANGES=1
 if grep -q "No planned migration operations" "$PLAN_FILE"; then
+    PLAN_HAS_CHANGES=0
     ok "no migrations to apply"
 else
     if [ "${SKIP_PRE_MIGRATE_BACKUP:-0}" = 1 ]; then
@@ -266,24 +284,31 @@ else
 fi
 
 # From here on, a failure may leave a changed schema: print how to roll back.
-# MIGRATE_STARTED, not "succeeded": a plan of several migrations can apply some
-# and then fail, which is when steps 2 and 3 matter most.
+# MIGRATE_STARTED: the plan was non-empty and migrate has started (it may have
+# applied part of the plan), so the schema steps apply.
 MIGRATE_STARTED=0
 print_rollback() {
     echo -e "\n${RED}==> Deploy failed at or after the migration step. Rollback recipe:${NC}"
     echo "    The old web replicas keep serving if the rolling restart failed."
-    if [ -n "$PREVIOUS_WEB_IMAGE" ]; then
-        echo "    1. Previous backend image (local, so no pull): ${PREVIOUS_WEB_IMAGE}"
-        echo "       docker tag ${PREVIOUS_WEB_IMAGE} ghcr.io/oddava/anishows-backend:rollback"
-        echo "       BACKEND_TAG=rollback SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh"
+    local frontend_back="${PREV_FRONTEND_TAG:-$FRONTEND_TAG}"
+    if [ "$MIGRATE_STARTED" = 1 ]; then
+        echo "    This deploy changed the schema (${PLAN_FILE}). If the old code cannot"
+        echo "    run on it, do step 1 first, then step 2."
+        echo "    1. Undo this deploy's migrations with the NEW image (it has the files;"
+        echo "       all are reversible), app by app, back to the migration before the plan:"
+        echo "       BACKEND_TAG=${BACKEND_TAG} scripts/deploy/compose.sh run --rm --no-deps web python manage.py migrate <app> <previous_migration>"
     else
-        echo "    1. Re-deploy the previous release: BACKEND_TAG=sha-<previous> ./deploy-prod.sh"
+        echo "    No schema change in this deploy: re-deploying the previous release is enough."
+    fi
+    if [ -n "$PREVIOUS_WEB_IMAGE" ]; then
+        echo "    2. Re-deploy the previous release from its local image (no pull):"
+        echo "       docker tag ${PREVIOUS_WEB_IMAGE} ghcr.io/oddava/anishows-backend:rollback"
+        echo "       BACKEND_TAG=rollback FRONTEND_TAG=${frontend_back} SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh"
+    else
+        echo "    2. Re-deploy the previous release: BACKEND_TAG=${PREV_BACKEND_TAG:-sha-<previous>} FRONTEND_TAG=${frontend_back} ./deploy-prod.sh"
     fi
     if [ "$MIGRATE_STARTED" = 1 ]; then
-        echo "    2. If the old code cannot run on the new schema, first undo the migrations in"
-        echo "       ${PLAN_FILE} with the NEW image (it has the files; all are reversible):"
-        echo "       scripts/deploy/compose.sh run --rm --no-deps web python manage.py migrate <app> <previous_migration>"
-        echo "    3. Last resort, restore the database from the pre-migrate backup:"
+        echo "    3. Last resort (data damage), restore the pre-migrate dump:"
         echo "       scripts/deploy/compose.sh stop web celery beat && scripts/deploy/compose.sh exec backup /app/shell/restore.sh $(basename "${PRE_MIGRATE_BACKUP:-<name>}") --yes --skip-media"
     fi
     echo "    Runbook: docs/deploy/runbook.md (Rollback). Log: ${LOG_FILE}"
@@ -298,7 +323,8 @@ trap on_exit EXIT
 ROLLBACK_HINTS=1
 
 step "Migrations"
-MIGRATE_STARTED=1
+# Set before the command: a plan of several migrations can apply some and fail.
+MIGRATE_STARTED="$PLAN_HAS_CHANGES"
 "${COMPOSE[@]}" run --rm --no-deps web python manage.py migrate --noinput
 ok "migrations applied"
 
@@ -347,6 +373,17 @@ step "Clearing application cache"
 step "Caddy (${CADDY_MODE} mode)"
 "${COMPOSE[@]}" up -d --no-deps caddy
 wait_ready "$(service_ids caddy | head -n1)" caddy || die "caddy is not healthy"
+# Caddyfile.prod is a single-file bind mount: `git pull` replaces the file
+# (a new inode), and the container keeps seeing the old one, so a reload
+# alone would serve the old config. Recreate Caddy when they differ (a second
+# or two of 502s); otherwise a graceful reload is enough.
+host_sum="$(sha256sum Caddyfile.prod | cut -d' ' -f1)"
+live_sum="$("${COMPOSE[@]}" exec -T caddy sha256sum /etc/caddy/Caddyfile 2>/dev/null | cut -d' ' -f1 || true)"
+if [ "$host_sum" != "$live_sum" ]; then
+    warn "Caddyfile.prod changed: recreating Caddy so it sees the new file"
+    "${COMPOSE[@]}" up -d --no-deps --force-recreate caddy
+    wait_ready "$(service_ids caddy | head -n1)" caddy || die "caddy is not healthy after the recreate"
+fi
 "${COMPOSE[@]}" exec -T caddy caddy reload --config /etc/caddy/Caddyfile --force \
     || { "${COMPOSE[@]}" logs --tail=50 caddy; die "caddy reload failed"; }
 if [ "$TUNNEL_IN_STACK" = 1 ]; then
@@ -410,13 +447,24 @@ ok "frontend served"
 NON_EXEMPT_ROUTE="/api/v1/genres/"
 acceptable_status() { [[ "$1" =~ ^(2[0-9][0-9]|4[0-9][0-9]|503)$ ]]; }
 if [ "$CADDY_MODE" = tunnel ]; then
-    # wget -S prints the first response's status line before following.
-    status="$("${COMPOSE[@]}" exec -T caddy wget -S -q -O /dev/null -T 10 \
+    # As cloudflared sends it. With the in-stack cloudflared, from the edge
+    # network itself (a throwaway container on it, Caddy's image for its
+    # wget), so a wrong EDGE_SUBNET / CADDY_TRUSTED_PROXIES fails here;
+    # otherwise from Caddy's loopback. wget -S prints the first status line.
+    probe=("${COMPOSE[@]}" exec -T caddy wget)
+    target="http://127.0.0.1${NON_EXEMPT_ROUTE}"
+    if [ "$TUNNEL_IN_STACK" = 1 ]; then
+        caddy_image="$(docker inspect --format '{{.Config.Image}}' "$(service_ids caddy | head -n1)")"
+        probe=(docker run --rm --network "${PROJECT}_edge" --entrypoint wget "$caddy_image")
+        target="http://caddy${NON_EXEMPT_ROUTE}"
+    fi
+    status="$("${probe[@]}" -S -q -O /dev/null -T 10 \
         --header "Host: ${DOMAIN}" --header "X-Forwarded-Proto: https" \
-        "http://127.0.0.1${NON_EXEMPT_ROUTE}" 2>&1 | grep -m1 -oE 'HTTP/[0-9.]+ [0-9]{3}' | grep -oE '[0-9]{3}$' || true)"
+        --header "CF-Connecting-IP: 192.0.2.10" \
+        "$target" 2>&1 | grep -m1 -oE 'HTTP/[0-9.]+ [0-9]{3}' | grep -oE '[0-9]{3}$' || true)"
     acceptable_status "$status" \
-        || die "Django answered ${NON_EXEMPT_ROUTE} with '${status:-no response}' for an https request: the X-Forwarded-Proto chain is broken (docs/deploy/tunnel.md)"
-    ok "scheme chain (https seen by Django)"
+        || die "Django answered ${NON_EXEMPT_ROUTE} with '${status:-no response}' for an https request from the tunnel: the trusted-peer / X-Forwarded-Proto chain is broken (EDGE_SUBNET, CADDY_TRUSTED_PROXIES; docs/deploy/tunnel.md)"
+    ok "scheme chain (https from the tunnel seen by Django)"
 fi
 
 if [ -n "${PUBLIC_BASE_URL:-}" ]; then
@@ -435,10 +483,26 @@ fi
 
 ROLLBACK_HINTS=0
 
+# The release now live: manual commands (scripts/deploy/compose.sh, verify,
+# the next rollback recipe) run exactly these images.
+mkdir -p "$(dirname "$DEPLOYED_STATE_FILE")"
+{
+    echo "# Written by deploy-prod.sh after a successful deploy; do not edit."
+    echo "BACKEND_TAG=${BACKEND_TAG}"
+    echo "FRONTEND_TAG=${FRONTEND_TAG}"
+    echo "DEPLOYED_AT=${DEPLOY_TS}"
+    echo "PREVIOUS_BACKEND_TAG=${PREV_BACKEND_TAG}"
+    echo "PREVIOUS_FRONTEND_TAG=${PREV_FRONTEND_TAG}"
+} >"$DEPLOYED_STATE_FILE"
+ok "release recorded in ${DEPLOYED_STATE_FILE}"
+
 if [ "${PRUNE_IMAGES:-1}" = 1 ]; then
-    step "Pruning old images (this project's only)"
-    # A shared host: never touch other projects' images.
-    docker image prune -f --filter "until=24h" --filter "label=app.anishows.component" >/dev/null || true
+    step "Pruning old images (this project's only; current and previous kept)"
+    KEEP_REFS="ghcr.io/oddava/anishows-backend:${BACKEND_TAG} ${FRONTEND_IMAGE}"
+    [ -n "$PREV_BACKEND_TAG" ] && KEEP_REFS+=" ghcr.io/oddava/anishows-backend:${PREV_BACKEND_TAG}"
+    [ -n "$PREV_FRONTEND_TAG" ] && KEEP_REFS+=" ghcr.io/oddava/anishows-frontend:${PREV_FRONTEND_TAG}"
+    KEEP_REFS="$KEEP_REFS" KEEP_IDS="${PREVIOUS_WEB_IMAGE}" bash scripts/deploy/prune_images.sh \
+        || warn "image prune failed (continuing)"
 fi
 
 echo -e "\n${GREEN}Deployment complete.${NC}"

@@ -93,7 +93,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://anishows.com/api/v1/genres/    
 #    (mobile data), then once from desktop B. A gets 429 on the 6th, B still gets 401.
 
 # 4. The app's view of the chain, from Caddy's own logs (one line per request):
-docker compose -f docker-compose.prod.yml exec caddy tail -n 3 /var/log/caddy/access.log \
+scripts/deploy/compose.sh exec caddy tail -n 3 /var/log/caddy/access.log \
   | grep -o '"client_ip":"[^"]*"'                                                   # the visitor's IP
 ```
 

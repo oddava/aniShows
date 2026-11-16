@@ -127,6 +127,7 @@ FAKE_DOCKER = r"""#!/usr/bin/env bash
 echo "$*" >> "$FAKE_DOCKER_LOG"
 if [ "${1:-}" = compose ]; then
   echo "env: mode=${CADDY_MODE:-} site=${CADDY_SITE_ADDRESS:-} trusted=${CADDY_TRUSTED_PROXIES:-} hsts=${CADDY_HSTS_HEADER:-} profiles=${COMPOSE_PROFILES:-}" >> "$FAKE_DOCKER_LOG"
+  echo "tags: backend=${BACKEND_TAG:-} frontend=${FRONTEND_TAG:-}" >> "$FAKE_DOCKER_LOG"
 fi
 args=" $* "
 case "$args" in
@@ -134,9 +135,20 @@ case "$args" in
 esac
 case "$args" in
   *"{{.Image}}"*) echo "sha256:previous" ;;
+  *" image inspect --format {{.Id}} "*)
+    case "$args" in
+      *"anishows-backend:sha-new "*) echo "sha256:current-backend" ;;
+      *"anishows-frontend:sha-new "*) echo "sha256:current-frontend" ;;
+      *"anishows-backend:sha-old "*) echo "sha256:previous" ;;
+      *) exit 1 ;;
+    esac ;;
+  *" images --no-trunc -q "*) printf 'sha256:current-backend\nsha256:current-frontend\nsha256:previous\nsha256:old-one\nsha256:old-two\n' ;;
   *" inspect --format "*) echo healthy ;;
+  *" ps -aq "*) echo "c0ffee000001" ;;
   *" ps -q "*) echo "c0ffee000001" ;;
-  *"migrate --plan"*) printf 'Planned operations:\nusers.0038_accounts_example\n' ;;
+  *"migrate --plan"*)
+    if [ "${FAKE_EMPTY_PLAN:-0}" = 1 ]; then printf 'Planned operations:\n  No planned migration operations.\n';
+    else printf 'Planned operations:\nusers.0038_accounts_example\n'; fi ;;
   *"migrate --noinput"*) [ "${FAKE_FAIL_MIGRATE:-0}" = 1 ] && exit 1 ;;
 esac
 exit 0
@@ -148,10 +160,14 @@ def _run_in_temp_repo(
     env_lines: dict[str, str],
     shell_env: dict[str, str] | None = None,
     args: tuple[str, ...] = (),
+    state: str | None = None,
 ):
     """Run a copy of a deploy script (with scripts/deploy) in a temp dir with a fake docker."""
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
+        if state is not None:
+            (work / "backups-data").mkdir()
+            (work / "backups-data" / "deployed.env").write_text(state, encoding="utf-8")
         shutil.copy(DEPLOY_SCRIPT, work / "deploy-prod.sh")
         shutil.copytree(DEPLOY_LIB, work / "scripts" / "deploy")
         (work / "docker-compose.prod.yml").write_text("services: {}\n", encoding="utf-8")
@@ -242,17 +258,44 @@ class DeployScriptRefusalTests(SimpleTestCase):
         result, _ = self._run(env)
         self.assertEqual(result.returncode, 1)
         self.assertIn("needs a real TUNNEL_TOKEN", result.stdout)
+        # An external cloudflared: its address must be given explicitly.
         result, _ = self._run({**env, "TUNNEL_EXTERNAL": "1"})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("TUNNEL_EXTERNAL=1 needs CADDY_TRUSTED_PROXIES", result.stdout)
+        result, _ = self._run(
+            {
+                **env,
+                "TUNNEL_EXTERNAL": "1",
+                "CADDY_TRUSTED_PROXIES": '"172.30.0.7/32 127.0.0.1/8 ::1/128"',
+            }
+        )
         self.assertEqual(result.returncode, 97, result.stdout)
         self.assertRegex(result.stdout, r"(?m)profiles: bundled-db$")
 
     def test_public_mode_and_external_db(self):
         result, calls = self._run(
-            {**SAFE_ENV, "CADDY_MODE": "public", "DB_HOST": "pg.internal", "DB_SSLMODE": "require"}
+            {
+                **SAFE_ENV,
+                "CADDY_MODE": "public",
+                "CADDY_ACME_EMAIL": "ops@anishows.com",
+                "DB_HOST": "pg.internal",
+                "DB_SSLMODE": "require",
+            }
         )
         self.assertEqual(result.returncode, 97, result.stdout)
         self.assertIn("-f infra/compose/public-ports.yml", calls)
         self.assertIn("profiles: none", result.stdout)
+
+    def test_public_mode_refuses_a_placeholder_acme_email(self):
+        for email in (None, "admin@anishows.local", "<ops-email>"):
+            env = {**SAFE_ENV, "CADDY_MODE": "public"}
+            if email:
+                env["CADDY_ACME_EMAIL"] = email
+            with self.subTest(email=email):
+                result, calls = self._run(env)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("needs a real CADDY_ACME_EMAIL", result.stdout)
+                self.assertEqual(calls, "")
 
     def test_env_values_with_spaces_and_comments_parse(self):
         result, _ = self._run(
@@ -286,15 +329,42 @@ class DeployScriptFailureRecipeTests(SimpleTestCase):
         self.assertIn("Rollback recipe", out)
         # The previous image is local: the recipe must not try to pull it.
         self.assertIn("docker tag sha256:previous ghcr.io/oddava/anishows-backend:rollback", out)
-        self.assertIn("BACKEND_TAG=rollback SKIP_PULL=1", out)
-        self.assertIn("python manage.py migrate <app> <previous_migration>", out)
+        self.assertIn("BACKEND_TAG=rollback FRONTEND_TAG=latest SKIP_PULL=1", out)
+        # Undoing migrations needs the NEW image, named explicitly (not .env's tag).
+        self.assertIn(
+            "BACKEND_TAG=latest scripts/deploy/compose.sh run --rm --no-deps web python manage.py migrate <app>",
+            out,
+        )
         self.assertIn("restore.sh", out)
+
+    def test_recipe_names_the_deployed_and_previous_tags(self):
+        result, _ = _run_in_temp_repo(
+            "deploy-prod.sh",
+            SAFE_ENV,
+            {
+                "SKIP_ANILIST_SMOKE": "1",
+                "SKIP_PULL": "1",
+                "BACKEND_TAG": "sha-new",
+                "FRONTEND_TAG": "sha-new",
+            },
+            state="BACKEND_TAG=sha-old\nFRONTEND_TAG=sha-oldfe\n",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("BACKEND_TAG=sha-new scripts/deploy/compose.sh run", result.stdout)
+        self.assertIn("BACKEND_TAG=rollback FRONTEND_TAG=sha-oldfe SKIP_PULL=1", result.stdout)
+
+    def test_no_schema_steps_without_migrations(self):
+        result, _ = self._run(FAKE_EMPTY_PLAN="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("No schema change in this deploy", result.stdout)
+        self.assertNotIn("restore.sh", result.stdout)
+        self.assertNotIn("Undo this deploy's migrations", result.stdout)
 
     def test_a_partial_migrate_still_lists_the_schema_steps(self):
         result, _ = self._run(FAKE_FAIL_MIGRATE="1")
         self.assertEqual(result.returncode, 1)
         self.assertIn("Rollback recipe", result.stdout)
-        self.assertIn("undo the migrations", result.stdout)
+        self.assertIn("Undo this deploy's migrations", result.stdout)
         self.assertIn("restore.sh", result.stdout)
 
     def test_no_recipe_when_nothing_changed(self):
@@ -358,3 +428,53 @@ class ComposeWrapperTests(SimpleTestCase):
             "scripts/deploy/compose.sh", {**SAFE_ENV, "DB_PASSWORD": "'ab$cd'"}, args=("ps",)
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+
+
+@unittest.skipUnless(shutil.which("bash"), "bash is required")
+class PruneImagesTests(SimpleTestCase):
+    def test_keeps_current_previous_and_in_use_removes_the_rest(self):
+        result, calls = _run_in_temp_repo(
+            "scripts/deploy/prune_images.sh",
+            {},
+            {
+                "KEEP_REFS": "ghcr.io/oddava/anishows-backend:sha-new "
+                "ghcr.io/oddava/anishows-frontend:sha-new",
+                "KEEP_IDS": "",
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        removed = {line.split()[-1] for line in calls.splitlines() if line.startswith("rmi -f ")}
+        # sha256:previous is the image a container uses; the others are current.
+        self.assertEqual(removed, {"sha256:old-one", "sha256:old-two"})
+        self.assertIn("images --no-trunc -q --filter label=app.anishows.component", calls)
+
+
+@unittest.skipUnless(shutil.which("bash"), "bash is required")
+class DeployedStateTests(SimpleTestCase):
+    def test_manual_compose_runs_the_deployed_tags(self):
+        result, calls = _run_in_temp_repo(
+            "scripts/deploy/compose.sh",
+            {**SAFE_ENV, "BACKEND_TAG": "latest"},
+            {"FAKE_LOG_TAGS": "1"},
+            args=("ps",),
+            state="BACKEND_TAG=sha-new\nFRONTEND_TAG=sha-new\n",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("tags: backend=sha-new frontend=sha-new", calls)
+
+    def test_the_shell_still_wins(self):
+        _, calls = _run_in_temp_repo(
+            "scripts/deploy/compose.sh",
+            SAFE_ENV,
+            {"BACKEND_TAG": "sha-pinned"},
+            args=("ps",),
+            state="BACKEND_TAG=sha-new\n",
+        )
+        self.assertIn("tags: backend=sha-pinned", calls)
+
+    def test_backslash_in_double_quotes_is_refused(self):
+        result, _ = _run_in_temp_repo(
+            "scripts/deploy/compose.sh", {**SAFE_ENV, "DB_PASSWORD": '"a\\nb"'}, args=("ps",)
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DB_PASSWORD contains a backslash", result.stderr)

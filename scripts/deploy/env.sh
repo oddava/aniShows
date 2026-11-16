@@ -47,6 +47,9 @@ load_env_file() {
             if [[ "$val" == *'$'* ]]; then
                 die "$file: $key contains '\$', which Compose would interpolate; wrap the value in single quotes"
             fi
+            if [[ "$val" == *'\'* ]]; then
+                die "$file: $key contains a backslash, which Compose unescapes in this form; wrap the value in single quotes"
+            fi
         fi
         if [ -z "${!key+x}" ]; then
             export "$key=$val"
@@ -61,6 +64,15 @@ is_placeholder_value() {
         change_me*|change-me*|changeme*|replace*|django-insecure*|"<"*) return 0 ;;
         *) return 1 ;;
     esac
+}
+
+# The image tags the last successful deploy-prod.sh run used (CI passes
+# sha-<commit> tags through the shell, so .env alone would name a stale
+# :latest). compose.sh and verify_backup.sh load this before .env, so manual
+# commands run the deployed code: shell > deployed state > .env.
+DEPLOYED_STATE_FILE="backups-data/deployed.env"
+load_deployed_state() {
+    load_env_file "$DEPLOYED_STATE_FILE"
 }
 
 is_true() { case "${1,,}" in 1|true|yes|on) return 0 ;; *) return 1 ;; esac; }
@@ -109,6 +121,10 @@ resolve_deploy_mode() {
     # Caddy's site addresses and trusted peers follow the mode unless set.
     # Loopback is always trusted: only Caddy's own container (smoke tests).
     local loopback="127.0.0.1/8 ::1/128"
+    # Set before any default below: was the trust list chosen by the operator?
+    TRUSTED_PROXIES_EXPLICIT=0
+    [ -n "${CADDY_TRUSTED_PROXIES:-}" ] && TRUSTED_PROXIES_EXPLICIT=1
+    export TRUSTED_PROXIES_EXPLICIT  # read by deploy-prod.sh
     export EDGE_SUBNET="${EDGE_SUBNET:-10.250.250.240/29}"
     if [ "$CADDY_MODE" = tunnel ]; then
         : "${CADDY_SITE_ADDRESS:=:80}"

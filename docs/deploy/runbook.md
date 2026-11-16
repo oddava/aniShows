@@ -32,6 +32,12 @@ client IP for everyone. Prefer `--no-deps` for single services.
 
 The whole run is logged to `backups-data/deploy-logs/deploy-<ts>.log`.
 
+**Releases.** After a successful deploy, `backups-data/deployed.env` records the image tags
+that are live (and the previous ones). `scripts/deploy/compose.sh`, `make prod-verify-backup`
+and the rollback recipe use them, so manual commands never run a stale `:latest`. Old images of
+this project are pruned after each deploy, keeping the current and previous release and anything
+a container uses (`scripts/deploy/prune_images.sh`; `PRUNE_IMAGES=0` turns it off).
+
 **Backup health.** Every scheduled run logs to `$PROD logs backup`. The container turns
 *unhealthy* (`$PROD ps`) when no daily/manual backup has succeeded for 26 h
 (`BACKUP_MAX_AGE_HOURS`). Point your uptime/alerting at that, or check it after each deploy.
@@ -97,6 +103,7 @@ database. Run it after the first backup, and monthly.
 | Secret | How |
 |---|---|
 | `DJANGO_SECRET_KEY` | Change in `.env`, `./deploy-prod.sh`. Logs everyone out and invalidates reset/verify links and JWTs. |
+| A value with `$` or `\` | `.env` refuses them outside single quotes (Compose would expand them). Quoting an existing value that Compose had been expanding changes its effective value: for `DJANGO_SECRET_KEY` that logs everyone out, for a DB/Redis password it must match the server's. |
 | `DB_PASSWORD` (bundled) | `$PROD exec db psql -U <user> -c "ALTER ROLE <user> PASSWORD '…'"`, then `.env`, deploy. |
 | `REDIS_PASSWORD` | `.env`, then `$PROD up -d --no-deps redis` and deploy (the cache and queued tasks are lost). |
 | `AWS_SECRET_ACCESS_KEY` (MinIO root) | `.env`, `$PROD up -d --no-deps minio`, deploy. |

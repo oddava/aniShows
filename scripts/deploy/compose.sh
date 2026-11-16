@@ -18,6 +18,7 @@ set -euo pipefail
 [ -f docker-compose.prod.yml ] || { echo "Run from the repo root (docker-compose.prod.yml not found)" >&2; exit 1; }
 # shellcheck source=scripts/deploy/env.sh
 source scripts/deploy/env.sh
+load_deployed_state
 load_env_file .env
 resolve_deploy_mode
 exec "${COMPOSE[@]}" "$@"

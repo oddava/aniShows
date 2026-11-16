@@ -44,12 +44,17 @@
 		X-Frame-Options "DENY"
 		# XSS protection
 		X-XSS-Protection "1; mode=block"
-		# Referrer policy
-		Referrer-Policy "strict-origin-when-cross-origin"
 		# Note: Content-Security-Policy is set by Django csp_middleware.py for backend routes
 		# and in the frontend handle block below for static pages.
 		# Remove server header
 		-Server
+	}
+	# Referrer policy (deferred, so it also replaces Django's). Account-link
+	# pages are excluded: the SPA block sends "no-referrer" for them.
+	@referrer_default not path /reset-password/* /verify-email/* /confirm-email-change/*
+	header @referrer_default {
+		Referrer-Policy "strict-origin-when-cross-origin"
+		defer
 	}
 }
 
@@ -68,9 +73,9 @@
 	respond @operator_denied_{args[0]} 403
 }
 
-# Access logs: rotated (10 MiB x 5) and without the secret in account-link
-# URIs (reset/verify/email-change tokens). Credentials headers are redacted by
-# Caddy itself.
+# Access logs: rotated (10 MiB x 5) and without secrets: account-link tokens
+# (reset/verify/email-change) and OAuth/secret query values, in the URI and
+# in the Referer a page sends. Credentials headers are redacted by Caddy itself.
 (access_log) {
 	log {
 		output file /var/log/caddy/{args[0]} {
@@ -78,7 +83,8 @@
 			roll_keep 5
 		}
 		format filter {
-			request>uri regexp "(?i)/(reset-password|password-reset-confirm|verify-email|confirm-email-change|email-change|activate)/[^?#]*" "/$1/<redacted>"
+			request>uri regexp "(?i)(/(?:reset-password|password-reset-confirm|verify-email|confirm-email-change|email-change|activate)/)[^?#\s]*|([?&](?:code|token|uid|key|signature)=)[^&#\s]*" "${1}${2}<redacted>"
+			request>headers>Referer regexp "(?i)(/(?:reset-password|password-reset-confirm|verify-email|confirm-email-change|email-change|activate)/)[^?#\s]*|([?&](?:code|token|uid|key|signature)=)[^&#\s]*" "${1}${2}<redacted>"
 		}
 	}
 }
@@ -300,6 +306,10 @@
 
 	# Frontend (STATIC) - Production mode
 	handle {
+		# Account-link pages carry a secret in their URL: send no Referer from
+		# them (their assets and API calls would otherwise carry the token).
+		@account_link_pages path /reset-password/* /verify-email/* /confirm-email-change/*
+		header @account_link_pages Referrer-Policy "no-referrer"
 		root * /srv/frontend
 		try_files {path} /index.html
 		file_server

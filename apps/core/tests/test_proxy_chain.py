@@ -156,9 +156,28 @@ class CaddyfileKeepsItsSideTests(SimpleTestCase):
         self.assertIn("roll_size 10MiB", log)
         self.assertIn("roll_keep 5", log)
         self.assertIn("request>uri regexp", log)
+        self.assertIn("request>headers>Referer regexp", log)
+        self.assertIn("code|token", log)
         self.assertIn("reset-password", log)
         self.assertEqual(self.text.count("import access_log "), 2)
         self.assertNotIn("output file /var/log/caddy/access.log", self.text)
+
+    def test_account_link_pages_send_no_referer(self):
+        self.assertIn(
+            "@account_link_pages path /reset-password/* /verify-email/* /confirm-email-change/*",
+            self.text,
+        )
+        self.assertIn('header @account_link_pages Referrer-Policy "no-referrer"', self.text)
+        # The site-wide policy is deferred (it would overwrite the one above)
+        # and so must skip these pages.
+        headers = self._snippet("security_headers")
+        self.assertIn(
+            "@referrer_default not path /reset-password/* /verify-email/* /confirm-email-change/*",
+            headers,
+        )
+        # Set once, only in the matched (deferred) header block.
+        self.assertEqual(headers.count('Referrer-Policy "strict-origin-when-cross-origin"'), 1)
+        self.assertIn("header @referrer_default {", headers)
 
     def test_liveness_stays_the_upstream_health_check(self):
         self.assertNotIn("health_uri /api/v1/health/ready/", self.text)
