@@ -14,15 +14,20 @@ CLOSE_THREAD_NOT_FOUND = 4404
 
 
 @database_sync_to_async
-def _thread_is_visible(thread_id: int) -> bool:
-    return Thread.objects.filter(pk=thread_id, is_removed=False).exists()
+def _thread_is_visible(thread_id: int, *, is_staff: bool) -> bool:
+    threads = Thread.objects.filter(pk=thread_id)
+    if not is_staff:
+        threads = threads.filter(is_removed=False)
+    return threads.exists()
 
 
 class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
     """WebSocket consumer for live forum thread updates.
 
     Any user (authenticated or anonymous) can subscribe to a visible thread to
-    receive real-time updates. An unknown or removed thread is closed with 4404.
+    receive real-time updates. An unknown thread, or a removed one for non-staff, is
+    closed with 4404; removing a thread closes its non-staff connections the same way,
+    and removed threads broadcast no new content.
 
     URL pattern: ``/ws/forums/threads/<thread_id>/``
 
@@ -40,7 +45,8 @@ class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         """Join the forum thread group."""
         self.thread_id = self.scope["url_route"]["kwargs"]["thread_id"]
-        if not await _thread_is_visible(self.thread_id):
+        self.is_staff = bool(getattr(self.scope.get("user"), "is_staff", False))
+        if not await _thread_is_visible(self.thread_id, is_staff=self.is_staff):
             # Accept first: a close before the handshake can't carry a code.
             await self.accept()
             await self.close(code=CLOSE_THREAD_NOT_FOUND)
@@ -95,6 +101,11 @@ class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
     async def forum_post_updated(self, event):
         """A post's text changed: ``{"type": "forum.post_updated", "post": {id, content, edited_at}}``."""
         await self.send_json({"type": "post_updated", "post": event["post"]})
+
+    async def forum_thread_removed(self, event):
+        """The thread was removed: non-staff connections are closed like an unknown thread."""
+        if not self.is_staff:
+            await self.close(code=CLOSE_THREAD_NOT_FOUND)
 
     async def forum_post_restored(self, event):
         """A removed post was restored: ``{"type": "forum.post_restored", "post_id": 1}``."""

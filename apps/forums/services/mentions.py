@@ -4,6 +4,7 @@ import re
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import F
 from django.db.models.functions import Lower
 
@@ -49,25 +50,44 @@ def resolve_mentioned_users(
     )
 
 
+def _reserve_mentions(instance: Thread | Post, *, author, previous_text: str | None) -> list:
+    """Claim part of the per-item mention budget under a row lock; return who to notify.
+
+    The read of ``mentions_notified`` and its increment happen in one locked transaction,
+    so two concurrent edits can't both spend the same remaining budget.
+    """
+    model = type(instance)
+    with transaction.atomic():
+        already_sent = (
+            model.objects.select_for_update()
+            .filter(pk=instance.pk)
+            .values_list("mentions_notified", flat=True)
+            .first()
+        )
+        if already_sent is None:
+            return []
+        users = resolve_mentioned_users(
+            instance.content,
+            author=author,
+            previous_text=previous_text,
+            limit=settings.FORUM_MAX_MENTIONS_PER_POST - already_sent,
+        )
+        if users:
+            model.objects.filter(pk=instance.pk).update(
+                mentions_notified=F("mentions_notified") + len(users)
+            )
+    return users
+
+
 def notify_mentions(author, instance: Thread | Post, *, previous_text: str | None = None) -> None:
     """Send one ``forum_mention`` notification per newly mentioned user.
 
     The cap holds per thread/post across all its edits (``mentions_notified``), so
     swapping names on every edit can't fan out past ``FORUM_MAX_MENTIONS_PER_POST``.
     """
-    model = type(instance)
-    already_sent = (
-        model.objects.filter(pk=instance.pk).values_list("mentions_notified", flat=True).first()
-    )
-    remaining = settings.FORUM_MAX_MENTIONS_PER_POST - (already_sent or 0)
-    users = resolve_mentioned_users(
-        instance.content, author=author, previous_text=previous_text, limit=remaining
-    )
+    users = _reserve_mentions(instance, author=author, previous_text=previous_text)
     if not users:
         return
-    model.objects.filter(pk=instance.pk).update(
-        mentions_notified=F("mentions_notified") + len(users)
-    )
     if isinstance(instance, Thread):
         data = {"thread_id": instance.id}
         dedupe_key = f"forum_mention:t:{instance.id}"

@@ -77,3 +77,48 @@ class ForumThreadConsumerTests(TransactionTestCase):
         self.assertEqual(
             removed, {"type": "post_removed", "post_id": post.id, "removal": "moderator"}
         )
+
+    def test_removing_a_thread_closes_guest_connections_but_not_staff(self):
+        staff = User.objects.create_user(
+            username="mod", email="mod@example.com", password="x", is_staff=True
+        )
+
+        async def scenario():
+            guest, guest_ok = await _connect(self.thread.pk)
+            moderator = WebsocketCommunicator(
+                URLRouter(websocket_urlpatterns), f"/ws/forums/threads/{self.thread.pk}/"
+            )
+            moderator.scope["user"] = staff
+            staff_ok, _ = await moderator.connect()
+            assert guest_ok and staff_ok
+            await get_channel_layer().group_send(
+                f"forum_thread_{self.thread.pk}",
+                {"type": "forum.thread_removed", "thread_id": self.thread.pk},
+            )
+            guest_output = await guest.receive_output()
+            staff_silent = await moderator.receive_nothing(timeout=0.2)
+            await moderator.disconnect()
+            return guest_output, staff_silent
+
+        guest_output, staff_silent = async_to_sync(scenario)()
+        self.assertEqual(guest_output, {"type": "websocket.close", "code": CLOSE_THREAD_NOT_FOUND})
+        self.assertTrue(staff_silent)
+
+    def test_staff_may_follow_a_removed_thread_live(self):
+        staff = User.objects.create_user(
+            username="mod2", email="mod2@example.com", password="x", is_staff=True
+        )
+        Thread.objects.filter(pk=self.thread.pk).update(is_removed=True)
+
+        async def scenario():
+            communicator = WebsocketCommunicator(
+                URLRouter(websocket_urlpatterns), f"/ws/forums/threads/{self.thread.pk}/"
+            )
+            communicator.scope["user"] = staff
+            connected, _ = await communicator.connect()
+            silent = await communicator.receive_nothing(timeout=0.2)
+            await communicator.disconnect()
+            return connected, silent
+
+        connected, silent = async_to_sync(scenario)()
+        self.assertTrue(connected and silent)

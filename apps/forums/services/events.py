@@ -57,6 +57,17 @@ def broadcast_post_updated(post) -> None:
     )
 
 
+def broadcast_thread_removed(thread) -> None:
+    """Tell open connections the thread is gone; non-staff ones are closed (4404)."""
+    run_after_commit(
+        lambda: broadcast_to_thread(
+            thread.id, {"type": "forum.thread_removed", "thread_id": thread.id}
+        ),
+        "Failed to broadcast thread removal for thread %s",
+        thread.id,
+    )
+
+
 def broadcast_post_restored(post) -> None:
     """A removed post is back: viewers refetch it (its author and content return)."""
     run_after_commit(
