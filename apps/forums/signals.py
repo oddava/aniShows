@@ -36,8 +36,8 @@ def update_thread_on_post_create(sender, instance, created, **kwargs):
     if created:
         instance.thread.adjust_reply_count(1)
         # Invalidate caches AFTER transaction commits to prevent race conditions
-        invalidate_after_commit(lambda: invalidate_thread_caches(instance.thread.id))
-        invalidate_after_commit(lambda: invalidate_post_list_cache(instance.thread.id))
+        # (this covers the thread's post list too).
+        invalidate_after_commit(lambda: invalidate_thread_caches(instance.thread_id))
 
 
 @receiver(post_delete, sender=Post)
@@ -47,10 +47,11 @@ def update_thread_on_post_delete(sender, instance, **kwargs):
     if not _obj_exists(Thread, instance.thread_id):
         return
 
-    instance.thread.adjust_reply_count(-1)
+    # A removed post was already taken out of the count.
+    if not instance.is_removed:
+        instance.thread.adjust_reply_count(-1)
     # Invalidate caches AFTER transaction commits
-    invalidate_after_commit(lambda: invalidate_thread_caches(instance.thread.id))
-    invalidate_after_commit(lambda: invalidate_post_list_cache(instance.thread.id))
+    invalidate_after_commit(lambda: invalidate_thread_caches(instance.thread_id))
 
 
 @receiver(post_save, sender=ThreadLike)
@@ -80,7 +81,7 @@ def update_post_like_count_on_create(sender, instance, created, **kwargs):
     if created:
         instance.post.adjust_like_count(1)
         # Invalidate post list cache AFTER transaction commits
-        invalidate_after_commit(lambda: invalidate_post_list_cache(instance.post.thread.id))
+        invalidate_after_commit(lambda: invalidate_post_list_cache(instance.post.thread_id))
 
 
 @receiver(post_delete, sender=PostLike)
@@ -92,7 +93,7 @@ def update_post_like_count_on_delete(sender, instance, **kwargs):
 
     instance.post.adjust_like_count(-1)
     # Invalidate post list cache AFTER transaction commits
-    invalidate_after_commit(lambda: invalidate_post_list_cache(instance.post.thread.id))
+    invalidate_after_commit(lambda: invalidate_post_list_cache(instance.post.thread_id))
 
 
 @receiver(post_save, sender=Category)
@@ -134,7 +135,9 @@ def update_category_on_thread_delete(sender, instance, **kwargs):
     if not _obj_exists(Category, instance.category_id):
         return
 
-    instance.category.adjust_thread_count(-1)
+    # A removed thread was already taken out of the count.
+    if not instance.is_removed:
+        instance.category.adjust_thread_count(-1)
     # Invalidate caches AFTER transaction commits
     invalidate_after_commit(invalidate_category_list_cache)
     invalidate_after_commit(lambda: invalidate_category_detail_cache(instance.category.slug))

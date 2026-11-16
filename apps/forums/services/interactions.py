@@ -1,219 +1,192 @@
 import hashlib
-import re
-from dataclasses import dataclass
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
-from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.db.models.functions import Lower
+from django.db import IntegrityError, transaction
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.exceptions import APIException
 
-from ...core.services.notification_service import NotificationService
-from ...shared.logger import logger
+from ...core.services.notification_service import notify
 from ..cache_utils import (
+    invalidate_category_detail_cache,
     invalidate_post_list_cache,
     invalidate_thread_caches,
-    invalidate_thread_list_cache,
 )
-from ..models import PostLike, ThreadLike
-
-User = get_user_model()
-
-
-@dataclass(slots=True)
-class ForumActionResult:
-    payload: dict
-    status_code: int
-
-
-def _broadcast_to_thread(thread_id, event):
-    try:
-        channel_layer = get_channel_layer()
-        if channel_layer is None:
-            return
-        group_name = f"forum_thread_{thread_id}"
-        async_to_sync(channel_layer.group_send)(group_name, event)
-    except Exception:
-        logger.exception("Failed to broadcast forum event for thread %s", thread_id)
+from ..models import Category, Post, PostLike, Thread, ThreadLike
+from . import subscriptions
+from .events import (
+    ForumActionResult,
+    broadcast_post_updated,
+    broadcast_to_thread,
+    run_after_commit,
+)
+from .mentions import notify_mentions
+from .moderation import mark_post_removed, record_thread_move
 
 
-def _run_after_commit(callback, log_message: str, *args):
-    def _wrapped():
-        try:
-            callback()
-        except Exception:
-            logger.exception(log_message, *args)
-
-    transaction.on_commit(_wrapped)
-
-
-def _handle_mentions(author, instance, *, is_thread=False):
-    pattern = r"(?<=^|(?<=[^a-zA-Z0-9-_\.]))@([A-Za-z0-9_]+)"
-    usernames = {username.lower() for username in re.findall(pattern, instance.content)}
-    usernames.discard(author.username.lower())
-    if not usernames:
-        return
-
-    mentioned_users = User.objects.annotate(_username_lower=Lower("username")).filter(
-        _username_lower__in=usernames
-    )
-    for mentioned_user in mentioned_users:
-        NotificationService.create_forum_mention_notification(
-            user=mentioned_user, author=author, instance=instance, is_thread=is_thread
-        )
+class ThreadHasRepliesError(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Threads with replies can only be removed by a moderator."
+    default_code = "thread_has_replies"
 
 
 def hash_viewer_identifier(value: str) -> str:
     return hashlib.md5(value.encode(), usedforsecurity=False).hexdigest()
 
 
-def create_thread(serializer, author):
+def _edit_marker(instance, validated_data: dict, fields: tuple[str, ...]) -> dict:
+    """``{"edited_at": now}`` when the update changes one of ``fields``, else ``{}``."""
+    changed = any(
+        name in validated_data and validated_data[name] != getattr(instance, name)
+        for name in fields
+    )
+    return {"edited_at": timezone.now()} if changed else {}
+
+
+def create_thread(serializer, author) -> Thread:
+    """Create a thread and subscribe its author (counters and caches: ``signals``)."""
     with transaction.atomic():
         thread = serializer.save(author=author)
-        _run_after_commit(
-            lambda: _handle_mentions(author, thread, is_thread=True),
+        subscriptions.subscribe(author, thread)
+        thread.is_subscribed = True
+        run_after_commit(
+            lambda: notify_mentions(author, thread),
             "Failed to process thread mentions for thread %s",
             thread.id,
         )
-        _run_after_commit(
-            invalidate_thread_list_cache,
-            "Failed to invalidate thread lists after creating thread %s",
-            thread.id,
-        )
     return thread
 
 
-def update_thread(serializer):
+def _move_thread(thread: Thread, from_category_id: int) -> None:
+    """Move ``thread``'s count from its old category to its new one."""
+    old_category = Category.objects.get(pk=from_category_id)
+    if not thread.is_removed:
+        old_category.adjust_thread_count(-1)
+        thread.category.adjust_thread_count(1)
+    run_after_commit(
+        lambda: invalidate_category_detail_cache(old_category.slug),
+        "Failed to invalidate the old category of moved thread %s",
+        thread.id,
+    )
+
+
+def update_thread(serializer, *, request) -> Thread:
+    """Apply an edit (author) or a category move (staff, audited)."""
+    thread = serializer.instance
+    previous_content = thread.content
+    previous_category_id = thread.category_id
+    edit = _edit_marker(thread, serializer.validated_data, ("title", "content"))
     with transaction.atomic():
-        thread = serializer.save()
-        _run_after_commit(
-            lambda: invalidate_thread_caches(thread.id),
-            "Failed to invalidate thread caches for thread %s",
-            thread.id,
-        )
+        thread = serializer.save(**edit)
+        if thread.category_id != previous_category_id:
+            _move_thread(thread, previous_category_id)
+            record_thread_move(request, thread, from_category_id=previous_category_id)
+        if thread.content != previous_content:
+            run_after_commit(
+                lambda: notify_mentions(thread.author, thread, previous_text=previous_content),
+                "Failed to process thread mentions for thread %s",
+                thread.id,
+            )
+
+        def _invalidate():
+            invalidate_thread_caches(thread.id)
+            invalidate_category_detail_cache(thread.category.slug)
+
+        run_after_commit(_invalidate, "Failed to invalidate caches for thread %s", thread.id)
     return thread
 
 
-def delete_thread(instance):
+def delete_thread(instance: Thread) -> None:
+    """Hard-delete an author's thread unless someone else replied to it (409)."""
     thread_id = instance.id
     with transaction.atomic():
-        instance.delete()
-        _run_after_commit(
-            lambda: invalidate_thread_caches(thread_id),
-            "Failed to invalidate deleted thread caches for thread %s",
+        # The lock keeps a reply from landing between the check and the delete.
+        locked = Thread.objects.select_for_update().get(pk=thread_id)
+        if locked.posts.exclude(author_id=locked.author_id).exists():
+            raise ThreadHasRepliesError()
+        locked.delete()
+        run_after_commit(
+            lambda: invalidate_post_list_cache(thread_id),
+            "Failed to invalidate post list cache for deleted thread %s",
             thread_id,
         )
 
 
-def toggle_thread_like(thread, user) -> ForumActionResult:
+def _liked_payload(status_name: str, like_count: int, *, is_liked: bool) -> dict:
+    return {"status": status_name, "like_count": like_count, "is_liked": is_liked}
+
+
+def _create_like(model, **fields) -> bool:
+    """Create a like row; ``False`` if it already exists (unique constraint)."""
+    try:
+        with transaction.atomic():
+            model.objects.create(**fields)
+    except IntegrityError:
+        return False
+    return True
+
+
+def toggle_thread_like(thread: Thread, user) -> ForumActionResult:
     with transaction.atomic():
-        locked_thread = thread.__class__.objects.select_for_update().get(pk=thread.pk)
-        locked_user = User.objects.select_for_update().get(pk=user.pk)
-        existing_like = (
-            ThreadLike.objects.select_for_update()
-            .filter(
-                thread=locked_thread,
-                user=locked_user,
-            )
-            .first()
-        )
-        if existing_like:
-            like_count = locked_thread.like_count
+        # The thread lock serializes like_count updates for this thread.
+        locked_thread = Thread.objects.select_for_update().get(pk=thread.pk)
+        if not _create_like(ThreadLike, thread=locked_thread, user=user):
             return ForumActionResult(
-                payload={
-                    "status": "already_liked",
-                    "like_count": like_count,
-                    "is_liked": True,
-                },
+                payload=_liked_payload("already_liked", locked_thread.like_count, is_liked=True),
                 status_code=200,
             )
-
-        ThreadLike.objects.create(thread=locked_thread, user=locked_user)
         like_count = locked_thread.like_count + 1
 
-        if locked_thread.author_id != locked_user.id:
-            _run_after_commit(
-                lambda: NotificationService.create_forum_like_notification(
-                    user=locked_thread.author,
-                    author=locked_user,
-                    instance=locked_thread,
-                    is_thread=True,
+        if locked_thread.author_id != user.id:
+            run_after_commit(
+                lambda: notify(
+                    locked_thread.author_id,
+                    "forum_like",
+                    actor=user,
+                    data={"thread_id": locked_thread.id},
+                    group_key=f"forum_like:t:{locked_thread.id}",
                 ),
                 "Failed to create thread like notification for thread %s",
                 locked_thread.id,
             )
-
-        _run_after_commit(
-            lambda: _broadcast_to_thread(
-                locked_thread.id,
-                {
-                    "type": "forum.thread_liked",
-                    "thread_id": locked_thread.id,
-                    "like_count": like_count,
-                },
-            ),
-            "Failed to broadcast thread like for thread %s",
-            locked_thread.id,
-        )
+        _broadcast_thread_like_count(locked_thread.id, like_count)
     return ForumActionResult(
-        payload={
-            "status": "liked",
-            "like_count": like_count,
-            "is_liked": True,
-        },
-        status_code=201,
+        payload=_liked_payload("liked", like_count, is_liked=True), status_code=201
     )
 
 
-def unlike_thread(thread, user) -> ForumActionResult:
-    try:
-        with transaction.atomic():
-            locked_thread = thread.__class__.objects.select_for_update().get(pk=thread.pk)
-            locked_user = User.objects.select_for_update().get(pk=user.pk)
-            like = ThreadLike.objects.select_for_update().get(
-                thread=locked_thread, user=locked_user
-            )
-            like.delete()
-            like_count = max(locked_thread.like_count - 1, 0)
-
-            _run_after_commit(
-                lambda: _broadcast_to_thread(
-                    locked_thread.id,
-                    {
-                        "type": "forum.thread_liked",
-                        "thread_id": locked_thread.id,
-                        "like_count": like_count,
-                    },
-                ),
-                "Failed to broadcast thread unlike for thread %s",
-                locked_thread.id,
-            )
-        return ForumActionResult(
-            payload={
-                "status": "unliked",
-                "like_count": like_count,
-                "is_liked": False,
-            },
-            status_code=200,
-        )
-    except ThreadLike.DoesNotExist:
-        return ForumActionResult(
-            payload={
-                "status": "not_liked",
-                "like_count": thread.like_count,
-                "is_liked": False,
-            },
-            status_code=200,
-        )
-
-
-def toggle_thread_pin(thread) -> ForumActionResult:
+def unlike_thread(thread: Thread, user) -> ForumActionResult:
     with transaction.atomic():
-        locked_thread = thread.__class__.objects.select_for_update().get(pk=thread.pk)
+        locked_thread = Thread.objects.select_for_update().get(pk=thread.pk)
+        deleted, _ = ThreadLike.objects.filter(thread=locked_thread, user=user).delete()
+        if not deleted:
+            return ForumActionResult(
+                payload=_liked_payload("not_liked", locked_thread.like_count, is_liked=False),
+                status_code=200,
+            )
+        like_count = max(locked_thread.like_count - 1, 0)
+        _broadcast_thread_like_count(locked_thread.id, like_count)
+    return ForumActionResult(
+        payload=_liked_payload("unliked", like_count, is_liked=False), status_code=200
+    )
+
+
+def _broadcast_thread_like_count(thread_id: int, like_count: int) -> None:
+    run_after_commit(
+        lambda: broadcast_to_thread(
+            thread_id,
+            {"type": "forum.thread_liked", "thread_id": thread_id, "like_count": like_count},
+        ),
+        "Failed to broadcast thread like count for thread %s",
+        thread_id,
+    )
+
+
+def toggle_thread_pin(thread: Thread) -> ForumActionResult:
+    with transaction.atomic():
+        locked_thread = Thread.objects.select_for_update().get(pk=thread.pk)
         locked_thread.is_pinned = not locked_thread.is_pinned
         locked_thread.save(update_fields=["is_pinned"])
-        _run_after_commit(
+        run_after_commit(
             lambda: invalidate_thread_caches(locked_thread.id),
             "Failed to invalidate pinned thread caches for thread %s",
             locked_thread.id,
@@ -227,212 +200,180 @@ def toggle_thread_pin(thread) -> ForumActionResult:
     )
 
 
-def create_post(serializer, author):
-    with transaction.atomic():
-        thread = (
-            serializer.validated_data["thread"]
-            .__class__.objects.select_for_update()
-            .get(pk=serializer.validated_data["thread"].pk)
+def _notify_reply_target(post: Post, author) -> None:
+    """Tell the thread author (top-level reply) or the parent's author (nested reply)."""
+    data = {"thread_id": post.thread_id, "post_id": post.id}
+    if post.parent_id is None:
+        recipient_id = post.thread.author_id
+        data["reason"] = "thread"
+    else:
+        recipient_id = post.parent.author_id
+        data.update(parent_post_id=post.parent_id, reason="parent")
+    if recipient_id != author.id:
+        notify(
+            recipient_id,
+            "forum_reply",
+            actor=author,
+            data=data,
+            dedupe_key=f"forum_reply:{post.id}",
         )
+
+
+def _enqueue_subscriber_fanout(post_id: int) -> None:
+    # Imported here: the tasks module imports this package.
+    from ..tasks import notify_thread_subscribers
+
+    notify_thread_subscribers.delay(post_id)
+
+
+def _broadcast_new_post(post: Post) -> None:
+    run_after_commit(
+        lambda: broadcast_to_thread(
+            post.thread_id,
+            {
+                "type": "forum.new_post",
+                "post": {
+                    "id": post.id,
+                    "thread_id": post.thread_id,
+                    "parent_id": post.parent_id,
+                    "author": {"id": post.author.id, "username": post.author.username},
+                    "content": post.content,
+                    "depth": post.depth,
+                    "like_count": 0,
+                    "created_at": post.created_at.isoformat(),
+                },
+            },
+        ),
+        "Failed to broadcast new post for thread %s",
+        post.thread_id,
+    )
+
+
+def create_post(serializer, author) -> Post:
+    """Create a reply (reply count and caches: ``signals``) and queue its notifications."""
+    with transaction.atomic():
+        thread = Thread.objects.select_for_update().get(pk=serializer.validated_data["thread"].pk)
         parent = serializer.validated_data.get("parent")
         if parent is not None:
-            parent = parent.__class__.objects.select_for_update().get(pk=parent.pk)
-        locked_author = User.objects.select_for_update().get(pk=author.pk)
+            # Locked so the parent can't be deleted while the reply is written.
+            parent = Post.objects.select_for_update().get(pk=parent.pk)
 
-        post = serializer.save(author=locked_author, thread=thread, parent=parent)
+        post = serializer.save(
+            author=author,
+            thread=thread,
+            parent=parent,
+            depth=parent.depth + 1 if parent is not None else 0,
+        )
         thread.updated_at = timezone.now()
         thread.save(update_fields=["updated_at"])
+        subscriptions.subscribe_on_first_post(post)
 
-        if post.parent:
-            post.depth = min(post.parent.depth + 1, 10)
-            post.save(update_fields=["depth"])
-
-        _run_after_commit(
-            lambda: _handle_mentions(locked_author, post, is_thread=False),
+        run_after_commit(
+            lambda: notify_mentions(author, post),
             "Failed to process post mentions for post %s",
             post.id,
         )
-
-        if not post.parent and thread.author_id != locked_author.id:
-            _run_after_commit(
-                lambda: NotificationService.create_forum_reply_notification(
-                    user=thread.author,
-                    thread=thread,
-                    post=post,
-                ),
-                "Failed to create thread reply notification for thread %s",
-                thread.id,
-            )
-
-        if post.parent and post.parent.author_id != locked_author.id:
-            _run_after_commit(
-                lambda: NotificationService.create_forum_reply_to_post_notification(
-                    user=post.parent.author,
-                    reply=post,
-                ),
-                "Failed to create post reply notification for post %s",
-                post.parent_id,
-            )
-
-        _run_after_commit(
-            lambda: invalidate_post_list_cache(thread.id),
-            "Failed to invalidate post list cache for thread %s",
-            thread.id,
+        run_after_commit(
+            lambda: _notify_reply_target(post, author),
+            "Failed to create reply notification for post %s",
+            post.id,
         )
-        _run_after_commit(
-            lambda: invalidate_thread_caches(thread.id),
-            "Failed to invalidate thread caches for thread %s",
-            thread.id,
+        run_after_commit(
+            lambda: _enqueue_subscriber_fanout(post.id),
+            "Failed to queue the subscriber fan-out for post %s",
+            post.id,
         )
-        _run_after_commit(
-            lambda: _broadcast_to_thread(
-                thread.id,
-                {
-                    "type": "forum.new_post",
-                    "post": {
-                        "id": post.id,
-                        "thread_id": thread.id,
-                        "parent_id": post.parent_id,
-                        "author": {
-                            "id": post.author.id,
-                            "username": post.author.username,
-                        },
-                        "content": post.content,
-                        "depth": post.depth,
-                        "like_count": 0,
-                        "created_at": post.created_at.isoformat(),
-                    },
-                },
-            ),
-            "Failed to broadcast new post for thread %s",
-            thread.id,
-        )
+        _broadcast_new_post(post)
     return post
 
 
-def update_post(serializer):
+def update_post(serializer) -> Post:
+    """Apply an author's edit; a changed text gets ``edited_at`` and a live update."""
+    post = serializer.instance
+    previous_content = post.content
+    edit = _edit_marker(post, serializer.validated_data, ("content",))
     with transaction.atomic():
-        post = serializer.save()
-        _run_after_commit(
-            lambda: invalidate_post_list_cache(post.thread_id),
-            "Failed to invalidate post list cache for thread %s",
-            post.thread_id,
-        )
+        post = serializer.save(**edit)
+        if edit:
+            run_after_commit(
+                lambda: invalidate_post_list_cache(post.thread_id),
+                "Failed to invalidate post list cache for thread %s",
+                post.thread_id,
+            )
+            run_after_commit(
+                lambda: notify_mentions(post.author, post, previous_text=previous_content),
+                "Failed to process post mentions for post %s",
+                post.id,
+            )
+            broadcast_post_updated(post)
     return post
 
 
-def delete_post(instance):
-    thread_id = instance.thread_id
-    thread = instance.thread
+def delete_post(instance: Post, *, actor) -> None:
+    """Author delete: soft-remove a post that has replies, hard-delete a leaf."""
     with transaction.atomic():
-        instance.delete()
-        _run_after_commit(
-            lambda: invalidate_post_list_cache(thread_id),
-            "Failed to invalidate post list cache for thread %s",
-            thread_id,
+        post = (
+            Post.objects.select_related("thread")
+            .select_for_update(of=("self",))
+            .get(pk=instance.pk)
         )
-        _run_after_commit(
-            lambda: invalidate_thread_caches(thread.id),
-            "Failed to invalidate thread caches for thread %s",
-            thread.id,
-        )
+        if not post.replies.exists():
+            post.delete()
+        elif not post.is_removed:
+            mark_post_removed(post, removed_by=actor)
 
 
-def toggle_post_like(post, user) -> ForumActionResult:
+def toggle_post_like(post: Post, user) -> ForumActionResult:
     with transaction.atomic():
-        locked_post = post.__class__.objects.select_for_update().get(pk=post.pk)
-        locked_user = User.objects.select_for_update().get(pk=user.pk)
-        existing_like = (
-            PostLike.objects.select_for_update()
-            .filter(
-                post=locked_post,
-                user=locked_user,
-            )
-            .first()
-        )
-        if existing_like:
-            like_count = locked_post.like_count
+        # The post lock serializes like_count updates for this post.
+        locked_post = Post.objects.select_for_update().get(pk=post.pk)
+        if not _create_like(PostLike, post=locked_post, user=user):
             return ForumActionResult(
-                payload={
-                    "status": "already_liked",
-                    "like_count": like_count,
-                    "is_liked": True,
-                },
+                payload=_liked_payload("already_liked", locked_post.like_count, is_liked=True),
                 status_code=200,
             )
-
-        PostLike.objects.create(post=locked_post, user=locked_user)
         like_count = locked_post.like_count + 1
 
-        if locked_post.author_id != locked_user.id:
-            _run_after_commit(
-                lambda: NotificationService.create_forum_like_notification(
-                    user=locked_post.author,
-                    author=locked_user,
-                    instance=locked_post,
-                    is_thread=False,
+        if locked_post.author_id != user.id:
+            run_after_commit(
+                lambda: notify(
+                    locked_post.author_id,
+                    "forum_like",
+                    actor=user,
+                    data={"thread_id": locked_post.thread_id, "post_id": locked_post.id},
+                    group_key=f"forum_like:p:{locked_post.id}",
                 ),
                 "Failed to create post like notification for post %s",
                 locked_post.id,
             )
-
-        _run_after_commit(
-            lambda: _broadcast_to_thread(
-                locked_post.thread_id,
-                {
-                    "type": "forum.post_liked",
-                    "post_id": locked_post.id,
-                    "like_count": like_count,
-                },
-            ),
-            "Failed to broadcast post like for post %s",
-            locked_post.id,
-        )
+        _broadcast_post_like_count(locked_post, like_count)
     return ForumActionResult(
-        payload={
-            "status": "liked",
-            "like_count": like_count,
-            "is_liked": True,
-        },
-        status_code=201,
+        payload=_liked_payload("liked", like_count, is_liked=True), status_code=201
     )
 
 
-def unlike_post(post, user) -> ForumActionResult:
-    try:
-        with transaction.atomic():
-            locked_post = post.__class__.objects.select_for_update().get(pk=post.pk)
-            locked_user = User.objects.select_for_update().get(pk=user.pk)
-            like = PostLike.objects.select_for_update().get(post=locked_post, user=locked_user)
-            like.delete()
-            like_count = max(locked_post.like_count - 1, 0)
-
-            _run_after_commit(
-                lambda: _broadcast_to_thread(
-                    locked_post.thread_id,
-                    {
-                        "type": "forum.post_liked",
-                        "post_id": locked_post.id,
-                        "like_count": like_count,
-                    },
-                ),
-                "Failed to broadcast post unlike for post %s",
-                locked_post.id,
+def unlike_post(post: Post, user) -> ForumActionResult:
+    with transaction.atomic():
+        locked_post = Post.objects.select_for_update().get(pk=post.pk)
+        deleted, _ = PostLike.objects.filter(post=locked_post, user=user).delete()
+        if not deleted:
+            return ForumActionResult(
+                payload=_liked_payload("not_liked", locked_post.like_count, is_liked=False),
+                status_code=200,
             )
-        return ForumActionResult(
-            payload={
-                "status": "unliked",
-                "like_count": like_count,
-                "is_liked": False,
-            },
-            status_code=200,
-        )
-    except PostLike.DoesNotExist:
-        return ForumActionResult(
-            payload={
-                "status": "not_liked",
-                "like_count": post.like_count,
-                "is_liked": False,
-            },
-            status_code=200,
-        )
+        like_count = max(locked_post.like_count - 1, 0)
+        _broadcast_post_like_count(locked_post, like_count)
+    return ForumActionResult(
+        payload=_liked_payload("unliked", like_count, is_liked=False), status_code=200
+    )
+
+
+def _broadcast_post_like_count(post: Post, like_count: int) -> None:
+    run_after_commit(
+        lambda: broadcast_to_thread(
+            post.thread_id,
+            {"type": "forum.post_liked", "post_id": post.id, "like_count": like_count},
+        ),
+        "Failed to broadcast post like count for post %s",
+        post.id,
+    )

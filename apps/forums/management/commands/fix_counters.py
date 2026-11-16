@@ -35,7 +35,7 @@ class Command(BaseCommand):
 
         # Fix thread reply counts
         for thread in Thread.objects.all():
-            actual_posts = thread.posts.count()
+            actual_posts = thread.posts.filter(is_removed=False).count()
             if thread.reply_count != actual_posts:
                 self.stdout.write(
                     f"  Thread {thread.id} replies: {thread.reply_count} -> {actual_posts}"
@@ -45,7 +45,7 @@ class Command(BaseCommand):
 
         # Fix category thread counts
         for category in Category.objects.all():
-            actual_threads = category.threads.count()
+            actual_threads = category.threads.filter(is_removed=False).count()
             if category.thread_count != actual_threads:
                 self.stdout.write(
                     f"  Category {category.id}: {category.thread_count} -> {actual_threads}"
