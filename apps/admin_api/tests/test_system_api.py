@@ -103,8 +103,40 @@ class SystemPageTests(TestCase):
         self.assertFalse(flush["stale"])
         never = [row for row in beat.values() if row["last_run"] is None]
         self.assertTrue(never)
-        self.assertTrue(all(row["next_due"] is None and not row["stale"] for row in never))
+        self.assertTrue(all(row["next_due"] is None for row in never))
         self.assertNotIn("collect-queue-metrics-minute", beat)
+
+    def test_last_run_is_matched_per_entry_not_per_task(self):
+        sync = "apps.animes.tasks.sync.sync_anime_catalog"
+        CeleryTaskResult.objects.create(
+            task_id="tr-1", task_name=sync, task_kwargs={"sync_type": "trending", "limit": 50}
+        )
+        old = CeleryTaskResult.objects.create(
+            task_id="up-1", task_name=sync, task_kwargs={"sync_type": "next_season", "limit": 100}
+        )
+        CeleryTaskResult.objects.filter(pk=old.pk).update(
+            date_created=timezone.now() - timedelta(days=6)
+        )
+
+        beat = {row["name"]: row for row in self.staff_client.get(URL).data["beat"]}
+
+        trending, upcoming = beat["sync-trending-hourly"], beat["sync-upcoming-weekly"]
+        self.assertGreater(trending["last_run"], upcoming["last_run"])
+        self.assertFalse(trending["stale"])
+        self.assertNotEqual(beat["sync-seasonal-daily"]["last_run"], trending["last_run"])
+
+    def test_a_missed_run_inside_the_retained_history_is_stale(self):
+        stamp = CeleryTaskResult.objects.create(task_id="old-1", task_name=CLEANUP_TASK)
+        CeleryTaskResult.objects.filter(pk=stamp.pk).update(
+            date_created=timezone.now() - timedelta(days=5)
+        )
+
+        beat = {row["name"]: row for row in self.staff_client.get(URL).data["beat"]}
+
+        seasonal = beat["sync-seasonal-daily"]  # daily, never seen in 5 days of history
+        self.assertIsNone(seasonal["last_run"])
+        self.assertTrue(seasonal["stale"])
+        self.assertFalse(beat["flush-forum-view-counts-minute"]["stale"])  # untracked
 
     def test_anilist_is_unavailable_without_the_r7_accessor(self):
         self.assertEqual(self.staff_client.get(URL).data["anilist"], {"available": False})
@@ -182,13 +214,27 @@ class BeatRunTests(TestCase):
 
         self.assertEqual(response.status_code, 202)
         self.send_task.assert_called_once_with(
-            CLEANUP_TASK, args=[], kwargs={"days": 7, "batch_size": 1000}, queue="low_priority"
+            CLEANUP_TASK,
+            args=[],
+            kwargs={"days": 7, "batch_size": 1000},
+            task_id=response.data["task_id"],
+            queue="low_priority",
         )
-        self.assertEqual(CeleryTaskResult.objects.get(task_id="beat-task-1").status, "PENDING")
+        self.assertEqual(
+            CeleryTaskResult.objects.get(task_id=response.data["task_id"]).status, "PENDING"
+        )
         row = AuditLog.objects.get()
         self.assertEqual(
             (row.action, row.entity_id), (AuditLog.ActionType.TRIGGER, "cleanup-task-results-daily")
         )
+
+    def test_untracked_entry_cannot_be_rerun_within_a_minute(self):
+        first = self._run("flush-forum-view-counts-minute")
+        second = self._run("flush-forum-view-counts-minute")
+
+        self.assertEqual((first.status_code, second.status_code), (202, 409))
+        self.assertEqual(self.send_task.call_count, 1)
+        self.assertFalse(CeleryTaskResult.objects.exists())
 
     def test_unknown_entry_is_404(self):
         self.assertEqual(self._run("drop-all-tables").status_code, 404)

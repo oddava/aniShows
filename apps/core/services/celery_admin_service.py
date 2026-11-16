@@ -1,8 +1,11 @@
 import json
+import zlib
 from dataclasses import dataclass
 from datetime import timedelta
+from uuid import uuid4
 
 from celery import current_app
+from django.db import connection, transaction
 from django.utils import timezone
 
 from ..models import CeleryTaskResult
@@ -87,6 +90,11 @@ AVAILABLE_TASKS = {
 
 MAX_ADMIN_TASK_PAYLOAD_BYTES = 4096
 MAX_BULK_DELETE_IDS = 500
+IN_FLIGHT_STATUSES = ("PENDING", "STARTED", "RETRY")
+# A pending/started row older than this no longer blocks a new run (a lost task).
+IN_FLIGHT_WINDOW = timedelta(hours=12)
+# First key of the two-int advisory lock, so G6's task locks share no space with others.
+ADVISORY_LOCK_NAMESPACE = 6006
 
 
 class CeleryTaskValidationError(ValueError):
@@ -222,38 +230,93 @@ def bulk_delete_task_results(*, ids=None, days=None) -> CeleryAdminActionResult:
     )
 
 
-def create_task_result_record(
-    *, task_path: str, task_id: str, args=None, kwargs=None, queue: str, user
-):
-    return CeleryTaskResult.objects.create(
-        task_id=task_id,
+class TaskAlreadyRunningError(Exception):
+    """An exclusive enqueue found the same task still pending or running."""
+
+
+def task_in_flight(task_path: str) -> bool:
+    """Whether a run of ``task_path`` is pending or running (rows from the last 12h only)."""
+    return CeleryTaskResult.objects.filter(
         task_name=task_path,
-        task_module=".".join(task_path.split(".")[:-1]),
-        status="PENDING",
-        task_args=args or [],
-        task_kwargs=kwargs or {},
-        queue=queue or "default",
-        triggered_by=user if getattr(user, "is_authenticated", False) else None,
-    )
+        status__in=IN_FLIGHT_STATUSES,
+        date_created__gte=timezone.now() - IN_FLIGHT_WINDOW,
+    ).exists()
+
+
+def _signed_int32(value: int) -> int:
+    return value - 2**32 if value >= 2**31 else value
+
+
+def _lock_task(task_path: str) -> None:
+    """Hold a Postgres advisory lock on ``task_path`` until the transaction ends."""
+    if connection.vendor != "postgresql":  # pragma: no cover - Postgres in every env
+        return
+    key = _signed_int32(zlib.crc32(task_path.encode("utf-8")))
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)", [ADVISORY_LOCK_NAMESPACE, key])
+
+
+def enqueue_tracked_task(
+    *,
+    task_path: str,
+    user,
+    kwargs: dict | None = None,
+    args: list | None = None,
+    queue: str | None = None,
+    task_module: str | None = None,
+    exclusive: bool = False,
+) -> CeleryTaskResult:
+    """Record the PENDING ``CeleryTaskResult``, then send the task with that ``task_id``.
+
+    The row exists before any worker can pick the task up, so ``task_prerun`` updates
+    it instead of racing it for the unique ``task_id``. With ``exclusive=True`` the
+    in-flight check and the insert run under a per-task advisory lock, so two
+    concurrent requests cannot both pass the check: the second raises
+    ``TaskAlreadyRunningError``. If sending fails, the row is marked failed (it never
+    blocks a retry) and the error propagates.
+    """
+    task_id = str(uuid4())
+    resolved_queue = queue or routed_queue(task_path)
+    with transaction.atomic():
+        if exclusive:
+            _lock_task(task_path)
+            if task_in_flight(task_path):
+                raise TaskAlreadyRunningError(task_path)
+        job = CeleryTaskResult.objects.create(
+            task_id=task_id,
+            task_name=task_path,
+            task_module=task_module or ".".join(task_path.split(".")[:-1]),
+            status=CeleryTaskResult.TaskStatus.PENDING,
+            task_args=args or [],
+            task_kwargs=kwargs or {},
+            queue=resolved_queue,
+            triggered_by=user if getattr(user, "is_authenticated", False) else None,
+        )
+
+    options = {"queue": queue} if queue else {}
+    try:
+        current_app.send_task(
+            task_path, args=args or [], kwargs=kwargs or {}, task_id=task_id, **options
+        )
+    except Exception:
+        CeleryTaskResult.objects.filter(pk=job.pk).update(
+            status=CeleryTaskResult.TaskStatus.FAILURE,
+            error_message="Could not enqueue the task.",
+            date_completed=timezone.now(),
+        )
+        raise
+    return job
 
 
 def trigger_task(*, task_path: str, args=None, kwargs=None, user):
     """Send an allowlisted task with validated kwargs. Routing follows ``task_routes``."""
     args, kwargs = validate_task_invocation(task_path=task_path, args=args, kwargs=kwargs)
     task_info = AVAILABLE_TASKS[task_path]
-    result = current_app.send_task(task_path, args=args or [], kwargs=kwargs or {})
-    task_result = create_task_result_record(
-        task_path=task_path,
-        task_id=result.id,
-        args=args,
-        kwargs=kwargs,
-        queue=routed_queue(task_path),
-        user=user,
-    )
+    job = enqueue_tracked_task(task_path=task_path, args=args, kwargs=kwargs, user=user)
     return {
         "message": f"Task {task_info['name']} triggered successfully.",
-        "task_id": result.id,
-        "task_result_id": task_result.id,
+        "task_id": job.task_id,
+        "task_result_id": job.id,
         "status": "PENDING",
         "kwargs": kwargs,
     }

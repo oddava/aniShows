@@ -10,6 +10,7 @@ from django.utils import timezone
 from ...animes.models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
 from ...animes.services.offline_catalog import DEFAULT_ASSET_NAME
 from ..models import CeleryTaskResult
+from .celery_admin_service import TaskAlreadyRunningError, enqueue_tracked_task
 
 CATALOG_SYNC_TASK = "apps.animes.tasks.sync.sync_anime_catalog"
 METADATA_ENRICHMENT_TASK = "apps.animes.tasks.metadata.enrich_metadata"
@@ -30,9 +31,6 @@ BATCH_SIZE_MAX = 500
 OFFLINE_IMPORT_LIMIT_MAX = 100_000
 CATALOG_SYNC_TYPES = ("seasonal", "next_season", "airing", "full_catalog")
 RELEASE_TAG_RE = re.compile(r"latest|[0-9A-Za-z._-]{1,40}")
-IN_FLIGHT_STATUSES = ("PENDING", "STARTED", "RETRY")
-# A pending/started row older than this no longer blocks a new trigger (a lost task).
-IN_FLIGHT_WINDOW = timedelta(hours=12)
 
 
 @dataclass(slots=True)
@@ -387,30 +385,15 @@ def format_task_result(result):
 
 
 def create_pending_job(*, user, task_path: str, task_module: str, kwargs, queue: str):
-    result = current_app.send_task(task_path, kwargs=kwargs, queue=queue)
-    job, created = CeleryTaskResult.objects.get_or_create(
-        task_id=result.id,
-        defaults={
-            "task_name": task_path,
-            "task_module": task_module,
-            "status": "PENDING",
-            "task_kwargs": kwargs,
-            "queue": queue,
-            "triggered_by": user if user and user.is_authenticated else None,
-        },
+    """Queue one import job exclusively (raises ``TaskAlreadyRunningError`` if one is in flight)."""
+    return enqueue_tracked_task(
+        task_path=task_path,
+        task_module=task_module,
+        kwargs=kwargs,
+        queue=queue,
+        user=user,
+        exclusive=True,
     )
-    if not created:
-        update_fields = ["task_name", "task_module", "task_kwargs", "queue"]
-        job.task_name = job.task_name or task_path
-        job.task_module = job.task_module or task_module
-        if not job.task_kwargs:
-            job.task_kwargs = kwargs
-        job.queue = job.queue or queue
-        if user and user.is_authenticated and not job.triggered_by_id:
-            job.triggered_by = user
-            update_fields.append("triggered_by")
-        job.save(update_fields=update_fields)
-    return job
 
 
 class ImportTriggerError(ValueError):
@@ -432,17 +415,12 @@ def _bounded_int(payload, key: str, *, default: int | None, minimum: int, maximu
     return value
 
 
-def _in_flight(task_path: str) -> bool:
-    """Whether a run of ``task_path`` is still pending or running (recent rows only)."""
-    return CeleryTaskResult.objects.filter(
-        task_name=task_path,
-        status__in=IN_FLIGHT_STATUSES,
-        date_created__gte=timezone.now() - IN_FLIGHT_WINDOW,
-    ).exists()
-
-
 def _queue_job(user, *, task_path: str, task_module: str, kwargs: dict, queue: str, message: str):
-    if _in_flight(task_path):
+    try:
+        job = create_pending_job(
+            user=user, task_path=task_path, task_module=task_module, kwargs=kwargs, queue=queue
+        )
+    except TaskAlreadyRunningError:
         return AdminImportJobActionResult(
             payload={
                 "detail": "A job of this kind is already pending or running. "
@@ -450,9 +428,6 @@ def _queue_job(user, *, task_path: str, task_module: str, kwargs: dict, queue: s
             },
             status_code=409,
         )
-    job = create_pending_job(
-        user=user, task_path=task_path, task_module=task_module, kwargs=kwargs, queue=queue
-    )
     return AdminImportJobActionResult(
         payload={"message": message, "job_id": job.id, "status": "pending"},
         status_code=202,

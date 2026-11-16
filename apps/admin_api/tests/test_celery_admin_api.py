@@ -66,7 +66,8 @@ class CeleryAdminApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         self.assertNotIn("queue", mock_send_task.call_args.kwargs)
-        row = CeleryTaskResult.objects.get(task_id="queued-1")
+        row = CeleryTaskResult.objects.get(task_id=response.data["task_id"])
+        self.assertEqual(mock_send_task.call_args.kwargs["task_id"], row.task_id)
         self.assertEqual(row.queue, "high_priority")  # root.celery task_routes
         audit = AuditLog.objects.get(action=AuditLog.ActionType.TRIGGER)
         self.assertEqual((audit.user, audit.entity_repr), (self.superuser, SYNC_TASK))

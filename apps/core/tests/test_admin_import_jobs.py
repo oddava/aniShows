@@ -1,14 +1,21 @@
+import threading
+import time
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 
-from django.test import SimpleTestCase, TestCase
+from django.db import connection
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.utils import timezone
 
 from ...admin_api.tests.helpers import bearer_client, make_user
 from ..models import AuditLog, CeleryTaskResult
-from ..services.admin_import_jobs_service import CATALOG_SYNC_TASK, format_task_result
+from ..services.admin_import_jobs_service import (
+    CATALOG_SYNC_TASK,
+    format_task_result,
+    trigger_import_job,
+)
 from ..views.admin_import_jobs import OFFLINE_RECONCILE_TASK, AdminImportJobFilter
 
 
@@ -259,3 +266,43 @@ class AdminImportJobFilterTests(TestCase):
 
         self.assertIn(completed, queryset)
         self.assertNotIn(failed, queryset)
+
+
+class ExclusiveTriggerRaceTests(TransactionTestCase):
+    """Two simultaneous triggers of the same task: one 202, one 409 (advisory lock)."""
+
+    def test_concurrent_triggers_queue_exactly_one_job(self):
+        user = make_user("race-root", role="superuser")
+        barrier = threading.Barrier(2)
+        results: list[int] = []
+        real_create = CeleryTaskResult.objects.create
+
+        def slow_create(**fields):
+            # Hold the first claim open long enough for the second request to arrive.
+            row = real_create(**fields)
+            time.sleep(0.5)
+            return row
+
+        def trigger():
+            try:
+                barrier.wait(timeout=5)
+                results.append(trigger_import_job({"source": "trending"}, user).status_code)
+            finally:
+                connection.close()
+
+        with (
+            patch(
+                "apps.core.services.celery_admin_service.current_app.send_task",
+                return_value=SimpleNamespace(id="x"),
+            ) as send_task,
+            patch.object(CeleryTaskResult.objects, "create", side_effect=slow_create),
+        ):
+            threads = [threading.Thread(target=trigger) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=20)
+
+        self.assertEqual(sorted(results), [202, 409])
+        self.assertEqual(send_task.call_count, 1)
+        self.assertEqual(CeleryTaskResult.objects.count(), 1)

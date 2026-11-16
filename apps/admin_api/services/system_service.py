@@ -10,6 +10,7 @@ scheduler beat really runs), never a database copy.
 from __future__ import annotations
 
 import datetime as dt
+from collections import Counter
 from contextlib import suppress
 from dataclasses import dataclass
 
@@ -18,13 +19,17 @@ from celery.schedules import crontab, schedule
 from django.conf import settings
 from django.core.cache import cache
 from django.db import DatabaseError, connection
-from django.db.models import Max
+from django.db.models import Max, Min
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from ...core.celery_signals import is_untracked, last_run_cache_key
 from ...core.models import AuditLog, CeleryTaskResult
-from ...core.services.celery_admin_service import create_task_result_record, routed_queue
+from ...core.services.celery_admin_service import (
+    TaskAlreadyRunningError,
+    enqueue_tracked_task,
+    routed_queue,
+)
 from ...core.services.celery_monitoring import get_queue_sizes, routed_queue_names
 from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ...shared.logger import logger
@@ -43,8 +48,10 @@ STALE_AFTER = dt.timedelta(minutes=15)
 TOP_TABLES = 8
 RECENT_FAILURES = 10
 FAILURE_MESSAGE_LENGTH = 300
-IN_FLIGHT_STATUSES = ("PENDING", "STARTED", "RETRY")
-IN_FLIGHT_WINDOW = dt.timedelta(hours=12)
+# cleanup-task-results-daily keeps 7 days of task results.
+TASK_RESULT_RETENTION = dt.timedelta(days=7)
+UNTRACKED_RUN_CLAIM_PREFIX = "admin:system:run:"
+UNTRACKED_RUN_CLAIM_SECONDS = 60
 # The R7 accessors only read the cache; anything else is a contract break.
 ACCESSOR_ERRORS: tuple[type[Exception], ...] = (
     *CACHE_ERRORS,
@@ -161,39 +168,98 @@ def schedule_text(value) -> str:
     return str(value)
 
 
-def _last_runs(entries: dict[str, BeatEntry]) -> dict[str, dt.datetime]:
+@dataclass(slots=True, frozen=True)
+class RunHistory:
+    """Last runs per beat entry, plus how far back the tracked history reaches."""
+
+    last_runs: dict[str, dt.datetime]
+    tracked_since: dt.datetime | None
+
+
+def _kwargs_match(entry_kwargs: dict, row_kwargs) -> bool:
+    """A result row belongs to an entry when it ran with (at least) the entry's kwargs.
+
+    Only used when several entries share one task (``sync_anime_catalog`` with
+    different ``sync_type``): the task name alone would credit an hourly run to a
+    weekly entry. Entries with identical kwargs (``derive-airing-hourly`` and
+    ``sync-popular-weekly``) cannot be told apart and share their last run.
+    """
+    if not isinstance(row_kwargs, dict):
+        return not entry_kwargs
+    return all(row_kwargs.get(key) == value for key, value in entry_kwargs.items())
+
+
+def _run_history(entries: dict[str, BeatEntry]) -> RunHistory:
     tasks = {entry.task for entry in entries.values()}
     tracked = sorted(task for task in tasks if not is_untracked(task))
-    last_runs = dict(
+    groups = list(
         CeleryTaskResult.objects.filter(task_name__in=tracked)
-        .values("task_name")
-        .annotate(last=Max("date_created"))
-        .values_list("task_name", "last")
+        .values("task_name", "task_kwargs")
+        .annotate(last=Max("date_created"), first=Min("date_created"))
+        .order_by()
     )
-    untracked = sorted(task for task in tasks if is_untracked(task))
-    cached = {}
+    entries_per_task = Counter(entry.task for entry in entries.values())
+    last_runs: dict[str, dt.datetime] = {}
+    for entry in entries.values():
+        if is_untracked(entry.task):
+            continue
+        shared = entries_per_task[entry.task] > 1
+        matching = [
+            group["last"]
+            for group in groups
+            if group["task_name"] == entry.task
+            and (not shared or _kwargs_match(entry.kwargs, group["task_kwargs"]))
+        ]
+        if matching:
+            last_runs[entry.name] = max(matching)
+
+    untracked = {entry.name: entry.task for entry in entries.values() if is_untracked(entry.task)}
+    cached: dict = {}
     with suppress(*CACHE_ERRORS):
-        cached = cache.get_many([last_run_cache_key(task) for task in untracked])
-    for task in untracked:
+        cached = cache.get_many([last_run_cache_key(task) for task in set(untracked.values())])
+    for name, task in untracked.items():
         stamp = parse_datetime(str(cached.get(last_run_cache_key(task)) or ""))
         if stamp is not None:
-            last_runs[task] = stamp
-    return last_runs
+            last_runs[name] = stamp
+
+    oldest = min((group["first"] for group in groups), default=None)
+    tracked_since = None
+    if oldest is not None:
+        tracked_since = max(oldest, timezone.now() - TASK_RESULT_RETENTION)
+    return RunHistory(last_runs=last_runs, tracked_since=tracked_since)
+
+
+def _next_due(entry: BeatEntry, since: dt.datetime, now: dt.datetime) -> dt.datetime | None:
+    try:
+        return now + entry.schedule.remaining_estimate(since)
+    except (AttributeError, TypeError, ValueError):
+        return None
 
 
 def beat_section() -> list[dict]:
+    """Every beat entry with its last run, next due time and whether it is overdue.
+
+    ``stale`` means more than 15 minutes past due. A tracked entry with no run in the
+    retained result history is stale too if it should have run since that history
+    begins (results are pruned after 7 days), so a missed weekly run is not hidden
+    as "never". A fresh install with no history flags nothing.
+    """
     entries = beat_entries()
-    last_runs = _last_runs(entries)
+    history = _run_history(entries)
     now = timezone.now()
     rows = []
     for entry in entries.values():
-        last_run = last_runs.get(entry.task)
+        last_run = history.last_runs.get(entry.name)
+        tracked = not is_untracked(entry.task)
         next_due = None
         stale = False
         if last_run is not None:
-            with suppress(AttributeError, TypeError, ValueError):
-                next_due = now + entry.schedule.remaining_estimate(last_run)
-                stale = next_due < now - STALE_AFTER
+            next_due = _next_due(entry, last_run, now)
+        elif tracked and history.tracked_since is not None:
+            missed = _next_due(entry, history.tracked_since, now)
+            stale = missed is not None and missed < now - STALE_AFTER
+        if next_due is not None:
+            stale = next_due < now - STALE_AFTER
         rows.append(
             {
                 "name": entry.name,
@@ -204,7 +270,7 @@ def beat_section() -> list[dict]:
                 "last_run": last_run.isoformat() if last_run else None,
                 "next_due": next_due.isoformat() if next_due else None,
                 "stale": stale,
-                "tracked": not is_untracked(entry.task),
+                "tracked": tracked,
             }
         )
     return rows
@@ -355,44 +421,55 @@ def build_system_payload(*, refresh: bool = False) -> dict:
 
 
 def run_beat_entry(request, entry_name: str) -> dict:
-    """Send one beat entry's task now, with its configured args/kwargs only."""
+    """Send one beat entry's task now, with its configured args/kwargs only.
+
+    Tracked tasks go through the exclusive enqueue (409 while one is pending or
+    running, safe against concurrent clicks). Untracked every-minute tasks have no
+    result rows, so a one-minute cache claim stops repeated runs instead.
+    """
     entry = beat_entries().get(entry_name)
     if entry is None:
         raise SystemActionError("Unknown beat entry.", 404)
-    if not is_untracked(entry.task) and (
-        CeleryTaskResult.objects.filter(
-            task_name=entry.task,
-            status__in=IN_FLIGHT_STATUSES,
-            date_created__gte=timezone.now() - IN_FLIGHT_WINDOW,
-        ).exists()
-    ):
-        raise SystemActionError("This task is already pending or running.", 409)
 
-    result = current_app.send_task(
-        entry.task, args=list(entry.args), kwargs=entry.kwargs, queue=entry.queue
-    )
-    if not is_untracked(entry.task):
-        create_task_result_record(
-            task_path=entry.task,
-            task_id=result.id,
-            args=list(entry.args),
-            kwargs=entry.kwargs,
-            queue=entry.queue,
-            user=request.user,
-        )
+    if is_untracked(entry.task):
+        claimed = False
+        with suppress(*CACHE_ERRORS):
+            claimed = bool(
+                cache.add(
+                    f"{UNTRACKED_RUN_CLAIM_PREFIX}{entry.name}", 1, UNTRACKED_RUN_CLAIM_SECONDS
+                )
+            )
+        if not claimed:
+            raise SystemActionError("This task was run moments ago.", 409)
+        task_id = current_app.send_task(
+            entry.task, args=list(entry.args), kwargs=entry.kwargs, queue=entry.queue
+        ).id
+    else:
+        try:
+            task_id = enqueue_tracked_task(
+                task_path=entry.task,
+                args=list(entry.args),
+                kwargs=entry.kwargs,
+                queue=entry.queue,
+                user=request.user,
+                exclusive=True,
+            ).task_id
+        except TaskAlreadyRunningError as exc:
+            raise SystemActionError("This task is already pending or running.", 409) from exc
+
     record_admin_action(
         request,
         action=AuditLog.ActionType.TRIGGER,
         entity_type="BeatEntry",
-        entity_id=entry.name[:50],
+        entity_id=entry.name,
         entity_repr=f"Run {entry.name} now",
-        metadata={"task": entry.task, "task_id": result.id, "kwargs": entry.kwargs},
+        metadata={"task": entry.task, "task_id": task_id, "kwargs": entry.kwargs},
     )
     with suppress(*CACHE_ERRORS):
         cache.delete(SYSTEM_CACHE_KEY)
     return {
         "entry": entry.name,
         "task": entry.task,
-        "task_id": result.id,
+        "task_id": task_id,
         "message": f"{entry.name} queued.",
     }

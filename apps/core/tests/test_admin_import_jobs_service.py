@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
+from ..celery_signals import on_task_prerun
 from ..models import CeleryTaskResult
 from ..services.admin_import_jobs_service import (
     CATALOG_SYNC_TASK,
@@ -97,15 +98,25 @@ class AdminImportJobsServiceTests(TestCase):
 
 
 class CreatePendingJobTests(TestCase):
-    @patch("apps.core.services.admin_import_jobs_service.current_app.send_task")
-    def test_create_pending_job_reuses_worker_created_tracking_row(self, mock_send_task):
-        mock_send_task.return_value = SimpleNamespace(id="task-race")
-        existing = CeleryTaskResult.objects.create(
-            task_id="task-race",
-            task_name="apps.animes.tasks.sync.sync_anime_catalog",
-            status=CeleryTaskResult.TaskStatus.STARTED,
-        )
+    """The tracking row exists before the task is sent (no prerun race on task_id)."""
 
+    @patch("apps.core.services.celery_admin_service.current_app.send_task")
+    def test_row_is_recorded_before_the_task_is_sent(self, mock_send_task):
+        seen = {}
+
+        def send(task_path, **options):
+            row = CeleryTaskResult.objects.get(task_id=options["task_id"])
+            seen.update(status=row.status, queue=row.queue)
+            # The worker starts the task before the request returns.
+            on_task_prerun(
+                task_id=options["task_id"],
+                task=SimpleNamespace(name=task_path),
+                args=(),
+                kwargs=options["kwargs"],
+            )
+            return SimpleNamespace(id=options["task_id"])
+
+        mock_send_task.side_effect = send
         job = create_pending_job(
             user=None,
             task_path="apps.animes.tasks.sync.sync_anime_catalog",
@@ -114,7 +125,27 @@ class CreatePendingJobTests(TestCase):
             queue="high_priority",
         )
 
-        self.assertEqual(job.id, existing.id)
+        self.assertEqual(seen, {"status": "PENDING", "queue": "high_priority"})
+        self.assertEqual(CeleryTaskResult.objects.count(), 1)
+        job.refresh_from_db()
         self.assertEqual(job.status, CeleryTaskResult.TaskStatus.STARTED)
         self.assertEqual(job.task_kwargs, {"sync_type": "trending", "limit": 50})
-        self.assertEqual(job.queue, "high_priority")
+
+    @patch("apps.core.services.celery_admin_service.current_app.send_task")
+    def test_a_failed_send_marks_the_row_failed_and_does_not_block(self, mock_send_task):
+        mock_send_task.side_effect = OSError("broker down")
+        kwargs = {
+            "user": None,
+            "task_path": "apps.animes.tasks.sync.sync_anime_catalog",
+            "task_module": "apps.animes.tasks.sync",
+            "kwargs": {"sync_type": "trending", "limit": 50},
+            "queue": "high_priority",
+        }
+        with self.assertRaises(OSError):
+            create_pending_job(**kwargs)
+        self.assertEqual(CeleryTaskResult.objects.get().status, "FAILURE")
+
+        mock_send_task.side_effect = None
+        mock_send_task.return_value = SimpleNamespace(id="ok")
+        create_pending_job(**kwargs)
+        self.assertEqual(CeleryTaskResult.objects.filter(status="PENDING").count(), 1)
