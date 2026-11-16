@@ -56,7 +56,13 @@ export default function VerificationPending() {
                     <div className="relative group">
                         <Mail className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
                         <input
+                            id="resend-email"
                             type="email"
+                            inputMode="email"
+                            autoComplete="email"
+                            autoCapitalize="none"
+                            spellCheck={false}
+                            aria-label="Email address"
                             required
                             className="input !pl-12 w-full"
                             placeholder="Enter your email"

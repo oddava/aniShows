@@ -1,30 +1,62 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { User, Lock, Mail, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { User, Lock, Mail, AlertCircle, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
 import GoogleLoginButton from '../components/GoogleLoginButton';
+import AuthField from '../components/auth/AuthField';
+import { safeReturnPath } from '../components/auth/returnTo';
 import SEO from '../components/SEO';
 import logger from '../utils/logger';
 import { getApiErrorMessage, getApiFieldErrors } from '../api/errors';
 import { PASSWORD_HINT, getPasswordProblem } from '../utils/password';
 
+const CARD_CLASS = 'bg-dark-100 rounded-2xl p-6 sm:p-8 border border-gray-800 shadow-xl';
+
+function ErrorBanner({ children }) {
+    return (
+        <div role="alert" className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
+            <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
+            <p className="text-sm">{children}</p>
+        </div>
+    );
+}
+
+/**
+ * Where to land after signing in: `state.from` (a path string set by the
+ * page that sent the user here) or `?next=`, same-origin paths only.
+ * `explicit` tells whether either was given, so staff still default to /admin.
+ */
+function useReturnPath() {
+    const location = useLocation();
+    const [searchParams] = useSearchParams();
+    const fromState = location.state?.from;
+    const candidate = typeof fromState === 'string' ? fromState : searchParams.get('next');
+    const path = safeReturnPath(candidate, '');
+    return { path: path || '/browse', explicit: Boolean(path) };
+}
+
+const isAdminAccount = (account) => Boolean(account?.is_staff || account?.is_superuser);
+
 export function Login() {
     const [formData, setFormData] = useState({
-        username: '', // Changed from email to username
+        username: '',
         password: '',
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const { login, isAuthenticated, user } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+    const { path: returnPath, explicit: hasReturnPath } = useReturnPath();
+    const stateMessage = typeof location.state?.message === 'string' ? location.state.message : '';
+    const isAdminUser = isAdminAccount(user);
 
     // Redirect if already authenticated
     useEffect(() => {
         if (isAuthenticated) {
-            const isAdminUser = Boolean(user?.is_staff || user?.is_superuser);
-            navigate(isAdminUser ? '/admin' : '/browse');
+            navigate(isAdminUser && !hasReturnPath ? '/admin' : returnPath, { replace: true });
         }
-    }, [isAuthenticated, navigate, user?.is_staff, user?.is_superuser]);
+    }, [isAuthenticated, navigate, isAdminUser, hasReturnPath, returnPath]);
 
     // Show loading spinner during redirect
     if (isAuthenticated) {
@@ -42,28 +74,11 @@ export function Login() {
 
         try {
             const loggedInUser = await login(formData.username.trim(), formData.password);
-            const isAdminUser = Boolean(loggedInUser?.is_staff || loggedInUser?.is_superuser);
-            navigate(isAdminUser ? '/admin' : '/browse');
+            const toAdmin = isAdminAccount(loggedInUser) && !hasReturnPath;
+            navigate(toAdmin ? '/admin' : returnPath, { replace: true });
         } catch (err) {
             logger.error('Login error:', err);
-            let msg = 'Invalid username or password';
-            if (err.response?.data) {
-                const data = err.response.data;
-                if (data.detail) {
-                    msg = data.detail;
-                } else if (data.non_field_errors) {
-                    msg = Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors;
-                } else {
-                    // Check if we have field specific errors that we can't show inline easily
-                    // Login form usually doesn't show inline field errors for username/password unless we add them
-                    // For now, let's grab the first error we find
-                    const firstKey = Object.keys(data)[0];
-                    if (firstKey && Array.isArray(data[firstKey])) {
-                        msg = `${firstKey}: ${data[firstKey][0]}`;
-                    }
-                }
-            }
-            setError(msg);
+            setError(getApiErrorMessage(err, 'Invalid username or password'));
         } finally {
             setLoading(false);
         }
@@ -79,16 +94,17 @@ export function Login() {
                         <p className="text-gray-400">Sign in to continue your anime journey</p>
                     </div>
 
-                    <div className="bg-dark-100 rounded-2xl p-8 border border-gray-800 shadow-xl">
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
-                            <AlertCircle className="w-5 h-5 shrink-0" />
-                            <p className="text-sm">{error}</p>
+                    <div className={CARD_CLASS}>
+                    {stateMessage && !error && (
+                        <div role="status" className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-3 text-green-400">
+                            <CheckCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
+                            <p className="text-sm">{stateMessage}</p>
                         </div>
                     )}
+                    {error && <ErrorBanner>{error}</ErrorBanner>}
 
                     <div className="mb-6">
-                        <GoogleLoginButton />
+                        <GoogleLoginButton returnTo={returnPath} />
                         <div className="relative mt-6">
                             <div className="absolute inset-0 flex items-center">
                                 <span className="w-full border-t border-gray-800" />
@@ -100,40 +116,29 @@ export function Login() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Username or Email
-                            </label>
-                            <div className="relative group">
-                                <User className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-                                <input
-                                    type="text"
-                                    required
-                                    className="input !pl-12 w-full"
-                                    placeholder="Enter your username or email"
-                                    value={formData.username}
-                                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                />
-                            </div>
-                        </div>
+                        <AuthField
+                            id="login-username"
+                            label="Username or Email"
+                            icon={User}
+                            autoComplete="username"
+                            required
+                            placeholder="Enter your username or email"
+                            value={formData.username}
+                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                        />
 
                         <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <label className="block text-sm font-medium text-gray-300">
-                                    Password
-                                </label>
-                            </div>
-                            <div className="relative group">
-                                <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-                                <input
-                                    type="password"
-                                    required
-                                    className="input !pl-12 w-full"
-                                    placeholder="Enter your password"
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                />
-                            </div>
+                            <AuthField
+                                id="login-password"
+                                label="Password"
+                                icon={Lock}
+                                type="password"
+                                autoComplete="current-password"
+                                required
+                                placeholder="Enter your password"
+                                value={formData.password}
+                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                            />
                             <div className="flex justify-end mt-2">
                                 <Link to="/forgot-password" className="text-xs text-accent hover:text-accent-hover transition-colors">
                                     Forgot Password?
@@ -169,6 +174,10 @@ export function Login() {
     );
 }
 
+/** The backend says so in its message when it skips email verification. */
+const isVerificationOptional = (response) =>
+    typeof response?.message === 'string' && response.message.toLowerCase().includes('optional');
+
 export function Register() {
     const [formData, setFormData] = useState({
         username: '',
@@ -178,7 +187,7 @@ export function Register() {
     });
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
-    const { register, isAuthenticated } = useAuth();
+    const { register, login, isAuthenticated } = useAuth();
     const navigate = useNavigate();
 
     // Redirect if already authenticated
@@ -213,18 +222,9 @@ export function Register() {
 
         setLoading(true);
 
+        let response;
         try {
-            // Register
-            await register(formData.username, formData.email, formData.password);
-
-            // Redirect to verification pending page
-            navigate('/verification-pending', {
-                state: {
-                    email: formData.email,
-                    message: "Please check your email to verify your account. Unverified accounts are automatically deleted after 7 days."
-                }
-            });
-
+            response = await register(formData.username, formData.email, formData.password);
         } catch (err) {
             // Field errors live under `errors` in the API's error envelope.
             const fieldErrors = getApiFieldErrors(err);
@@ -235,9 +235,31 @@ export function Register() {
                 newErrors.general = getApiErrorMessage(err, 'Registration failed. Please try again.');
             }
             setErrors(newErrors);
-        } finally {
             setLoading(false);
+            return;
         }
+
+        if (isVerificationOptional(response)) {
+            // There is no email to wait for, so sign straight in.
+            try {
+                await login(formData.username, formData.password);
+                navigate('/browse', { replace: true });
+            } catch (err) {
+                logger.error('Login after registration failed:', err);
+                navigate('/login', { state: { message: 'Account created. Please sign in.' } });
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
+        setLoading(false);
+        navigate('/verification-pending', {
+            state: {
+                email: formData.email,
+                message: "Please check your email to verify your account. Unverified accounts are automatically deleted after 7 days."
+            }
+        });
     };
 
     return (
@@ -250,13 +272,8 @@ export function Register() {
                         <p className="text-gray-400">Join the community and track your anime</p>
                     </div>
 
-                    <div className="bg-dark-100 rounded-2xl p-8 border border-gray-800 shadow-xl">
-                    {errors.general && (
-                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
-                            <AlertCircle className="w-5 h-5 shrink-0" />
-                            <p className="text-sm">{errors.general}</p>
-                        </div>
-                    )}
+                    <div className={CARD_CLASS}>
+                    {errors.general && <ErrorBanner>{errors.general}</ErrorBanner>}
 
                     <div className="mb-6">
                         <GoogleLoginButton />
@@ -271,77 +288,56 @@ export function Register() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Username
-                            </label>
-                            <div className="relative group">
-                                <User className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-                                <input
-                                    type="text"
-                                    required
-                                    className={`input !pl-12 w-full ${errors.username ? '!border-red-500 focus:!ring-red-500/20' : ''}`}
-                                    placeholder="Choose a username"
-                                    value={formData.username}
-                                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                />
-                            </div>
-                            {errors.username && <p className="text-red-400 text-xs mt-1">{[].concat(errors.username).join(' ')}</p>}
-                        </div>
+                        <AuthField
+                            id="register-username"
+                            label="Username"
+                            icon={User}
+                            autoComplete="username"
+                            required
+                            placeholder="Choose a username"
+                            value={formData.username}
+                            error={errors.username}
+                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                        />
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Email Address
-                            </label>
-                            <div className="relative group">
-                                <Mail className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-                                <input
-                                    type="email"
-                                    required
-                                    className={`input !pl-12 w-full ${errors.email ? '!border-red-500 focus:!ring-red-500/20' : ''}`}
-                                    placeholder="Enter your email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                />
-                            </div>
-                            {errors.email && <p className="text-red-400 text-xs mt-1">{[].concat(errors.email).join(' ')}</p>}
-                        </div>
+                        <AuthField
+                            id="register-email"
+                            label="Email Address"
+                            icon={Mail}
+                            type="email"
+                            autoComplete="email"
+                            required
+                            placeholder="Enter your email"
+                            value={formData.email}
+                            error={errors.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        />
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Password
-                            </label>
-                            <div className="relative group">
-                                <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-                                <input
-                                    type="password"
-                                    required
-                                    className={`input !pl-12 w-full ${errors.password ? '!border-red-500 focus:!ring-red-500/20' : ''}`}
-                                    placeholder="Create a password"
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                />
-                            </div>
-                            {errors.password && <p className="text-red-400 text-xs mt-1">{[].concat(errors.password).join(' ')}</p>}
-                            {!errors.password && <p className="text-gray-500 text-xs mt-1">{PASSWORD_HINT}</p>}
-                        </div>
+                        <AuthField
+                            id="register-password"
+                            label="Password"
+                            icon={Lock}
+                            type="password"
+                            autoComplete="new-password"
+                            required
+                            placeholder="Create a password"
+                            value={formData.password}
+                            error={errors.password}
+                            hint={PASSWORD_HINT}
+                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        />
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Confirm Password
-                            </label>
-                            <div className="relative group">
-                                <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-                                <input
-                                    type="password"
-                                    required
-                                    className="input !pl-12 w-full"
-                                    placeholder="Confirm your password"
-                                    value={formData.confirmPassword}
-                                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                                />
-                            </div>
-                        </div>
+                        <AuthField
+                            id="register-password-confirm"
+                            label="Confirm Password"
+                            icon={Lock}
+                            type="password"
+                            autoComplete="new-password"
+                            required
+                            placeholder="Confirm your password"
+                            value={formData.confirmPassword}
+                            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                        />
 
                         <button
                             type="submit"
