@@ -65,15 +65,16 @@ export const animeKeys = {
 };
 
 /*
- * Navbar search box. Deliberately NOT under 'anime': the Navbar is always
- * mounted, and list/status mutations invalidate ['anime'], which would refetch
- * the 100-title cache after every list change. Before react-query it loaded
- * once per mount, and it still does.
+ * Search suggestions (navbar and hero search). Deliberately NOT under 'anime',
+ * so the adult-content toggle's removeQueries(['anime']) doesn't drop the
+ * suggestions of an open search box; the adult flag is part of the key
+ * instead, so switching it never shows the other setting's suggestions.
  */
 export const navbarSearchKeys = {
     all: ['navbarSearch'],
-    cache: () => ['navbarSearch', 'cache'],
-    results: (query) => ['navbarSearch', 'results', query],
+    results: (query, adultContentEnabled = false) => [
+        'navbarSearch', 'results', query, Boolean(adultContentEnabled),
+    ],
 };
 
 export const characterKeys = {
@@ -255,16 +256,14 @@ export const animeQueries = {
 };
 
 export const navbarSearchQueries = {
-    /** First 100 titles, matched locally with fuse.js. */
-    cache: () => queryOptions({
-        queryKey: navbarSearchKeys.cache(),
-        queryFn: ({ signal }) => animeApi.getAll({ page_size: 100 }, signal)
-            .then((res) => res.data.results || []),
-    }),
-    /** Server-side search for one (trimmed) query. */
-    results: (query) => queryOptions({
-        queryKey: navbarSearchKeys.results(query),
-        queryFn: () => animeApi.getAll({ q: query, page_size: 10 })
+    /**
+     * Server-side search (relevance-ranked) for one trimmed query. The signal
+     * is passed through, so a request for a query the user has typed past is
+     * aborted when its key loses its last observer.
+     */
+    results: (query, adultContentEnabled = false) => queryOptions({
+        queryKey: navbarSearchKeys.results(query, adultContentEnabled),
+        queryFn: ({ signal }) => animeApi.getAll({ q: query, page_size: 10 }, signal)
             .then((res) => res.data.results || []),
     }),
 };

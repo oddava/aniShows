@@ -1,11 +1,12 @@
 import { Suspense, lazy, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import logger from '../../utils/logger';
+import { MIN_SEARCH_LENGTH } from './useAnimeSearchSuggestions';
 
 // The result rows (images, highlighting) load in their own chunk, kept out of
 // the entry. They are fetched as soon as the search is opened or focused, and
-// results only show after the 200 ms debounce plus the 300 ms minimum spinner,
-// so the chunk is in by then; until it is, the spinner stays up.
+// results only show after the 200 ms debounce plus the request, so the chunk
+// is in by then; until it is, the spinner stays up.
 const loadSearchSuggestionList = () => import('./SearchSuggestionList');
 const SearchSuggestionList = lazy(() =>
     loadSearchSuggestionList().catch((error) => {
@@ -25,6 +26,27 @@ const SearchingIndicator = () => (
 );
 
 /**
+ * The navbar and hero search's "nothing found" state (B23): a hint about which
+ * titles match and the full Browse search for the same query.
+ */
+export function SearchNoMatches({ query, onSearchAll }) {
+    return (
+        <div className="py-6 px-4 text-center text-gray-400" role="status">
+            <p className="text-sm font-medium text-gray-300">
+                No matches for &ldquo;{query}&rdquo;. Try the English or Japanese title
+            </p>
+            <button
+                type="button"
+                onClick={onSearchAll}
+                className="mt-3 text-sm font-medium text-accent hover:underline"
+            >
+                Search all anime
+            </button>
+        </div>
+    );
+}
+
+/**
  * The collapsible desktop search box and its suggestions dropdown. `search` is
  * the state from useNavbarSearch.
  */
@@ -36,6 +58,7 @@ export default function NavbarSearch({ search }) {
         searchQuery, setSearchQuery,
         searchSuggestions,
         isSearching,
+        noMatches,
         showSuggestions, setShowSuggestions,
         selectedIndex, setSelectedIndex,
         handleSuggestionClick,
@@ -87,7 +110,7 @@ export default function NavbarSearch({ search }) {
                         }}
                         onFocus={() => {
                             preloadSearchSuggestionList();
-                            if (searchQuery.trim().length >= 1) {
+                            if (searchQuery.trim().length >= MIN_SEARCH_LENGTH) {
                                 setShowSuggestions(true);
                             }
                         }}
@@ -148,11 +171,8 @@ export default function NavbarSearch({ search }) {
                                 handleSearch={handleSearch}
                             />
                         </Suspense>
-                    ) : searchQuery.trim().length >= 2 ? (
-                        <div className="py-8 text-center text-gray-400">
-                            <p className="text-sm font-medium text-gray-300">No results found</p>
-                            <p className="text-xs mt-1 text-gray-500">Try different keywords</p>
-                        </div>
+                    ) : noMatches ? (
+                        <SearchNoMatches query={searchQuery.trim()} onSearchAll={handleSearch} />
                     ) : null}
                 </div>
             </div>

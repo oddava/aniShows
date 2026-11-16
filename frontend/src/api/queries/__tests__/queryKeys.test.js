@@ -95,6 +95,8 @@ describe('query keys keep the shapes the app used before the factory', () => {
         [studioKeys.all, ['studios']],
         [scheduleKeys.all, ['schedule']],
         [scheduleKeys.week(true, false), ['schedule', true, false]],
+        [navbarSearchKeys.results('fri', true), ['navbarSearch', 'results', 'fri', true]],
+        [navbarSearchKeys.results('fri'), ['navbarSearch', 'results', 'fri', false]],
         [profileKeys.own, ['ownProfile']],
         [profileKeys.all, ['profile']],
         [profileKeys.me, ['profile', 'me']],
@@ -181,13 +183,13 @@ describe('prefix invalidation still reaches the same cache entries', () => {
             animeKeys.filteredList({}),
         ];
         animeEntries.forEach(seed);
-        seed(navbarSearchKeys.cache());
+        seed(navbarSearchKeys.results('fri', false));
         seed(profileKeys.own);
 
         await client.invalidateQueries({ queryKey: animeKeys.all });
 
         animeEntries.forEach((key) => expect(invalidated(key)).toBe(true));
-        expect(invalidated(navbarSearchKeys.cache())).toBe(false);
+        expect(invalidated(navbarSearchKeys.results('fri', false))).toBe(false);
         expect(invalidated(profileKeys.own)).toBe(false);
     });
 
@@ -406,12 +408,14 @@ describe('queryOptions call the same endpoints as the inline queryFns did', () =
         await expect(scheduleQueries.week(true, false).queryFn(fnContext)).resolves.toEqual({});
     });
 
-    it('navbarSearchQueries fetch the cache and a single search', async () => {
+    it('navbarSearchQueries run one server search and pass the abort signal', async () => {
         mocks.animeApi.getAll.mockResolvedValue({ data: { results: [{ id: 1 }] } });
-        await expect(navbarSearchQueries.cache().queryFn(fnContext)).resolves.toEqual([{ id: 1 }]);
-        expect(mocks.animeApi.getAll).toHaveBeenLastCalledWith({ page_size: 100 }, undefined);
-        await navbarSearchQueries.results('frieren').queryFn(fnContext);
-        expect(mocks.animeApi.getAll).toHaveBeenLastCalledWith({ q: 'frieren', page_size: 10 });
+        const signal = new AbortController().signal;
+        await expect(navbarSearchQueries.results('frieren', true).queryFn({ ...fnContext, signal }))
+            .resolves.toEqual([{ id: 1 }]);
+        expect(mocks.animeApi.getAll).toHaveBeenLastCalledWith({ q: 'frieren', page_size: 10 }, signal);
+        expect(navbarSearchQueries.results('frieren', true).queryKey).toEqual(['navbarSearch', 'results', 'frieren', true]);
+        expect(navbarSearchQueries).not.toHaveProperty('cache');
     });
 
     it('listQueries.byStatus falls back from results to data', async () => {

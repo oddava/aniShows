@@ -87,11 +87,6 @@ export default function SearchSuggestionList({
                                 <span className="sr-only">Rating </span>{anime.rating}
                             </span>
                         )}
-                        {anime.isExactMatch && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-accent/20 text-accent rounded-full flex-shrink-0">
-                                Exact
-                            </span>
-                        )}
                     </div>
                 );
             })}
