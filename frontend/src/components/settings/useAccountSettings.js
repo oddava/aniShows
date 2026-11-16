@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { getApiErrorMessage } from '../../api/errors';
 import { authApi, clearSession, setAccessToken } from '../../api/client';
 import { startGoogleSignIn } from '../auth/googleSignIn';
+import { useAuth } from '../../context/AuthContext';
 import { getPasswordProblem } from '../../utils/password';
 import logger from '../../utils/logger';
 
@@ -17,6 +18,7 @@ const isReauthRequired = (err) =>
     err?.response?.status === 403 && err?.response?.data?.code === 'reauth_required';
 
 export default function useAccountSettings({ user, logout }) {
+    const { refreshProfile } = useAuth();
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -34,6 +36,7 @@ export default function useAccountSettings({ user, logout }) {
     const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isUpdatingPendingEmail, setIsUpdatingPendingEmail] = useState(false);
     // A passwordless (Google) account must sign in again before sensitive changes.
     const [reauthRequired, setReauthRequired] = useState(false);
 
@@ -114,6 +117,8 @@ export default function useAccountSettings({ user, logout }) {
             setAccountSuccess('Confirmation email sent to new address!');
             setChangeEmail('');
             setChangeEmailPassword('');
+            // Show the "waiting for confirmation" state from /users/me/.
+            await refreshProfile().catch(() => {});
         } catch (err) {
             if (!handleReauthError(err)) {
                 setAccountError(getApiErrorMessage(err, 'Failed to change email'));
@@ -122,6 +127,27 @@ export default function useAccountSettings({ user, logout }) {
             setIsChangingEmail(false);
         }
     };
+
+    const handlePendingEmail = async (request, successMessage) => {
+        setIsUpdatingPendingEmail(true);
+        setAccountError('');
+        setAccountSuccess('');
+        try {
+            await request();
+            setAccountSuccess(successMessage);
+            await refreshProfile().catch(() => {});
+        } catch (err) {
+            setAccountError(getApiErrorMessage(err, 'Something went wrong. Please try again.'));
+        } finally {
+            setIsUpdatingPendingEmail(false);
+        }
+    };
+
+    const handleResendEmailChange = () =>
+        handlePendingEmail(authApi.resendEmailChange, 'Confirmation email sent again.');
+
+    const handleCancelEmailChange = () =>
+        handlePendingEmail(authApi.cancelEmailChange, 'Email change cancelled.');
 
     const handleDeleteAccount = async () => {
         if (user.has_password && !deleteAccountPassword) {
@@ -169,6 +195,9 @@ export default function useAccountSettings({ user, logout }) {
         showDeleteConfirm, setShowDeleteConfirm,
         reauthRequired,
         handleReauth,
+        isUpdatingPendingEmail,
+        handleResendEmailChange,
+        handleCancelEmailChange,
         handleChangePassword,
         handleResendVerification,
         handleChangeEmail,
