@@ -15,12 +15,12 @@ import SEO from '../components/SEO';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorState from '../components/common/ErrorState';
 import {
+  bucketScheduleByDate,
   formatCalendarDate,
   formatDate,
-  getCurrentWeekdayIndex,
   getZonedCalendarToday,
+  hasAiringDate,
   resolveTimeZone,
-  groupScheduleDaysByTimezone,
 } from '../utils/dateUtils';
 import { animeKeys, scheduleKeys, scheduleQueries } from '../api/queries/anime';
 import { profileKeys } from '../api/queries/user';
@@ -29,13 +29,27 @@ import { profileKeys } from '../api/queries/user';
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// "21:30" in the viewer's zone, from the next airing time (or the broadcast slot).
+// Statuses that leave a show out of "My list" (finished or given up on).
+const MY_LIST_EXCLUDED_STATUSES = new Set(['dropped', 'completed']);
+
+const isOnMyList = (anime) => {
+  const status = anime?.user_list_status?.status;
+  return Boolean(status) && !MY_LIST_EXCLUDED_STATUSES.has(String(status).toLowerCase());
+};
+
+const filterMyList = (daysPayload) => Object.fromEntries(
+  Object.entries(daysPayload || {}).map(([day, items]) => [
+    day,
+    Array.isArray(items) ? items.filter(isOnMyList) : items,
+  ])
+);
+
+// "Airs 21:30" / "Aired 09:00" in the viewer's zone; "Time TBA" without a date.
 const formatAirTime = (anime, preferredTimezone) => {
-  if (anime?.next_airing_date) {
-    const time = formatDate(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preferredTimezone);
-    if (time) return `Airs ${time}`;
-  }
-  return null;
+  if (!hasAiringDate(anime)) return 'Time TBA';
+  const time = formatDate(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preferredTimezone);
+  if (!time) return null;
+  return new Date(anime.next_airing_date) < new Date() ? `Aired ${time}` : `Airs ${time}`;
 };
 
 const getTimezoneLabel = (preferredTimezone) => {
@@ -57,14 +71,16 @@ const addDays = (date, days) => {
 
 // Day Selector Component
 // The schedule lists each show's *next* airing, so the strip is the coming
-// seven days starting today, not a calendar week. Seven equal columns, so the
-// whole strip fits on a phone without sideways scrolling.
-const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday, preferredTimezone }) => {
+// seven dates starting today, not a calendar week. Column `position` is the
+// date today + position; its label and its count come from that same offset.
+// Seven equal columns, so the whole strip fits on a phone without sideways
+// scrolling.
+const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday }) => {
   return (
     <div className="grid grid-cols-7 gap-1.5 sm:gap-2" role="group" aria-label="Day">
       {Array.from({ length: 7 }, (_, position) => (todayDay + position) % 7).map((index, position) => {
         const isSelected = selectedDay === index;
-        const count = animeCounts[index] || 0;
+        const count = animeCounts[position] || 0;
         const isToday = position === 0;
         const date = addDays(startOfToday, position);
         const dayOfMonth = formatCalendarDate(date, { day: 'numeric' });
@@ -101,8 +117,9 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
   );
 };
 
-// Range line: the dates the strip covers, and a shortcut back to today.
-const RangeHeader = ({ startOfToday, onToday, isTodaySelected }) => {
+// Range line: the dates the strip covers, the members' "My list" filter and a
+// shortcut back to today.
+const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle, myListOnly, onToggleMyList }) => {
   const end = addDays(startOfToday, 6);
 
   return (
@@ -116,14 +133,26 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected }) => {
         </span>
       </div>
 
-      <button
-        type="button"
-        onClick={onToday}
-        disabled={isTodaySelected}
-        className="ui-pill-button h-9 py-0 disabled:opacity-40 disabled:cursor-default disabled:hover:text-gray-300"
-      >
-        Today
-      </button>
+      <div className="flex items-center gap-2">
+        {showMyListToggle && (
+          <button
+            type="button"
+            onClick={onToggleMyList}
+            aria-pressed={myListOnly}
+            className={`ui-pill-button h-9 py-0 ${myListOnly ? 'border-accent/40 text-white' : ''}`}
+          >
+            My list
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onToday}
+          disabled={isTodaySelected}
+          className="ui-pill-button h-9 py-0 disabled:opacity-40 disabled:cursor-default disabled:hover:text-gray-300"
+        >
+          Today
+        </button>
+      </div>
     </div>
   );
 };
@@ -137,32 +166,34 @@ export default function Schedule() {
   const [isUpdatingAdultContent, setIsUpdatingAdultContent] = useState(false);
   const preferredTimezone = user?.preferred_timezone;
   const timezoneLabel = useMemo(() => getTimezoneLabel(preferredTimezone), [preferredTimezone]);
-  const todayDayIndex = useMemo(
-    () => getCurrentWeekdayIndex(preferredTimezone),
-    [preferredTimezone]
-  );
 
   // Today as a calendar date in the same zone the schedule is grouped by.
   const startOfToday = useMemo(() => getZonedCalendarToday(preferredTimezone), [preferredTimezone]);
+  const todayDayIndex = startOfToday.getUTCDay();
 
-  // Get initial day from URL or use today
+  // The selected column is kept as a weekday (so `?day=friday` links keep
+  // working); the strip holds each weekday exactly once, so it maps to one date.
   const [selectedDay, setSelectedDay] = useState(() => {
     const dayParam = searchParams.get('day');
-    if (dayParam) {
-      const dayIndex = DAY_NAMES.findIndex(d => d.toLowerCase() === dayParam.toLowerCase());
-      return dayIndex !== -1 ? dayIndex : getCurrentWeekdayIndex(preferredTimezone);
-    }
-    return getCurrentWeekdayIndex(preferredTimezone);
+    const dayIndex = dayParam
+      ? DAY_NAMES.findIndex(d => d.toLowerCase() === dayParam.toLowerCase())
+      : -1;
+    return dayIndex !== -1 ? dayIndex : todayDayIndex;
   });
+  const selectedOffset = (selectedDay - todayDayIndex + 7) % 7;
 
+  // "My list" (members only): kept in state so the URL flag survives the
+  // moment before the session is known.
+  const [myListParam, setMyListParam] = useState(() => searchParams.get('mine') === '1');
+  const myListOnly = isAuthenticated && myListParam;
 
-
-  // Keep the selected day in the URL so it survives reloads and can be shared.
+  // Keep the selected day (and My list) in the URL so they survive reloads and can be shared.
   useEffect(() => {
     const params = new URLSearchParams();
     params.set('day', DAY_NAMES[selectedDay].toLowerCase());
+    if (myListOnly) params.set('mine', '1');
     setSearchParams(params, { replace: true });
-  }, [selectedDay, setSearchParams]);
+  }, [selectedDay, myListOnly, setSearchParams]);
 
   const handleToggleAdultContent = useCallback(async () => {
     if (!isAuthenticated || isUpdatingAdultContent) return;
@@ -199,23 +230,24 @@ export default function Schedule() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const groupedScheduleDays = useMemo(
-    () => groupScheduleDaysByTimezone(rawScheduleDays, preferredTimezone),
-    [rawScheduleDays, preferredTimezone]
+  // Seven date buckets (index = days from today) plus the count airing later.
+  const { days: scheduleByOffset, laterCount } = useMemo(
+    () => bucketScheduleByDate(
+      myListOnly ? filterMyList(rawScheduleDays) : rawScheduleDays,
+      preferredTimezone
+    ),
+    [rawScheduleDays, preferredTimezone, myListOnly]
   );
 
-  // Calculate anime counts per day
-  const animeCounts = useMemo(() => {
-    return DAY_NAMES.map((day) => groupedScheduleDays[day.toLowerCase()]?.length || 0);
-  }, [groupedScheduleDays]);
+  const animeCounts = useMemo(
+    () => scheduleByOffset.map((items) => items.length),
+    [scheduleByOffset]
+  );
 
-  // Get anime for selected day
-  const selectedDayAnime = useMemo(() => {
-    return groupedScheduleDays[DAY_NAMES[selectedDay].toLowerCase()] || [];
-  }, [groupedScheduleDays, selectedDay]);
+  const selectedDayAnime = scheduleByOffset[selectedOffset] || [];
 
   const handleToday = () => {
-    setSelectedDay(getCurrentWeekdayIndex(preferredTimezone));
+    setSelectedDay(todayDayIndex);
   };
 
   if (error) {
@@ -252,6 +284,9 @@ export default function Schedule() {
             startOfToday={startOfToday}
             onToday={handleToday}
             isTodaySelected={selectedDay === todayDayIndex}
+            showMyListToggle={isAuthenticated}
+            myListOnly={myListOnly}
+            onToggleMyList={() => setMyListParam(!myListOnly)}
           />
 
           {/* Day Selector */}
@@ -262,7 +297,6 @@ export default function Schedule() {
               animeCounts={animeCounts}
               todayDay={todayDayIndex}
               startOfToday={startOfToday}
-              preferredTimezone={preferredTimezone}
             />
           </div>
 
@@ -271,9 +305,8 @@ export default function Schedule() {
             <h2 className="text-lg font-bold text-white/90">
               {DAY_NAMES[selectedDay]}
               <span className="text-gray-500 font-normal ml-2">
-                {/* Convert JS day index (0=Sun) to Monday-start offset (Mon=0, Tue=1, ..., Sun=6) */}
                 {formatCalendarDate(
-                  addDays(startOfToday, (selectedDay - todayDayIndex + 7) % 7),
+                  addDays(startOfToday, selectedOffset),
                   { month: 'short', day: 'numeric' }
                 )}
               </span>
@@ -335,10 +368,18 @@ export default function Schedule() {
                 No episodes scheduled
               </h3>
               <p className="text-sm text-gray-400 max-w-md mx-auto">
-                There are no anime episodes airing on {DAY_NAMES[selectedDay]}.
-                Try another day in the strip above.
+                {myListOnly
+                  ? `Nothing from your list airs on ${DAY_NAMES[selectedDay]}.`
+                  : `There are no anime episodes airing on ${DAY_NAMES[selectedDay]}.`}
+                {' '}Try another day in the strip above.
               </p>
             </div>
+          )}
+
+          {!isLoading && laterCount > 0 && (
+            <p className="mt-8 text-sm text-gray-500">
+              {laterCount} more {laterCount === 1 ? 'airs' : 'air'} later
+            </p>
           )}
         </div>
       </div>
