@@ -11,6 +11,19 @@ from ..services.notification_tasks_service import NotificationTaskService
 NOTIFICATION_TASK_LOCK_SECONDS = 15 * 60
 
 
+@observed_shared_task(retry_policy="standard", queue="notifications")
+def deliver_notifications(self, notification_ids: list[int]):
+    """Event-driven push/email delivery, enqueued by ``notify`` on commit.
+
+    Each channel is claimed per row before sending, so no lock is needed: a race
+    with the sweeper or a retry never delivers twice.
+    """
+    with retry_on_error(
+        self, "Notification delivery task failed", extra={"count": len(notification_ids)}
+    ):
+        return NotificationTaskService.deliver_notifications(notification_ids)
+
+
 @observed_shared_task(retry_policy="standard")
 def send_pending_notifications(self):
     with cache_lock(
