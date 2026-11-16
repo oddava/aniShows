@@ -1,8 +1,14 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-# Import celery admin to register models (registers automatically via @admin.register)
-from .models import AuditLog, Notification, PushSubscription, SystemLog
+from .models import (
+    AdminPanelSettings,
+    AuditLog,
+    CeleryTaskResult,
+    Notification,
+    PushSubscription,
+    SystemLog,
+)
 
 # Admin site branding
 admin.site.site_header = "aniShows Administration"
@@ -342,4 +348,35 @@ class PushSubscriptionAdmin(admin.ModelAdmin):
     ordering = ["-created_at"]
 
     def has_add_permission(self, request):
+        return False
+
+
+class ReadOnlyAdmin(admin.ModelAdmin):
+    """Inspect-only: these rows are written by the app, never by hand."""
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(CeleryTaskResult)
+class CeleryTaskResultAdmin(ReadOnlyAdmin):
+    list_display = ["date_created", "task_name", "status", "queue", "execution_time", "retries"]
+    list_filter = ["status", "queue"]
+    search_fields = ["task_id", "task_name", "error_message"]
+    date_hierarchy = "date_created"
+    list_select_related = ["triggered_by"]
+    readonly_fields = [field.name for field in CeleryTaskResult._meta.fields]
+
+
+@admin.register(AdminPanelSettings)
+class AdminPanelSettingsAdmin(ReadOnlyAdmin):
+    """Edit settings in the admin SPA (validated and audited), not here."""
+
+    list_display = ["key", "updated_by", "updated_at"]
+    readonly_fields = ["key", "data", "updated_by", "created_at", "updated_at"]
+
+    def has_delete_permission(self, request, obj=None):
         return False

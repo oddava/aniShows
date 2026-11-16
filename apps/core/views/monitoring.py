@@ -1,4 +1,5 @@
 import base64
+import hmac
 import os
 
 from django.http import HttpResponse, HttpResponseForbidden
@@ -63,7 +64,10 @@ class MetricsView(View):
             decoded_credentials = base64.b64decode(encoded_credentials).decode("utf-8")
             username, password = decoded_credentials.split(":", 1)
 
-            return username == expected_username and password == expected_password
+            # Constant-time: a timing difference must not reveal a matching prefix.
+            username_ok = hmac.compare_digest(username.encode(), expected_username.encode())
+            password_ok = hmac.compare_digest(password.encode(), expected_password.encode())
+            return username_ok and password_ok
         except ValueError as e:
             # Bad base64 (binascii.Error), non-UTF-8 bytes, or no ":" separator.
             logger.warning("Invalid auth header: %s", e)
