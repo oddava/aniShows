@@ -1,15 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
-import { Helmet } from 'react-helmet-async';
 import { staffFavoriteApi } from '../api/client';
+import SEO from '../components/SEO';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
 import EntityFavoriteButton from '../components/common/EntityFavoriteButton';
 import { useAuth } from '../context/AuthContext';
 import { staffKeys, staffQueries } from '../api/queries/anime';
 import { staffFavoriteKeys } from '../api/queries/user';
+import { groupRolesByAnime, markupToPlainText, toSafeHttpUrl } from '../utils/characterRoles';
+import { SITE_ORIGIN, absoluteMediaUrl } from '../utils/imageUtils';
 
-// Parse markdown-style links [text](url) into React elements
+// A prolific voice actor can have hundreds of roles; show this many first.
+const INITIAL_ROLES = 60;
+
+// Parse markdown-style links [text](url) into React elements. Only http(s)
+// links become anchors; any other scheme stays plain text.
 function parseMarkdownLinks(text) {
     if (!text) return null;
     const parts = text.split(/(\[.*?\]\(.*?\))/g);
@@ -17,10 +23,12 @@ function parseMarkdownLinks(text) {
         const match = part.match(/\[(.*?)\]\((.*?)\)/);
         if (match) {
             const [, linkText, url] = match;
+            const href = toSafeHttpUrl(url);
+            if (!href) return <span key={index}>{linkText.replace(/<[^>]*>/g, '')}</span>;
             return (
                 <a
                     key={index}
-                    href={url}
+                    href={href}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-400 hover:text-blue-300 underline transition-colors"
@@ -107,14 +115,24 @@ export default function VoiceActorDetail() {
         },
     });
 
-    const voiceRoleCount = staff?.voice_roles?.length || 0;
-    const productionCreditCount = staff?.production_credits?.length || 0;
+    // One entry per anime: its characters (voice roles) or job titles (credits).
+    const voiceRoles = useMemo(
+        () => groupRolesByAnime(staff?.voice_roles, { personField: 'character' }),
+        [staff?.voice_roles]
+    );
+    const productionCredits = useMemo(
+        () => groupRolesByAnime(staff?.production_credits),
+        [staff?.production_credits]
+    );
+    const voiceRoleCount = voiceRoles.length;
+    const productionCreditCount = productionCredits.length;
 
     if (isLoading) return <StaffDetailSkeleton />;
 
     if (error || !staff) {
         return (
             <div className="min-h-screen bg-dark flex items-center justify-center">
+                <SEO page="notFound" noIndex />
                 <div className="text-center">
                     <h2 className="text-xl font-bold text-white mb-2">Staff Not Found</h2>
                     <p className="text-gray-400 mb-6">The staff member you're looking for doesn't exist.</p>
@@ -129,13 +147,17 @@ export default function VoiceActorDetail() {
     const getImageUrl = (url) => url || '/placeholder-avatar.png';
 
     const appearanceCount = voiceRoleCount + productionCreditCount;
+    const descriptionText = markupToPlainText(staff.description, 120);
 
     return (
         <>
-            <Helmet>
-                <title>{staff.name} - aniShows</title>
-                <meta name="description" content={`${staff.name} - Voice actor and staff member. ${staff.description?.slice(0, 120) || ''}`} />
-            </Helmet>
+            <SEO
+                customTitle={`${staff.name} | AniShows`}
+                customDescription={`${staff.name}: voice actor and staff profile.${descriptionText ? ` ${descriptionText}` : ''}`}
+                canonical={`${SITE_ORIGIN}/staff/${staff.id ?? id}`}
+                ogImage={absoluteMediaUrl(staff.image) || undefined}
+                ogType="profile"
+            />
 
             <div className="min-h-screen bg-dark">
                 <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8">
@@ -212,7 +234,7 @@ export default function VoiceActorDetail() {
                         <div className="mb-5">
                             <h2 className="text-lg font-medium text-white sm:text-xl">Voice Roles</h2>
                         </div>
-                        <VoiceRolesSection voiceRoles={staff.voice_roles} />
+                        <VoiceRolesSection key={staff.id ?? id} voiceRoles={voiceRoles} />
                     </section>
 
                     {productionCreditCount > 0 && (
@@ -220,7 +242,7 @@ export default function VoiceActorDetail() {
                             <div className="mb-5">
                                 <h2 className="text-lg font-medium text-white sm:text-xl">Production Credits</h2>
                             </div>
-                            <ProductionCreditsSection credits={staff.production_credits} />
+                            <ProductionCreditsSection key={staff.id ?? id} credits={productionCredits} />
                         </section>
                     )}
                 </div>
@@ -229,56 +251,91 @@ export default function VoiceActorDetail() {
     );
 }
 
-function VoiceRolesSection({ voiceRoles }) {
-    if (!voiceRoles || voiceRoles.length === 0) {
-        return null;
-    }
-
+function ShowAllButton({ total, onClick }) {
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-            {voiceRoles.map((vr) => (
-                <div
-                    key={vr.id}
-                    className="group flex gap-4 py-3 transition-colors"
-                >
-                    <div className="relative h-20 w-14 flex-shrink-0 overflow-hidden rounded bg-dark-200">
-                        <Link to={vr.anime?.slug ? `/anime/${vr.anime.slug}` : '#'} className="block h-full w-full">
-                            <AnimeMediaImage
-                                anime={vr.anime}
-                                kind="cover"
-                                size="small"
-                                alt={vr.anime?.title}
-                                className="h-full w-full object-cover transition-opacity hover:opacity-80"
-                                loading="lazy"
-                            />
-                        </Link>
-                    </div>
-
-                    <div className="min-w-0 flex-1 flex flex-col justify-center">
-                        <Link
-                            to={vr.anime?.slug ? `/anime/${vr.anime.slug}` : '#'}
-                            className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-white"
-                        >
-                            {vr.anime?.title}
-                        </Link>
-                        <p className="mt-0.5 text-xs text-gray-500">
-                            {vr.role}
-                        </p>
-                        <Link
-                            to={`/character/${vr.character?.id}`}
-                            className="mt-1.5 block truncate text-xs text-gray-400 transition-colors hover:text-gray-300"
-                        >
-                            {vr.character?.name}
-                        </Link>
-                    </div>
-                </div>
-            ))}
+        <div className="mt-6 text-center">
+            <button type="button" onClick={onClick} className="btn-secondary text-sm">
+                Show all {total}
+            </button>
         </div>
     );
 }
 
+function useShowAll(items) {
+    const [showAll, setShowAll] = useState(false);
+    const visible = showAll ? items : items.slice(0, INITIAL_ROLES);
+    const canShowAll = !showAll && items.length > INITIAL_ROLES;
+    return { visible, canShowAll, showAll: () => setShowAll(true) };
+}
+
+const animeHref = (anime) => (anime?.slug ? `/anime/${anime.slug}` : '#');
+
+function VoiceRolesSection({ voiceRoles }) {
+    const { visible, canShowAll, showAll } = useShowAll(voiceRoles);
+
+    if (voiceRoles.length === 0) {
+        return null;
+    }
+
+    return (
+        <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                {visible.map((group) => (
+                    <div
+                        key={group.key}
+                        className="group flex gap-4 py-3 transition-colors"
+                    >
+                        <div className="relative h-20 w-14 flex-shrink-0 overflow-hidden rounded bg-dark-200">
+                            <Link to={animeHref(group.anime)} className="block h-full w-full">
+                                <AnimeMediaImage
+                                    anime={group.anime}
+                                    kind="cover"
+                                    size="small"
+                                    alt={group.anime?.title}
+                                    className="h-full w-full object-cover transition-opacity hover:opacity-80"
+                                    loading="lazy"
+                                />
+                            </Link>
+                        </div>
+
+                        <div className="min-w-0 flex-1 flex flex-col justify-center">
+                            <Link
+                                to={animeHref(group.anime)}
+                                className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-white"
+                            >
+                                {group.anime?.title}
+                            </Link>
+                            <p className="mt-0.5 text-xs text-gray-500">
+                                {group.roles.join(' · ')}
+                            </p>
+                            {group.people.length > 0 && (
+                                <p className="mt-1.5 text-xs text-gray-400 line-clamp-2">
+                                    {group.people.map((character, index) => (
+                                        <span key={character.id ?? character.name}>
+                                            {index > 0 && ', '}
+                                            <Link
+                                                to={`/character/${character.id}`}
+                                                className="transition-colors hover:text-gray-300"
+                                            >
+                                                {character.name}
+                                            </Link>
+                                        </span>
+                                    ))}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {canShowAll && <ShowAllButton total={voiceRoles.length} onClick={showAll} />}
+        </>
+    );
+}
+
 function ProductionCreditsSection({ credits }) {
-    if (!credits || credits.length === 0) {
+    const { visible, canShowAll, showAll } = useShowAll(credits);
+
+    if (credits.length === 0) {
         return (
             <div className="text-center py-16">
                 <p className="text-gray-400 text-sm">No production credits found.</p>
@@ -287,40 +344,43 @@ function ProductionCreditsSection({ credits }) {
     }
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-            {credits.map((credit) => (
-                <div
-                    key={credit.id}
-                    className="flex items-center gap-4 py-3 group"
-                >
-                    {/* Anime cover */}
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-dark-200 flex-shrink-0">
-                        <Link to={credit.anime?.slug ? `/anime/${credit.anime.slug}` : '#'}>
-                            <AnimeMediaImage
-                                anime={credit.anime}
-                                kind="cover"
-                                size="small"
-                                alt={credit.anime?.title}
-                                className="w-full h-full object-cover transition-opacity hover:opacity-80"
-                                loading="lazy"
-                            />
-                        </Link>
-                    </div>
+        <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                {visible.map((group) => (
+                    <div
+                        key={group.key}
+                        className="flex items-center gap-4 py-3 group"
+                    >
+                        {/* Anime cover */}
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-dark-200 flex-shrink-0">
+                            <Link to={animeHref(group.anime)}>
+                                <AnimeMediaImage
+                                    anime={group.anime}
+                                    kind="cover"
+                                    size="small"
+                                    alt={group.anime?.title}
+                                    className="w-full h-full object-cover transition-opacity hover:opacity-80"
+                                    loading="lazy"
+                                />
+                            </Link>
+                        </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                        <Link
-                            to={credit.anime?.slug ? `/anime/${credit.anime.slug}` : '#'}
-                            className="block truncate text-sm font-medium text-gray-200 transition-colors hover:text-white"
-                        >
-                            {credit.anime?.title}
-                        </Link>
-                        <p className="text-xs text-gray-500 mt-1">
-                            {credit.role}
-                        </p>
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                            <Link
+                                to={animeHref(group.anime)}
+                                className="block truncate text-sm font-medium text-gray-200 transition-colors hover:text-white"
+                            >
+                                {group.anime?.title}
+                            </Link>
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                {group.roles.join(', ')}
+                            </p>
+                        </div>
                     </div>
-                </div>
-            ))}
-        </div>
+                ))}
+            </div>
+            {canShowAll && <ShowAllButton total={credits.length} onClick={showAll} />}
+        </>
     );
 }

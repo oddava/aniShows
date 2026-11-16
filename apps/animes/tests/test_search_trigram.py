@@ -54,6 +54,8 @@ def catalog(db):
     _anime("Frieren: Beyond Journey's End", rank=6, synopsis="An elf mage outlives her party.")
     _anime("100% Pascal-sensei", rank=7)
     _anime("1000 Days of Spring", rank=8)
+    _anime("One Piece", rank=9)
+    _anime("One-Punch Man", rank=10)
 
 
 @pytest.mark.django_db
@@ -75,10 +77,36 @@ def test_substring_match_ignores_case(catalog):
         ("narto", "Naruto"),
         ("atack on titan", "Attack on Titan"),
         ("frieren journy", "Frieren: Beyond Journey's End"),
+        # "pice" alone scores 0.40 against "One Piece" (the per-word bar is
+        # 0.5); the whole phrase scores 0.67 (smoke finding S-1).
+        ("one pice", "One Piece"),
+        ("attack on titn", "Attack on Titan"),
+        # Three words, one misspelt below the per-word bar ("tian" 0.40).
+        ("attack on tian", "Attack on Titan"),
     ],
 )
 def test_typos_still_find_the_title(catalog, typo, title):
     assert title in _titles(typo)
+
+
+def test_a_phrase_match_ranks_the_closest_title_first(catalog):
+    assert _titles("one pice")[0] == "One Piece"
+
+
+@pytest.mark.parametrize(
+    ("query", "title"),
+    [
+        # One exact word out of two already scores 0.5 as a phrase: the
+        # unrelated word must still resemble the title.
+        ("one zzzz", "One Piece"),
+        ("one piece zzzz", "One Piece"),
+        # The phrase scores 0.56 against "One-Punch Man", but "pice" does not
+        # resemble any word in it.
+        ("one pice", "One-Punch Man"),
+    ],
+)
+def test_a_phrase_match_needs_every_word_to_resemble_the_title(catalog, query, title):
+    assert title not in _titles(query)
 
 
 def test_without_a_sort_the_best_match_comes_first(catalog):
@@ -117,7 +145,9 @@ def test_ilike_treats_like_wildcards_literally(catalog):
     assert not Anime.objects.filter(title__ilike="n_ruto").exists()
 
 
-@pytest.mark.parametrize("query", ["frieren", "outlives", "naruto shippuden", "atack on titan"])
+@pytest.mark.parametrize(
+    "query", ["frieren", "outlives", "naruto shippuden", "atack on titan", "one pice"]
+)
 def test_search_conditions_are_served_by_the_trigram_indexes(catalog, query):
     from apps.animes.services.public_anime_service import AnimeQueryService
 

@@ -178,17 +178,23 @@ class ShelfMixin:
             .order_by("-shared_genres", "-id")[:8]
         )
 
-    def _fallback_recommendations_queryset(self, anime, *, can_view_adult_content: bool = True):
-        relation_mal_ids = self._relation_mal_ids(anime)
-        related_ids = self._related_anime_ids(anime)
+    def _fallback_recommendations_queryset(
+        self,
+        anime,
+        *,
+        can_view_adult_content: bool = True,
+        related_ids: list[int] | None = None,
+        related_anilist_ids: set[int] | None = None,
+    ):
+        if related_ids is None or related_anilist_ids is None:
+            related_ids, related_anilist_ids = self._relation_targets(anime)
         genre_ids = self._genre_ids(anime)
 
-        queryset = self.shelf_queryset_for(can_view_adult_content).exclude(id=anime.id)
-        if relation_mal_ids:
-            queryset = queryset.exclude(mal_id__in=relation_mal_ids)
-        if related_ids:
-            queryset = queryset.exclude(id__in=related_ids)
-
+        queryset = self.shelf_queryset_for(can_view_adult_content).exclude(
+            id__in=[anime.id, *related_ids]
+        )
+        if related_anilist_ids:
+            queryset = queryset.exclude(anilist_id__in=related_anilist_ids)
         return (
             queryset.filter(genres__in=genre_ids)
             .annotate(shared_genres=Count("genres"))
@@ -196,15 +202,22 @@ class ShelfMixin:
         )
 
     @staticmethod
-    def _relation_mal_ids(anime) -> list[int]:
-        relation_ids = []
-        for target_mal_id, linked_mal_id in anime.relations.values_list(
-            "target_mal_id", "to_anime__mal_id"
+    def _relation_targets(anime) -> tuple[list[int], set[int]]:
+        """``(linked anime IDs in provider order, AniList IDs)`` of ``anime``'s relations.
+
+        One query. A linked target is excluded by its local ID, one not
+        imported yet by its AniList ID.
+        """
+        related_ids: list[int] = []
+        anilist_ids: set[int] = set()
+        for to_anime_id, target_anilist_id in anime.relations.values_list(
+            "to_anime_id", "target_anilist_id"
         ):
-            relation_mal_id = target_mal_id or linked_mal_id
-            if relation_mal_id and relation_mal_id != anime.mal_id:
-                relation_ids.append(relation_mal_id)
-        return list(dict.fromkeys(relation_ids))
+            if to_anime_id and to_anime_id != anime.id:
+                related_ids.append(to_anime_id)
+            if target_anilist_id:
+                anilist_ids.add(target_anilist_id)
+        return list(dict.fromkeys(related_ids)), anilist_ids
 
     @staticmethod
     def _related_anime_ids(anime) -> list[int]:

@@ -138,9 +138,11 @@ def test_offline_catalog_flush_invalidates_current_detail_cache(api_client):
     ],
 )
 def test_filter_option_cache_refreshes_after_model_update(
-    api_client, basename, factory_class, updated_name
+    api_client, django_capture_on_commit_callbacks, basename, factory_class, updated_name
 ):
     obj = factory_class()
+    if basename == "studio":  # only studios with a listed anime are offered (P2-2)
+        create_anime(title="Studio Showcase").studios.add(obj)
 
     first_response = api_client.get(reverse(f"{basename}-list"))
     assert first_response.status_code == 200
@@ -151,7 +153,8 @@ def test_filter_option_cache_refreshes_after_model_update(
     if basename == "genre":
         obj.slug = slugify(updated_name)
         update_fields.append("slug")
-    obj.save(update_fields=update_fields)
+    with django_capture_on_commit_callbacks(execute=True):  # invalidated on commit
+        obj.save(update_fields=update_fields)
 
     refreshed_response = api_client.get(reverse(f"{basename}-list"))
     refreshed_names = [item["name"] for item in refreshed_response.data]
@@ -446,3 +449,44 @@ def test_trending_shelf_uses_cover_art_when_banner_is_missing(api_client):
 
     assert payload["banner_image"] == anime.cover_image_external_url
     assert payload["banner_image_large"] == anime.cover_image_external_url
+
+
+@pytest.mark.django_db
+def test_studios_lists_only_studios_with_a_public_non_adult_anime(api_client):
+    """Browse's studio picker skips studios nobody can browse to (P2-2)."""
+    from apps.animes.models import OfflineAnimeSyncState
+
+    listed = create_studio(name="Listed Studio")
+    create_anime(title="Public Show").studios.add(listed)
+    create_studio(name="Empty Studio")
+    adult_only = create_studio(name="Adult Studio")
+    adult = create_anime(title="Adult Show")
+    adult.genres.add(create_genre(name="Hentai", slug="hentai"))
+    adult.studios.add(adult_only)
+    hidden_only = create_studio(name="Hidden Studio")
+    hidden = create_anime(title="Hidden Show")
+    hidden.studios.add(hidden_only)
+    OfflineAnimeSyncState.objects.create(
+        anime=hidden,
+        metadata_status=OfflineAnimeSyncState.StageStatus.QUARANTINED,
+        franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
+        quarantined=True,
+        quarantine_reason="test",
+    )
+
+    first = api_client.get(reverse("studio-list"))
+    second = api_client.get(reverse("studio-list"))
+
+    assert [item["name"] for item in first.data] == ["Listed Studio"]
+    assert (first["X-Cache-Status"], second["X-Cache-Status"]) == ("miss", "hit")
+    assert "max-age=3600" in first["Cache-Control"]
+
+
+@pytest.mark.django_db
+def test_status_filter_ignores_the_unused_not_yet_aired_value(api_client):
+    """``not_yet_aired`` matches no stored status, so it is no longer a filter (P2-1)."""
+    create_anime(title="Status Alpha", status=Anime.AnimeStatus.finished)
+
+    response = api_client.get(reverse("anime-list"), {"status": "not_yet_aired"})
+
+    assert [item["title"] for item in response.data["results"]] == ["Status Alpha"]

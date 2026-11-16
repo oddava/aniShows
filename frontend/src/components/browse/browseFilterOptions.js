@@ -1,17 +1,28 @@
 // Option lists and limits for the Browse filters.
 
+export const RELEVANCE_SORT = 'relevance';
+
 export const SORT_OPTIONS = [
+  { value: RELEVANCE_SORT, label: 'Best match' },
   { value: 'popular', label: 'Most Popular' },
+  { value: 'trending', label: 'Trending' },
   { value: 'rating', label: 'Highest Rated' },
   { value: 'newest', label: 'Newest First' },
   { value: 'title', label: 'Title A-Z' },
 ];
 
+/** The sorts to offer: "Best match" only ranks something while there is a search. */
+export const getSortOptions = (hasSearch) => (
+  hasSearch ? SORT_OPTIONS : SORT_OPTIONS.filter((option) => option.value !== RELEVANCE_SORT)
+);
+
 export const TYPE_OPTIONS = [
   { value: 'TV', label: 'TV Series' },
   { value: 'Movie', label: 'Movie' },
+  { value: 'ONA', label: 'ONA' },
   { value: 'OVA', label: 'OVA' },
   { value: 'Special', label: 'Special' },
+  { value: 'Music', label: 'Music' },
 ];
 
 export const STATUS_OPTIONS = [
@@ -30,6 +41,28 @@ export const SEASON_OPTIONS = [
 export const YEAR_OPTIONS = Array.from({ length: 30 }, (_, i) => new Date().getFullYear() - i);
 export const MIN_YEAR_BOUND = 1980;
 export const MAX_YEAR_BOUND = new Date().getFullYear() + 1;
+
+/**
+ * The season `direction` (+1/-1) steps away from `season` `year`, rolling the
+ * year (fall -> winter of the next year), or null outside the year bounds or
+ * for an unknown season. Seasons are in calendar order in SEASON_OPTIONS.
+ */
+export const stepSeason = (season, year, direction) => {
+  const index = SEASON_OPTIONS.findIndex((option) => option.value === season);
+  const yearNumber = Number.parseInt(year, 10);
+  if (index < 0 || !Number.isFinite(yearNumber)) return null;
+  const total = index + direction;
+  const nextYear = yearNumber + Math.floor(total / SEASON_OPTIONS.length);
+  if (nextYear < MIN_YEAR_BOUND || nextYear > MAX_YEAR_BOUND) return null;
+  const nextIndex = ((total % SEASON_OPTIONS.length) + SEASON_OPTIONS.length) % SEASON_OPTIONS.length;
+  return { season: SEASON_OPTIONS[nextIndex].value, year: String(nextYear) };
+};
+
+/** "Fall 2026" for a season and year, or '' when either is missing. */
+export const formatSeasonLabel = (season, year) => {
+  const label = SEASON_OPTIONS.find((option) => option.value === season)?.label;
+  return label && year ? `${label} ${year}` : '';
+};
 export const FILTER_UPDATE_DEBOUNCE_MS = 250;
 export const DEBOUNCED_FILTER_KEYS = new Set([
   'minRating',

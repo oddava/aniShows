@@ -2,7 +2,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -13,6 +13,8 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from ...shared.logger import logger
+from ...shared.pagination import NoCountPagination
+from ...shared.parsing import positive_int
 from ...shared.public_cache import (
     get_or_build_public_payload,
     invalidate_public_cache_keys,
@@ -97,6 +99,13 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         "Saturday",
     )
     SCHEDULE_DAY_LOOKUP = {day.lower(): day for day in SCHEDULE_DAY_NAMES}
+    # The schedule ships what airs from a day ago to 8 days ahead (B7): a stale
+    # ``next_airing_date`` or a show on hiatus would land on the wrong date.
+    SCHEDULE_WINDOW_BEFORE = timedelta(days=1)
+    SCHEDULE_WINDOW_AFTER = timedelta(days=8)
+    # AniList's recommendations for one title, kept a day (B18): they change slowly,
+    # and every cold key would otherwise cost an interactive AniList call.
+    ANILIST_RECOMMENDATIONS_TTL = 24 * 60 * 60
 
     def build_queryset(self, request, *, action: str, include_user_context: bool = True):
         is_list = action == "list"
@@ -138,12 +147,25 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
 
         return self._apply_list_filters(queryset, request)
 
-    def schedule_queryset(self, user, *, include_user_context: bool = True):
+    @staticmethod
+    def schedule_now() -> datetime:
+        """The instant the schedule window and its cache key are computed from."""
+        return timezone.now()
+
+    def schedule_queryset(
+        self, user, *, include_user_context: bool = True, now: datetime | None = None
+    ):
+        now = now or self.schedule_now()
         queryset = (
             Anime.public_queryset()
             .filter(status=Anime.AnimeStatus.airing)
             .filter(
-                Q(broadcast_day__in=self.SCHEDULE_DAY_NAMES) | Q(next_airing_date__isnull=False)
+                Q(
+                    next_airing_date__gte=now - self.SCHEDULE_WINDOW_BEFORE,
+                    next_airing_date__lte=now + self.SCHEDULE_WINDOW_AFTER,
+                )
+                # No date yet: placed by its weekly slot ("Time TBA" on the frontend).
+                | Q(next_airing_date__isnull=True, broadcast_day__in=self.SCHEDULE_DAY_NAMES)
             )
             .only(*self.LIST_FIELDS)
             .prefetch_related(self._genre_prefetch(), Anime.studios_prefetch())
@@ -183,39 +205,51 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         localized = timezone.localtime(next_airing_date, local_tz)
         return cls.SCHEDULE_DAY_NAMES[(localized.weekday() + 1) % 7]
 
-    def get_action_anime(self, slug: str) -> Anime:
-        return Anime.public_queryset().only(*self.ACTION_ANIME_ONLY_FIELDS).get(slug=slug)
-
-    def recommendations_queryset(self, anime, *, can_view_adult_content: bool = True):
-        """AniList's recommendations that exist locally, in AniList's order.
-
-        Falls back to shared-genre recommendations when AniList has none (or
-        none that are in the catalog).
-        """
-        return self.recommendations(anime, can_view_adult_content=can_view_adult_content)[0]
-
     def recommendations(self, anime, *, can_view_adult_content: bool = True):
         """``(queryset, degraded)``: ``degraded`` when AniList could not be asked.
 
-        A degraded answer is the genre fallback served because AniList was
-        busy or down, so callers should not cache it like a real answer.
+        AniList's recommendations that exist locally, in AniList's order, or
+        shared-genre recommendations when AniList has none in the catalog. A
+        degraded answer is that fallback served because AniList was busy or
+        down, so callers should not cache it like a real answer. Franchise
+        entries (this anime's relations) are left out either way.
         """
+        related_ids, related_anilist_ids = self._relation_targets(anime)
+        degraded = False
         if anime.anilist_id or anime.mal_id:
             queryset, degraded = self._provider_recommendations_queryset(
-                anime, can_view_adult_content=can_view_adult_content
+                anime,
+                can_view_adult_content=can_view_adult_content,
+                related_ids=related_ids,
+                related_anilist_ids=related_anilist_ids,
             )
             if queryset is not None and queryset.exists():
                 return queryset, False
-        else:
-            degraded = False
 
         fallback = self._fallback_recommendations_queryset(
-            anime, can_view_adult_content=can_view_adult_content
+            anime,
+            can_view_adult_content=can_view_adult_content,
+            related_ids=related_ids,
+            related_anilist_ids=related_anilist_ids,
         )
         return fallback, degraded
 
-    def _provider_recommendations_queryset(self, anime, *, can_view_adult_content: bool):
-        """``(queryset or None, degraded)`` for AniList's recommendations."""
+    @classmethod
+    def anilist_recommendations_cache_key(cls, anime) -> str:
+        return f"anime_anilist_recommendations:v1:{anime.anilist_id or ''}:{anime.mal_id or ''}"
+
+    def _anilist_recommendations(self, anime) -> tuple[list[dict], bool]:
+        """``(recommendations, degraded)`` from AniList, a real answer kept for a day.
+
+        The key is not in the collection namespace (which catalog syncs bump
+        every hour) and holds only AniList's IDs, so both adult-content
+        variants share it; the payload built from it is cached like a shelf.
+        """
+        cache_key = self.anilist_recommendations_cache_key(anime)
+        cached = cache.get(cache_key)
+        if isinstance(cached, list):
+            return cached, False
+
         service = AniListService(enable_caching=True, enable_rate_limiting=True)
         try:
             recommendations = service.get_recommendations_for_anime(
@@ -233,15 +267,39 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         finally:
             service.close()
 
-        relation_mal_ids = set(self._relation_mal_ids(anime))
+        if not degraded:
+            compact = [
+                {"id": item.get("id"), "mal_id": item.get("mal_id")}
+                for item in recommendations
+                if isinstance(item, dict)
+            ]
+            cache.set(cache_key, compact, self.ANILIST_RECOMMENDATIONS_TTL)
+        return recommendations, degraded
+
+    def _provider_recommendations_queryset(
+        self,
+        anime,
+        *,
+        can_view_adult_content: bool,
+        related_ids: list[int],
+        related_anilist_ids: set[int],
+    ):
+        """``(queryset or None, degraded)`` for AniList's recommendations.
+
+        AniList names a title by its AniList ID and its ``idMal``; both are
+        matched against the catalog. Franchise entries are excluded by the
+        relation's local anime or AniList ID.
+        """
+        recommendations, degraded = self._anilist_recommendations(anime)
+
         ordering_cases = []
         anilist_ids: list[int] = []
         mal_ids: list[int] = []
         for position, recommendation in enumerate(recommendations):
             rec_anilist_id = recommendation.get("id")
             rec_mal_id = recommendation.get("mal_id")
-            if (rec_anilist_id and rec_anilist_id == anime.anilist_id) or (
-                rec_mal_id and (rec_mal_id == anime.mal_id or rec_mal_id in relation_mal_ids)
+            if (rec_anilist_id and rec_anilist_id in {anime.anilist_id, *related_anilist_ids}) or (
+                rec_mal_id and rec_mal_id == anime.mal_id
             ):
                 continue
             if rec_anilist_id:
@@ -260,7 +318,7 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         queryset = (
             self.shelf_queryset_for(can_view_adult_content)
             .filter(Q(anilist_id__in=anilist_ids) | Q(mal_id__in=mal_ids))
-            .exclude(id__in=[anime.id, *self._related_anime_ids(anime)])
+            .exclude(id__in=[anime.id, *related_ids])
             .annotate(recommendation_order=ordering)
             .order_by("recommendation_order", "-id")
         )
@@ -286,37 +344,151 @@ class AnimePublicPayloadService:
         "banner_image_large",
     )
 
+    # A save that changes only these fields changes only the detail payload (no
+    # card or shelf shows them), so it drops that one key instead of every
+    # collection (B2). ``synopsis`` is left out on purpose, although the spec lists
+    # it: the trending/top-rated shelves and the Home hero show it (SHELF_FIELDS).
+    DETAIL_ONLY_FIELDS = frozenset(
+        {
+            "status_distribution",
+            "external_links",
+            "trailer_url",
+            "theme_songs",
+            "meta_description",
+        }
+    )
+    # The query parameters a list response depends on (``ListFilterMixin`` and
+    # the paginator). Anything else is ignored, so it cannot mint cache keys (B11).
+    LIST_CACHE_SCALAR_PARAMS = (
+        "q",
+        "studio",
+        "season",
+        "year",
+        "min_year",
+        "max_year",
+        "min_rating",
+        "max_rating",
+        "min_episodes",
+        "max_episodes",
+        "min_duration",
+        "max_duration",
+        "source",
+        "shelf",
+        "sort",
+        "page",
+        "page_size",
+    )
+    # Read stripped and lowercased by the filters, so normalised the same way in the
+    # key. The others are kept as sent: the sort variants test their raw truthiness.
+    LIST_CACHE_CASELESS_PARAMS = frozenset({"q", "shelf", "sort"})
+    # Comma-separated sets whose order and case do not matter.
+    LIST_CACHE_SET_PARAMS = ("tags", "type", "status")
+    # Numbers the filters parse with this type: "7" and "7.0" are the same filter, and
+    # every value that does not parse behaves alike (ignored, but still truthy for the
+    # sort variants), so all of those share one marker.
+    LIST_CACHE_NUMERIC_PARAMS: dict[str, type[int] | type[float]] = {
+        "studio": int,
+        "year": int,
+        "min_year": int,
+        "max_year": int,
+        "min_rating": float,
+        "max_rating": float,
+        "min_episodes": int,
+        "max_episodes": int,
+        "min_duration": int,
+        "max_duration": int,
+    }
+    UNPARSED_PARAM = "~"
+
     @classmethod
     def detail_cache_key(cls, slug: str) -> str:
         return f"anime_detail_base:{cls.PUBLIC_CACHE_VERSION}:{slug}"
 
     @classmethod
-    def schedule_cache_key(cls, day_key: str, can_view_adult_content: bool) -> str:
-        """``day_key`` is a lowercase day name, or ``"all"`` for the whole week."""
+    def detail_cache_keys(cls, slug: str) -> tuple[str, ...]:
+        """Every key that holds ``slug``'s detail payload (the legacy keys are gone)."""
+        return (cls.detail_cache_key(slug),)
+
+    @classmethod
+    def schedule_cache_key(
+        cls, day_key: str, can_view_adult_content: bool, *, now: datetime | None = None
+    ) -> str:
+        """``day_key`` is a lowercase day name, or ``"all"`` for the whole week.
+
+        The UTC date stamp rolls the airing window over daily. Like every
+        shelf, the key also carries the collection namespace when stored, so
+        an anime save invalidates it through the namespace bump.
+        """
+        stamp = (now or AnimeQueryService.schedule_now()).astimezone(UTC).strftime("%Y%m%d")
         return (
             f"anime_schedule:{cls.PUBLIC_CACHE_VERSION}:day:{day_key}"
-            f":adult:{int(can_view_adult_content)}"
+            f":adult:{int(can_view_adult_content)}:d:{stamp}"
         )
 
     @classmethod
-    def schedule_cache_keys(cls) -> tuple[str, ...]:
-        day_keys = ("all", *(day.lower() for day in AnimeQueryService.SCHEDULE_DAY_NAMES))
-        return tuple(
-            cls.schedule_cache_key(day_key, flag) for day_key in day_keys for flag in (False, True)
+    def list_cache_key_params(cls, query_params) -> dict[str, str | list]:
+        """The known list parameters, normalised so equivalent requests share a key."""
+        params: dict[str, str | list] = {}
+        for name in cls.LIST_CACHE_SCALAR_PARAMS:
+            value = query_params.get(name) or ""
+            if name in cls.LIST_CACHE_CASELESS_PARAMS:
+                value = value.strip().lower()
+            if name == "q" and len(value) < MIN_SEARCH_LENGTH:
+                value = ""  # the search filter ignores it too
+            if value and name in cls.LIST_CACHE_NUMERIC_PARAMS:
+                value = cls._canonical_number(value, cls.LIST_CACHE_NUMERIC_PARAMS[name])
+            elif name == "page":
+                value = cls._canonical_page(value)
+            elif name == "page_size":
+                value = cls._canonical_page_size(value)
+            if value:
+                params[name] = value
+        for name in cls.LIST_CACHE_SET_PARAMS:
+            raw = query_params.get(name)
+            if raw:  # present, even if every part is blank: it still counts as a filter
+                params[name] = sorted({part.strip().lower() for part in raw.split(",")} - {""})
+        genres = sorted(
+            set(AnimeQueryService._parse_multi_value_params(query_params.getlist("genre")))
         )
+        if genres:
+            params["genre"] = genres
+        exclude_ids = AnimeQueryService.parse_exclude_ids(query_params.get("exclude_ids"))
+        if exclude_ids:
+            params["exclude_ids"] = sorted(set(exclude_ids))
+        return params
 
     @classmethod
-    def detail_cache_keys(cls, slug: str) -> tuple[str, ...]:
-        return (
-            cls.detail_cache_key(slug),
-            # Read through older keys so stale detail caches can self-heal after deploys.
-            f"anime_detail_base:{slug}",
-            f"anime_detail_base:v6:{slug}",
-            f"anime_detail_base:v5:{slug}",
-            f"anime_detail_base:v4:{slug}",
-            f"anime_detail_base:v3:{slug}",
-            f"anime_detail_base:v2:{slug}",
+    def _canonical_number(cls, value: str, number_type: type[int] | type[float]) -> str:
+        try:
+            return str(number_type(value))
+        except (TypeError, ValueError):
+            return cls.UNPARSED_PARAM
+
+    @classmethod
+    def _canonical_page(cls, value: str) -> str:
+        """Page 1 is the default; anything that is not a page number is a 404 (not cached)."""
+        number = positive_int(value)
+        if number is None:
+            return cls.UNPARSED_PARAM if value else ""
+        return "" if number == 1 else str(number)
+
+    @staticmethod
+    def _canonical_page_size(value: str) -> str:
+        """As ``NoCountPagination`` reads it: clamped to its maximum; invalid means default."""
+        number = positive_int(value)
+        if number is None:
+            return ""
+        number = min(number, NoCountPagination.max_page_size)
+        return "" if number == NoCountPagination.page_size else str(number)
+
+    @classmethod
+    def list_cache_key(cls, query_params, *, can_view_adult_content: bool) -> str:
+        """The list payload's key (before the collection namespace), viewer-independent."""
+        param_string = json.dumps(
+            sorted(cls.list_cache_key_params(query_params).items()), separators=(",", ":")
         )
+        digest = hashlib.sha256(param_string.encode()).hexdigest()
+        return f"anime_list:{cls.PUBLIC_CACHE_VERSION}:adult:{int(can_view_adult_content)}:{digest}"
 
     @staticmethod
     def sanitize_public_user_fields(payload):
@@ -338,15 +510,14 @@ class AnimePublicPayloadService:
         )
 
     @classmethod
-    def cache_list_payload(cls, request, build_payload):
-        if request.user.is_authenticated:
-            return CachedPayloadResult(data=build_payload(), cache_status="skip")
+    def cache_list_payload(cls, request, build_payload, *, can_view_adult_content: bool):
+        """The list page every viewer with this adult-content setting shares (B10).
 
-        params = dict(request.query_params)
-        param_string = json.dumps(sorted(params.items()), separators=(",", ":"))
-        cache_key_hash = hashlib.sha256(param_string.encode()).hexdigest()
+        ``build_payload`` must build it without the viewer; signed-in callers add
+        their own state afterwards (``enrich_list_payload_for_user``).
+        """
         cache_key = cls._with_collection_namespace(
-            f"anime_list:{cls.PUBLIC_CACHE_VERSION}:{cache_key_hash}"
+            cls.list_cache_key(request.query_params, can_view_adult_content=can_view_adult_content)
         )
         data, cache_status = get_or_build_public_payload(
             cache_key,
@@ -367,19 +538,31 @@ class AnimePublicPayloadService:
         )
         return CachedPayloadResult(data=data, cache_status=cache_status)
 
+    @staticmethod
+    def with_site_status_distribution(data):
+        """Add this site's list counts (D-3), computed per request, never cached here.
+
+        ``site_status_counts`` is G3's (``user_list_side_effects``); until it
+        exists the field is null and this costs nothing.
+        """
+        if not isinstance(data, dict) or "id" not in data:
+            return data
+        from . import user_list_side_effects
+
+        site_status_counts = getattr(user_list_side_effects, "site_status_counts", None)
+        return {
+            **data,
+            "site_status_distribution": (
+                site_status_counts(data["id"]) if site_status_counts is not None else None
+            ),
+        }
+
     @classmethod
     def get_detail_payload(cls, slug: str, request, query_service: AnimeQueryService):
-        cache_keys = cls.detail_cache_keys(slug)
-        primary_cache_key = cache_keys[0]
+        primary_cache_key = cls.detail_cache_key(slug)
         coverless_marker_key = f"{primary_cache_key}:coverless_checked"
-        cached_base = None
-        cache_hit_key = None
         cache_status = "hit"
-        for key in cache_keys:
-            cached_base = cache.get(key)
-            if cached_base is not None:
-                cache_hit_key = key
-                break
+        cached_base = cache.get(primary_cache_key)
 
         needs_refresh = cached_base is None
         if cached_base:
@@ -397,8 +580,8 @@ class AnimePublicPayloadService:
                 or cls.item_has_stale_imagekit_cache_urls(data)
             ):
                 needs_refresh = True
-                invalidate_public_cache_keys(*cache_keys)
-            elif cache_hit_key != primary_cache_key or cache_payload_changed:
+                invalidate_public_cache_keys(primary_cache_key)
+            elif cache_payload_changed:
                 ttl = 3600 if cls.has_cover_media(data) else 60
                 cache.set(primary_cache_key, data, ttl)
                 cache.set(public_cache_stale_key(primary_cache_key), data, ttl + 900)
@@ -429,12 +612,8 @@ class AnimePublicPayloadService:
             )
             if cache_status == "miss" and not cls.has_cover_media(data):
                 cache.set(coverless_marker_key, True, 60)
-            if cache_hit_key and cache_hit_key != primary_cache_key:
-                ttl = 3600 if cls.has_cover_media(data) else 60
-                # Rehydrate the legacy key that was actually requested so older readers converge.
-                cache.set(cache_hit_key, data, ttl)
-                cache.set(public_cache_stale_key(cache_hit_key), data, ttl + 900)
 
+        data = cls.with_site_status_distribution(data)
         if request.user.is_authenticated:
             data = cls.enrich_detail_payload_for_user(data, request.user)
 
@@ -484,6 +663,18 @@ class AnimePublicPayloadService:
             }
             for item in data
         ]
+
+    @classmethod
+    def enrich_list_payload_for_user(cls, data, user):
+        """``enrich_collection_payload_for_user`` for a list page (paginated or not)."""
+        if isinstance(data, dict) and isinstance(data.get("results"), list):
+            return {
+                **data,
+                "results": cls.enrich_collection_payload_for_user(data["results"], user),
+            }
+        if isinstance(data, list):
+            return cls.enrich_collection_payload_for_user(data, user)
+        return data
 
     @classmethod
     def enrich_browse_rows_payload_for_user(cls, data: list[dict], user):
@@ -640,18 +831,27 @@ class AnimePublicPayloadService:
 
 # --- Cross-group invalidation contract (G2; overview section 5) ---------------
 # Other groups call these instead of saving the Anime row to flush its caches.
-# Prep-commit stubs: they do exactly what an ``Anime`` post_save does today
-# (``signals._invalidate_anime_public_caches``, which also bumps the collection
-# namespace). G2 narrows ``invalidate_anime_detail`` to the slug's own keys (P0-2).
+# An ``Anime`` save does the same through ``signals``: a save of detail-only
+# fields calls the first, any other save both (P0-2).
 
 
 def invalidate_anime_detail(slug: str) -> None:
-    """Drop the cached public payloads of one anime (today: also every collection)."""
-    from ..signals import _invalidate_anime_public_caches
+    """Drop one anime's cached detail payload; every collection stays cached.
 
-    _invalidate_anime_public_caches(slug)
+    For changes only the detail page shows (review counts, status counts,
+    external links...). Its cards in lists and shelves are untouched (a synopsis
+    is on the shelves: use ``invalidate_public_collections`` too).
+
+    It runs at once: inside a transaction, call it from
+    ``transaction.on_commit``, or a reader can cache the old row again before
+    the commit.
+    """
+    invalidate_public_cache_keys(*AnimePublicPayloadService.detail_cache_keys(slug))
 
 
 def invalidate_public_collections() -> None:
-    """Invalidate every cached public collection (lists, shelves, browse rows)."""
+    """Invalidate every cached public collection (lists, shelves, browse rows, schedule).
+
+    Runs at once, like ``invalidate_anime_detail``: defer it to the commit.
+    """
     AnimePublicPayloadService.bump_collection_cache_namespace()

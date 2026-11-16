@@ -47,6 +47,9 @@ LIST_FILTERS = [
     {"q": "ab"},
     {"q": "abc"},
     {"q": "two words x"},
+    # With an explicit sort the search predicate compiles without running the
+    # relevance window, so this pins the multi-word (and phrase) match.
+    {"q": "two words x", "sort": "popular"},
     {"genre": "action"},
     {"genre": "action,drama"},
     {"genre": "missing"},

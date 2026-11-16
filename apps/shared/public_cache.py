@@ -13,6 +13,9 @@ PayloadBuilder = Callable[[], object]
 
 # How long a payload built while a dependency failed is kept (``Degraded``).
 DEGRADED_TTL_SECONDS = 60
+# The longest a request waits for another builder before building itself, whatever
+# ``PUBLIC_API_CACHE_WAIT_TIMEOUT_MS`` says (``PUBLIC_API_CACHE_WAIT_CAP_MS``).
+DEFAULT_WAIT_CAP_MS = 3000
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +63,17 @@ def _is_valid(payload, validator: PayloadValidator | None) -> bool:
     return bool(validator(payload))
 
 
+def lock_wait_timeout_ms() -> int:
+    """How long to poll for another builder's payload before rebuilding.
+
+    The configured timeout, capped: a slow builder (or one that died holding
+    the lock) must not hold every other reader for the lock TTL.
+    """
+    configured = max(int(settings.PUBLIC_API_CACHE_WAIT_TIMEOUT_MS), 0)
+    cap = max(int(getattr(settings, "PUBLIC_API_CACHE_WAIT_CAP_MS", DEFAULT_WAIT_CAP_MS)), 0)
+    return min(configured, cap)
+
+
 def _jittered_ttl(base_ttl: int) -> int:
     jitter = max(int(settings.PUBLIC_API_CACHE_TTL_JITTER_SECONDS), 0)
     if jitter == 0:
@@ -105,7 +119,7 @@ def get_or_build_public_payload(
     if stale_payload is not None:
         return stale_payload, "stale"
 
-    wait_timeout_ms = max(int(settings.PUBLIC_API_CACHE_WAIT_TIMEOUT_MS), 0)
+    wait_timeout_ms = lock_wait_timeout_ms()
     poll_interval_ms = max(int(settings.PUBLIC_API_CACHE_WAIT_POLL_INTERVAL_MS), 1)
     deadline = time.monotonic() + (wait_timeout_ms / 1000.0)
 

@@ -38,6 +38,8 @@ function getSafeLocalStorage() {
 }
 
 function parseDate(value) {
+    // new Date(null) is the 1970 epoch, not "no date".
+    if (value == null || value === '') return null;
     const date = value instanceof Date ? value : new Date(value);
     return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -197,38 +199,75 @@ function compareScheduleItems(a, b) {
     return String(a?.title || '').localeCompare(String(b?.title || ''));
 }
 
-export function groupScheduleDaysByTimezone(daysPayload = {}, preference) {
-    const groupedDays = Object.fromEntries(
-        DAY_NAMES.map((day) => [day.toLowerCase(), []])
-    );
-    const payloadEntries = Object.entries(daysPayload || {}).filter(([, items]) => Array.isArray(items));
+const DAY_MS = 24 * 60 * 60 * 1000;
+export const SCHEDULE_DAYS = 7;
 
-    payloadEntries.forEach(([sourceKey, items]) => {
+export function hasAiringDate(item) {
+    return Boolean(parseDate(item?.next_airing_date));
+}
+
+/**
+ * Calendar-day offset of `date` from `today` (a getZonedCalendarToday anchor),
+ * read in the same zone. Both sides are UTC-noon anchors, so DST shifts never
+ * move a date across a boundary.
+ */
+function getCalendarOffset(date, today, preference) {
+    const day = getZonedCalendarToday(preference, date);
+    return Math.round((day - today) / DAY_MS);
+}
+
+function resolveBroadcastWeekday(item, sourceKey) {
+    for (const candidate of [item?.broadcast_day, sourceKey]) {
+        const name = String(candidate || '').trim().toLowerCase();
+        const index = DAY_NAMES.findIndex((day) => day.toLowerCase() === name);
+        if (index !== -1) return index;
+    }
+    return -1;
+}
+
+/**
+ * Buckets the schedule payload by calendar date in the viewer's zone.
+ *
+ * Returns `days`: SCHEDULE_DAYS arrays where the index is the number of days
+ * from today (0 = today), and `laterCount`: entries airing SCHEDULE_DAYS or
+ * more days ahead, which are left out. Rules:
+ * - a next_airing_date in [today, today + 7) goes under that date; one that
+ *   aired earlier today stays under today (the card shows "Aired");
+ * - a next_airing_date before today (stale) is dropped;
+ * - no usable next_airing_date but a broadcast day: that weekday's column
+ *   inside the strip ("Time TBA").
+ */
+export function bucketScheduleByDate(daysPayload = {}, preference, now = new Date()) {
+    const days = Array.from({ length: SCHEDULE_DAYS }, () => []);
+    const today = getZonedCalendarToday(preference, now);
+    const todayWeekday = today.getUTCDay();
+    let laterCount = 0;
+
+    Object.entries(daysPayload || {}).forEach(([sourceKey, items]) => {
+        if (!Array.isArray(items)) return;
         items.forEach((item) => {
-        const nextAiringDate = parseDate(item?.next_airing_date);
-        const broadcastDay = String(item?.broadcast_day || '').trim().toLowerCase();
-        let targetKey = '';
+            const airingDate = parseDate(item?.next_airing_date);
+            let offset;
 
-        if (nextAiringDate) {
-            targetKey = DAY_NAMES[getWeekdayIndex(nextAiringDate, preference)].toLowerCase();
-        } else if (Object.prototype.hasOwnProperty.call(DAY_INDEX_BY_NAME, String(item?.broadcast_day || '').trim())) {
-            targetKey = String(item.broadcast_day).trim().toLowerCase();
-        } else if (broadcastDay in groupedDays) {
-            targetKey = broadcastDay;
-        } else if (sourceKey in groupedDays) {
-            targetKey = sourceKey;
-        }
+            if (airingDate) {
+                offset = getCalendarOffset(airingDate, today, preference);
+                if (offset >= SCHEDULE_DAYS) {
+                    laterCount += 1;
+                    return;
+                }
+                if (offset < 0) return;
+            } else {
+                const weekday = resolveBroadcastWeekday(item, sourceKey);
+                if (weekday === -1) return;
+                offset = (weekday - todayWeekday + 7) % 7;
+            }
 
-        if (!targetKey || !(targetKey in groupedDays)) return;
-        groupedDays[targetKey].push(item);
+            days[offset].push(item);
         });
     });
 
-    Object.keys(groupedDays).forEach((key) => {
-        groupedDays[key].sort(compareScheduleItems);
-    });
-
-    return groupedDays;
+    days.forEach((items) => items.sort(compareScheduleItems));
+    return { days, laterCount };
 }
 
 /**

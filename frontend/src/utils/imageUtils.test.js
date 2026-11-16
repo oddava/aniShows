@@ -1,4 +1,7 @@
+import { afterEach, beforeEach, vi } from 'vitest';
+
 import {
+    absoluteMediaUrl,
     applyImageFallback,
     getImageFallbackUrl,
     getImageUrl,
@@ -68,5 +71,39 @@ describe('imageUtils failover behavior', () => {
 
         const optimized = getOptimizedImageUrl(anime, 'cover', 'small');
         expect(optimized).toBe('https://img.anilist.co/external-only.jpg');
+    });
+});
+
+describe('absoluteMediaUrl', () => {
+    beforeEach(() => {
+        vi.stubEnv('VITE_API_URL', '');
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it('resolves stored media paths against the site origin', () => {
+        expect(absoluteMediaUrl('/media/anime/covers/a.jpg')).toBe('https://anishows.com/media/anime/covers/a.jpg');
+        expect(absoluteMediaUrl('media/anime/covers/a.jpg')).toBe('https://anishows.com/media/anime/covers/a.jpg');
+        expect(absoluteMediaUrl('/media/a.jpg', 'https://example.test/')).toBe('https://example.test/media/a.jpg');
+    });
+
+    it('strips leaked internal hosts before resolving', () => {
+        expect(absoluteMediaUrl('http://localhost:8000/media/a.jpg')).toBe('https://anishows.com/media/a.jpg');
+        expect(absoluteMediaUrl('http://minio:9000/bucket/media/a.jpg')).toBe('https://anishows.com/media/a.jpg');
+    });
+
+    it('keeps external absolute URLs', () => {
+        expect(absoluteMediaUrl('https://img.anilist.co/cover.jpg')).toBe('https://img.anilist.co/cover.jpg');
+        expect(absoluteMediaUrl('//img.anilist.co/cover.jpg')).toBe('https://img.anilist.co/cover.jpg');
+    });
+
+    it('returns null when there is nothing shareable', () => {
+        expect(absoluteMediaUrl(null)).toBeNull();
+        expect(absoluteMediaUrl('')).toBeNull();
+        expect(absoluteMediaUrl('null')).toBeNull();
+        expect(absoluteMediaUrl('data:image/svg+xml;charset=UTF-8,%3Csvg%3E')).toBeNull();
+        expect(absoluteMediaUrl('blob:https://anishows.com/123')).toBeNull();
     });
 });

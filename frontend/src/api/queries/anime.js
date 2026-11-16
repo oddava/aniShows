@@ -6,8 +6,8 @@ import { animeApi, characterApi, genreApi, staffApi, studioApi } from '../client
  * Query keys for anime catalogue data.
  *
  * Every key below starts with 'anime', so invalidating or removing
- * `animeKeys.all` still reaches all of them (that is what the adult-content
- * toggle and list mutations rely on). `animeKeys.bySlug(slug)` is the prefix
+ * `animeKeys.all` still reaches all of them (the adult-content toggle relies on
+ * that; list changes patch them in place, see patchAnimeListStatus). `animeKeys.bySlug(slug)` is the prefix
  * for everything about one title.
  *
  * The arrays are kept exactly as they were when they were written inline, so
@@ -65,15 +65,16 @@ export const animeKeys = {
 };
 
 /*
- * Navbar search box. Deliberately NOT under 'anime': the Navbar is always
- * mounted, and list/status mutations invalidate ['anime'], which would refetch
- * the 100-title cache after every list change. Before react-query it loaded
- * once per mount, and it still does.
+ * Search suggestions (navbar and hero search). Deliberately NOT under 'anime',
+ * so the adult-content toggle's removeQueries(['anime']) doesn't drop the
+ * suggestions of an open search box; the adult flag is part of the key
+ * instead, so switching it never shows the other setting's suggestions.
  */
 export const navbarSearchKeys = {
     all: ['navbarSearch'],
-    cache: () => ['navbarSearch', 'cache'],
-    results: (query) => ['navbarSearch', 'results', query],
+    results: (query, adultContentEnabled = false) => [
+        'navbarSearch', 'results', query, Boolean(adultContentEnabled),
+    ],
 };
 
 export const characterKeys = {
@@ -94,19 +95,90 @@ export const scheduleKeys = {
     week: (isAuthenticated, adultContentEnabled) => ['schedule', isAuthenticated, adultContentEnabled],
 };
 
-/** Only ever invalidated (AnimeCard); nothing reads it today. Kept so that call is unchanged. */
-export const seasonalKeys = { all: ['seasonal'] };
+const isPlainObject = (value) => value !== null
+    && typeof value === 'object'
+    && Object.getPrototypeOf(value) === Object.prototype;
+
+const nextListStatus = (anime, userListStatus) => {
+    if (!userListStatus) return null;
+    const merged = { ...(anime.user_list_status || {}), ...userListStatus };
+    const episodeCount = Number(anime.episode_count) || 0;
+    if (!('progress' in userListStatus) && 'episodes_watched' in userListStatus) {
+        merged.progress = episodeCount > 0 ? (merged.episodes_watched / episodeCount) * 100 : 0;
+    }
+    return merged;
+};
+
+const sameListStatus = (a, b) => {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...keys].every((key) => a[key] === b[key]);
+};
+
+/*
+ * Walks one cached payload and returns it with `user_list_status` replaced on
+ * every card for `animeId`, or the same reference when nothing matched (so
+ * untouched queries don't re-render). Covers every shape under ['anime'] and
+ * ['schedule']: plain arrays, `{ results }` pages, infinite `{ pages, pageParams }`,
+ * browse rows (`[{ anime_list }]`), the detail payload and the schedule days map.
+ * Only objects that already carry a `user_list_status` key are anime cards
+ * (signed-in payloads always include it), so episodes, characters or staff
+ * that happen to share the id are left alone.
+ */
+const patchNode = (node, animeId, userListStatus) => {
+    if (Array.isArray(node)) {
+        let changed = false;
+        const next = node.map((item) => {
+            const patched = patchNode(item, animeId, userListStatus);
+            if (patched !== item) changed = true;
+            return patched;
+        });
+        return changed ? next : node;
+    }
+    if (!isPlainObject(node)) return node;
+
+    let next = node;
+    if ('user_list_status' in node && node.id != null && String(node.id) === String(animeId)) {
+        const status = nextListStatus(node, userListStatus);
+        if (!sameListStatus(status, node.user_list_status)) {
+            next = { ...node, user_list_status: status };
+        }
+    }
+    for (const [key, value] of Object.entries(node)) {
+        if (key === 'user_list_status' || value === null || typeof value !== 'object') continue;
+        const patched = patchNode(value, animeId, userListStatus);
+        if (patched !== value) {
+            if (next === node) next = { ...node };
+            next[key] = patched;
+        }
+    }
+    return next;
+};
 
 /**
  * Bring cached anime payloads up to date after a list change (G2 contract, used by
- * G3's useListEntryMutation). Prep-commit stub: it does what AnimeCard does today,
- * invalidating every anime query (and the unused seasonal key); `animeId` and
- * `userListStatus` are accepted for the precise in-place patch G2 adds (P1-9).
+ * AnimeCard and G3's useListEntryMutation; B20, P1-9). Patches `user_list_status`
+ * in place in every ['anime'] and ['schedule'] query that shows `animeId`, instead
+ * of refetching every grid, shelf and detail page.
+ *
+ * `userListStatus`: `null` when the entry was removed; otherwise the entry (the
+ * `user_list_status` shape). It is merged over the cached value, so callers may
+ * pass only the fields they changed (`{ id, status }`); `progress` follows a new
+ * `episodes_watched`.
  */
-export const patchAnimeListStatus = (queryClient, animeId, userListStatus) => Promise.all([
-    queryClient.invalidateQueries({ queryKey: animeKeys.all }),
-    queryClient.invalidateQueries({ queryKey: seasonalKeys.all }),
-]);
+export const patchAnimeListStatus = (queryClient, animeId, userListStatus) => {
+    if (animeId === undefined || animeId === null) return;
+    [animeKeys.all, scheduleKeys.all].forEach((queryKey) => {
+        // Like setQueriesData, but a query whose payload doesn't show this
+        // anime is not written at all (its data and timestamps stay as they are).
+        queryClient.getQueriesData({ queryKey }).forEach(([key, data]) => {
+            if (data === undefined) return;
+            const patched = patchNode(data, animeId, userListStatus);
+            if (patched !== data) queryClient.setQueryData(key, patched);
+        });
+    });
+};
 
 const data = (res) => res.data;
 
@@ -184,16 +256,14 @@ export const animeQueries = {
 };
 
 export const navbarSearchQueries = {
-    /** First 100 titles, matched locally with fuse.js. */
-    cache: () => queryOptions({
-        queryKey: navbarSearchKeys.cache(),
-        queryFn: ({ signal }) => animeApi.getAll({ page_size: 100 }, signal)
-            .then((res) => res.data.results || []),
-    }),
-    /** Server-side search for one (trimmed) query. */
-    results: (query) => queryOptions({
-        queryKey: navbarSearchKeys.results(query),
-        queryFn: () => animeApi.getAll({ q: query, page_size: 10 })
+    /**
+     * Server-side search (relevance-ranked) for one trimmed query. The signal
+     * is passed through, so a request for a query the user has typed past is
+     * aborted when its key loses its last observer.
+     */
+    results: (query, adultContentEnabled = false) => queryOptions({
+        queryKey: navbarSearchKeys.results(query, adultContentEnabled),
+        queryFn: ({ signal }) => animeApi.getAll({ q: query, page_size: 10 }, signal)
             .then((res) => res.data.results || []),
     }),
 };

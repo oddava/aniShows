@@ -9,8 +9,8 @@ import {
     navbarSearchKeys,
     navbarSearchQueries,
     scheduleKeys,
+    patchAnimeListStatus,
     scheduleQueries,
-    seasonalKeys,
     staffKeys,
     studioKeys,
 } from '../anime';
@@ -98,7 +98,8 @@ describe('query keys keep the shapes the app used before the factory', () => {
         [studioKeys.all, ['studios']],
         [scheduleKeys.all, ['schedule']],
         [scheduleKeys.week(true, false), ['schedule', true, false]],
-        [seasonalKeys.all, ['seasonal']],
+        [navbarSearchKeys.results('fri', true), ['navbarSearch', 'results', 'fri', true]],
+        [navbarSearchKeys.results('fri'), ['navbarSearch', 'results', 'fri', false]],
         [profileKeys.own, ['ownProfile']],
         [profileKeys.all, ['profile']],
         [profileKeys.me, ['profile', 'me']],
@@ -189,13 +190,13 @@ describe('prefix invalidation still reaches the same cache entries', () => {
             animeKeys.filteredList({}),
         ];
         animeEntries.forEach(seed);
-        seed(navbarSearchKeys.cache());
+        seed(navbarSearchKeys.results('fri', false));
         seed(profileKeys.own);
 
         await client.invalidateQueries({ queryKey: animeKeys.all });
 
         animeEntries.forEach((key) => expect(invalidated(key)).toBe(true));
-        expect(invalidated(navbarSearchKeys.cache())).toBe(false);
+        expect(invalidated(navbarSearchKeys.results('fri', false))).toBe(false);
         expect(invalidated(profileKeys.own)).toBe(false);
     });
 
@@ -270,6 +271,126 @@ describe('prefix invalidation still reaches the same cache entries', () => {
     });
 });
 
+describe('patchAnimeListStatus updates cached cards in place (B20, P1-9)', () => {
+    const ENTRY = { id: 50, status: 'Watching', score: null, episodes_watched: 3, progress: 25 };
+    const card = (id, userListStatus = null, extra = {}) => ({
+        id, slug: `anime-${id}`, episode_count: 12, is_favorite: false, user_list_status: userListStatus, ...extra,
+    });
+    let client;
+
+    beforeEach(() => {
+        client = new QueryClient();
+    });
+
+    it('patches every cache shape under anime and schedule', () => {
+        const other = card(8);
+        const keys = {
+            detail: animeKeys.detail('anime-7', 1),
+            trending: animeKeys.trending('member-home'),
+            topRated: animeKeys.topRated(),
+            browseRow: animeKeys.browseRow(false),
+            browseList: animeKeys.browseList({ sort: 'popular' }),
+            recommendations: animeKeys.recommendations('anime-9'),
+            schedule: scheduleKeys.week(true, false),
+        };
+        client.setQueryData(keys.detail, card(7, null, { relations: [{ id: 3, title: 'x' }] }));
+        client.setQueryData(keys.trending, [card(7), other]);
+        client.setQueryData(keys.topRated, { results: [other, card(7)], next: null });
+        client.setQueryData(keys.browseRow, [{ key: 'a', anime_list: [card(7)] }, { key: 'b', anime_list: [other] }]);
+        client.setQueryData(keys.browseList, {
+            pages: [{ results: [other], next: 'x' }, { results: [card(7)], next: null }],
+            pageParams: [1, 2],
+        });
+        client.setQueryData(keys.recommendations, { results: [other] });
+        client.setQueryData(keys.schedule, { monday: [card(7)], tuesday: [other] });
+        const recommendationsBefore = client.getQueryData(keys.recommendations);
+        const otherRowBefore = client.getQueryData(keys.browseRow)[1];
+
+        patchAnimeListStatus(client, 7, ENTRY);
+
+        const status = (data) => data.user_list_status;
+        expect(status(client.getQueryData(keys.detail))).toEqual(ENTRY);
+        expect(status(client.getQueryData(keys.trending)[0])).toEqual(ENTRY);
+        expect(status(client.getQueryData(keys.topRated).results[1])).toEqual(ENTRY);
+        expect(status(client.getQueryData(keys.browseRow)[0].anime_list[0])).toEqual(ENTRY);
+        expect(status(client.getQueryData(keys.browseList).pages[1].results[0])).toEqual(ENTRY);
+        expect(client.getQueryData(keys.browseList).pageParams).toEqual([1, 2]);
+        expect(status(client.getQueryData(keys.schedule).monday[0])).toEqual(ENTRY);
+
+        // Other cards stay untouched, and so do queries without this anime.
+        expect(client.getQueryData(keys.trending)[1]).toBe(other);
+        expect(client.getQueryData(keys.browseRow)[1]).toBe(otherRowBefore);
+        expect(client.getQueryData(keys.recommendations)).toBe(recommendationsBefore);
+        expect(client.getQueryData(keys.detail).relations).toEqual([{ id: 3, title: 'x' }]);
+    });
+
+    it('returns new objects only along the changed path', () => {
+        const untouchedPage = { results: [card(8)], next: 'x' };
+        const key = animeKeys.browseList({ sort: 'rating' });
+        client.setQueryData(key, { pages: [untouchedPage, { results: [card(7)], next: null }], pageParams: [1, 2] });
+
+        patchAnimeListStatus(client, 7, ENTRY);
+
+        expect(client.getQueryData(key).pages[0]).toBe(untouchedPage);
+    });
+
+    it('does not write a query whose data does not change', () => {
+        const key = animeKeys.trending('guest-home');
+        client.setQueryData(key, [card(7, ENTRY)]);
+        const before = client.getQueryState(key).dataUpdatedAt;
+        const data = client.getQueryData(key);
+        const setQueryData = vi.spyOn(client, 'setQueryData');
+
+        patchAnimeListStatus(client, 7, { ...ENTRY });
+        patchAnimeListStatus(client, 99, ENTRY);
+
+        expect(setQueryData).not.toHaveBeenCalled();
+        expect(client.getQueryData(key)).toBe(data);
+        expect(client.getQueryState(key).dataUpdatedAt).toBe(before);
+    });
+
+    it('merges partial updates, recomputes progress, and clears on removal', () => {
+        const key = animeKeys.detail('anime-7', 1);
+        client.setQueryData(key, card(7, ENTRY));
+
+        patchAnimeListStatus(client, 7, { id: 50, episodes_watched: 6 });
+        expect(client.getQueryData(key).user_list_status).toEqual({ ...ENTRY, episodes_watched: 6, progress: 50 });
+
+        patchAnimeListStatus(client, 7, { id: 50, status: 'Completed' });
+        expect(client.getQueryData(key).user_list_status.status).toBe('Completed');
+        expect(client.getQueryData(key).user_list_status.episodes_watched).toBe(6);
+
+        patchAnimeListStatus(client, '7', null);
+        expect(client.getQueryData(key).user_list_status).toBeNull();
+    });
+
+    it('leaves episodes, characters and guest cards (no user_list_status) alone', () => {
+        const episodes = animeKeys.watchEpisodes('anime-3', 50);
+        const characters = animeKeys.characters('anime-3', 50);
+        const guest = animeKeys.trending('guest-home');
+        client.setQueryData(episodes, { pages: [{ results: [{ id: 7, title: 'Episode 7' }] }], pageParams: [1] });
+        client.setQueryData(characters, { pages: [{ results: [{ id: 7, name: 'Frieren' }] }], pageParams: [1] });
+        client.setQueryData(guest, [{ id: 7, slug: 'anime-7' }]);
+        const before = [episodes, characters, guest].map((key) => client.getQueryData(key));
+
+        patchAnimeListStatus(client, 7, ENTRY);
+
+        expect([episodes, characters, guest].map((key) => client.getQueryData(key))).toEqual(before);
+        [episodes, characters, guest].forEach((key, index) => {
+            expect(client.getQueryData(key)).toBe(before[index]);
+        });
+    });
+
+    it('never invalidates (no refetch of every grid)', () => {
+        client.setQueryData(animeKeys.detail('anime-7', 1), card(7));
+        const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+        patchAnimeListStatus(client, 7, ENTRY);
+
+        expect(invalidate).not.toHaveBeenCalled();
+    });
+});
+
 describe('queryOptions call the same endpoints as the inline queryFns did', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -298,12 +419,14 @@ describe('queryOptions call the same endpoints as the inline queryFns did', () =
         await expect(scheduleQueries.week(true, false).queryFn(fnContext)).resolves.toEqual({});
     });
 
-    it('navbarSearchQueries fetch the cache and a single search', async () => {
+    it('navbarSearchQueries run one server search and pass the abort signal', async () => {
         mocks.animeApi.getAll.mockResolvedValue({ data: { results: [{ id: 1 }] } });
-        await expect(navbarSearchQueries.cache().queryFn(fnContext)).resolves.toEqual([{ id: 1 }]);
-        expect(mocks.animeApi.getAll).toHaveBeenLastCalledWith({ page_size: 100 }, undefined);
-        await navbarSearchQueries.results('frieren').queryFn(fnContext);
-        expect(mocks.animeApi.getAll).toHaveBeenLastCalledWith({ q: 'frieren', page_size: 10 });
+        const signal = new AbortController().signal;
+        await expect(navbarSearchQueries.results('frieren', true).queryFn({ ...fnContext, signal }))
+            .resolves.toEqual([{ id: 1 }]);
+        expect(mocks.animeApi.getAll).toHaveBeenLastCalledWith({ q: 'frieren', page_size: 10 }, signal);
+        expect(navbarSearchQueries.results('frieren', true).queryKey).toEqual(['navbarSearch', 'results', 'frieren', true]);
+        expect(navbarSearchQueries).not.toHaveProperty('cache');
     });
 
     it('listQueries.byStatus falls back from results to data', async () => {

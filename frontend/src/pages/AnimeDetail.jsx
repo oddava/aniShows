@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { favoriteApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import SEOHelmet from '../components/SEOHelmet';
+import SEO from '../components/SEO';
+import AnimeDetailSEO from '../components/animeDetail/AnimeDetailSEO';
 import { AnimeDetailSkeleton } from '../components/skeletons';
 import {
     applyImageFallback,
@@ -15,7 +16,7 @@ import {
 } from '../utils/imageUtils';
 import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import logger from '../utils/logger';
-import { animeKeys, animeQueries } from '../api/queries/anime';
+import { animeKeys, animeQueries, patchAnimeListStatus } from '../api/queries/anime';
 import { favoriteKeys, listKeys, profileKeys, userKeys } from '../api/queries/user';
 import { DEFAULT_TAB_ID, TABS, getTabByPath, getTabHref } from '../components/animeDetail/animeDetailTabs';
 import TabButton from '../components/animeDetail/TabButton';
@@ -25,6 +26,7 @@ import AnimeDetailTabContent from '../components/animeDetail/AnimeDetailTabConte
 import ReviewsSection from '../components/animeDetail/ReviewsSection';
 import RecommendationsSidebar from '../components/animeDetail/RecommendationsSidebar';
 import useAnimeDetailTabData from '../components/animeDetail/useAnimeDetailTabData';
+import useNearViewport from '../components/animeDetail/useNearViewport';
 import useAnimeReviews from '../components/animeDetail/useAnimeReviews';
 import ErrorState from '../components/common/ErrorState';
 import useScrollFade from '../hooks/useScrollFade';
@@ -59,8 +61,18 @@ export default function AnimeDetail() {
         gcTime: 600000, // 10 minutes
     });
 
+    // Sidebar recommendations load once their column is about to show.
+    const [recommendationsRef, recommendationsNear] = useNearViewport({ resetKey: slug });
+
     // Tab data (characters, staff, episodes, ratings, recommendations) and reviews
-    const tabData = useAnimeDetailTabData({ slug, user, anime, activeTab, queryClient });
+    const tabData = useAnimeDetailTabData({
+        slug,
+        user,
+        anime,
+        activeTab,
+        queryClient,
+        loadRecommendations: recommendationsNear,
+    });
     const { watchEpisodesTotal, charactersTotal, staffTotal, recommendations } = tabData;
     const reviews = useAnimeReviews({ slug, anime, user, isAuthenticated, queryClient, animeDetailQueryKey });
 
@@ -125,12 +137,13 @@ export default function AnimeDetail() {
             };
         });
 
-        queryClient.invalidateQueries({ queryKey: animeKeys.all });
-        queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
+        // Every other cached card for this title (grids, shelves, schedule) gets
+        // the new status in place instead of a refetch of everything (B20).
+        patchAnimeListStatus(queryClient, anime?.id, nextEntry);
         queryClient.invalidateQueries({ queryKey: userKeys.watching });
         queryClient.invalidateQueries({ queryKey: listKeys.all });
         queryClient.invalidateQueries({ queryKey: profileKeys.own });
-    }, [animeDetailQueryKey, queryClient]);
+    }, [anime?.id, animeDetailQueryKey, queryClient]);
 
     useEffect(() => {
         setIsBannerLoaded(false);
@@ -150,6 +163,7 @@ export default function AnimeDetail() {
     if (isError || !anime) {
         return (
             <div className="min-h-[70vh] flex items-center justify-center px-4 pt-24">
+                <SEO page="notFound" noIndex />
                 {isNotFound ? (
                     <div className="ui-empty-state w-full max-w-lg">
                         <h1 className="text-lg font-semibold text-white mb-2">Anime not found</h1>
@@ -220,7 +234,7 @@ export default function AnimeDetail() {
             className="min-h-screen anime-detail-page"
             style={accentColor && !isRetro ? { '--anime-accent': accentColor } : { '--anime-accent': 'var(--color-accent)' }}
         >
-            <SEOHelmet anime={anime} />
+            <AnimeDetailSEO anime={anime} />
 
             {/* Banner */}
             <div className="relative h-[40vh] min-h-[300px] overflow-hidden bg-dark-200">
@@ -312,6 +326,7 @@ export default function AnimeDetail() {
                             anime={anime}
                             recommendations={recommendations}
                             accentColor={accentColor}
+                            containerRef={recommendationsRef}
                         />
                     </div>
                 </div>

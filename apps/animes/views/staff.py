@@ -1,40 +1,48 @@
-from django.db.models import Count, Exists, OuterRef, Prefetch
-from rest_framework.viewsets import ReadOnlyModelViewSet
+from django.db.models import Prefetch, QuerySet
 
 from ..models import AnimeCharacter, AnimeStaff, Staff, UserFavoriteStaff
 from ..serializers import StaffDetailSerializer
+from .characters import (
+    DETAIL_PERSON_FIELDS,
+    PERSON_FIELDS,
+    ROLE_ANIME_FIELDS,
+    CachedPersonDetailViewSet,
+    prefixed,
+    visible_anime_ids,
+)
 
 
-class StaffViewSet(ReadOnlyModelViewSet):
-    """Staff detail endpoint.  Only the retrieve (detail) action is meaningful;
-    the list action is intentionally disabled.
-    """
+class StaffViewSet(CachedPersonDetailViewSet):
+    """Staff detail endpoint (voice roles and production credits)."""
 
     serializer_class = StaffDetailSerializer
-    pagination_class = None
+    CACHE_PREFIX = "staff"
+    favorite_model = UserFavoriteStaff
+    favorite_field = "staff"
 
-    def get_queryset(self):
-        queryset = Staff.objects.prefetch_related(
-            Prefetch(
-                "voice_roles",
-                queryset=AnimeCharacter.objects.select_related("anime", "character").order_by(
-                    "-anime__release_date"
-                ),
-            ),
-            Prefetch(
-                "production_credits",
-                queryset=AnimeStaff.objects.select_related("anime").order_by(
-                    "-anime__release_date"
-                ),
-            ),
-        ).annotate(_favorite_count=Count("favorites", distinct=True))
-
-        user = self.request.user
-        if user.is_authenticated:
-            queryset = queryset.annotate(
-                _is_favorite=Exists(
-                    UserFavoriteStaff.objects.filter(user=user, staff=OuterRef("pk"))
-                )
+    def detail_queryset(self, can_view_adult_content: bool) -> QuerySet:
+        visible = visible_anime_ids(can_view_adult_content)
+        voice_roles = (
+            AnimeCharacter.objects.filter(anime__in=visible)
+            .select_related("anime", "character")
+            .only(
+                "id",
+                "role",
+                "anime_id",
+                "character_id",
+                "voice_actor_id",
+                *ROLE_ANIME_FIELDS,
+                *prefixed("character", PERSON_FIELDS),
             )
-
-        return queryset
+            .order_by("-anime__release_date", "id")
+        )
+        production_credits = (
+            AnimeStaff.objects.filter(anime__in=visible)
+            .select_related("anime")
+            .only("id", "role", "anime_id", "staff_id", *ROLE_ANIME_FIELDS)
+            .order_by("-anime__release_date", "id")
+        )
+        return Staff.objects.only(*DETAIL_PERSON_FIELDS).prefetch_related(
+            Prefetch("voice_roles", queryset=voice_roles),
+            Prefetch("production_credits", queryset=production_credits),
+        )

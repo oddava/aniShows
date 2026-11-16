@@ -16,3 +16,8 @@ it replaces base's value for every group (``test_seams_guard`` fails on it).
 Document every override in the group's spec.
 Empty in the prep commit: it changes nothing until the group adds to it.
 """
+
+# The longest a public-cache reader waits for another request that is building the
+# same payload, before it builds the payload itself (``apps/shared/public_cache.py``).
+# Caps ``PUBLIC_API_CACHE_WAIT_TIMEOUT_MS`` (base.py, 30000) without changing it (P0-2).
+PUBLIC_API_CACHE_WAIT_CAP_MS = 3000

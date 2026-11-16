@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { DEBOUNCED_FILTER_KEYS, FILTER_UPDATE_DEBOUNCE_MS } from './browseFilterOptions';
+import {
+  DEBOUNCED_FILTER_KEYS,
+  FILTER_UPDATE_DEBOUNCE_MS,
+  RELEVANCE_SORT,
+  stepSeason,
+} from './browseFilterOptions';
+
+/**
+ * The sort Browse sends (B1, P0-1). A search ranks by relevance unless the user
+ * picked a sort; without a search "relevance" ranks nothing, so it falls back
+ * to popular like an unset sort does.
+ */
+export function resolveBrowseSort(sortParam, search) {
+  if (sortParam && !(sortParam === RELEVANCE_SORT && !search)) return sortParam;
+  return search ? RELEVANCE_SORT : 'popular';
+}
 
 /**
  * The Browse filters, read from and written to the URL. Also keeps a local
@@ -18,8 +33,8 @@ export default function useBrowseUrlFilters() {
     searchParams.get('genre')?.split(',').filter(Boolean) || [],
     [searchParams]
   );
-  const currentSort = searchParams.get('sort') || 'popular';
   const currentSearch = searchParams.get('q') || '';
+  const currentSort = resolveBrowseSort(searchParams.get('sort'), currentSearch);
   const currentTypes = searchParams.get('type') || '';
   const currentStatuses = searchParams.get('status') || '';
   const currentStudio = searchParams.get('studio') || '';
@@ -174,6 +189,42 @@ export default function useBrowseUrlFilters() {
     } else {
       newParams.delete(key);
     }
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
+  // The empty state's "Search all anime for …": keep the query (and an explicit
+  // sort), drop every filter.
+  const searchWithoutFilters = useCallback(() => {
+    const newParams = new URLSearchParams();
+    const q = searchParams.get('q');
+    const sort = searchParams.get('sort');
+    if (q) newParams.set('q', q);
+    if (sort) newParams.set('sort', sort);
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
+  // "Best match" is what a search sorts by anyway, so choosing it drops `sort`.
+  const setSort = useCallback((value) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
+    if (!value || value === RELEVANCE_SORT) {
+      newParams.delete('sort');
+    } else {
+      newParams.set('sort', value);
+    }
+    setSearchParams(newParams);
+  }, [searchParams, setSearchParams]);
+
+  // The ‹ › buttons beside the season chip (P2-7): one season back or forward.
+  const stepSeasonParam = useCallback((direction) => {
+    const next = stepSeason(searchParams.get('season'), searchParams.get('year'), direction);
+    if (!next) return;
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('exclude_ids');
+    newParams.delete('min_year');
+    newParams.delete('max_year');
+    newParams.set('season', next.season);
+    newParams.set('year', next.year);
     setSearchParams(newParams);
   }, [searchParams, setSearchParams]);
 
@@ -351,7 +402,10 @@ export default function useBrowseUrlFilters() {
     hasActiveFilters,
     localFilters,
     clearAllFilters,
+    searchWithoutFilters,
     updateParam,
+    setSort,
+    stepSeason: stepSeasonParam,
     clearSeasonAndYear,
     clearYearRange,
     toggleArrayParam,

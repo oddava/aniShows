@@ -1,3 +1,4 @@
+import time
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -201,3 +202,78 @@ class AnimeDetailRecommendationsTests(APITestCase):
         self.assertTrue(response.data[0]["is_favorite"])
         self.assertEqual(response.data[0]["user_list_status"]["status"], "Watching")
         self.assertEqual(response.data[0]["user_list_status"]["episodes_watched"], 4)
+
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
+    def test_anilist_answer_is_kept_a_day_across_namespace_bumps(self, mock_get_recommendations):
+        """One AniList call per title per day (B18), whatever the catalog syncs flush."""
+        from ..services.public_anime_service import (
+            AnimePublicPayloadService,
+            AnimeQueryService,
+        )
+
+        mock_get_recommendations.return_value = [{"id": 300, "mal_id": 1300}]
+        url = reverse("anime-recommendations", args=[self.anime.slug])
+
+        first = self.client.get(url)
+        AnimePublicPayloadService.bump_collection_cache_namespace()  # an hourly sync
+        self.client.force_authenticate(user=self.user)  # the other adult-content variant too
+        second = self.client.get(url)
+
+        self.assertEqual(first["X-Cache-Status"], "miss")
+        self.assertEqual(second["X-Cache-Status"], "miss")
+        self.assertEqual([item["slug"] for item in second.data], [self.anilist_recommendation.slug])
+        mock_get_recommendations.assert_called_once()
+        cache_key = AnimeQueryService.anilist_recommendations_cache_key(self.anime)
+        self.assertEqual(cache.get(cache_key), [{"id": 300, "mal_id": 1300}])
+        # LocMemCache internals: the key's expiry timestamp.
+        expiry = cache._expire_info[cache.make_key(cache_key)]  # type: ignore[attr-defined]
+        self.assertGreater(expiry - time.time(), 23 * 60 * 60)
+
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
+    def test_a_failed_anilist_call_is_not_kept(self, mock_get_recommendations):
+        from ..services.public_anime_service import AnimeQueryService
+
+        mock_get_recommendations.side_effect = TimeoutError("AniList timed out")
+        response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
+
+        self.assertEqual(response["X-Cache-Status"], "degraded")
+        self.assertIsNone(
+            cache.get(AnimeQueryService.anilist_recommendations_cache_key(self.anime))
+        )
+
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
+    def test_unlinked_relations_are_excluded_by_anilist_id(self, mock_get_recommendations):
+        """A relation whose target is not linked locally still drops it by AniList ID (B29)."""
+        set_relations(
+            self.anime,
+            [
+                {"id": 200, "mal_id": 1200, "type": "SEQUEL", "title": "Frieren Season 2"},
+                {"id": 300, "mal_id": None, "type": "SIDE_STORY", "title": "Unlinked"},
+            ],
+        )
+        from ..models import AnimeRelation
+
+        AnimeRelation.objects.filter(from_anime=self.anime, target_anilist_id=300).update(
+            to_anime=None
+        )
+        mock_get_recommendations.return_value = [{"id": 300, "mal_id": 1300}]
+
+        response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
+
+        self.assertNotIn(self.anilist_recommendation.slug, [item["slug"] for item in response.data])
+
+    @patch(RECOMMENDATIONS_PATH, new_callable=MagicMock)
+    def test_a_mal_only_relation_no_longer_excludes_a_recommendation(
+        self, mock_get_recommendations
+    ):
+        """Jikan-era MAL-only relation rows are not an exclusion key any more (B29)."""
+        from ..models import AnimeRelation
+
+        AnimeRelation.objects.create(
+            from_anime=self.anime, relation_type="OTHER", target_mal_id=1300, title="MAL row"
+        )
+        mock_get_recommendations.return_value = [{"id": 300, "mal_id": 1300}]
+
+        response = self.client.get(reverse("anime-recommendations", args=[self.anime.slug]))
+
+        self.assertIn(self.anilist_recommendation.slug, [item["slug"] for item in response.data])

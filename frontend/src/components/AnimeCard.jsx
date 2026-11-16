@@ -14,7 +14,7 @@ import {
     isSameOriginImageUrl,
 } from '../utils/imageUtils';
 import logger from '../utils/logger';
-import { animeKeys, seasonalKeys } from '../api/queries/anime';
+import { patchAnimeListStatus } from '../api/queries/anime';
 import { listKeys, profileKeys, userKeys } from '../api/queries/user';
 
 const STATUS_OPTIONS = [
@@ -41,6 +41,17 @@ function getTimeRemainingLabel(dateString) {
     const days = Math.floor(hours / 24);
     return `${days}d ${hours % 24}h`;
 }
+
+// The `user_list_status` fields a saved list entry (the list API's response) carries.
+const LIST_STATUS_FIELDS = [
+    'id', 'status', 'score', 'episodes_watched', 'notes', 'started_at',
+    'finished_at', 'total_rewatches', 'is_rewatching',
+];
+
+const savedListFields = (saved) => {
+    if (!saved || typeof saved !== 'object') return {};
+    return Object.fromEntries(LIST_STATUS_FIELDS.filter((key) => key in saved).map((key) => [key, saved[key]]));
+};
 
 function AnimeCard({
     anime,
@@ -131,16 +142,23 @@ function AnimeCard({
         return [anime.anime_type, Number.isFinite(year) ? year : null].filter(Boolean).join(' · ') || null;
     }, [metaText, showMeta, anime.anime_type, anime.release_date]);
 
-    // Everything that shows this entry: anime grids, the user's lists and
-    // profile stats, and Home's "Currently Watching" shelf (its key is not
-    // under listKeys.all, so it needs its own invalidation).
-    const invalidateAfterListChange = useCallback(() => {
-        queryClient.invalidateQueries({ queryKey: animeKeys.all });
-        queryClient.invalidateQueries({ queryKey: seasonalKeys.all });
+    // Everything that shows this entry. Anime grids, shelves, the detail page
+    // and Schedule get the new state patched in place (no refetch, B20); the
+    // user's lists and profile stats, and Home's "Currently Watching" shelf (its
+    // key is not under listKeys.all) are refetched.
+    // `userListStatus`: the changed fields, or null when the entry was removed.
+    // The server's saved entry wins over what was sent: its normaliser may move
+    // progress or stamp dates (e.g. Completed fills episodes_watched).
+    const syncAfterListChange = useCallback((userListStatus, saved) => {
+        patchAnimeListStatus(
+            queryClient,
+            anime.id,
+            userListStatus && { ...userListStatus, ...savedListFields(saved) },
+        );
         queryClient.invalidateQueries({ queryKey: listKeys.all });
         queryClient.invalidateQueries({ queryKey: userKeys.watching });
         queryClient.invalidateQueries({ queryKey: profileKeys.own });
-    }, [queryClient]);
+    }, [queryClient, anime.id]);
 
     useEffect(() => {
         setImageLoaded(false);
@@ -224,12 +242,17 @@ function AnimeCard({
         setIsLoading(true);
         try {
             if (listId) {
-                await listApi.update(listId, { status: newStatus });
+                const response = await listApi.update(listId, { status: newStatus });
+                syncAfterListChange({ id: listId, status: newStatus }, response?.data);
             } else {
                 const response = await listApi.add({ anime_id: anime.id, status: newStatus });
                 setListId(response.data.id);
+                syncAfterListChange({
+                    id: response.data.id,
+                    status: newStatus,
+                    episodes_watched: 0,
+                }, response.data);
             }
-            invalidateAfterListChange();
         } catch (error) {
             logger.error('Error updating list:', error);
             setListStatus(previousStatus);
@@ -237,7 +260,7 @@ function AnimeCard({
         } finally {
             setIsLoading(false);
         }
-    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, invalidateAfterListChange]);
+    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, syncAfterListChange]);
 
     const handleRemoveFromList = useCallback(async (e) => {
         e.preventDefault();
@@ -255,7 +278,7 @@ function AnimeCard({
         setIsLoading(true);
         try {
             await listApi.remove(previousId);
-            invalidateAfterListChange();
+            syncAfterListChange(null);
         } catch (error) {
             logger.error('Error removing from list:', error);
             setListStatus(previousStatus);
@@ -263,7 +286,7 @@ function AnimeCard({
         } finally {
             setIsLoading(false);
         }
-    }, [listId, listStatus, isLoading, invalidateAfterListChange]);
+    }, [listId, listStatus, isLoading, syncAfterListChange]);
 
     const handleQuickProgress = useCallback(async (e) => {
         e.preventDefault();
@@ -277,15 +300,15 @@ function AnimeCard({
 
         try {
             const entryId = userListEntry?.id || listId;
-            await listApi.update(entryId, { episodes_watched: newEpisodes });
-            invalidateAfterListChange();
+            const response = await listApi.update(entryId, { episodes_watched: newEpisodes });
+            syncAfterListChange({ id: entryId, episodes_watched: newEpisodes }, response?.data);
         } catch (error) {
             logger.error("Failed to update progress", error);
             setLocalEpisodesWatched(previousEpisodes);
         } finally {
             setIsLoading(false);
         }
-    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, invalidateAfterListChange]);
+    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, syncAfterListChange]);
 
     const toggleStatusMenu = useCallback((e) => {
         e.preventDefault();
