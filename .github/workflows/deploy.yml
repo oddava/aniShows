@@ -40,6 +40,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # The production stack must parse in every mode before anything ships
+      # (env_file .env is required by the services, so an empty one stands in).
+      - name: Lint production compose files
+        run: |
+          set -euo pipefail
+          : > .env
+          for profiles in "" bundled-db analytics tunnel "bundled-db,analytics,tunnel"; do
+            COMPOSE_PROFILES="$profiles" docker compose -f docker-compose.prod.yml config -q
+            COMPOSE_PROFILES="$profiles" docker compose -f docker-compose.prod.yml -f infra/compose/public-ports.yml config -q
+          done
+          docker compose -f docker-compose.prod.yml -f infra/compose/loopback-port.yml config -q
+          docker compose -f docker-compose.prod.yml -f infra/compose/shared-tunnel-network.yml config -q
+          bash -n deploy-prod.sh backups/entrypoint.sh backups/shell/*.sh scripts/deploy/*.sh
+          rm .env
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -75,6 +90,9 @@ jobs:
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
+          # Sentry release, readiness cache key and image revision label.
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 

@@ -3,10 +3,13 @@ set -Eeuo pipefail
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
-TYPE="${1:-manual}" # manual, daily, weekly, pre-restore
+TYPE="${1:-manual}" # manual, daily, weekly, pre-restore, pre-migrate
 LOCK_DIR="$BACKUP_DIR/.backup.lock"
-# Backups of each group (regular, pre-restore) to keep, the new one included.
+# Backups of each group (regular, pre-restore, pre-migrate) to keep, the new
+# one included. Pre-migrate dumps (deploy-prod.sh, before a schema change) are
+# rotated on their own, so daily backups never push them out.
 KEEP="${BACKUP_KEEP:-1}"
+KEEP_PRE_MIGRATE="${BACKUP_KEEP_PRE_MIGRATE:-3}"
 
 DB_HOST="${POSTGRES_HOST:-db}"
 DB_PORT="${POSTGRES_PORT:-5432}"
@@ -20,6 +23,13 @@ SKIP_LOCK="${BACKUP_SKIP_LOCK:-0}"
 OUTPUT_PATH_FILE="${BACKUP_OUTPUT_PATH_FILE:-}"
 MEDIA_COMPRESS_LEVEL="${BACKUP_MEDIA_COMPRESS_LEVEL:-1}"
 MEDIA_RSYNC_PASSES="${BACKUP_MEDIA_RSYNC_PASSES:-2}"
+
+# Optional off-site copy (rclone remote path, e.g. "offsite:anishows-backups").
+# The remote is configured by RCLONE_CONFIG_<NAME>_* variables in .env (see
+# docs/backups.md); unset = local only. Copies older than
+# BACKUP_REMOTE_KEEP_DAYS are deleted from the remote.
+REMOTE="${BACKUP_REMOTE:-}"
+REMOTE_KEEP_DAYS="${BACKUP_REMOTE_KEEP_DAYS:-30}"
 
 CURRENT_BACKUP_DIR=""
 WORK_DIR=""
@@ -95,6 +105,11 @@ backup_db() {
         --no-owner \
         --no-privileges \
         --file "$out_file"
+    # A truncated or corrupt archive fails here, not on the day of a restore.
+    if ! pg_restore --list "$out_file" >/dev/null; then
+        echo "Error: pg_restore cannot read the new dump ($out_file)." >&2
+        exit 1
+    fi
 }
 
 backup_media() {
@@ -181,13 +196,17 @@ EOF
 # imported backups (named *-imported) are never rotated.
 prune_previous_backups() {
     local group_pattern
+    local keep="$KEEP"
     if [ "$TYPE" = "pre-restore" ]; then
         group_pattern='^[0-9]{8}_[0-9]{6}-pre-restore$'
+    elif [ "$TYPE" = "pre-migrate" ]; then
+        group_pattern='^[0-9]{8}_[0-9]{6}-pre-migrate$'
+        keep="$KEEP_PRE_MIGRATE"
     else
         group_pattern='^[0-9]{8}_[0-9]{6}-(manual|daily|weekly)$'
     fi
 
-    log "Keeping the newest $KEEP backup(s) of this kind..."
+    log "Keeping the newest $keep backup(s) of this kind..."
     local path name
     local -a group=()
     for path in "$BACKUP_DIR"/*/; do
@@ -196,14 +215,37 @@ prune_previous_backups() {
             group+=("$name")
         fi
     done
-    if [ "${#group[@]}" -le "$KEEP" ]; then
+    if [ "${#group[@]}" -le "$keep" ]; then
         return
     fi
     # Names start with the timestamp, so a reverse sort is newest first.
-    printf '%s\n' "${group[@]}" | sort -r | tail -n +"$((KEEP + 1))" | while IFS= read -r name; do
+    printf '%s\n' "${group[@]}" | sort -r | tail -n +"$((keep + 1))" | while IFS= read -r name; do
         log "Removing old backup $name"
         rm -rf "${BACKUP_DIR:?}/$name"
     done
+}
+
+# Copy the finished backup off this host. A failure leaves the local backup in
+# place and makes the run fail, so cron mail / the deploy log shows it.
+upload_offsite() {
+    if [ -z "$REMOTE" ]; then
+        return 0
+    fi
+    require_command rclone
+    local name
+    name="$(basename "$CURRENT_BACKUP_DIR")"
+    log "Uploading $name to off-site remote $REMOTE..."
+    if ! rclone copy --checksum --no-traverse "$CURRENT_BACKUP_DIR" "$REMOTE/$name"; then
+        echo "Error: off-site upload to $REMOTE failed; the local backup is kept." >&2
+        return 1
+    fi
+    if ! rclone check --one-way "$CURRENT_BACKUP_DIR" "$REMOTE/$name"; then
+        echo "Error: off-site copy of $name does not match the local files." >&2
+        return 1
+    fi
+    log "Off-site copy verified. Removing remote copies older than ${REMOTE_KEEP_DAYS} days..."
+    rclone delete --min-age "${REMOTE_KEEP_DAYS}d" "$REMOTE" || log "Warning: remote retention cleanup failed."
+    rclone rmdirs --leave-root "$REMOTE" >/dev/null 2>&1 || true
 }
 
 main() {
@@ -225,6 +267,8 @@ main() {
     fi
     assert_numeric_positive "$MEDIA_RSYNC_PASSES" "BACKUP_MEDIA_RSYNC_PASSES"
     assert_numeric_positive "$KEEP" "BACKUP_KEEP"
+    assert_numeric_positive "$KEEP_PRE_MIGRATE" "BACKUP_KEEP_PRE_MIGRATE"
+    assert_numeric_positive "$REMOTE_KEEP_DAYS" "BACKUP_REMOTE_KEEP_DAYS"
 
     mkdir -p "$BACKUP_DIR"
     acquire_lock
@@ -251,6 +295,7 @@ main() {
         printf '%s\n' "$CURRENT_BACKUP_DIR" >"$OUTPUT_PATH_FILE"
     fi
     prune_previous_backups
+    upload_offsite
 }
 
 main "$@"

@@ -19,7 +19,8 @@
 # Postgres), ANALYTICS_ENABLED (auto: on when UMAMI_DOMAIN is set),
 # TUNNEL_TOKEN, TUNNEL_EXTERNAL=1 (cloudflared runs outside this stack),
 # COMPOSE_EXTRA_FILES (space-separated override files), PUBLIC_BASE_URL,
-# SKIP_ANILIST_SMOKE=1, SKIP_PRE_MIGRATE_BACKUP=1, ALLOW_INSECURE_DEFAULTS=1
+# SKIP_ANILIST_SMOKE=1, SKIP_PRE_MIGRATE_BACKUP=1, SKIP_PULL=1 (local images:
+# dry runs, air-gapped hosts), ALLOW_INSECURE_DEFAULTS=1
 # (one run past the secret refusals), PRUNE_IMAGES (default 1: only images
 # labelled app.anishows.component). Every variable: .env.production.example.
 
@@ -296,10 +297,15 @@ if [ -n "$current_web" ]; then
     PREVIOUS_WEB_IMAGE="$(docker inspect --format '{{.Image}}' "$current_web" 2>/dev/null || true)"
 fi
 
-step "Pulling images"
-"${COMPOSE[@]}" pull --ignore-buildable
+if [ "${SKIP_PULL:-0}" = 1 ]; then
+    step "Images: local only (SKIP_PULL=1)"
+    docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || die "$FRONTEND_IMAGE is not present locally"
+else
+    step "Pulling images"
+    "${COMPOSE[@]}" pull --ignore-buildable
+    docker pull "$FRONTEND_IMAGE"
+fi
 "${COMPOSE[@]}" build backup
-docker pull "$FRONTEND_IMAGE"
 
 step "Core services"
 core_services=(redis minio)
@@ -399,7 +405,11 @@ step "Frontend: ${FRONTEND_IMAGE}"
 # After the backend, and copied over the old build instead of wiping it: open
 # tabs still load their old hashed chunks, and index.html (copied last) never
 # points at assets that are not there yet. Chunks unused for a week go.
-docker volume create "$FRONTEND_VOLUME" >/dev/null
+# Labelled as compose's own volume, so compose does not warn about it.
+docker volume create \
+    --label "com.docker.compose.project=${PROJECT}" \
+    --label com.docker.compose.volume=frontend_dist \
+    "$FRONTEND_VOLUME" >/dev/null
 docker run --rm -v "${FRONTEND_VOLUME}:/srv/frontend" "$FRONTEND_IMAGE" sh -c '
     set -e
     mkdir -p /srv/frontend/assets
@@ -411,7 +421,7 @@ docker run --rm -v "${FRONTEND_VOLUME}:/srv/frontend" "$FRONTEND_IMAGE" sh -c '
 ok "frontend files deployed"
 
 step "Clearing application cache"
-"${COMPOSE[@]}" exec -T web python -c "from django.core.cache import cache; cache.clear()" \
+"${COMPOSE[@]}" exec -T web python manage.py shell -c "from django.core.cache import cache; cache.clear()" \
     && ok "cache cleared" || warn "cache clear failed (continuing)"
 
 step "Caddy (${CADDY_MODE} mode)"
@@ -463,7 +473,8 @@ fetch_retry /api/v1/health/ | grep -q '"status"' || die "API liveness check fail
 ok "liveness"
 # Readiness straight from a web replica: through Caddy it is behind the D-9
 # gate, and host traffic reaches Caddy from the Docker gateway, not loopback.
-"${COMPOSE[@]}" exec -T web curl -fsS http://localhost:8000/api/v1/health/ready/     | grep -q '"database": *true' || die "readiness check failed (database, cache or migrations)"
+"${COMPOSE[@]}" exec -T web curl -fsS http://localhost:8000/api/v1/health/ready/ \
+    | grep -q '"database": *true' || die "readiness check failed (database, cache or migrations)"
 ok "readiness"
 html="$(fetch_retry / || true)"
 echo "$html" | grep -q 'id="root"' || die "homepage did not return the SPA"

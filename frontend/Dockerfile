@@ -6,6 +6,9 @@
 # ============================================================================
 FROM node:20-alpine AS base
 
+# deploy-prod.sh prunes only images carrying this label (shared host).
+LABEL app.anishows.component="frontend"
+
 WORKDIR /app
 
 # Copy package files

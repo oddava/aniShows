@@ -17,7 +17,8 @@ ENV_EXAMPLE = .env.example
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
         clean prune cleanup-media backup backups backup-export backup-import exports \
         verify-backup restore restore-db-only restore-media-only load-browse \
-        load-api-smoke load-api-standard load-api-micro bench-api
+        load-api-smoke load-api-standard load-api-micro bench-api \
+        prod-config prod-backup prod-verify-backup check-migrations-reversible
 
 # ============================================================================
 # Service Management
@@ -356,6 +357,31 @@ restore-media-only:             ## Restore media only (Usage: make restore-media
 	docker compose start $$services; \
 	if [ $$restore_status -ne 0 ]; then exit $$restore_status; fi
 	docker compose run --rm createbuckets
+
+# ============================================================================
+# Production stack (docker-compose.prod.yml; run on the server from the repo
+# root, see docs/deploy/runbook.md). deploy-prod.sh is the deploy itself.
+# ============================================================================
+
+PROD_COMPOSE = docker compose -f docker-compose.prod.yml
+
+prod-config:                    ## Validate docker-compose.prod.yml for every profile and override combination
+	@set -e; for profiles in "" bundled-db analytics tunnel "bundled-db,analytics,tunnel"; do \
+		COMPOSE_PROFILES="$$profiles" $(PROD_COMPOSE) config -q; \
+		COMPOSE_PROFILES="$$profiles" $(PROD_COMPOSE) -f infra/compose/public-ports.yml config -q; \
+		echo "ok: profiles=[$$profiles]"; \
+	done
+
+prod-backup:                    ## Production: backup now (DB + media; off-site too when BACKUP_REMOTE is set)
+	$(PROD_COMPOSE) exec backup bash -c '. /app/cron.env && /app/shell/backup.sh manual'
+
+prod-verify-backup:             ## Production: restore a backup into a throwaway DB and run the app against it (TIMESTAMP=... optional)
+	bash scripts/deploy/verify_backup.sh $(TIMESTAMP)
+
+check-migrations-reversible:    ## Every migration since BASE (default revamp/base) reverses and re-applies on the test DB
+	@leaves="$$(bash scripts/deploy/check_migrations_reversible.sh --print-base-leaves $(or $(BASE),revamp/base))"; \
+	docker compose --profile test run --rm -e MIGRATION_BASE_LEAVES="$$leaves" test \
+		bash scripts/deploy/check_migrations_reversible.sh
 
 # ============================================================================
 # Help
