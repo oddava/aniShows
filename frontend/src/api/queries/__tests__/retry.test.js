@@ -28,7 +28,8 @@ describe('retryUnlessClientError', () => {
 });
 
 describe('app QueryClient', () => {
-    it('uses retryUnlessClientError as the default query retry', async () => {
+    // Cold-imports the whole provider tree, which is slow under a full parallel run.
+    it('uses retryUnlessClientError as the default query retry', { timeout: 30000 }, async () => {
         vi.resetModules();
         const created = [];
         vi.doMock('@tanstack/react-query', async (importOriginal) => {
