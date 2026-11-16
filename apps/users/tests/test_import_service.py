@@ -543,6 +543,28 @@ class ImportLifecycleTests(ImportTestMixin, TestCase):
         self.assertTrue(job.failure_reason.startswith("Took too long; "))
         self.assertIn("of 2 processed. Run it again to continue.", job.failure_reason)
 
+    def test_soft_time_limit_while_storing_a_title_is_reraised(self):
+        # Storing a fetched title (cast, images) is the slowest step (council M3).
+        fetcher = FakeFetcher([anilist_row(77)], media=[media_item(77)])
+        job = self.make_job()
+        with (
+            patch.object(base_module, "save_media", side_effect=SoftTimeLimitExceeded),
+            self.assertRaises(SoftTimeLimitExceeded),
+        ):
+            AniListImporter(job, "remote-name", fetcher=fetcher).run()
+        job.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.failed)
+        self.assertTrue(job.failure_reason.startswith("Took too long; "))
+
+    def test_database_error_leaves_the_job_for_the_task_retry(self):
+        fetcher = FakeFetcher()
+        fetcher.fetch_list_collection = Mock(side_effect=OperationalError("db down"))
+        job = self.make_job()
+        with self.assertRaises(OperationalError):
+            AniListImporter(job, "remote-name", fetcher=fetcher).run()
+        job.refresh_from_db()
+        self.assertEqual((job.status, job.failure_reason), (JobStatus.processing, ""))
+
     def test_private_and_missing_lists_fail_with_a_clear_reason(self):
         for message, code in (("Private User", "private"), ("User not found", "not_found")):
             fetcher, _ = graphql_transport(

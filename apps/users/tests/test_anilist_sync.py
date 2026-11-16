@@ -19,7 +19,8 @@ from ..models import UserAnimeList, UserImportJob, UserListLink, UserProfile
 from ..services.celery_tasks import UserTaskService
 from ..services.import_service import anilist_sync
 from ..services.import_service.anilist import AniListImporter
-from ..services.import_service.anilist_fetch import USER_MESSAGES
+from ..services.import_service.anilist_fetch import USER_MESSAGES, AniListFetchError
+from ..services.import_service.base import BaseImporter
 from .test_import_service import (
     FakeFetcher,
     ImportTestMixin,
@@ -387,3 +388,80 @@ class DailySyncTests(TestCase):
             },
         )
         self.assertEqual(entry["options"], {"queue": "low_priority"})
+
+
+class CursorTests(ImportTestMixin, TestCase):
+    """The incremental cursor never moves past an entry left for later (council M2)."""
+
+    def setUp(self):
+        super().setUp()
+        self.link = UserListLink.objects.create(
+            user=self.user, external_username="remote-name", cursor_updated_at=200
+        )
+        make_anime(1, anilist_id=11)
+
+    def sync(self, fetcher):
+        job, result = self.run_anilist(fetcher, mode=UserImportJob.ImportMode.incremental)
+        self.link.refresh_from_db()
+        return job, result
+
+    def test_entry_past_the_catalog_cap_holds_the_cursor_below_it(self):
+        rows = [anilist_row(11, updated=900, progress=1), anilist_row(55, updated=800)]
+        with patch.object(BaseImporter, "MAX_UNKNOWN_FETCHES", 0):
+            _job, result = self.sync(FakeFetcher(recent=rows))
+
+        self.assertEqual(result["outcome"], "completed")
+        self.assertEqual(self.link.cursor_updated_at, 799)
+
+    def test_anilist_busy_during_the_catalog_fetch_holds_the_cursor(self):
+        fetcher = FakeFetcher(recent=[anilist_row(11, updated=900), anilist_row(55, updated=850)])
+
+        def busy(**_ids):
+            raise AniListFetchError("rate_limited", "busy")
+            yield  # pragma: no cover - makes this a generator like the real one
+
+        fetcher.fetch_media_by_ids = busy
+        self.sync(fetcher)
+
+        self.assertEqual(self.link.cursor_updated_at, 849)
+
+    def test_titles_anilist_does_not_have_do_not_hold_the_cursor(self):
+        rows = [anilist_row(11, updated=900), anilist_row(55, updated=800)]
+        self.sync(FakeFetcher(recent=rows))  # 55 is fetched and not found: permanent
+
+        self.assertEqual(self.link.cursor_updated_at, 900)
+
+    def test_cursor_never_goes_back(self):
+        rows = [anilist_row(55, updated=201)]
+        with patch.object(BaseImporter, "MAX_UNKNOWN_FETCHES", 0):
+            self.sync(FakeFetcher(recent=rows))
+
+        self.assertEqual(self.link.cursor_updated_at, 200)
+
+    @patch("apps.users.services.import_service.anilist_fetch.time.sleep")
+    def test_anilist_outage_is_reported_but_not_counted_as_a_strike(self, _sleep):
+        fetcher, _ = graphql_transport(lambda q, v: httpx.Response(503, json={}))
+        UserListLink.objects.filter(pk=self.link.pk).update(consecutive_failures=2)
+        job, _ = self.sync(fetcher)
+
+        self.assertEqual(job.status, JobStatus.failed)
+        self.assertEqual(self.link.consecutive_failures, 2)
+        self.assertEqual(self.link.last_error, USER_MESSAGES["unavailable"])
+
+
+class DailySyncFailureTests(TestCase):
+    def test_a_crashed_sync_job_is_failed_not_left_processing(self):
+        user = User.objects.create_user(username="crash", email="crash@example.com", password="x")
+        User.objects.filter(pk=user.pk).update(last_login=timezone.now())
+        UserListLink.objects.create(user=user, external_username="crash", auto_sync=True)
+
+        def factory(job, link):
+            importer = Mock()
+            importer.run.side_effect = RuntimeError("boom")
+            return importer
+
+        anilist_sync.sync_linked_lists(importer_factory=factory)
+
+        job = UserImportJob.objects.get(user=user)
+        self.assertEqual(job.status, JobStatus.failed)
+        self.assertTrue(job.failure_reason)

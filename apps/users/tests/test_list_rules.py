@@ -297,3 +297,45 @@ class UserTodayTests(SimpleTestCase):
         )
 
         self.assertEqual(result["finished_at"], date(2026, 11, 17))
+
+
+class AutomaticDateTests(SimpleTestCase):
+    """Automatic dates fit around stored ones; they never move a stored date (council M1)."""
+
+    FINISHED = date(2020, 5, 1)
+
+    def completed(self):
+        return entry(status=Status.completed, episodes_watched=12, finished_at=self.FINISHED)
+
+    def test_rewatch_of_an_entry_finished_long_ago_keeps_its_finish_date(self):
+        result = normalize(self.completed(), {"is_rewatching": True})
+
+        self.assertEqual(result["status"], Status.watching)
+        self.assertNotIn("finished_at", result)
+        self.assertIsNone(result.get("started_at"))
+
+    def test_lowering_progress_keeps_the_finish_date(self):
+        result = normalize(self.completed(), {"episodes_watched": 5})
+
+        self.assertEqual(result["status"], Status.watching)
+        self.assertNotIn("finished_at", result)
+        self.assertIsNone(result.get("started_at"))
+
+    def test_back_to_watching_keeps_the_finish_date(self):
+        result = normalize(self.completed(), {"status": Status.watching})
+
+        self.assertNotIn("finished_at", result)
+        self.assertIsNone(result.get("started_at"))
+
+    def test_watching_still_gets_a_start_date_without_a_past_finish(self):
+        result = normalize(entry(status=Status.plan_to_watch), {"status": Status.watching})
+
+        self.assertEqual(result["started_at"], TODAY)
+
+    def test_invented_finish_date_never_precedes_a_start_date_of_tomorrow(self):
+        tomorrow = date(2026, 11, 17)
+        result = normalize(
+            entry(status=Status.watching, started_at=tomorrow), {"status": Status.completed}
+        )
+
+        self.assertEqual(result["finished_at"], tomorrow)

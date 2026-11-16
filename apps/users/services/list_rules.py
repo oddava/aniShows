@@ -187,19 +187,26 @@ def normalize_entry(
         if becoming_completed and strict:
             finished = result.get("finished_at", current.finished_at)
             if finished is None:
-                result["finished_at"] = today
+                started = result.get("started_at", current.started_at)
+                # A start date may be up to tomorrow; the invented finish never precedes it.
+                result["finished_at"] = max(today, started) if started else today
 
     if status == Status.watching and strict and current.status != Status.watching:
         started = result.get("started_at", current.started_at)
-        if started is None:
+        finished = result.get("finished_at", current.finished_at)
+        # Invent a start date only where it fits: an entry finished in the past (a
+        # rewatch of an imported title) keeps its finish date and gets no start date.
+        if started is None and (finished is None or finished >= today):
             result["started_at"] = today
 
     started = result.get("started_at", current.started_at)
     finished = result.get("finished_at", current.finished_at)
     if started and finished and finished < started:
-        if strict and ("finished_at" in attrs or "started_at" in attrs):
+        # Automatic dates are placed so they never break the order, and stored rows
+        # satisfy the CHECK constraint, so a sent date is the cause here.
+        if strict:
             raise ListRuleError("finished_at", "Finish date cannot be earlier than start date.")
-        # An automatic date never breaks the order: it moves to the start date.
+        # Imports: a source with crossed dates keeps the start and drops the finish order.
         result["finished_at"] = started
 
     result["status"] = status

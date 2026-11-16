@@ -27,7 +27,7 @@ from typing import Any
 
 from celery.exceptions import SoftTimeLimitExceeded
 from django.core.cache import cache
-from django.db import transaction
+from django.db import InterfaceError, OperationalError, transaction
 from django.utils import timezone
 
 from ....animes.models import Anime
@@ -44,6 +44,9 @@ from .entries import (
     ImportedEntry,
 )
 
+RETRY_REASONS = frozenset({REASON_NOT_IN_CATALOG_YET, REASON_INVALID})
+RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
+
 ACTIVE_STATUSES = (UserImportJob.ImportStatus.pending, UserImportJob.ImportStatus.processing)
 # Fields an import writes on an existing entry.
 ENTRY_FIELDS = (
@@ -59,7 +62,15 @@ ENTRY_FIELDS = (
 
 
 class ImportSourceError(Exception):
-    """The source cannot be read (unknown user, private list, bad file): fail with this message."""
+    """The source cannot be read (unknown user, private list, bad file): fail with this message.
+
+    ``transient`` marks a failure of the source itself (busy, down), not of the user's
+    list, so a linked account is not penalised for it.
+    """
+
+    def __init__(self, message: str, *, transient: bool = False):
+        super().__init__(message)
+        self.transient = transient
 
 
 class ImportCancelledError(Exception):
@@ -97,6 +108,9 @@ class BaseImporter:
         self._to_create: list[UserAnimeList] = []
         self._to_update: list[UserAnimeList] = []
         self._touched_anime_ids: set[int] = set()
+        # Entries left out for a reason that may pass (catalog cap, AniList busy, a bad
+        # payload, an entry error): an incremental sync must not move its cursor past them.
+        self.retry_entries: list[ImportedEntry] = []
         self._last_flush = 0.0
         self._today = user_today(self.user)
 
@@ -139,6 +153,8 @@ class BaseImporter:
 
     def _record_unmatched(self, entry: ImportedEntry, reason: str) -> None:
         self.failed_count += 1
+        if reason in RETRY_REASONS:
+            self.retry_entries.append(entry)
         if len(self.unmatched) < self.MAX_UNMATCHED_STORED:
             self.unmatched.append(entry.unmatched(reason))
 
@@ -271,6 +287,8 @@ class BaseImporter:
                         with transaction.atomic():
                             resolved[entry.key()] = save_media(self._get_persistence(), item)
                         self.fetched_count += 1
+                    except SoftTimeLimitExceeded:
+                        raise
                     except Exception:
                         logger.warning(
                             "Could not store an imported title",
@@ -399,6 +417,7 @@ class BaseImporter:
         cap = int(settings.MAX_IMPORT_XML_ENTRIES)
         if len(entries) > cap:
             self.errors.append(f"Only the first {cap} entries were imported.")
+            self.retry_entries.extend(entries[cap:])
             entries = entries[:cap]
         self.total_count = len(entries)
         self.flush(force=True)
@@ -432,6 +451,7 @@ class BaseImporter:
                 except Exception as exc:
                     logger.warning("Import entry failed", exc_info=True)
                     self.failed_count += 1
+                    self.retry_entries.append(entry)
                     self.errors.append(f"{entry.title or 'Unknown'}: {exc}")
             self.write_pending()
             self._tick()
@@ -521,6 +541,12 @@ class BaseImporter:
                 f"Took too long; {self.processed_count} of {self.total_count} processed. "
                 "Run it again to continue."
             )
+            raise
+        except RETRYABLE_DB_ERRORS:
+            # The database dropped out: leave the job processing so the task's retry
+            # resumes it (the merge skips what was already written); the task fails
+            # the job if the retries run out.
+            outcome = "retrying"
             raise
         except Exception:
             outcome = "failed"

@@ -168,6 +168,30 @@ def due_links(now=None):
     )
 
 
+def _claim_sync_job(link: UserListLink) -> UserImportJob | None:
+    """Create the daily job under the same user lock as a manual import, or ``None``.
+
+    A user with an import already running is skipped (it syncs tomorrow), so the
+    daily step can never race a manual import into two active jobs.
+    """
+    user_model = link.user.__class__
+    with transaction.atomic():
+        user_model.objects.select_for_update().filter(pk=link.user_id).first()
+        if UserImportJob.objects.filter(
+            user_id=link.user_id,
+            status__in=(UserImportJob.ImportStatus.pending, UserImportJob.ImportStatus.processing),
+        ).exists():
+            return None
+        return UserImportJob.objects.create(
+            user=link.user,
+            source=UserImportJob.ImportSource.anilist,
+            source_identifier=link.external_username,
+            mode=UserImportJob.ImportMode.incremental,
+            status=UserImportJob.ImportStatus.processing,
+            started_at=timezone.now(),
+        )
+
+
 def sync_linked_lists(*, importer_factory=None) -> dict[str, int]:
     """The daily step: incremental sync of each due link, sequentially, in this task.
 
@@ -179,29 +203,23 @@ def sync_linked_lists(*, importer_factory=None) -> dict[str, int]:
     factory = importer_factory or (lambda job, link: AniListImporter(job, link.external_username))
     counts = {"synced": 0, "failed": 0, "skipped": 0}
     for link in due_links():
-        if UserImportJob.objects.filter(
-            user=link.user,
-            status__in=(UserImportJob.ImportStatus.pending, UserImportJob.ImportStatus.processing),
-        ).exists():
+        job = _claim_sync_job(link)
+        if job is None:
             counts["skipped"] += 1
             continue
-        job = UserImportJob.objects.create(
-            user=link.user,
-            source=UserImportJob.ImportSource.anilist,
-            source_identifier=link.external_username,
-            mode=UserImportJob.ImportMode.incremental,
-            status=UserImportJob.ImportStatus.processing,
-            started_at=timezone.now(),
-        )
         try:
             result = factory(job, link).run()
         except SoftTimeLimitExceeded:
             counts["failed"] += 1
             logger.warning("Daily AniList sync stopped at the time limit", extra=counts)
             break
-        except Exception:
+        except Exception as exc:
             counts["failed"] += 1
             logger.exception("Daily AniList sync failed", extra={"link_id": link.pk})
+            # No task retry here: end the job now rather than leave it processing.
+            from ..celery_tasks import UserTaskService
+
+            UserTaskService.mark_import_job_failed(job_id=job.pk, error_message=str(exc))
             continue
         counts["synced" if result.get("outcome") == "completed" else "failed"] += 1
     logger.info("Daily AniList sync finished", extra=counts)
