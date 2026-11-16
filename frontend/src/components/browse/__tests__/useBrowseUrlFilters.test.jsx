@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import useBrowseUrlFilters, { resolveBrowseSort } from '../useBrowseUrlFilters';
 import useBrowseAnimeList from '../useBrowseAnimeList';
 import SortSelect from '../SortSelect';
-import { getSortOptions } from '../browseFilterOptions';
+import { getSortOptions, TYPE_OPTIONS } from '../browseFilterOptions';
 import { usePrefetchAnime } from '../../../hooks/usePrefetchAnime';
 import { animeKeys } from '../../../api/queries/anime';
 
@@ -82,6 +82,14 @@ describe('useBrowseUrlFilters sort', () => {
         expect(searchOf().has('sort')).toBe(false);
         expect(searchOf().get('q')).toBe('frieren');
         expect(result.current.currentSort).toBe('relevance');
+    });
+});
+
+describe('TYPE_OPTIONS (B24, P2-1)', () => {
+    it('offers every type the backend accepts', () => {
+        // Backend VALID_TYPES: tv, movie, ova, ona, special, music (compared lowercased).
+        expect(TYPE_OPTIONS.map((o) => o.value.toLowerCase()).sort())
+            .toEqual(['movie', 'music', 'ona', 'ova', 'special', 'tv']);
     });
 });
 

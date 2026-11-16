@@ -19,8 +19,10 @@ export const getSortOptions = (hasSearch) => (
 export const TYPE_OPTIONS = [
   { value: 'TV', label: 'TV Series' },
   { value: 'Movie', label: 'Movie' },
+  { value: 'ONA', label: 'ONA' },
   { value: 'OVA', label: 'OVA' },
   { value: 'Special', label: 'Special' },
+  { value: 'Music', label: 'Music' },
 ];
 
 export const STATUS_OPTIONS = [
