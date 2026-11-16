@@ -73,9 +73,14 @@ def update_thread(serializer, *, request) -> Thread:
     """Apply an edit (author) or a category move (staff, audited)."""
     thread = serializer.instance
     previous_content = thread.content
-    previous_category_id = thread.category_id
     edit = _edit_marker(thread, serializer.validated_data, ("title", "content"))
     with transaction.atomic():
+        # Locked so two concurrent staff moves can't both count the same old category.
+        previous_category_id = (
+            Thread.objects.select_for_update()
+            .values_list("category_id", flat=True)
+            .get(pk=thread.pk)
+        )
         thread = serializer.save(**edit)
         if thread.category_id != previous_category_id:
             _move_thread(thread, previous_category_id)
@@ -320,7 +325,7 @@ def delete_post(instance: Post, *, actor) -> None:
         if not post.replies.exists():
             post.delete()
         elif not post.is_removed:
-            mark_post_removed(post, removed_by=actor)
+            mark_post_removed(post, removed_by=actor, by_author=True)
 
 
 def toggle_post_like(post: Post, user) -> ForumActionResult:

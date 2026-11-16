@@ -367,6 +367,7 @@ def _toggle_vote(review: Review, user, vote_type: str) -> bool:
     if vote is None:
         ReviewVote.objects.create(user=user, review=review, vote_type=vote_type)
         return True
+    # Hand the points receivers the loaded review (and its author): no extra query.
     vote.review = review
     if vote.vote_type == vote_type:
         vote.delete()
@@ -380,7 +381,7 @@ def vote_on_review(review, user, vote_type):
     ensure_reviews_enabled()
     if review.user_id == user.id:
         return ReviewActionResult(
-            payload={"error": "Cannot vote on your own review"},
+            payload={"detail": "You cannot vote on your own review.", "code": "own_review"},
             status_code=400,
         )
 
@@ -464,7 +465,7 @@ def report_review(review, user, validated_data):
     ensure_reviews_enabled()
     if review.user_id == user.id:
         return ReviewActionResult(
-            payload={"error": "You cannot report your own review."},
+            payload={"detail": "You cannot report your own review.", "code": "own_review"},
             status_code=400,
         )
 

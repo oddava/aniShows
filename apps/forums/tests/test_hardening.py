@@ -1,0 +1,203 @@
+"""Hostile-content limits and moderation edge cases (council round 1)."""
+
+import time
+from unittest import mock
+
+import pytest
+from django.conf import settings
+from django.urls import reverse
+
+from ...core.models import Notification
+from ..models import Post
+from ..services.excerpt import EXCERPT_SOURCE_LENGTH, build_excerpt
+from .conftest import make_reply
+
+POSTS_URL = reverse("forums:post-list")
+THREADS_URL = reverse("forums:thread-list")
+MENTION = Notification.NotificationType.FORUM_MENTION
+
+
+def _post_url(post, action=None):
+    if action is None:
+        return reverse("forums:post-detail", args=[post.id])
+    return reverse(f"forums:post-{action}", args=[post.id])
+
+
+@pytest.fixture
+def staff(make_user):
+    return make_user("moderator", is_staff=True)
+
+
+@pytest.mark.django_db
+class TestContentLength:
+    def test_post_longer_than_the_cap_is_400(self, make_user, make_thread, api_for):
+        author = make_user()
+        thread = make_thread(author)
+        too_long = "x" * (settings.FORUM_CONTENT_MAX_LENGTH + 1)
+
+        response = api_for(author).post(
+            POSTS_URL, {"thread": thread.id, "content": too_long}, format="json"
+        )
+
+        assert response.status_code == 400
+        assert "content" in response.data["errors"]
+        assert not thread.posts.exists()
+
+    def test_thread_longer_than_the_cap_is_400(self, make_user, api_for, forum_category):
+        response = api_for(make_user()).post(
+            THREADS_URL,
+            {
+                "category": forum_category.id,
+                "title": "t",
+                "content": "x" * (settings.FORUM_CONTENT_MAX_LENGTH + 1),
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert "content" in response.data["errors"]
+
+    def test_a_post_at_the_cap_is_accepted(self, make_user, make_thread, api_for):
+        author = make_user()
+        thread = make_thread(author)
+
+        response = api_for(author).post(
+            POSTS_URL,
+            {"thread": thread.id, "content": "x" * settings.FORUM_CONTENT_MAX_LENGTH},
+            format="json",
+        )
+
+        assert response.status_code == 201
+
+
+@pytest.mark.django_db
+class TestRemovedParents:
+    def test_reply_to_a_removed_post_is_400_for_non_staff(
+        self, make_user, make_thread, api_for, staff
+    ):
+        author = make_user()
+        thread = make_thread(author)
+        parent = make_reply(thread, author, content="rude")
+        api_for(staff).post(_post_url(parent, "remove"), {}, format="json")
+
+        response = api_for(make_user()).post(
+            POSTS_URL, {"thread": thread.id, "parent": parent.id, "content": "hi"}, format="json"
+        )
+
+        assert response.status_code == 400
+        assert "parent" in response.data["errors"]
+        listed = api_for(author).get(POSTS_URL, {"thread__id": thread.id}).data["results"][0]
+        assert listed["can_reply"] is False
+
+    def test_staff_may_still_reply_under_a_removed_post(
+        self, make_user, make_thread, api_for, staff
+    ):
+        author = make_user()
+        thread = make_thread(author)
+        parent = make_reply(thread, author)
+        api_for(staff).post(_post_url(parent, "remove"), {}, format="json")
+
+        response = api_for(staff).post(
+            POSTS_URL, {"thread": thread.id, "parent": parent.id, "content": "note"}, format="json"
+        )
+
+        assert response.status_code == 201
+
+
+@pytest.mark.django_db
+class TestRemovalKind:
+    def test_staff_removing_their_own_post_is_a_moderator_removal(
+        self, make_thread, api_for, staff
+    ):
+        post = make_reply(make_thread(staff), staff)
+
+        api_for(staff).post(_post_url(post, "remove"), {}, format="json")
+
+        post.refresh_from_db()
+        assert (post.removal, post.removed_by_author) == ("moderator", False)
+
+    def test_restore_clears_the_author_flag(self, make_user, make_thread, api_for, staff):
+        author = make_user()
+        thread = make_thread(author)
+        post = make_reply(thread, author)
+        make_reply(thread, make_user(), post)
+        api_for(author).delete(_post_url(post))
+        post.refresh_from_db()
+        assert post.removal == "author"
+
+        api_for(staff).post(_post_url(post, "restore"))
+
+        post.refresh_from_db()
+        assert (post.is_removed, post.removed_by_author, post.removal) == (False, False, None)
+
+    def test_restore_broadcasts_post_restored(
+        self, make_user, make_thread, api_for, staff, django_capture_on_commit_callbacks
+    ):
+        post = make_reply(make_thread(make_user()), make_user())
+        api_for(staff).post(_post_url(post, "remove"), {}, format="json")
+
+        with (
+            mock.patch("apps.forums.services.events.broadcast_to_thread") as broadcast,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            api_for(staff).post(_post_url(post, "restore"))
+
+        broadcast.assert_called_once_with(
+            post.thread_id, {"type": "forum.post_restored", "post_id": post.id}
+        )
+
+
+@pytest.mark.django_db
+def test_mention_cap_holds_across_edits(
+    make_user, make_thread, api_for, django_capture_on_commit_callbacks
+):
+    author = make_user()
+    first = [make_user(f"first{i}").username for i in range(10)]
+    second = [make_user(f"second{i}").username for i in range(10)]
+    post = make_reply(make_thread(author), author, content="hello")
+    url = _post_url(post)
+    client = api_for(author)
+
+    for names in (first, second, first):
+        with django_capture_on_commit_callbacks(execute=True):
+            response = client.patch(
+                url, {"content": " ".join(f"@{name}" for name in names)}, format="json"
+            )
+        assert response.status_code == 200
+
+    mentions = Notification.objects.filter(notification_type=MENTION)
+    assert mentions.count() == settings.FORUM_MAX_MENTIONS_PER_POST
+    assert set(mentions.values_list("user__username", flat=True)) == set(first)
+    assert Post.objects.get(pk=post.pk).mentions_notified == settings.FORUM_MAX_MENTIONS_PER_POST
+
+
+class TestExcerpt:
+    @pytest.mark.parametrize(
+        ("content", "expected"),
+        [
+            ("a ||secret|| b >!more!< c", "a [spoiler] b [spoiler] c"),
+            # An unclosed opener hides the rest: it may be a spoiler cut off by the slice.
+            ("a ||secret and more", "a [spoiler]"),
+        ],
+    )
+    def test_spoilers_become_placeholders(self, content, expected):
+        assert build_excerpt(content) == expected
+
+    def test_a_spoiler_cut_by_the_source_slice_does_not_leak(self):
+        content = "x" * (EXCERPT_SOURCE_LENGTH - 3) + " ||secret|| tail"
+
+        assert "secret" not in build_excerpt(content, max_length=EXCERPT_SOURCE_LENGTH)
+
+    @pytest.mark.parametrize(
+        "hostile",
+        [
+            ">!" * 50_000,
+            "||a" * 50_000,
+            "[" * 100_000,
+            ">!x\n" * 50_000,
+        ],
+    )
+    def test_hostile_text_is_fast(self, hostile):
+        started = time.perf_counter()
+        build_excerpt(hostile)
+        assert time.perf_counter() - started < 0.5

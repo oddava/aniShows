@@ -15,7 +15,7 @@ from ..models import Post, Thread
 from .events import (
     ForumActionResult,
     broadcast_post_removed,
-    broadcast_post_updated,
+    broadcast_post_restored,
     run_after_commit,
 )
 
@@ -145,8 +145,14 @@ def restore_thread(thread: Thread, *, request) -> ForumActionResult:
     return ForumActionResult(payload={"status": "restored", "is_removed": False}, status_code=200)
 
 
-def mark_post_removed(post: Post, *, removed_by, reason: str = "") -> None:
-    """Soft-remove a post the caller has locked: placeholder, counters, caches, live event."""
+def mark_post_removed(post: Post, *, removed_by, reason: str = "", by_author: bool = False) -> None:
+    """Soft-remove a post the caller has locked: placeholder, counters, caches, live event.
+
+    ``by_author`` marks the author's own delete ("[deleted]"); anything else is a moderator
+    removal, even a staff member removing their own post through the moderation action.
+    """
+    post.removed_by_author = by_author
+    post.save(update_fields=["removed_by_author"])
     _set_removed(post, removed_by=removed_by, reason=reason)
     post.thread.adjust_reply_count(-1)
     run_after_commit(
@@ -179,6 +185,8 @@ def restore_post(post: Post, *, request) -> ForumActionResult:
         locked = _lock_post(post)
         if locked.is_removed:
             _clear_removed(locked)
+            locked.removed_by_author = False
+            locked.save(update_fields=["removed_by_author"])
             locked.thread.adjust_reply_count(1)
             _audit(
                 request,
@@ -193,7 +201,7 @@ def restore_post(post: Post, *, request) -> ForumActionResult:
                 "Failed to invalidate caches for restored post %s",
                 locked.id,
             )
-            broadcast_post_updated(locked)
+            broadcast_post_restored(locked)
     return ForumActionResult(payload={"status": "restored", "is_removed": False}, status_code=200)
 
 

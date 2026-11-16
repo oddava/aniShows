@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import DatabaseError
 from rest_framework.exceptions import ValidationError
@@ -12,6 +13,9 @@ from .services.excerpt import build_excerpt
 User = get_user_model()
 
 TOO_DEEP_MESSAGE = "This conversation is too deep to reply here. Reply higher up."
+REMOVED_PARENT_MESSAGE = "This reply was removed and can't be replied to."
+# Forum bodies are rendered in every viewer's browser: keep them bounded.
+CONTENT_FIELD_KWARGS = {"content": {"max_length": settings.FORUM_CONTENT_MAX_LENGTH}}
 
 
 def _viewer_is_staff(serializer) -> bool:
@@ -162,6 +166,7 @@ class ThreadSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
             "is_removed",
             "removal_reason",
         ]
+        extra_kwargs = CONTENT_FIELD_KWARGS
         read_only_fields = [
             "author",
             "created_at",
@@ -227,6 +232,7 @@ class PostSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
             "has_hidden_replies",
             "can_reply",
         ]
+        extra_kwargs = CONTENT_FIELD_KWARGS
         read_only_fields = [
             "author",
             "created_at",
@@ -258,6 +264,8 @@ class PostSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
             raise ValidationError({"parent": "Parent post must belong to the same thread."})
         if parent and parent.depth >= Post.MAX_DEPTH:
             raise ValidationError({"parent": TOO_DEEP_MESSAGE})
+        if parent and parent.is_removed and not _viewer_is_staff(self):
+            raise ValidationError({"parent": REMOVED_PARENT_MESSAGE})
 
         if thread and thread.is_locked and not _viewer_is_staff(self):
             raise ValidationError({"thread": "This thread is locked."})
@@ -282,7 +290,7 @@ class PostSerializer(RemovalReasonMixin, LikedByUserMixin, ModelSerializer):
 
     def get_can_reply(self, obj) -> bool:
         thread = obj.thread
-        if obj.depth >= Post.MAX_DEPTH or thread.is_removed:
+        if obj.depth >= Post.MAX_DEPTH or obj.is_removed or thread.is_removed:
             return False
         return not thread.is_locked or _viewer_is_staff(self)
 

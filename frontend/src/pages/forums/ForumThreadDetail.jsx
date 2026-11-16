@@ -121,6 +121,10 @@ const ForumThreadDetail = () => {
                 edited_at: post.edited_at ?? null,
             });
         },
+        onPostRestored: () => {
+            // The restored post's author and content come back from the server.
+            queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
+        },
         onPostRemoved: ({ post_id, removal }) => {
             if (isStaff) {
                 // Staff keep the content and see the reason; refetch to get them

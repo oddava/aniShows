@@ -72,6 +72,8 @@ class ModerationFields(Model):
 
 class Thread(TimestampMixin, ModerationFields, Model):
     category = ForeignKey(Category, CASCADE, related_name="threads")
+    # Mention notifications sent for this thread across all its edits (capped).
+    mentions_notified = PositiveSmallIntegerField(default=0)
     title = CharField(max_length=255, db_index=True)
     author = ForeignKey("users.CustomUser", CASCADE, related_name="forum_threads")
     content = TextField()
@@ -113,6 +115,10 @@ class Post(TimestampMixin, ModerationFields, Model):
 
     thread = ForeignKey(Thread, CASCADE, related_name="posts")
     author = ForeignKey("users.CustomUser", CASCADE, related_name="forum_posts")
+    # The author deleted it (shown as "[deleted]"), as opposed to a moderator removal.
+    removed_by_author = BooleanField(default=False)
+    # Mention notifications sent for this post across all its edits (capped).
+    mentions_notified = PositiveSmallIntegerField(default=0)
     content = TextField()
     like_count = PositiveIntegerField(default=0)
     parent = ForeignKey(
@@ -144,7 +150,7 @@ class Post(TimestampMixin, ModerationFields, Model):
         """``None``, ``"author"`` (the author deleted it) or ``"moderator"``."""
         if not self.is_removed:
             return None
-        return "author" if self.removed_by_id == self.author_id else "moderator"
+        return "author" if self.removed_by_author else "moderator"
 
 
 class ThreadLike(CreatedAtMixin, Model):

@@ -32,6 +32,7 @@ class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
         - ``new_post``: A new post/reply was created in the thread
         - ``post_updated``: A post's text changed (edit or restore)
         - ``post_removed``: A post was removed (by its author or a moderator)
+        - ``post_restored``: A removed post was restored by a moderator
         - ``post_liked``: A post in the thread was liked/unliked
         - ``thread_liked``: The thread itself was liked/unliked
     """
@@ -94,6 +95,10 @@ class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
     async def forum_post_updated(self, event):
         """A post's text changed: ``{"type": "forum.post_updated", "post": {id, content, edited_at}}``."""
         await self.send_json({"type": "post_updated", "post": event["post"]})
+
+    async def forum_post_restored(self, event):
+        """A removed post was restored: ``{"type": "forum.post_restored", "post_id": 1}``."""
+        await self.send_json({"type": "post_restored", "post_id": event["post_id"]})
 
     async def forum_post_removed(self, event):
         """A post was removed: ``{"type": "forum.post_removed", "post_id": 1, "removal": "author"}``."""

@@ -66,7 +66,8 @@ def test_content_is_stored_as_typed(make_user, make_thread, api_for):
         ("a >!hidden!< b", "a [spoiler] b"),
         ("![img](https://x/y.png|200|C) @[clip](https://youtu.be/x) text", "text"),
         ("```js\nlet a = 1 < 2;\n```", "let a = 1 < 2;"),
-        ("<b>bold</b> &amp; snake_case", "bold & snake_case"),
+        # Text is shown as typed: tags and entities stay visible text.
+        ("<b>bold</b> &amp; snake_case", "<b>bold</b> &amp; snake_case"),
         ("- one\n- two\n1. three", "one two three"),
     ],
 )

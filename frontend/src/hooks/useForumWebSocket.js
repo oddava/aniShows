@@ -15,6 +15,7 @@ import { useWebSocket } from './useWebSocket';
  * @param {function} [handlers.onThreadLiked] - Called with `{ thread_id, like_count }`.
  * @param {function} [handlers.onPostUpdated] - Called with `{ id, content, edited_at }`.
  * @param {function} [handlers.onPostRemoved] - Called with `{ post_id, removal }`.
+ * @param {function} [handlers.onPostRestored] - Called with `{ post_id }` when a moderator restores a post.
  * @param {function} [handlers.onOpen] - Called when the WebSocket connection opens.
  * @param {function} [handlers.onClose] - Called when the WebSocket connection closes.
  * @returns {{ state: string, send: function, connect: function, disconnect: function }}
@@ -54,6 +55,10 @@ export function useForumWebSocket(threadId, handlers = {}) {
                 if (data.post_id != null) {
                     current.onPostRemoved?.({ post_id: data.post_id, removal: data.removal ?? 'moderator' });
                 }
+                break;
+
+            case 'post_restored':
+                if (data.post_id != null) current.onPostRestored?.({ post_id: data.post_id });
                 break;
 
             default:

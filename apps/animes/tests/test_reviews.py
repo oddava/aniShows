@@ -554,8 +554,8 @@ class ReviewInteractionTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["detail"], "Cannot vote on your own review")
-        self.assertEqual(response.data["code"], "review_vote_failed")
+        self.assertEqual(response.data["detail"], "You cannot vote on your own review.")
+        self.assertEqual(response.data["code"], "own_review")
 
 
 class AnimeReviewPaginationTests(APITestCase):
@@ -745,7 +745,7 @@ class ReviewReportWorkflowTests(APITestCase):
         response = self._report(self.review)
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "review_report_failed")
+        self.assertEqual(response.data["code"], "own_review")
 
 
 class ReviewInteractionResponseTests(APITestCase):

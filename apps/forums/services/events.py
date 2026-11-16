@@ -57,6 +57,17 @@ def broadcast_post_updated(post) -> None:
     )
 
 
+def broadcast_post_restored(post) -> None:
+    """A removed post is back: viewers refetch it (its author and content return)."""
+    run_after_commit(
+        lambda: broadcast_to_thread(
+            post.thread_id, {"type": "forum.post_restored", "post_id": post.id}
+        ),
+        "Failed to broadcast post restore for post %s",
+        post.id,
+    )
+
+
 def broadcast_post_removed(post) -> None:
     run_after_commit(
         lambda: broadcast_to_thread(

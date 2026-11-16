@@ -42,5 +42,7 @@ _throttle_rates.update(
 REVIEW_REPORTS_PER_DAY = 20
 # Distinct ``@mentions`` notified per thread or post (spec 5 P0-10, G4 C-G5-2).
 FORUM_MAX_MENTIONS_PER_POST = 10
+# Longest forum thread/post body accepted (characters). Every viewer's browser renders it.
+FORUM_CONTENT_MAX_LENGTH = 20_000
 # Subscribers notified about one new post (spec 5 P1-3).
 FORUM_SUBSCRIPTION_FANOUT_CAP = 500

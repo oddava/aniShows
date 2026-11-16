@@ -48,6 +48,19 @@ class Migration(migrations.Migration):
     operations = [
         *_moderation_fields("thread"),
         *_moderation_fields("post"),
+        migrations.AddField(
+            model_name="post",
+            name="removed_by_author",
+            field=models.BooleanField(default=False),
+        ),
+        *(
+            migrations.AddField(
+                model_name=model_name,
+                name="mentions_notified",
+                field=models.PositiveSmallIntegerField(default=0),
+            )
+            for model_name in ("thread", "post")
+        ),
         migrations.CreateModel(
             name="ThreadSubscription",
             fields=[
