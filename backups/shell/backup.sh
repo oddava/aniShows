@@ -58,7 +58,7 @@ require_command() {
 
 # The lock lives in lock.sh (an flock shared with restore.sh across containers).
 # shellcheck source=backups/shell/lock.sh
-source "$(dirname "$0")/lock.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lock.sh"
 
 acquire_lock() {
     if [ "$SKIP_LOCK" = "1" ]; then
@@ -214,6 +214,7 @@ prune_previous_backups() {
 # place and makes the run fail, so cron mail / the deploy log shows it.
 upload_offsite() {
     if [ -z "$REMOTE" ]; then
+        log "Off-site upload skipped: BACKUP_REMOTE is empty (this backup stays on this host only)."
         return 0
     fi
     require_command rclone
@@ -229,20 +230,26 @@ upload_offsite() {
         return 1
     fi
     log "Off-site copy verified. Removing remote copies older than ${REMOTE_KEEP_DAYS} days..."
-    # Only our own timestamped backup directories, never other data that
-    # shares the bucket or path.
     # By the date in the name, and only directories this script created: other
     # data that shares the bucket or path is never touched.
-    local cutoff dir old
+    local cutoff dir old listing
     cutoff="$(date -u -d "@$(( $(date +%s) - REMOTE_KEEP_DAYS * 86400 ))" +%Y%m%d)"
-    rclone lsf --dirs-only --max-depth 1 "$REMOTE" 2>/dev/null | while IFS= read -r dir; do
+    if ! listing="$(rclone lsf --dirs-only --max-depth 1 "$REMOTE")"; then
+        # The copy itself is verified; only the pruning is skipped this time.
+        log "Warning: could not list $REMOTE; old off-site copies were not pruned."
+        return 0
+    fi
+    while IFS= read -r dir; do
         old="${dir%/}"
         [[ "$old" =~ ^([0-9]{8})_[0-9]{6}-[a-z-]+$ ]] || continue
         if [[ "${BASH_REMATCH[1]}" < "$cutoff" ]]; then
-            rclone purge "$REMOTE/$old" && log "Removed off-site copy $old" \
-                || log "Warning: could not remove off-site copy $old"
+            if rclone purge "$REMOTE/$old"; then
+                log "Removed off-site copy $old"
+            else
+                log "Warning: could not remove off-site copy $old"
+            fi
         fi
-    done
+    done <<<"$listing"
 }
 
 main() {
@@ -299,4 +306,7 @@ main() {
     esac
 }
 
-main "$@"
+# Sourced by the tests (functions only); run as a script otherwise.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main "$@"
+fi

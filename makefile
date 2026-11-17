@@ -18,7 +18,7 @@ ENV_EXAMPLE = .env.example
         clean prune cleanup-media backup backups backup-export backup-import exports \
         verify-backup restore restore-db-only restore-media-only load-browse \
         load-api-smoke load-api-standard load-api-micro bench-api \
-        prod-config prod-backup prod-verify-backup check-migrations-reversible
+        prod-config prod-backup prod-verify-backup prod-restore prod-offsite-list check-migrations-reversible
 
 # ============================================================================
 # Service Management
@@ -382,6 +382,13 @@ prod-backup:                    ## Production: backup now (DB + media; off-site 
 
 prod-verify-backup:             ## Production: restore a backup into a throwaway DB and run the app against it (TIMESTAMP=... optional)
 	bash scripts/deploy/verify_backup.sh $(TIMESTAMP)
+
+prod-restore:                   ## Production: restore a backup over the live data (TIMESTAMP=...|latest FORCE=1 [FROM_OFFSITE=1] [SCOPE=--db-only|--media-only])
+	@if [ -z "$(TIMESTAMP)" ]; then echo "Usage: make prod-restore TIMESTAMP=YYYYMMDD_HHMMSS|latest FORCE=1 [FROM_OFFSITE=1]"; exit 1; fi
+	bash scripts/deploy/restore.sh $(TIMESTAMP) $(if $(FROM_OFFSITE),--from-offsite) $(SCOPE) $(if $(FORCE),--yes)
+
+prod-offsite-list:              ## Production: list the backups in BACKUP_REMOTE
+	$(PROD_COMPOSE) exec -T backup bash -c '. /app/cron.env && /app/shell/fetch_offsite.sh'
 
 check-migrations-reversible:    ## Every migration since BASE (default revamp/base) reverses and re-applies on the test DB
 	@leaves="$$(bash scripts/deploy/check_migrations_reversible.sh --print-base-leaves $(or $(BASE),revamp/base))"; \
