@@ -1,7 +1,7 @@
 name: CI
 
-# Runs on every PR and on pushes to develop. Pushes to main run it through
-# deploy.yml (workflow_call), which only builds and deploys if it passes.
+# Runs on every PR and on pushes to develop. A deploy (deploy.yml, manual
+# only) runs it first through workflow_call and builds only if it passes.
 on:
   pull_request:
   push:
