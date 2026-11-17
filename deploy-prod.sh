@@ -313,11 +313,16 @@ for candidate in "$STATE_FRONTEND_ID" "$STATE_PREVIOUS_FRONTEND_ID"; do
 done
 
 step "Core services"
-core_services=(redis minio)
+core_services=(redis)
 [ "$DB_HOST" = db ] && core_services+=(db)
 "${COMPOSE[@]}" up -d --wait --no-deps "${core_services[@]}"
-"${COMPOSE[@]}" up --no-deps --exit-code-from createbuckets createbuckets >/dev/null \
-    || die "bucket setup failed"
+
+step "Object storage"
+# The bucket lives on the host's RustFS, outside this stack (infra provisions
+# it, its user and the anishows-s3 network). Before any change: head_bucket,
+# then put/get/delete of a probe under media/, as the app, from the app image.
+"${COMPOSE[@]}" run --rm --no-deps web python manage.py s3_check \
+    || die "object storage check failed (is the anishows-s3 network attached to rustfs? are the AWS_* values right?)"
 
 step "Configuration check"
 # Before any schema change. Warnings (e.g. core.W001: no Safe Browsing key)

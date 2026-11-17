@@ -6,7 +6,7 @@ behind the host's **existing reverse proxy** (it owns ports 80/443 and the certi
 the host's loopback only; nothing of ours is published to the internet directly.
 
 ```
-browser ──https──▶ host reverse proxy ──http──▶ 127.0.0.1:8080 ──▶ Caddy (container) ──▶ web / minio / SPA
+browser ──https──▶ host reverse proxy ──http──▶ 127.0.0.1:8080 ──▶ Caddy (container) ──▶ web / RustFS (media) / SPA
                    (TLS, certificates)          (docker-proxy: Caddy sees the
                                                  gateway of APP_SUBNET as the peer)
 ```
@@ -23,6 +23,7 @@ backups in [../backups.md](../backups.md); every variable in `.env.production.ex
 | The host's reverse proxy | nginx or Caddy (examples in [host-proxy/](host-proxy/)); DNS for `anishows.com` (+ `www`) points at the VPS |
 | GHCR read access | Images `ghcr.io/oddava/anishows-{backend,frontend}` are built by the Deploy workflow; the server needs `docker login ghcr.io` (step 2) unless the packages are public |
 | About 3 GB of memory headroom | The lean default profile: [runbook.md](runbook.md#footprint-on-a-shared-8-gb--4-core-host) |
+| The host's RustFS, provisioned by infra | Object storage is **not** part of this stack. Infra creates, once: the Docker network `anishows-s3` (internal only, RustFS attached as `rustfs:9000`), the bucket `anishows-media`, a bucket-scoped user `anishows` (read/write on that bucket only) and anonymous `GetObject` on `anishows-media/media/*` only. Step 4 lists the values; the deploy checks all of it (`manage.py s3_check`) before changing anything |
 | Optional: an off-site backup target | Hetzner Storage Box or Backblaze B2 (step 7) |
 | Optional: external Postgres 15+ | Role + database + `pg_trgm`; TLS; a connection limit ([runbook.md](runbook.md#first-deploy-new-host)) |
 
@@ -74,14 +75,16 @@ anything. For this host:
 |---|---|
 | `DJANGO_SECRET_KEY` | 64+ random characters |
 | `ALLOWED_HOSTS` | `anishows.com,www.anishows.com` |
-| `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, `DOMAIN_NAME`, `MINIO_PUBLIC_DOMAIN` | the template's `anishows.com` values |
+| `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS`, `DOMAIN_NAME`, `S3_PUBLIC_DOMAIN` | the template's `anishows.com` values |
 | `CADDY_MODE` | `proxy` |
 | `CADDY_TRUSTED_PROXIES` | `"10.250.250.1/32 127.0.0.1/8 ::1/128"` (the Docker gateway of `APP_SUBNET`: the host proxy arrives from there) |
 | `TRUSTED_PROXY_CIDRS` | `10.250.250.0/25` (`APP_SUBNET`) |
 | `APP_SUBNET` | leave unset (`10.250.250.0/25`) unless it overlaps a network on the host (`docker network inspect` / `ip route`); then change it and both trust lists with it |
 | `ADMIN_ALLOW_CIDRS` | empty = `/django-admin/`, `/metrics`, readiness closed to everyone (403). To use the admin: your IP, e.g. `"203.0.113.10/32"` |
 | `PUBLIC_BASE_URL` | `https://anishows.com` (the deploy smoke-tests through the host proxy) |
-| `DB_PASSWORD`, `REDIS_PASSWORD`, `AWS_SECRET_ACCESS_KEY`, `METRICS_PASSWORD` | random (`METRICS_PASSWORD` empty disables `/metrics`) |
+| `DB_PASSWORD`, `REDIS_PASSWORD`, `METRICS_PASSWORD` | random (`METRICS_PASSWORD` empty disables `/metrics`) |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | the `anishows` user's credentials, from infra (the secret is not yours to generate) |
+| `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_ENDPOINT_URL`, `AWS_S3_REGION_NAME`, `S3_PUBLIC_DOMAIN`, `S3_PUBLIC_USE_SSL`, `S3_NETWORK` | the template's values (`anishows-media`, `http://rustfs:9000`, `us-east-1`, `anishows.com`, `True`, `anishows-s3`) |
 | `RESEND_API_KEY`, `DEFAULT_FROM_EMAIL` | from resend.com, with `anishows.com` verified there (sign-up, password-reset mail) |
 | Optional | `GOOGLE_CLIENT_ID/SECRET`, `SENTRY_DSN`, `VAPID_*`, `MAL_CLIENT_ID`, `BACKUP_REMOTE` + `RCLONE_CONFIG_*` (step 7) |
 
@@ -307,8 +310,11 @@ files from `.env`:
 | `UMAMI_DOMAIN` set (or `ANALYTICS_ENABLED=1`) | `analytics` profile (Umami); off by default |
 
 Services: `web` (gunicorn + uvicorn workers; HTTP and WebSockets), `celery`, `beat`, `redis`,
-`minio` (media, served read-only by Caddy under `/media/`), `createbuckets`, `caddy`, `backup`,
-plus the optional `db`, `cloudflared`, `umami`, `umami_db`. Compose project name = directory name
+`caddy` (which also serves the media bucket read-only under `/media/`), `backup`,
+plus the optional `db`, `cloudflared`, `umami`, `umami_db`. The media bucket is the host's
+RustFS, reached as `http://rustfs:9000` over the external network `${S3_NETWORK:-anishows-s3}`
+that `web`, `celery`, `beat`, `caddy` and `backup` join; Compose neither creates nor removes it.
+Compose project name = directory name
 (`anishows` for `/srv/anishows`) unless `COMPOSE_PROJECT_NAME` is set. Every container has a memory
 limit and rotating logs (5 × 10 MB); every long-running service except celery, beat and the
 optional Umami has a healthcheck (celery's and beat's would start a second Django process inside
@@ -335,7 +341,7 @@ proxy (28 checks, all passed):
 - HTTPS: `/api/v1/genres/` 200 over https (no redirect), plain http → one 301 → 200, no loop;
   HSTS `max-age=31536000`; the refresh cookie `Secure; HttpOnly; SameSite=Lax`;
 - `/django-admin/`, `/metrics` and readiness 403 with `ADMIN_ALLOW_CIDRS` empty;
-- the SPA and its assets, Django static, a MinIO media object (writes 405), liveness 200, a
+- the SPA and its assets, Django static, a media object from the bucket (writes 405), liveness 200, a
   WebSocket upgrade (101);
 - login with the site's `Origin` 200, from another origin 403; CORS preflight granted to the
   site with credentials, nothing for another origin;

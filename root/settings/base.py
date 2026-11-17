@@ -383,14 +383,15 @@ IMAGEKIT_LEGACY_CACHEFILE_DIRS = tuple(
     for prefix in _parse_csv(os.getenv("IMAGEKIT_LEGACY_CACHEFILE_DIRS", "CACHE/images"))
     if prefix.strip("/")
 )
-# Keep runtime request paths fast; bucket creation is handled by createbuckets init job.
-# Only read by the S3 storage backend.
+# Keep runtime request paths fast; the bucket is provisioned out of band (the
+# host's RustFS in production, the `createbuckets` job in dev; deploys check it
+# with `manage.py s3_check`). Only read by the S3 storage backend.
 S3_RUNTIME_BUCKET_AUTOCREATE = _env_bool("S3_RUNTIME_BUCKET_AUTOCREATE", False)
 
 if USE_S3:
     from botocore.config import Config
 
-    # AWS/MinIO settings
+    # S3 settings (RustFS/MinIO or any S3-compatible store; AWS when no endpoint)
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME")
@@ -400,12 +401,21 @@ if USE_S3:
     AWS_DEFAULT_ACL = None
     AWS_S3_FILE_OVERWRITE = False
 
-    MINIO_PUBLIC_DOMAIN = os.getenv("MINIO_PUBLIC_DOMAIN", "localhost:9000")
+    # A custom endpoint is a self-hosted S3 (RustFS in production, behind
+    # Caddy's /media). Its objects are read through S3_PUBLIC_DOMAIN, unsigned:
+    # anonymous GetObject is allowed on the media/ prefix only. The legacy
+    # MINIO_* names are still read so an existing .env keeps working.
+    S3_PUBLIC_DOMAIN = os.getenv("S3_PUBLIC_DOMAIN") or os.getenv(
+        "MINIO_PUBLIC_DOMAIN", "localhost:9000"
+    )
 
-    if "minio" in (AWS_S3_ENDPOINT_URL or ""):
-        AWS_S3_CUSTOM_DOMAIN = MINIO_PUBLIC_DOMAIN
-        AWS_S3_USE_SSL = os.getenv("MINIO_USE_SSL", "False") == "True"
-        AWS_S3_URL_PROTOCOL = "https:" if AWS_S3_USE_SSL else "http:"
+    if AWS_S3_ENDPOINT_URL:
+        AWS_S3_CUSTOM_DOMAIN = S3_PUBLIC_DOMAIN
+        S3_PUBLIC_USE_SSL = (
+            os.getenv("S3_PUBLIC_USE_SSL") or os.getenv("MINIO_USE_SSL", "False")
+        ) == "True"
+        AWS_S3_USE_SSL = S3_PUBLIC_USE_SSL
+        AWS_S3_URL_PROTOCOL = "https:" if S3_PUBLIC_USE_SSL else "http:"
     else:
         AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com"
         AWS_S3_URL_PROTOCOL = "https:"
@@ -421,7 +431,7 @@ if USE_S3:
         max_pool_connections=max(_env_int("AWS_S3_MAX_POOL_CONNECTIONS", 50), 10),
     )
 
-    # ImageKit configuration - store generated thumbnails in MinIO
+    # ImageKit configuration - store generated thumbnails in the S3 bucket
     IMAGEKIT_DEFAULT_FILE_STORAGE = "root.storage_backends.MediaStorage"
     IMAGEKIT_CACHE_BACKEND = "default"
     IMAGEKIT_DEFAULT_CACHEFILE_STRATEGY = "imagekit.cachefiles.strategies.Optimistic"

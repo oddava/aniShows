@@ -62,7 +62,8 @@ def _is_storage_endpoint_error(exc: Exception) -> bool:
         msg = str(current).lower()
         if any(pattern in msg for pattern in _ENDPOINT_ERROR_PATTERNS):
             return True
-        if "endpoint url" in msg and "minio" in msg:
+        # botocore: 'Could not connect to the endpoint URL: "http://rustfs:9000/..."'.
+        if "endpoint url" in msg and ("rustfs" in msg or "minio" in msg):
             return True
     return False
 

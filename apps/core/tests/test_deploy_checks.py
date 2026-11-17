@@ -107,7 +107,7 @@ SAFE_ENV = {
     "DJANGO_SECRET_KEY": GOOD_KEY,
     "DB_PASSWORD": "db-pass-0123456789",
     "REDIS_PASSWORD": "redis-pass-0123456789",
-    "AWS_SECRET_ACCESS_KEY": "minio-pass-0123456789",
+    "AWS_SECRET_ACCESS_KEY": "rustfs-pass-0123456789",
     "METRICS_PASSWORD": "metrics-pass-0123456789",
     "ALLOWED_HOSTS": "anishows.com,www.anishows.com",
     "DOMAIN_NAME": "anishows.com",
@@ -154,6 +154,7 @@ case "$args" in
   *" inspect --format "*) echo healthy ;;
   *" ps -aq "*) echo "c0ffee000001" ;;
   *" ps -q "*) echo "c0ffee000001" ;;
+  *"manage.py s3_check"*) [ "${FAKE_FAIL_S3_CHECK:-0}" = 1 ] && exit 1 ;;
   *"migrate --plan"*)
     if [ "${FAKE_EMPTY_PLAN:-0}" = 1 ]; then printf 'Planned operations:\n  No planned migration operations.\n';
     else printf 'Planned operations:\n%s\n' "${FAKE_PLAN:-users.0038_accounts_example}"; fi ;;
@@ -480,6 +481,34 @@ class DeployScriptFailureRecipeTests(SimpleTestCase):
             out,
         )
         self.assertIn("restore.sh", out)
+
+    def test_object_storage_is_the_hosts_not_a_bundled_service(self):
+        """No bundled MinIO or bucket job; the app proves the host's bucket first."""
+        result, calls = self._run()
+        out = result.stdout
+        lines = calls.splitlines()
+        self.assertNotIn("minio", calls.lower())
+        self.assertNotIn("createbuckets", calls)
+        core = "compose -f docker-compose.prod.yml up -d --wait --no-deps redis db"
+        self.assertIn(core, lines)
+        probe = "run --rm --no-deps web python manage.py s3_check"
+        probe_line = next(i for i, line in enumerate(lines) if line.endswith(probe))
+        self.assertGreater(probe_line, lines.index(f"{core}"))
+        self.assertIn("==> Object storage", out)
+        # Before the configuration check and any schema change.
+        for later in ("manage.py check --deploy", "manage.py migrate --plan"):
+            later_line = next(i for i, line in enumerate(lines) if later in line)
+            self.assertGreater(later_line, probe_line, later)
+        self.assertLess(out.index("Object storage"), out.index("Configuration check"))
+
+    def test_a_failing_object_storage_check_stops_the_deploy_before_any_change(self):
+        result, calls = self._run(FAKE_FAIL_S3_CHECK="1")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("object storage check failed", result.stdout + result.stderr)
+        self.assertIn("anishows-s3 network", result.stdout + result.stderr)
+        self.assertNotIn("manage.py check --deploy", calls)
+        self.assertNotIn("migrate", calls)
+        self.assertNotIn("Rollback recipe", result.stdout)
 
     def test_recipe_names_the_deployed_and_previous_tags(self):
         result, _ = _run_in_temp_repo(

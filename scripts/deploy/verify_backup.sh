@@ -3,8 +3,10 @@
 # Prove a backup restores: load its database dump into a throwaway Postgres on
 # the production compose network, then run the app's checks against it
 # (`manage.py check`, `showmigrations --plan`, a row count). Nothing touches
-# the live database, so this works with an external/shared Postgres too
-# (no CREATEDB rights needed). Run on the server from the repo root:
+# the live database or the media bucket (only the dump is loaded; the media
+# archive is just checksummed with the rest), so this works with an
+# external/shared Postgres too (no CREATEDB rights needed). Run on the server
+# from the repo root:
 #
 #   scripts/deploy/verify_backup.sh                 # newest backup in backups-data/
 #   scripts/deploy/verify_backup.sh 20261116_030000 # or a timestamp / directory name

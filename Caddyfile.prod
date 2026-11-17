@@ -216,15 +216,16 @@
 		}
 	}
 
-	# MinIO Media - proxy /media/* to MinIO bucket
+	# S3 media - proxy /media/* to the media/ prefix of the host's RustFS bucket
+	# (S3_UPSTREAM over the s3 network; anonymous GetObject is allowed there only).
 	# Note: /media/CACHE/* is also handled here when thumbnails are in S3
 	handle_path /media/* {
-		# Read-only: MinIO would otherwise accept signed S3 writes and deletes
+		# Read-only: the S3 server would otherwise accept signed writes and deletes
 		# sent through this public route.
 		@media_write not method GET HEAD
 		respond @media_write 405
 
-		# Fix MIME types for common image formats (MinIO sometimes returns application/octet-stream)
+		# Fix MIME types for common image formats (the S3 server sometimes returns application/octet-stream)
 		@webp path *.webp
 		header @webp Content-Type "image/webp"
 
@@ -237,16 +238,16 @@
 		@gif path *.gif
 		header @gif Content-Type "image/gif"
 
-		rewrite * /anishows-media/media{path}
-		reverse_proxy minio:9000 {
+		rewrite * /{$S3_MEDIA_BUCKET:anishows-media}/media{path}
+		reverse_proxy {$S3_UPSTREAM:rustfs:9000} {
 			header_up Host {upstream_hostport}
-			# Strip CORS headers from MinIO to avoid duplicates
+			# Strip CORS headers from the S3 server to avoid duplicates
 			header_down -Access-Control-Allow-Origin
 			header_down -Access-Control-Allow-Methods
 			# Strip upstream content type so extension-based header rules
 			# above set a single canonical Content-Type.
 			header_down -Content-Type
-			# Fail gracefully if MinIO is unavailable - serve placeholder or return 404
+			# Fail gracefully if the S3 server is unavailable - serve placeholder or return 404
 			lb_try_duration 5s
 			lb_try_interval 1s
 

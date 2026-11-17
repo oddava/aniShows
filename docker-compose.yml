@@ -1,6 +1,6 @@
 # Local development stack.
 #
-#   make up   -> web, celery, beat, frontend, db, redis, minio
+#   make up   -> web, celery, beat, frontend, db, redis, rustfs
 #   open http://localhost:5173  (Vite proxies /api, /ws, /media, /django-admin)
 #
 # Python and frontend sources are bind-mounted, so code changes reload without
@@ -23,8 +23,11 @@ x-backend: &backend
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
-    AWS_S3_ENDPOINT_URL: http://minio:9000
-    MINIO_PUBLIC_DOMAIN: localhost:${FRONTEND_PORT:-5173}
+    # Dev object storage: the rustfs service below (RustFS, S3-compatible).
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-rustfsadmin}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-rustfsadmin}
+    AWS_S3_ENDPOINT_URL: http://rustfs:9000
+    S3_PUBLIC_DOMAIN: localhost:${FRONTEND_PORT:-5173}
   volumes:
     - .:/app
   user: "1000:1000"
@@ -84,6 +87,8 @@ services:
     environment:
       VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
       VITE_ENVIRONMENT: development
+      # Vite proxies /media here (default in vite.config.js is the old minio name).
+      DEV_MEDIA_TARGET: http://rustfs:9000
       VITE_UMAMI_SCRIPT_URL: ${VITE_UMAMI_SCRIPT_URL:-}
       VITE_UMAMI_WEBSITE_ID: ${VITE_UMAMI_WEBSITE_ID:-}
     ports:
@@ -121,36 +126,48 @@ services:
     volumes:
       - redis_data:/data
 
-  minio:
-    image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    command: server /data --console-address ":9001"
+  # Object storage (RustFS, multi-arch). Production uses the RustFS already
+  # running on the host instead; this one is for local development only.
+  rustfs:
+    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
     environment:
-      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_ACCESS_KEY: ${AWS_ACCESS_KEY_ID:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${AWS_SECRET_ACCESS_KEY:-rustfsadmin}
     ports:
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${RUSTFS_CONSOLE_PORT:-9001}:9001"
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
       interval: 5s
       timeout: 5s
       retries: 10
     volumes:
-      - minio_data:/data
+      - rustfs_data:/data
 
+  # Creates the bucket and makes only its media/ prefix publicly readable
+  # (GetObject, no listing), the same policy as production. Idempotent.
   createbuckets:
-    image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    image: rustfs/rc:v0.1.37@sha256:7e93fd410a8fe51514f89373e093392c92095b98dc6140335fcfe956810c4c80
     depends_on:
-      minio:
+      rustfs:
         condition: service_healthy
     environment:
-      MINIO_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
-      MINIO_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      S3_USER: ${AWS_ACCESS_KEY_ID:-rustfsadmin}
+      S3_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-rustfsadmin}
       BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-anishows-media}
-    entrypoint: >
-      /bin/sh -c "set -e;
-      mc alias set local http://minio:9000 $${MINIO_USER} $${MINIO_PASSWORD};
-      mc mb --ignore-existing local/$${BUCKET_NAME};
-      mc anonymous set download local/$${BUCKET_NAME}/media"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        rc alias set local http://rustfs:9000 "$${S3_USER}" "$${S3_PASSWORD}"
+        rc mb -p "local/$${BUCKET_NAME}"
+        # Not `rc anonymous set download`: that also allows listing the bucket.
+        printf '%s' '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::'"$${BUCKET_NAME}"'/media/*"]}]}' > /tmp/media-read.json
+        rc anonymous set-json /tmp/media-read.json "local/$${BUCKET_NAME}"
 
   # -------------------------------------------------------------------- tests
 
@@ -251,15 +268,20 @@ services:
       POSTGRES_DB: ${DB_NAME:-anishows_db}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      # Media backups read the dev bucket over S3 (rclone).
+      AWS_S3_ENDPOINT_URL: http://rustfs:9000
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-rustfsadmin}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-rustfsadmin}
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-anishows-media}
+      AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME:-us-east-1}
     depends_on:
       - db
-      - minio
+      - rustfs
     volumes:
       - ./backups-data:/backups
-      - minio_data:/minio_data
 
 volumes:
   db_data:
   redis_data:
-  minio_data:
+  rustfs_data:
   umami_db_data:

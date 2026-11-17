@@ -14,6 +14,7 @@ from rest_framework.exceptions import ValidationError
 from ...core.models import Notification
 from ..models import Post, Thread
 from ..serializers import PostSerializer, ThreadSerializer
+from ..services import excerpt as excerpt_module
 from ..services.excerpt import EXCERPT_SOURCE_LENGTH, build_excerpt
 from ..services.interactions import create_post, update_post, update_thread
 from ..services.mentions import notify_mentions
@@ -213,11 +214,37 @@ class TestExcerpt:
             "[a](" * 25_000,
         ],
     )
-    def test_hostile_text_is_fast(self, hostile):
-        started = time.perf_counter()
-        build_excerpt(hostile)
-        # The quadratic patterns took 100-300 ms on the 4k slice; linear ones take ~1 ms.
-        assert time.perf_counter() - started < 0.05
+    def test_hostile_text_is_fast(self, hostile, monkeypatch):
+        """The work is linear in the slice of the source the excerpt reads.
+
+        build_excerpt reads only the first EXCERPT_SOURCE_LENGTH characters, so a
+        longer input changes nothing; the slice length itself is what scales here
+        (every hostile text is longer than the larger one). Linear work doubles with
+        the slice (ratio ~2); the quadratic patterns this guards against quadruple it
+        (they took 100-300 ms on the 4k slice). A wall-clock budget alone is flaky on
+        shared runners, so compare two sizes and keep a generous ceiling as a backstop.
+        """
+        small_slice, large_slice = 4_000, 8_000
+        assert len(hostile) > large_slice
+
+        def best_of(source_length, repeats=5, batch=10):
+            monkeypatch.setattr(excerpt_module, "EXCERPT_SOURCE_LENGTH", source_length)
+            # The fastest run is the least disturbed by a busy shared runner; a batch
+            # of calls keeps the cheap (linear) cases above the timer's noise.
+            best = float("inf")
+            for _ in range(repeats):
+                started = time.perf_counter()
+                for _ in range(batch):
+                    build_excerpt(hostile)
+                best = min(best, time.perf_counter() - started)
+            return best
+
+        best_of(small_slice, repeats=1)  # warm up
+        small = best_of(small_slice)
+        large = best_of(large_slice)
+
+        assert large / small < 3, f"time grew {large / small:.1f}x for 2x the slice"
+        assert large < 2.0
 
 
 def _request_for(user):
@@ -451,9 +478,26 @@ class TestNesting:
         assert max_container_nesting(text) == depth
 
     def test_counting_is_linear(self):
-        started = time.perf_counter()
-        max_container_nesting("> " * 10_000 + "\n" + "- " * 10_000)
-        assert time.perf_counter() - started < 0.05
+        def body_of(scale):
+            return "> " * (10_000 * scale) + "\n" + "- " * (10_000 * scale)
+
+        def best_of(body, repeats=5):
+            # The fastest run is the least disturbed by a busy shared runner.
+            best = float("inf")
+            for _ in range(repeats):
+                started = time.perf_counter()
+                max_container_nesting(body)
+                best = min(best, time.perf_counter() - started)
+            return best
+
+        best_of(body_of(1), repeats=1)  # warm up
+        small = best_of(body_of(1))
+        large = best_of(body_of(2))
+
+        # Linear work doubles with the input (ratio ~2); a rescan per marker would
+        # quadruple it. Compare two sizes, with a generous ceiling as a backstop.
+        assert large / small < 3, f"time grew {large / small:.1f}x for 2x the input"
+        assert large < 2.0
 
 
 @pytest.mark.django_db

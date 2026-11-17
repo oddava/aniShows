@@ -15,13 +15,15 @@ client IP for everyone). Prefer `--no-deps` for single services.
 ## What a deploy does
 
 1. Refuses unsafe `.env` values before touching anything: a placeholder or short `DJANGO_SECRET_KEY`,
-   `METRICS_PASSWORD`, `DB_PASSWORD`, `REDIS_PASSWORD`, `AWS_SECRET_ACCESS_KEY` (the MinIO root
-   password), and the Umami secrets when analytics is on. Also `ALLOWED_HOSTS` that is unset,
+   `METRICS_PASSWORD`, `DB_PASSWORD`, `REDIS_PASSWORD`, `AWS_SECRET_ACCESS_KEY` (still a placeholder: the RustFS user's secret comes from infra), and the Umami secrets when analytics is on. Also `ALLOWED_HOSTS` that is unset,
    local-only, `*`, or missing `DOMAIN_NAME`'s host, and tunnel mode without a token.
    `ALLOW_INSECURE_DEFAULTS=1` lets one run through with a warning. The edge is refused with no
    override: `TRUSTED_PROXY_CIDRS` unset or wide, proxy mode without `CADDY_TRUSTED_PROXIES`, or
    a wide-open `ADMIN_ALLOW_CIDRS` (unless `ALLOW_WIDE_ADMIN_CIDRS=1`).
-2. `docker compose config` for the chosen mode, pull images, start redis/minio (and the bundled db).
+2. `docker compose config` for the chosen mode, pull images, start redis (and the bundled db).
+   Then the **object storage** check, `manage.py s3_check` as the app: the bucket exists and a probe
+   object under `media/` can be written, read and deleted with `AWS_*`. A missing `anishows-s3`
+   network, a wrong key or an unprovisioned bucket stops the deploy here, before anything changes.
 3. `manage.py check --deploy --fail-level ERROR` (e.g. `core.E010` stops it), then the AniList
    smoke query.
 4. `migrate --plan`, saved to `backups-data/deploy-logs/deploy-<ts>-migrate-plan.txt`. If anything
@@ -136,7 +138,7 @@ A real restore: `scripts/deploy/restore.sh <ts>|latest [--from-offsite] [--db-on
 | A value with `$` or `\` | `.env` refuses them outside single quotes (Compose would expand them). Quoting an existing value that Compose had been expanding changes its effective value: for `DJANGO_SECRET_KEY` that logs everyone out, for a DB/Redis password it must match the server's. |
 | `DB_PASSWORD` (bundled) | `$PROD exec db psql -U <user> -c "ALTER ROLE <user> PASSWORD '…'"`, then `.env`, deploy. |
 | `REDIS_PASSWORD` | `.env`, then `$PROD up -d --no-deps redis` and deploy (the cache and queued tasks are lost). |
-| `AWS_SECRET_ACCESS_KEY` (MinIO root) | `.env`, `$PROD up -d --no-deps minio`, deploy. |
+| `AWS_SECRET_ACCESS_KEY` (the RustFS `anishows` user) | Infra rotates it on the host's RustFS; then `.env`, `$PROD up -d --no-deps backup` (the cron env file is rebuilt at start), deploy (it runs `s3_check`). |
 | `METRICS_PASSWORD` | `.env`, deploy; update the Prometheus scrape config. |
 | `TUNNEL_TOKEN` | Cloudflare dashboard → tunnel → refresh token, `.env`, `$PROD up -d --no-deps cloudflared`. |
 | `RCLONE_CONFIG_*` | `.env`, `$PROD up -d --no-deps backup` (the cron env file is rebuilt at start), then `make prod-offsite-list`. |
@@ -146,7 +148,7 @@ A real restore: `scripts/deploy/restore.sh <ts>|latest [--from-offsite] [--db-on
 ## Footprint on a shared 8 GB / 4-core host
 
 The limits are caps, not reservations. Measured idle in the dry run with one gunicorn worker: web
-~190 MB per replica, celery ~175 MB, beat ~115 MB, minio ~110 MB, Postgres ~45–70 MB, backup ~45 MB,
+~190 MB per replica, celery ~175 MB, beat ~115 MB, Postgres ~45–70 MB, backup ~45 MB,
 Caddy ~15 MB, Redis ~6 MB. Each extra gunicorn worker adds roughly 100–120 MB.
 
 The defaults are the **lean** profile (about 3 GB of limits), sized for the shared host. The
@@ -159,7 +161,6 @@ roomy profile is the previous defaults, for a host with spare memory; set its va
 | beat | 192M | 256M | `BEAT_MEMORY_LIMIT` |
 | db (bundled only) | 768M | 1G | `DB_MEMORY_LIMIT` |
 | redis | 256M (`REDIS_MAXMEMORY=128mb`) | 512M (`256mb`) | `REDIS_MEMORY_LIMIT` |
-| minio | 256M | 256M | `MINIO_MEMORY_LIMIT` |
 | caddy | 128M | 256M | `CADDY_MEMORY_LIMIT` |
 | cloudflared (tunnel mode only) | 128M | 128M | `CLOUDFLARED_MEMORY_LIMIT` |
 | backup | 256M | 256M | `BACKUP_MEMORY_LIMIT` |

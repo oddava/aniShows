@@ -16,9 +16,12 @@
 #   1. (--from-offsite) fetch the backup into backups-data/ and check its checksums
 #   2. verify it: checksums, and a test restore into a temporary database
 #   3. stop web, celery and beat (Caddy stays up and answers 502 meanwhile)
-#   4. backups/shell/restore.sh: a pre-restore snapshot of the live data, the
-#      dump restored into a staging database and swapped in by name (the old
-#      database is kept as rollback_<timestamp>), then the media archive
+#   4. backups/shell/restore.sh: a pre-restore snapshot of the live data (the
+#      database and an export of the media bucket), the dump restored into a
+#      staging database and swapped in by name (the old database is kept as
+#      rollback_<timestamp>), then the media archive, rclone-synced into the
+#      S3 bucket AWS_STORAGE_BUCKET_NAME (that bucket only; objects the backup
+#      lacks are removed from it)
 #   5. migrate (the backup may predate this release's schema). Not for a
 #      pre-migrate dump: it is the schema of the release before, and migrating
 #      it with the live (bad) release would re-apply the migrations being undone

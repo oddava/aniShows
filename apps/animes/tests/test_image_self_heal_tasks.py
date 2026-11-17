@@ -20,6 +20,12 @@ class ImageTaskOutageDetectionTests(TestCase):
         )
         self.assertTrue(_is_storage_endpoint_error(exc))
 
+    def test_detects_rustfs_endpoint_error_message(self):
+        exc = Exception(
+            'Could not connect to the endpoint URL: "http://rustfs:9000/anishows-media/media/c.jpg"'
+        )
+        self.assertTrue(_is_storage_endpoint_error(exc))
+
     def test_non_storage_errors_are_not_misclassified(self):
         exc = ValueError("invalid payload from provider")
         self.assertFalse(_is_storage_endpoint_error(exc))
