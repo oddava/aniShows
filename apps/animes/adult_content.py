@@ -162,14 +162,47 @@ def sync_adult_flags_from_anilist(
     return totals
 
 
-def _drop_public_caches(slugs: Iterable[str]) -> None:
+def _drop_public_caches(slugs: Iterable[str], *, bump_namespace: bool = True) -> None:
     """One list-cache (namespace) bump, then each row's cached detail payload."""
-    from .services.public_anime_service import AnimePublicPayloadService
-    from .signals import _invalidate_anime_public_caches  # signals imports models
+    from .services.public_anime_service import AnimePublicPayloadService, invalidate_anime_detail
 
-    AnimePublicPayloadService.bump_collection_cache_namespace()
+    if bump_namespace:
+        AnimePublicPayloadService.bump_collection_cache_namespace()
     for slug in slugs:
-        _invalidate_anime_public_caches(slug, bump_namespace=False)
+        invalidate_anime_detail(slug)
+
+
+def drop_public_caches_or_keep_for_replay(
+    slugs: Iterable[str],
+    *,
+    bump_namespace: bool = True,
+    using: str | None = None,
+    reraise: bool = True,
+) -> None:
+    """Drop these anime's cached public payloads now, or keep them for a replay.
+
+    Every path that changes a row's public visibility after (or outside) its
+    commit goes through here: an Anime save (``signals``), the adult-flag sync,
+    the offline catalog import. When the cache is down, the slugs are kept in
+    ``PendingPublicCacheInvalidation`` (readers and the 5-minute task replay
+    them) and, with ``reraise``, the error still propagates: a failed
+    invalidation is reported, never silently dropped.
+    """
+    from ..shared.errors import CACHE_ERRORS
+
+    slugs = list(dict.fromkeys(slugs))
+    try:
+        _drop_public_caches(slugs, bump_namespace=bump_namespace)
+    except CACHE_ERRORS:
+        pending = apps.get_model("anime", "PendingPublicCacheInvalidation")
+        pending.objects.using(using or "default").bulk_create(
+            [pending(slug=slug) for slug in slugs], ignore_conflicts=True
+        )
+        logger.warning(
+            "Cache down: %s anime kept for a cache invalidation replay", len(slugs), exc_info=True
+        )
+        if reraise:
+            raise
 
 
 def _invalidate_public_caches(slugs: list[str], using: str) -> None:
@@ -183,20 +216,8 @@ def _invalidate_public_caches(slugs: list[str], using: str) -> None:
     """
 
     def invalidate():
-        from ..shared.errors import CACHE_ERRORS
-
-        try:
-            _drop_public_caches(slugs)
-        except CACHE_ERRORS:
-            pending = apps.get_model("anime", "PendingPublicCacheInvalidation")
-            pending.objects.using(using).bulk_create(
-                [pending(slug=slug) for slug in dict.fromkeys(slugs)], ignore_conflicts=True
-            )
-            logger.warning(
-                "Cache down: %s anime kept for a cache invalidation replay",
-                len(slugs),
-                exc_info=True,
-            )
+        # The sync goes on (the replay drops them once Redis is back).
+        drop_public_caches_or_keep_for_replay(slugs, using=using, reraise=False)
 
     transaction.on_commit(invalidate, using=using)
 

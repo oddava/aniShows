@@ -14,7 +14,6 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from ...shared.logger import logger
-from ...shared.public_cache import invalidate_public_cache_keys
 from ..adult_content import offline_entry_is_provisionally_adult
 from ..models import Anime, AnimeStudio, Studio
 from . import offline_catalog_parsing as parsing
@@ -29,7 +28,6 @@ from .offline_catalog_parsing import (
     ANIME_URL_MAX_LENGTH,
     OfflineCatalogEntry,
 )
-from .public_anime_service import AnimePublicPayloadService
 
 if TYPE_CHECKING:
     from datetime import date
@@ -206,14 +204,11 @@ class OfflineCatalogPersistence(OfflineCatalogMatcher):
             self._attach_primary_studios(studio_pairs)
 
         if touched_slugs:
-            AnimePublicPayloadService.bump_collection_cache_namespace()
-            invalidate_public_cache_keys(
-                *[
-                    key
-                    for slug in touched_slugs
-                    for key in AnimePublicPayloadService.detail_cache_keys(slug)
-                ]
-            )
+            # A cache error keeps them for a replay (an offline row can be
+            # hidden as provisionally adult), then still raises.
+            from ..adult_content import drop_public_caches_or_keep_for_replay
+
+            drop_public_caches_or_keep_for_replay(touched_slugs)
 
         return {
             "created": created_count,

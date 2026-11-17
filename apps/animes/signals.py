@@ -5,6 +5,7 @@ from django.dispatch import receiver
 
 from ..shared.public_cache import invalidate_public_cache_keys
 from ..users.models import UserAnimeList
+from .adult_content import drop_public_caches_or_keep_for_replay
 from .models import Anime, Genre, Review, Studio, UserFavorite
 from .services.public_anime_service import AnimePublicPayloadService, invalidate_anime_detail
 from .services.user_list_side_effects import (
@@ -144,10 +145,9 @@ def invalidate_anime_detail_cache(sender, instance, update_fields=None, using=No
         slugs.add(old_slug)
 
     def invalidate() -> None:
-        if not detail_only:
-            AnimePublicPayloadService.bump_collection_cache_namespace()
-        for slug in slugs:
-            _invalidate_anime_public_caches(slug, bump_namespace=False)
+        # A cache error keeps the slugs for a replay (a save can flag a title
+        # adult: AniList's isAdult), then still raises.
+        drop_public_caches_or_keep_for_replay(slugs, bump_namespace=not detail_only, using=using)
 
     transaction.on_commit(invalidate, using=using)
 
@@ -155,7 +155,9 @@ def invalidate_anime_detail_cache(sender, instance, update_fields=None, using=No
 @receiver(post_delete, sender=Anime)
 def invalidate_deleted_anime_detail_cache(sender, instance, using=None, **kwargs):
     slug = instance.slug
-    transaction.on_commit(lambda: _invalidate_anime_public_caches(slug), using=using)
+    transaction.on_commit(
+        lambda: drop_public_caches_or_keep_for_replay([slug], using=using), using=using
+    )
     AnimeWatchEpisodeService().invalidate_for_anime(instance)
 
 

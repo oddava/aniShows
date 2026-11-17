@@ -11,7 +11,7 @@ from ...shared.parsing import positive_int
 from ...shared.public_cache import get_or_build_public_payload
 from ..models import Anime, AnimeCharacter, Character, UserFavoriteCharacter
 from ..serializers import CharacterDetailSerializer
-from ..services.public_anime_service import AnimeQueryService
+from ..services.public_anime_service import AnimePublicPayloadService, AnimeQueryService
 
 # What the role serializers read (``StaffVoiceRoleAnimeSerializer`` and the
 # compact person serializers); never the whole Anime row (B15).
@@ -42,7 +42,8 @@ def prefixed(prefix: str, fields: tuple[str, ...]) -> tuple[str, ...]:
 class CachedPersonDetailViewSet(RetrieveModelMixin, GenericViewSet):
     """A character or staff page: retrieve only, every role in one payload.
 
-    The payload is cached per adult-content setting (``{CACHE_PREFIX}:{id}:adult:{0|1}``,
+    The payload is cached per adult-content setting (``{CACHE_PREFIX}:{id}:adult:{0|1}``
+    under the catalog namespace,
     10 min) and built without the viewer; the favourite count and the viewer's
     own favourite state are read per request, in one query. There is no list
     action: it returned the whole table.
@@ -67,8 +68,12 @@ class CachedPersonDetailViewSet(RetrieveModelMixin, GenericViewSet):
             instance = get_object_or_404(self.detail_queryset(can_view_adult_content), pk=object_id)
             return self.get_serializer(instance).data
 
+        # Under the catalog namespace: the anime list on the page follows every
+        # visibility change (a title flagged adult or quarantined) at once.
         data, cache_status = get_or_build_public_payload(
-            f"{self.CACHE_PREFIX}:{object_id}:adult:{int(can_view_adult_content)}",
+            AnimePublicPayloadService._with_collection_namespace(
+                f"{self.CACHE_PREFIX}:{object_id}:adult:{int(can_view_adult_content)}"
+            ),
             build_payload,
             ttl=self.CACHE_TTL,
         )

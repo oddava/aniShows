@@ -12,13 +12,13 @@ under the catalog's collection namespace, so visibility changes drop it at once.
 from xml.sax.saxutils import escape
 
 from django.conf import settings
-from django.core.cache import cache
 from django.http import Http404, HttpResponse
 from django.views.decorators.http import require_GET
 
 from ...animes.models import Anime
 from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
+from ...shared.public_cache import best_effort_get, best_effort_set
 
 ANIME_PER_FILE = 10_000
 CACHE_TTL_SECONDS = 6 * 60 * 60
@@ -56,17 +56,16 @@ def _cached(key: str, build) -> str:
 
     try:
         namespace = AnimePublicPayloadService.collection_cache_namespace()
-        cache_key = f"{CACHE_PREFIX}{namespace}:{key}"
-        body = cache.get(cache_key)
     except CACHE_ERRORS:
         logger.warning("SEO cache unavailable (read)", exc_info=True)
         return build()
+    # best_effort_*: a cache error is a miss, and a key built while the
+    # namespace was unavailable (an outage key) is never read or written.
+    cache_key = f"{CACHE_PREFIX}{namespace}:{key}"
+    body = best_effort_get(cache_key, source="SEO")
     if body is None:
         body = build()
-        try:
-            cache.set(cache_key, body, CACHE_TTL_SECONDS)
-        except CACHE_ERRORS:
-            logger.warning("SEO cache unavailable (write)", exc_info=True)
+        best_effort_set(cache_key, body, CACHE_TTL_SECONDS, source="SEO")
     return body
 
 

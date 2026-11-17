@@ -195,13 +195,13 @@ def test_changed_rows_drop_their_cached_public_payloads(django_capture_on_commit
             "apps.animes.services.public_anime_service."
             "AnimePublicPayloadService.bump_collection_cache_namespace"
         ) as bump,
-        mock.patch("apps.animes.signals._invalidate_anime_public_caches") as drop,
+        mock.patch("apps.animes.services.public_anime_service.invalidate_anime_detail") as drop,
         django_capture_on_commit_callbacks(execute=True),
     ):
         apply_anilist_adult_flags([{"id": 5101, "isAdult": True}])
 
     bump.assert_called_once()
-    drop.assert_called_once_with(anime.slug, bump_namespace=False)
+    drop.assert_called_once_with(anime.slug)
 
 
 def test_an_invalidation_lost_to_an_outage_is_replayed_once_redis_is_back(
@@ -243,13 +243,13 @@ def test_an_invalidation_lost_to_an_outage_is_replayed_once_redis_is_back(
 
     with (
         mock.patch(bump_path) as bump,
-        mock.patch("apps.animes.signals._invalidate_anime_public_caches") as drop,
+        mock.patch("apps.animes.services.public_anime_service.invalidate_anime_detail") as drop,
     ):
         assert replay_public_cache_invalidations.apply().get() == 1
         assert adult_content.replay_public_cache_invalidations() == 0
 
     bump.assert_called_once()
-    drop.assert_called_once_with(anime.slug, bump_namespace=False)
+    drop.assert_called_once_with(anime.slug)
     assert not PendingPublicCacheInvalidation.objects.exists()
 
 
@@ -613,3 +613,43 @@ def mock_no_replay():
     from unittest import mock
 
     return mock.patch.object(adult_content, "replay_public_cache_invalidations", return_value=1)
+
+
+def test_a_save_that_flags_a_title_adult_during_an_outage_is_replayed(
+    _pending_checks_on, django_capture_on_commit_callbacks
+):
+    """Council r3: a provider save (AniList's isAdult) whose post-commit
+    invalidation fails keeps the slug for the replay and still raises.
+    """
+    from unittest import mock
+
+    from django.urls import reverse
+    from redis.exceptions import ConnectionError as RedisConnectionError
+    from rest_framework.test import APIClient
+
+    from apps.animes.models import PendingPublicCacheInvalidation
+    from apps.shared.throttling import warn_cache_outage
+
+    anime = make_anime(anilist_id=5105)
+    client = APIClient()
+    detail = reverse("anime-detail", args=[anime.slug])
+    assert client.get(detail).status_code == 200  # cached as not adult
+
+    anime.is_adult = True
+    with (
+        mock.patch(
+            "apps.animes.services.public_anime_service."
+            "AnimePublicPayloadService.bump_collection_cache_namespace",
+            side_effect=RedisConnectionError("down"),
+        ),
+        pytest.raises(RedisConnectionError),
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        anime.save()
+    assert list(PendingPublicCacheInvalidation.objects.values_list("slug", flat=True)) == [
+        anime.slug
+    ]
+
+    warn_cache_outage("test outage")  # this process saw it; Redis is back now
+    assert client.get(detail).status_code == 403
+    assert not PendingPublicCacheInvalidation.objects.exists()

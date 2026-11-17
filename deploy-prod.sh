@@ -86,6 +86,7 @@ STATE_BACKEND_ID="$(state_value BACKEND_IMAGE_ID)"
 STATE_FRONTEND_ID="$(state_value FRONTEND_IMAGE_ID)"
 STATE_PREVIOUS_BACKEND_ID="$(state_value PREVIOUS_BACKEND_IMAGE_ID)"
 STATE_PREVIOUS_FRONTEND_ID="$(state_value PREVIOUS_FRONTEND_IMAGE_ID)"
+STATE_PREVIOUS_BACKEND_TAG="$(state_value PREVIOUS_BACKEND_TAG)"
 load_deployed_state
 [ -n "$tag_source" ] || { [ -n "${BACKEND_TAG:-}" ] && tag_source="deployed.env"; }
 load_env_file .env
@@ -589,6 +590,9 @@ prev_backend_id="$STATE_PREVIOUS_BACKEND_ID"
 [ "$NEW_BACKEND_ID" != "$STATE_BACKEND_ID" ] && prev_backend_id="${ROLLBACK_BACKEND_ID}"
 prev_frontend_id="$STATE_PREVIOUS_FRONTEND_ID"
 [ "$NEW_FRONTEND_ID" != "$STATE_FRONTEND_ID" ] && prev_frontend_id="${ROLLBACK_FRONTEND_ID}"
+# The previous release's tag (sha-<7>: the commit for the workflow's rollback_to).
+prev_backend_tag="$STATE_PREVIOUS_BACKEND_TAG"
+[ "$NEW_BACKEND_ID" != "$STATE_BACKEND_ID" ] && prev_backend_tag="${STATE_BACKEND_TAG}"
 state_tmp="${DEPLOYED_STATE_FILE}.tmp.$$"
 {
     echo "# Written by deploy-prod.sh after a successful deploy; do not edit."
@@ -598,6 +602,7 @@ state_tmp="${DEPLOYED_STATE_FILE}.tmp.$$"
     echo "FRONTEND_IMAGE_ID=${NEW_FRONTEND_ID}"
     echo "PREVIOUS_BACKEND_IMAGE_ID=${prev_backend_id}"
     echo "PREVIOUS_FRONTEND_IMAGE_ID=${prev_frontend_id}"
+    echo "PREVIOUS_BACKEND_TAG=${prev_backend_tag}"
     echo "DEPLOYED_AT=${DEPLOY_TS}"
 } >"$state_tmp"
 mv -f "$state_tmp" "$DEPLOYED_STATE_FILE"

@@ -215,9 +215,11 @@ server's `backups-data/.deploy.lock`); a running deploy is never cancelled.
 **Rollback:**
 
 - *Web did not come up:* nothing to do; the old replica keeps serving and the deploy fails.
-- *The new release is bad:* run the workflow with **rollback_to** = the previous commit (its
-  7-character SHA is the `sha-…` tag in `backups-data/deployed.env`, `PREVIOUS_*` lines, or in
-  the workflow history). CI and the build are skipped; that commit's images are already in GHCR.
+- *The new release is bad:* run the workflow with **rollback_to** = the previous commit. Its
+  7-character SHA is in `backups-data/deployed.env` as `PREVIOUS_BACKEND_TAG=sha-<7 chars>` (the
+  release before the live one; `BACKEND_TAG` is the live one), or in the previous successful run of
+  the Deploy workflow. CI and the build are skipped; that commit's images are already in GHCR.
+  Without GitHub: the local-image recipe with `PREVIOUS_*_IMAGE_ID` ([runbook.md](runbook.md#rollback), step 2).
 - *Its migrations must be undone too*, or anything else: the failed deploy prints a recipe with the
   concrete image ids and migration names; [runbook.md](runbook.md#rollback) has the steps,
   including restoring the pre-migrate dump.

@@ -102,7 +102,8 @@ A failure after the migration step prints a recipe with the concrete names. In g
    `docker tag <backend id> ghcr.io/oddava/anishows-backend:rollback && docker tag <frontend id> ghcr.io/oddava/anishows-frontend:rollback && BACKEND_TAG=rollback FRONTEND_TAG=rollback SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh`
    (the ids are `PREVIOUS_*_IMAGE_ID` in `backups-data/deployed.env`, or printed by the failed
    deploy; `SKIP_PULL=1`: the `rollback` tags exist only on this host). From the registry instead:
-   the Deploy workflow with `rollback_to` = the previous commit (it also checks that commit out),
+   the Deploy workflow with `rollback_to` = the previous commit (`PREVIOUS_BACKEND_TAG=sha-<7>` in
+   `backups-data/deployed.env`; it also checks that commit out),
    or by hand `git checkout --detach <previous> && BACKEND_TAG=sha-<previous> FRONTEND_TAG=sha-<previous> ./deploy-prod.sh`.
    (The workflow takes the deploy lock before the checkout and hands it to `deploy-prod.sh`; a
    target whose `deploy-prod.sh` predates that hand-over takes the lock itself instead.)
