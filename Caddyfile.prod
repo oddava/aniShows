@@ -16,6 +16,13 @@
 	# (public mode only; the other modes have no site that needs a certificate).
 	email {$CADDY_ACME_EMAIL:admin@anishows.local}
 
+	# The container healthcheck asks the admin API every 30 s; without this,
+	# each probe is an info line in `docker logs` (2,880 a day). Requests to
+	# the site still go to the access log below.
+	log default {
+		exclude admin.api
+	}
+
 	servers {
 		# Peers whose client-IP and X-Forwarded-Proto headers Caddy believes.
 		# Proxy mode: the host's reverse proxy only (CADDY_TRUSTED_PROXIES,

@@ -1,7 +1,8 @@
 # Production runbook
 
-Everything runs from the repo root on the server. `deploy-prod.sh` is the only deploy path; CI
-(`.github/workflows/deploy.yml`) calls it over SSH after the images are pushed. Edge modes and the
+Everything runs from the repo root on the server. `deploy-prod.sh` is the only deploy path; the
+Deploy workflow (`.github/workflows/deploy.yml`, run by hand) builds the images, checks the commit
+out on the server and calls it over SSH (`scripts/deploy/remote_deploy.sh`). Edge modes and the
 proxy chain: [DEPLOY.md](DEPLOY.md) (proxy mode, the default) and [tunnel.md](tunnel.md) (optional). Backups: [../backups.md](../backups.md). Every variable:
 `.env.production.example`.
 
@@ -79,15 +80,18 @@ a container uses (`scripts/deploy/prune_images.sh`; `PRUNE_IMAGES=0` turns it of
    set `CADDY_TRUSTED_PROXIES` to Cloudflare's ranges (https://www.cloudflare.com/ips/, space-separated,
    plus `127.0.0.1/8 ::1/128`) and block 80/443 from other sources at the firewall. Simpler: use
    DNS-only records in public mode, or the tunnel.
-5. `docker login ghcr.io` (a PAT with `read:packages`), then `./deploy-prod.sh`.
+5. `docker login ghcr.io` (a PAT with `read:packages`), then run the Deploy workflow (it builds
+   the images and runs `./deploy-prod.sh` on the server; DEPLOY.md steps 5 and 8).
 6. Create the first admin: `$PROD exec web python manage.py createsuperuser`.
 7. Run the outside checks in DEPLOY.md (no redirect loop, per-client throttles, the real
    `client_ip` in Caddy's log), then `make prod-verify-backup` after the first nightly backup.
 
 ## Routine deploy
 
-Push to `main` (CI), or on the server: `git pull --ff-only && ./deploy-prod.sh`. Pin a release with
-`BACKEND_TAG=sha-<7 chars> FRONTEND_TAG=sha-<7 chars> ./deploy-prod.sh`.
+Actions → **Deploy (Hetzner VPS)** → Run workflow on `main` (nothing deploys on push). By hand on
+the server, for a commit whose images the workflow already pushed:
+`git fetch && git checkout --detach <commit> && BACKEND_TAG=sha-<7 chars> FRONTEND_TAG=sha-<7 chars> ./deploy-prod.sh`.
+A config-only change (`.env`): `./deploy-prod.sh` alone keeps the live release.
 
 ## Rollback
 
@@ -98,22 +102,26 @@ A failure after the migration step prints a recipe with the concrete names. In g
    `docker tag <backend id> ghcr.io/oddava/anishows-backend:rollback && docker tag <frontend id> ghcr.io/oddava/anishows-frontend:rollback && BACKEND_TAG=rollback FRONTEND_TAG=rollback SKIP_PULL=1 SKIP_ANILIST_SMOKE=1 ./deploy-prod.sh`
    (the ids are `PREVIOUS_*_IMAGE_ID` in `backups-data/deployed.env`, or printed by the failed
    deploy; `SKIP_PULL=1`: the `rollback` tags exist only on this host). From the registry instead:
-   `BACKEND_TAG=sha-<previous> FRONTEND_TAG=sha-<previous> ./deploy-prod.sh`.
-   (or `BACKEND_TAG=sha-<previous>`).
+   the Deploy workflow with `rollback_to` = the previous commit (it also checks that commit out),
+   or by hand `git checkout --detach <previous> && BACKEND_TAG=sha-<previous> FRONTEND_TAG=sha-<previous> ./deploy-prod.sh`.
 3. **The old code cannot run on the new schema:** undo this deploy's migrations with the *new*
    image (it has the migration files; every fan-out migration is reversible by policy), then do step 2:
    `$PROD run --rm --no-deps web python manage.py migrate <app> <migration before the plan>`.
    The plan file lists exactly which migrations were applied.
 4. **Last resort, data damage:** restore the pre-migrate dump. Stop web/celery/beat first:
-   `$PROD stop web celery beat && $PROD exec backup /app/shell/restore.sh <ts>-pre-migrate --yes --skip-media`.
-   With the bundled db, restore swaps databases and keeps the old one as `rollback_*`. On an external
+   `scripts/deploy/restore.sh <ts>-pre-migrate --db-only --yes` (it stops and restarts web, celery
+   and beat itself). With the bundled db, restore swaps databases and keeps the old one as `rollback_*`. On an external
    server the role needs CREATEDB for that; otherwise restore with `pg_restore --clean` as the owner.
 
 ## Restore drill and verification
 
 `make prod-verify-backup [TIMESTAMP=…]` restores a dump into a throwaway Postgres on the compose
 network and runs `check`, `showmigrations` and a row count against it. It never touches the live
-database. Run it after the first backup, and monthly.
+database. Run it after the first backup, and monthly. With an off-site remote, also
+`scripts/deploy/restore.sh latest --from-offsite` (no `--yes`: fetch and verify only) now and then.
+
+A real restore: `scripts/deploy/restore.sh <ts>|latest [--from-offsite] [--db-only|--media-only] --yes`
+(`make prod-restore TIMESTAMP=… FORCE=1`), DEPLOY.md step 7.
 
 ## Rotating secrets
 
@@ -126,7 +134,9 @@ database. Run it after the first backup, and monthly.
 | `AWS_SECRET_ACCESS_KEY` (MinIO root) | `.env`, `$PROD up -d --no-deps minio`, deploy. |
 | `METRICS_PASSWORD` | `.env`, deploy; update the Prometheus scrape config. |
 | `TUNNEL_TOKEN` | Cloudflare dashboard → tunnel → refresh token, `.env`, `$PROD up -d --no-deps cloudflared`. |
-| `RCLONE_CONFIG_*` | `.env`, `$PROD up -d --no-deps backup` (the cron env file is rebuilt at start). |
+| `RCLONE_CONFIG_*` | `.env`, `$PROD up -d --no-deps backup` (the cron env file is rebuilt at start), then `make prod-offsite-list`. |
+| `VPS_SSH_KEY` (GitHub) | New key pair; add the public key to the app user's `authorized_keys`, update the secret, remove the old line. |
+| GHCR read token (server) | New `read:packages` PAT, `docker login ghcr.io` as the app user, revoke the old one. |
 
 ## Footprint on a shared 8 GB / 4-core host
 
@@ -197,7 +207,7 @@ db the same budget applies against Postgres' `max_connections` (100).
 | # | Decision | Where |
 |---|---|---|
 | G7 Q1 ✓ | HSTS on (1 year); `includeSubDomains` and `preload` **off** by default (they cover every subdomain, and preload is hard to undo). Each is an env flag. | `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD` |
-| G7 Q2 ✓ / ⚑ | Decided: local backups (daily, `BACKUP_KEEP`) plus `make prod-verify-backup`. Off-site stays documented and env-driven; **target still to be chosen** (Hetzner Object Storage, a Storage Box, …). Unset = no upload. | `BACKUP_REMOTE`, `RCLONE_CONFIG_*` |
+| G7 Q2 ✓ / ⚑ | Decided: local backups (daily, `BACKUP_KEEP`) plus `make prod-verify-backup`. Off-site is optional and env-driven; **target still to be chosen** (Storage Box or B2 examples in DEPLOY.md step 7). Unset = no upload, one log line per run. | `BACKUP_REMOTE`, `RCLONE_CONFIG_*` |
 | D-9 ⚑ | Real CIDRs for `/metrics`, readiness, `/django-admin/`. Default: **closed** (empty = 403 for every client); wide-open values are refused unless `ALLOW_WIDE_ADMIN_CIDRS=1`. | `ADMIN_ALLOW_CIDRS` |
 | D-1 ✓ | API session auth **off** in production: the SPA is JWT-only (Bearer access token, httpOnly refresh cookie). The Django admin keeps its own session. | `API_SESSION_AUTH_ENABLED=False` (template) |
 | Adult rule ✓ | Adult = AniList `Media.isAdult` only (genres/tags no longer count, so e.g. *The Apothecary Diaries* is visible). Migration `anime.0060` seeds it from the Hentai genre or a `hentai` tag and never unhides a row without AniList data; the deploy that applies it then queues `sync_adult_flags` on the worker (≈ 1 request per 50 titles, rate-limited; `manage.py sync_adult_flags` runs it by hand), and a weekly task keeps it in sync. | `apps/animes/adult_content.py` |
