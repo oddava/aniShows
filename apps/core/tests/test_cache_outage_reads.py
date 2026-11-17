@@ -7,6 +7,7 @@ apps/users/tests/test_auth_cache_outage.py (they fail closed with a 503).
 """
 
 from contextlib import ExitStack
+from typing import Any
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -23,6 +24,12 @@ CACHE_METHODS = ("get", "get_many", "set", "set_many", "add", "delete", "delete_
 
 
 class ReadEndpointsSurviveACacheOutageTests(APITestCase):
+    user: Any
+    staff: Any
+    anime: Anime
+    category: Category
+    thread: Thread
+
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(

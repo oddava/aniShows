@@ -46,7 +46,7 @@ def schedule_user_stats_refresh(
 
     try:
         kwargs = {"user_id": user_id}
-        options = {"kwargs": kwargs}
+        options: dict[str, object] = {"kwargs": kwargs}
         if resolved_countdown:
             options["countdown"] = resolved_countdown
         if queue:

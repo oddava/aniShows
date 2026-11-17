@@ -15,7 +15,7 @@ import sys
 
 # Measured on release/anishows-rc with mypy 1.19.1 (uv.lock), `python -m mypy .`,
 # the [tool.mypy] config in pyproject.toml.
-CEILING = 310
+CEILING = 307
 _SUMMARY = re.compile(r"Found (\d+) errors? in \d+ files?")
 
 

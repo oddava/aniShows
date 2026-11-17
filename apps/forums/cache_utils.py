@@ -202,13 +202,16 @@ def get_thread_view_buffer_key(thread_id: int) -> str:
     return THREAD_VIEW_BUFFER_KEY.format(thread_id=thread_id)
 
 
+# NotImplementedError: the cache backend is not django-redis.
+_REDIS_CONNECTION_ERRORS: tuple[type[BaseException], ...] = (NotImplementedError, *CACHE_ERRORS)
+
+
 def _get_redis_connection():
     try:
         from django_redis import get_redis_connection
 
         return get_redis_connection("default")
-    except (NotImplementedError, *CACHE_ERRORS):
-        # NotImplementedError: the cache backend is not django-redis.
+    except _REDIS_CONNECTION_ERRORS:
         return None
 
 

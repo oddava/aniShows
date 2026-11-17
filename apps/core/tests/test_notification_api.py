@@ -244,7 +244,11 @@ class EmailUnsubscribeApiTests(APITestCase):
         self.assertTrue(self._email_on())
 
     def test_view_is_throttled(self):
-        self.assertIn(ScopedRateThrottle, EmailUnsubscribeView.throttle_classes)
+        # A scoped limit; it fails open during a Redis outage (a signed link,
+        # nothing to guess), like the other non-credential limits.
+        self.assertTrue(
+            any(issubclass(c, ScopedRateThrottle) for c in EmailUnsubscribeView.throttle_classes)
+        )
         self.assertEqual(EmailUnsubscribeView.throttle_scope, "notification_email_unsubscribe")
         from django.conf import settings
 
