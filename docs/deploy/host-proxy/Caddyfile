@@ -1,0 +1,34 @@
+# aniShows behind the host's existing Caddy (proxy mode, CADDY_MODE=proxy).
+#
+# Add this site to the host Caddy's Caddyfile (or an imported file), then
+# `caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy`.
+# The host Caddy gets the certificates for anishows.com itself (ACME).
+#
+# reverse_proxy already does what the app relies on: it appends the client to
+# X-Forwarded-For, sets X-Forwarded-Proto to the scheme it saw, passes Host
+# through and proxies WebSocket upgrades (/ws/). Do not add
+# "header_up X-Forwarded-For {header.X-Forwarded-For}" or similar: passing a
+# client's own header through would let it pick its IP.
+#
+# The stack's Caddy listens on 127.0.0.1:8080 (CADDY_PROXY_BIND /
+# CADDY_PROXY_PORT) and sees this Caddy as the Docker gateway of APP_SUBNET
+# (10.250.250.1): that address is in CADDY_TRUSTED_PROXIES.
+
+anishows.com, www.anishows.com {
+	# Caddy caps request bodies at 12 MB in the stack too.
+	request_body {
+		max_size 12MB
+	}
+	reverse_proxy 127.0.0.1:8080 {
+		transport http {
+			read_timeout 120s
+		}
+	}
+	# HSTS comes from the stack ("max-age=31536000"); do not add a second one here.
+}
+
+# Host Caddy running in a container instead (no host network)? Then
+# 127.0.0.1 is that container itself. Either publish nothing and join our
+# network (CADDY_PROXY_PUBLISH=0, infra/compose/shared-proxy-network.yml,
+# reverse_proxy anishows-caddy:80), or use the host's address on a bridge;
+# see DEPLOY.md, "The proxy runs as a container".

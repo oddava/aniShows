@@ -10,7 +10,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from apps.core.views import MetricsView
+from apps.core.views import MetricsView, seo
 from apps.users.share_preview import ProfileSharePreviewView
 
 urlpatterns = [
@@ -25,6 +25,11 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("i18n/", include("django.conf.urls.i18n")),
     path("metrics", MetricsView.as_view(), name="metrics"),
+    # Caddy sends these four to Django; the SPA serves every other page.
+    path("robots.txt", seo.robots_txt, name="robots_txt"),
+    path("sitemap.xml", seo.sitemap_index, name="sitemap_index"),
+    path("sitemap-pages.xml", seo.sitemap_pages, name="sitemap_pages"),
+    path("sitemap-anime-<int:number>.xml", seo.sitemap_anime, name="sitemap_anime"),
     path("u/<str:username>", ProfileSharePreviewView.as_view(), name="profile_share_preview"),
     path(
         "u/<str:username>/", ProfileSharePreviewView.as_view(), name="profile_share_preview_slash"

@@ -1,0 +1,18 @@
+# External Postgres with DB_SSLMODE=verify-full (or verify-ca): mount the
+# server's CA certificate into every container that connects. In .env:
+#   DB_SSLMODE=verify-full
+#   DB_SSLROOTCERT=/etc/anishows/db-ca.pem        (path inside the containers)
+#   DB_CA_FILE=/srv/anishows/db-ca.pem            (path on the host)
+#   COMPOSE_EXTRA_FILES="infra/compose/db-ca.yml"
+x-db-ca: &db-ca
+  - ${DB_CA_FILE:?set DB_CA_FILE to the CA certificate on the host}:/etc/anishows/db-ca.pem:ro
+
+services:
+  web:
+    volumes: *db-ca
+  celery:
+    volumes: *db-ca
+  beat:
+    volumes: *db-ca
+  backup:
+    volumes: *db-ca

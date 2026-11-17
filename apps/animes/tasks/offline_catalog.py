@@ -91,7 +91,6 @@ class OfflineCatalogImportTask(BaseTask):
                 round_interval_minutes=settings.OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES,
                 batch_size=settings.OFFLINE_RECONCILE_BATCH_SIZE,
                 chunk_size=enrichment_chunk_size,
-                require_themes=True,
             )
         result["watch_episode_sync_queued"] = bool(watch_episode_task_id)
         result["watch_episode_sync_task_id"] = watch_episode_task_id
@@ -104,9 +103,9 @@ class OfflineCatalogImportTask(BaseTask):
 
 
 class OfflineCatalogReconcileSyncTask(BaseTask):
-    """Reconcile AniList/Jikan enrichment for offline-imported anime.
+    """Reconcile AniList enrichment for offline-imported anime.
 
-    This task repeatedly enqueues metadata, franchise, and theme sync chunks
+    This task repeatedly enqueues metadata and franchise sync chunks
     for anime imported from Anime Offline Database until all candidates are
     synced (or a hard round cap is hit).
     """
@@ -120,7 +119,6 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
         anime_ids: list[int] | None = None,
         batch_size: int | None = None,
         chunk_size: int | None = None,
-        require_themes: bool = True,
         strict: bool = False,
         reset_pipeline: bool = False,
         max_rounds: int | None = None,
@@ -218,7 +216,6 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
                         "anime_ids": anime_ids or [],
                         "batch_size": batch_size,
                         "chunk_size": chunk_size,
-                        "require_themes": require_themes,
                         "strict": strict,
                         "reset_pipeline": False,
                         "max_rounds": max_rounds,
@@ -299,7 +296,6 @@ class OfflineCatalogReconcileSyncTask(BaseTask):
                         ~Q(
                             offline_sync_state__metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
                             offline_sync_state__franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-                            offline_sync_state__themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
                         )
                         | build_stalled_offline_metadata_query()
                     )
@@ -431,11 +427,15 @@ def reconcile_offline_catalog_sync(
     round_interval_minutes: int | None = None,
     workflow_key: str | None = None,
 ):
+    """Run one reconcile round.
+
+    ``require_themes`` is ignored (the themes stage was removed with Jikan); it
+    is still accepted for messages queued before.
+    """
     return self.execute(
         anime_ids=anime_ids,
         batch_size=batch_size,
         chunk_size=chunk_size,
-        require_themes=require_themes,
         strict=strict,
         reset_pipeline=reset_pipeline,
         max_rounds=max_rounds,

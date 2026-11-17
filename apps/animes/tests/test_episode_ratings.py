@@ -177,6 +177,20 @@ class EpisodeRatingApiTests(APITestCase):
             ["Episode number cannot exceed the known episode count (3)."],
         )
 
+    def test_episode_rating_bounds_unknown_episode_counts(self):
+        self.anime.episode_count = 0
+        self.anime.save(update_fields=["episode_count"])
+        self.client.force_authenticate(user=self.user)
+
+        too_far = self.client.put(self.detail_url(10001), {"rating": "4.5"})
+        at_cap = self.client.put(self.detail_url(10000), {"rating": "4.5"})
+
+        self.assertEqual(too_far.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            too_far.data["errors"]["episode_number"], ["Episode number cannot exceed 10000."]
+        )
+        self.assertEqual(at_cap.status_code, status.HTTP_201_CREATED)
+
     def test_episode_rating_requires_authentication(self):
         response = self.client.put(self.detail_url(1), {"rating": "4.5"})
 

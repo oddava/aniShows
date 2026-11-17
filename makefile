@@ -8,16 +8,17 @@ ENV_FILE = .env
 ENV_EXAMPLE = .env.example
 
 .PHONY: help up down restart build ps logs web-logs celery-logs beat-logs \
-        front-logs db-logs mig migrate shell superuser test lint collectstatic \
+        front-logs db-logs mig migrate shell superuser test lint typecheck collectstatic \
         msg icomp import-anime sync-catalog sync-airing sync-metadata \
-        sync-themes sync-full sync-franchises sync-recs import-offline \
+        sync-full sync-franchises sync-recs import-offline \
         import-offline-async import-offline-resume import-offline-full import-offline-full-async \
-        offline-repair-run populate-themes \
+        offline-repair-run \
         backfill-urls backfill-youtube update-slugs thumbnails thumbnails-s3 \
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
         clean prune cleanup-media backup backups backup-export backup-import exports \
         verify-backup restore restore-db-only restore-media-only load-browse \
-        load-api-smoke load-api-standard load-api-micro bench-api
+        load-api-smoke load-api-standard load-api-micro bench-api \
+        prod-config prod-backup prod-verify-backup prod-restore prod-offsite-list check-migrations-reversible
 
 # ============================================================================
 # Service Management
@@ -95,6 +96,9 @@ test:                           ## Run backend tests in parallel (ARGS="apps/use
 lint:                           ## Run linter (ruff)
 	docker compose run --rm --no-deps web /opt/venv/bin/python -m ruff check .
 
+typecheck:                      ## mypy: fail above the ceiling in scripts/check_mypy_ceiling.py
+	docker compose run --rm --no-deps web python scripts/check_mypy_ceiling.py
+
 bench-api:                      ## Time public API endpoints cold/warm against the dev DB (ARGS="--rounds 5 --json out.json")
 	docker compose run --rm web python scripts/bench_public_api.py $(ARGS)
 
@@ -127,15 +131,11 @@ sync-metadata:                  ## Enrich anime metadata
 	$(EXEC) migrate
 	$(EXEC) sync_anime enrich-metadata --async
 
-sync-themes:                    ## Sync theme songs via Celery
-	$(EXEC) migrate
-	$(EXEC) sync_anime sync-themes --async
-
 sync-recs:                      ## Generate recommendations for all users
 	$(EXEC) migrate
 	$(EXEC) sync_anime generate-recommendations --async
 
-sync-full:                      ## Run full sync pipeline (catalog + airing + metadata + themes + recs)
+sync-full:                      ## Run full sync pipeline (catalog + airing + metadata + episodes + recs)
 	$(EXEC) migrate
 	$(EXEC) sync_anime full-sync --async
 
@@ -183,9 +183,6 @@ offline-repair-run:             ## Reset and re-run offline enrichment pipeline 
 ## ============================================================================
 ## Data Population & Backfill
 ## ============================================================================
-#
-#populate-themes:                ## Fetch themes directly from Jikan API (standalone, no Celery)
-#	$(EXEC) populate_themes
 #
 #sync-franchises:                ## Populate franchise/relation data from AniList
 #	$(EXEC) populate_franchises
@@ -363,6 +360,40 @@ restore-media-only:             ## Restore media only (Usage: make restore-media
 	docker compose start $$services; \
 	if [ $$restore_status -ne 0 ]; then exit $$restore_status; fi
 	docker compose run --rm createbuckets
+
+# ============================================================================
+# Production stack (docker-compose.prod.yml; run on the server from the repo
+# root, see docs/deploy/runbook.md). deploy-prod.sh is the deploy itself;
+# scripts/deploy/compose.sh runs compose in the mode .env selects.
+# ============================================================================
+
+PROD_COMPOSE = bash scripts/deploy/compose.sh
+PROD_COMPOSE_RAW = docker compose -f docker-compose.prod.yml
+
+prod-config:                    ## Validate docker-compose.prod.yml for every profile and override combination
+	@set -e; for profiles in "" bundled-db analytics tunnel "bundled-db,analytics,tunnel"; do \
+		COMPOSE_PROFILES="$$profiles" $(PROD_COMPOSE_RAW) config -q; \
+		COMPOSE_PROFILES="$$profiles" $(PROD_COMPOSE_RAW) -f infra/compose/public-ports.yml config -q; \
+		echo "ok: profiles=[$$profiles]"; \
+	done
+
+prod-backup:                    ## Production: backup now (DB + media; off-site too when BACKUP_REMOTE is set)
+	$(PROD_COMPOSE) exec backup bash -c '. /app/cron.env && /app/shell/backup.sh manual'
+
+prod-verify-backup:             ## Production: restore a backup into a throwaway DB and run the app against it (TIMESTAMP=... optional)
+	bash scripts/deploy/verify_backup.sh $(TIMESTAMP)
+
+prod-restore:                   ## Production: restore a backup over the live data (TIMESTAMP=...|latest FORCE=1 [FROM_OFFSITE=1] [SCOPE=--db-only|--media-only])
+	@if [ -z "$(TIMESTAMP)" ]; then echo "Usage: make prod-restore TIMESTAMP=YYYYMMDD_HHMMSS|latest FORCE=1 [FROM_OFFSITE=1]"; exit 1; fi
+	bash scripts/deploy/restore.sh $(TIMESTAMP) $(if $(FROM_OFFSITE),--from-offsite) $(SCOPE) $(if $(FORCE),--yes)
+
+prod-offsite-list:              ## Production: list the backups in BACKUP_REMOTE
+	$(PROD_COMPOSE) exec -T backup bash -c '. /app/cron.env && /app/shell/fetch_offsite.sh'
+
+check-migrations-reversible:    ## Every migration since BASE (default revamp/base) reverses and re-applies on the test DB
+	@leaves="$$(bash scripts/deploy/check_migrations_reversible.sh --print-base-leaves $(or $(BASE),revamp/base))"; \
+	docker compose --profile test run --rm -e MIGRATION_BASE_LEAVES="$$leaves" test \
+		bash scripts/deploy/check_migrations_reversible.sh
 
 # ============================================================================
 # Help

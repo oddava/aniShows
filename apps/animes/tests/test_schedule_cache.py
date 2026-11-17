@@ -52,6 +52,7 @@ def catalog():
     other = _airing("safe-tuesday", "Tuesday")
     adult = _airing("adult-monday", "Monday")
     adult.genres.add(hentai)
+    Anime.objects.filter(pk=adult.pk).update(is_adult=True)  # AniList's isAdult
     return {"safe": safe, "other": other, "adult": adult}
 
 
@@ -211,13 +212,14 @@ def test_user_state_matches_the_uncached_annotation(catalog):
 
 
 @pytest.mark.django_db
-def test_saving_an_anime_invalidates_the_schedule(catalog):
+def test_saving_an_anime_invalidates_the_schedule(catalog, django_capture_on_commit_callbacks):
     client = _client()
     client.get(URL)
     client.get(f"{URL}?day=tuesday")
 
     catalog["safe"].broadcast_day = "Tuesday"
-    catalog["safe"].save()
+    with django_capture_on_commit_callbacks(execute=True):  # invalidated on commit
+        catalog["safe"].save()
 
     week, _ = _get(client, URL)
     tuesday, _ = _get(client, f"{URL}?day=tuesday")

@@ -1,123 +1,114 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { navbarSearchKeys, navbarSearchQueries } from '../../api/queries/anime';
-import { useFreshError, useReportError } from '../../hooks/useQueryErrorReport';
-import logger from '../../utils/logger';
 import { isActiveElementEditable } from '../../utils/dom';
-import useFuzzySearch from './useFuzzySearch';
+import useAnimeSearchSuggestions, { MIN_SEARCH_LENGTH } from './useAnimeSearchSuggestions';
 
-const EMPTY_ANIME_CACHE = [];
+const MAX_SUGGESTIONS = 8;
 
 /**
  * State and behaviour of the desktop navbar search: the collapsible input,
- * local fuzzy matches plus API results (debounced), keyboard shortcuts ("/",
+ * server-side suggestions (useAnimeSearchSuggestions), keyboard shortcuts ("/",
  * Escape, arrows, Enter) and closing on outside clicks. Navbar calls it so the
- * auto-hide logic can see whether the search is in use; Escape also closes the
- * profile menu, hence `setIsProfileOpen`.
+ * auto-hide logic can see whether the search is in use. (Navbar also passes
+ * `{ setIsProfileOpen }`; the profile menu handles its own Escape, so it is
+ * not needed here.)
  */
-export default function useNavbarSearch({ setIsProfileOpen }) {
+export default function useNavbarSearch() {
     const [isSearchExpanded, setIsSearchExpanded] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchSuggestions, setSearchSuggestions] = useState([]);
-    const [isSearching, setIsSearching] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
-    const [FuseClass, setFuseClass] = useState(null);
     const [selectedIndex, setSelectedIndex] = useState(-1);
     const navigate = useNavigate();
-    const queryClient = useQueryClient();
     const searchRef = useRef(null);
     const searchInputRef = useRef(null);
 
-    // The first 100 titles, matched locally for instant suggestions. Loaded once
-    // per mount; a failure only costs the local matches.
-    const animeCacheQuery = useQuery({ ...navbarSearchQueries.cache(), staleTime: 0, retry: false });
-    const allAnimeCache = animeCacheQuery.data ?? EMPTY_ANIME_CACHE;
-    useReportError(
-        useFreshError(animeCacheQuery, navbarSearchKeys.cache()),
-        animeCacheQuery.errorUpdatedAt,
-        { log: 'Failed to load anime cache:' },
-    );
+    const suggestions = useAnimeSearchSuggestions(searchQuery);
+    const searchSuggestions = suggestions.isActive
+        ? suggestions.results.slice(0, MAX_SUGGESTIONS)
+        : suggestions.results;
+    const isSearching = suggestions.isSearching;
 
-    // Initialize fuzzy search with cache - options are now inside the hook
-    const { search: fuzzySearch } = useFuzzySearch(FuseClass, allAnimeCache, {});
-
-    // fuse.js only powers the search box, so keep it out of the entry chunk.
+    // Typing opens the list; a query too short to search closes it. Dismissing
+    // (Escape, outside click) doesn't change the query, so a late response
+    // never reopens the list by itself.
     useEffect(() => {
-        let active = true;
-        import('fuse.js')
-            .then((module) => {
-                if (active) {
-                    setFuseClass(() => module.default);
-                }
-            })
-            .catch((error) => logger.error('Failed to load fuzzy search:', error));
-        return () => {
-            active = false;
-        };
+        setSelectedIndex(-1);
+        setShowSuggestions(searchQuery.trim().length >= MIN_SEARCH_LENGTH);
+    }, [searchQuery]);
+
+    const closeSearch = useCallback(() => {
+        setShowSuggestions(false);
+        setSelectedIndex(-1);
+        setIsSearchExpanded(false);
     }, []);
 
     // Close the suggestions when clicking outside the search
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (searchRef.current && !searchRef.current.contains(event.target)) {
-                setShowSuggestions(false);
-                setSelectedIndex(-1);
-                setIsSearchExpanded(false);
+                closeSearch();
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [closeSearch]);
 
-    // Define handleSuggestionClick BEFORE the useEffect that uses it
-    const handleSuggestionClick = useCallback((slug) => {
-        navigate(`/anime/${slug}`);
+    const leaveSearch = useCallback((path) => {
+        navigate(path);
         setSearchQuery('');
-        setShowSuggestions(false);
-        setSelectedIndex(-1);
-        setIsSearchExpanded(false);
-        if (searchInputRef.current) {
-            searchInputRef.current.blur();
-        }
-    }, [navigate]);
+        closeSearch();
+        searchInputRef.current?.blur();
+    }, [navigate, closeSearch]);
 
-    // Enhanced keyboard shortcuts
+    const handleSuggestionClick = useCallback((slug) => {
+        leaveSearch(`/anime/${slug}`);
+    }, [leaveSearch]);
+
+    // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e) => {
-            // "/" to focus search
-            if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-                // Don't trigger if user is typing in an input
-                if (isActiveElementEditable()) {
+            // "/" (outside text fields) or Ctrl/Cmd+K (anywhere) focuses search
+            const isSlash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey;
+            const isCommandK = (e.metaKey || e.ctrlKey) && !e.altKey && e.key?.toLowerCase() === 'k';
+            // Pages with their own search box (Browse) don't mount the nav input.
+            if ((isSlash || isCommandK) && searchInputRef.current) {
+                // "/" is a character; let it through when typing in a field
+                if (isSlash && isActiveElementEditable()) {
+                    return;
+                }
+                // Guest home: the hero search is on screen and the nav pill is hidden.
+                const heroSearch = document.documentElement.dataset.heroSearch === 'visible'
+                    ? document.getElementById('home-search')
+                    : null;
+                if (heroSearch) {
+                    e.preventDefault();
+                    heroSearch.focus();
                     return;
                 }
                 e.preventDefault();
                 setIsSearchExpanded(true);
-                setTimeout(() => {
-                    if (searchInputRef.current) {
-                        searchInputRef.current.focus();
-                        setShowSuggestions(true);
-                    }
-                }, 50);
+                // The input is always mounted, so focus now: keys typed right
+                // after the shortcut land in the field instead of being lost.
+                searchInputRef.current.focus();
+                // A leftover query is selected, so typing replaces it.
+                searchInputRef.current.select();
+                if (searchInputRef.current.value.trim().length >= MIN_SEARCH_LENGTH) setShowSuggestions(true);
             }
 
             // ESC to blur search and close dropdowns
+            // (The profile menu handles its own Escape so it can restore focus
+            // to its button.)
             if (e.key === 'Escape') {
                 if (document.activeElement === searchInputRef.current) {
                     e.preventDefault();
                     searchInputRef.current.blur();
-                    setShowSuggestions(false);
-                    setSelectedIndex(-1);
-                    setIsSearchExpanded(false);
-                } else {
-                    setShowSuggestions(false);
-                    setIsProfileOpen(false);
-                    setIsSearchExpanded(false);
                 }
+                closeSearch();
             }
 
-            // Arrow keys for navigation in suggestions
-            if (showSuggestions && searchSuggestions.length > 0) {
+            // Arrow keys for navigation in suggestions, only while typing in
+            // the search field (never steal keys from whatever has focus).
+            if (showSuggestions && searchSuggestions.length > 0 && document.activeElement === searchInputRef.current) {
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
                     setSelectedIndex(prev =>
@@ -135,129 +126,35 @@ export default function useNavbarSearch({ setIsProfileOpen }) {
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [showSuggestions, searchSuggestions, selectedIndex, handleSuggestionClick, navigate, setIsProfileOpen]);
+    }, [showSuggestions, searchSuggestions, selectedIndex, handleSuggestionClick, closeSearch]);
 
-    // Enhanced search with fuzzy matching - use ref to avoid dependency cycle
-    const fuzzySearchRef = useRef(fuzzySearch);
-    useEffect(() => {
-        fuzzySearchRef.current = fuzzySearch;
-    }, [fuzzySearch]);
-
-    // Smooth search with minimum loading time to prevent flickering
-    const MIN_LOADING_TIME = 300; // Minimum time to show loading spinner
-    const searchTimeoutRef = useRef(null);
-    const loadingStartTimeRef = useRef(0);
-
-    useEffect(() => {
-        // Clear any pending timeout
-        if (searchTimeoutRef.current) {
-            clearTimeout(searchTimeoutRef.current);
-        }
-
-        if (searchQuery.trim().length < 1) {
-            setSearchSuggestions([]);
-            setShowSuggestions(false);
-            setSelectedIndex(-1);
-            setIsSearching(false);
-            return;
-        }
-
-        // Don't hide results immediately - keep showing old results while searching
-        loadingStartTimeRef.current = Date.now();
-        setIsSearching(true);
-
-        searchTimeoutRef.current = setTimeout(async () => {
-            try {
-                // Get local fuzzy results for instant feedback
-                const fuzzyResults = fuzzySearchRef.current(searchQuery.trim());
-
-                // Also call the API to search the full database
-                let apiResults = [];
-                try {
-                    const results = await queryClient.fetchQuery({
-                        ...navbarSearchQueries.results(searchQuery.trim()),
-                        retry: false,
-                    });
-                    apiResults = results.map(item => ({
-                        ...item,
-                        isApiResult: true
-                    }));
-                } catch (apiError) {
-                    logger.error('API search error:', apiError);
-                    // Fall back to cache-only results if API fails
-                }
-
-                // Combine results: prioritize API results, add unique fuzzy results
-                const seen = new Set();
-                const combined = [];
-
-                // Add API results first (they're from the full database)
-                apiResults.forEach(item => {
-                    if (!seen.has(item.id)) {
-                        seen.add(item.id);
-                        combined.push(item);
-                    }
-                });
-
-                // Add fuzzy results that weren't in API results (might have better match scoring)
-                fuzzyResults.forEach(item => {
-                    if (!seen.has(item.id)) {
-                        seen.add(item.id);
-                        combined.push({ ...item, isFuzzyMatch: true });
-                    }
-                });
-
-                // Calculate remaining time to meet minimum loading duration
-                const elapsed = Date.now() - loadingStartTimeRef.current;
-                const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsed);
-
-                // Delay showing results to prevent flickering
-                setTimeout(() => {
-                    if (combined.length > 0) {
-                        setSearchSuggestions(combined.slice(0, 8));
-                        setShowSuggestions(true);
-                    } else {
-                        // No results - show empty state
-                        setSearchSuggestions([]);
-                        setShowSuggestions(true);
-                    }
-                    setIsSearching(false);
-                }, remainingTime);
-            } catch (error) {
-                logger.error('Search error:', error);
-                setSearchSuggestions([]);
-                setIsSearching(false);
-            }
-        }, 200); // Debounce delay
-
-        return () => {
-            if (searchTimeoutRef.current) {
-                clearTimeout(searchTimeoutRef.current);
-            }
-        };
-    }, [searchQuery, queryClient]);
-
+    // Browse with the query ("View all results", "Search all anime", Enter).
     const handleSearch = (e) => {
-        e.preventDefault();
-        if (searchQuery.trim()) {
-            navigate(`/browse?q=${encodeURIComponent(searchQuery.trim())}`);
-            setSearchQuery('');
-            setShowSuggestions(false);
-            setSelectedIndex(-1);
-            setIsSearchExpanded(false);
-            if (searchInputRef.current) {
-                searchInputRef.current.blur();
-            }
+        e?.preventDefault?.();
+        const trimmed = searchQuery.trim();
+        if (trimmed) {
+            leaveSearch(`/browse?q=${encodeURIComponent(trimmed)}`);
         }
     };
 
+    // Focus left the search widget (Tab, click elsewhere): close the list so
+    // nothing reopens or captures keys later.
+    const handleSearchBlur = useCallback((event) => {
+        if (searchRef.current?.contains(event.relatedTarget)) return;
+        setShowSuggestions(false);
+        setSelectedIndex(-1);
+        if (!searchInputRef.current?.value) setIsSearchExpanded(false);
+    }, []);
+
     return {
+        handleSearchBlur,
         searchRef,
         searchInputRef,
         isSearchExpanded, setIsSearchExpanded,
         searchQuery, setSearchQuery,
         searchSuggestions,
         isSearching,
+        noMatches: suggestions.noMatches,
         showSuggestions, setShowSuggestions,
         selectedIndex, setSelectedIndex,
         handleSuggestionClick,

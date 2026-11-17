@@ -1,3 +1,4 @@
+import Modal from '../Modal';
 import CustomSelect from '../../../../components/common/CustomSelect';
 import { AVAILABLE_COLORS, AVAILABLE_ICONS } from './badgeOptions';
 
@@ -12,24 +13,8 @@ export default function BadgeFormModal({
     updateMutation,
 }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="w-full max-w-lg bg-dark-200 border border-dark-300 rounded-xl shadow-2xl overflow-hidden">
-                <div className="flex items-center justify-between p-6 border-b border-dark-300">
-                    <h2 className="text-xl font-bold text-white">
-                        {editingBadge ? 'Edit Badge' : 'Create Badge'}
-                    </h2>
-                    <button
-                        onClick={() => {
-                            setIsModalOpen(false);
-                            setFormError(null);
-                        }}
-                        className="p-2 text-gray-400 hover:text-white rounded-lg transition-colors"
-                    >
-                        ✕
-                    </button>
-                </div>
-                
-                <form onSubmit={handleSave} className="p-6 space-y-4">
+        <Modal isOpen onClose={() => { setIsModalOpen(false); setFormError(null); }} title={editingBadge ? 'Edit Badge' : 'Create Badge'} size="medium">
+                <form onSubmit={handleSave} className="space-y-4">
                     {formError && (
                         <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
                             {formError}
@@ -136,13 +121,12 @@ export default function BadgeFormModal({
                         <button
                             type="submit"
                             disabled={createMutation.isPending || updateMutation.isPending}
-                            className="px-6 py-2 bg-accent hover:bg-accent-dark text-white font-medium rounded-lg transition-colors disabled:opacity-50"
+                            className="px-6 py-2 bg-accent-dark hover:bg-violet-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50"
                         >
                             {editingBadge ? 'Update Badge' : 'Create Badge'}
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+        </Modal>
     );
 }

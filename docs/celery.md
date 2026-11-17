@@ -35,7 +35,7 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 - `max_retries=5`
 - `default_retry_delay=60`
 - backoff enabled
-- intended for AniList/Jikan/Resend style network calls
+- intended for AniList/Resend style network calls
 
 `long`
 - `max_retries=3`
@@ -63,9 +63,6 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 `apps.animes.tasks.franchises.update_relation_slugs`
 - Repairs missing relation slugs for already-linked franchise entries.
 
-`apps.animes.tasks.themes.sync_theme_songs`
-- Syncs opening and ending themes from Jikan.
-
 `apps.animes.tasks.themes.backfill_theme_youtube_urls`
 - Fills missing YouTube search URLs for saved theme rows.
 
@@ -82,7 +79,7 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 - Imports Anime Offline Database releases.
 
 `apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync`
-- Reconciles offline-imported anime through metadata, franchise, and theme stages.
+- Reconciles offline-imported anime through the metadata and franchise stages (AniList).
 
 `apps.animes.tasks.recommendations.generate_recommendations`
 - Generates recommendation rows for one user or all active users.
@@ -101,9 +98,6 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 `apps.core.tasks.cleanup_tasks.cleanup_old_task_results`
 - Cleans up the custom `core.CeleryTaskResult` table.
 
-`apps.core.tasks.cleanup_tasks.cleanup_celery_backend`
-- Placeholder backend-cleanup task kept for compatibility.
-
 `apps.core.tasks.cleanup_tasks.health_check_workers`
 - Reports worker heartbeat health.
 
@@ -118,9 +112,6 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 
 `apps.core.tasks.logging_tasks.log_request_async`
 - Asynchronously persists request logs.
-
-`apps.core.tasks.logging_tasks.log_audit_async`
-- Asynchronously persists audit logs.
 
 `apps.core.tasks.logging_tasks.log_exception_async`
 - Asynchronously persists exception logs.
@@ -215,13 +206,14 @@ Beat schedules are defined in [root/settings/base.py](/home/oddava/Projects/aniS
 - daily at `04:30`
 - added in this refactor because it is explicitly a repair task for stale relation data
 
+`sync-adult-flags-weekly`
+- `apps.animes.tasks.adult_content.sync_adult_flags`
+- Wednesdays at `03:40`, `low_priority` queue
+- re-reads AniList's `isAdult` for the catalog, 500 rows (10 AniList requests) per run; each run queues the next
+
 `generate-recommendations-daily`
 - `apps.animes.tasks.recommendations.generate_recommendations`
 - daily at `05:00`
-
-`sync-themes-daily`
-- `apps.animes.tasks.themes.sync_theme_songs`
-- daily at `06:00`
 
 `user-maintenance-daily`
 - `apps.users.tasks.run_user_maintenance_workflow`
@@ -254,10 +246,6 @@ Beat schedules are defined in [root/settings/base.py](/home/oddava/Projects/aniS
 - Monday at `02:00`
 
 ### Other Existing Periodic Jobs
-
-`sync-themes-retry`
-- `apps.animes.tasks.themes.sync_theme_songs`
-- daily at `18:00`
 
 `check-new-episodes`
 - `apps.core.tasks.notifications.check_new_episodes`

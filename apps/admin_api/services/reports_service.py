@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db.models import Avg, Count, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
@@ -10,11 +9,14 @@ from django.utils import timezone
 from ...animes.models import Anime, Genre, Review, ReviewVote, Studio, UserFavorite
 from ...core.models import AuditLog
 from ...shared.logger import logger
+from ...shared.public_cache import best_effort_get, best_effort_set
 from ...users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
 REPORT_CACHE_PREFIX = "admin:reports:v2"
 REPORT_CACHE_TIMEOUT_SECONDS = 300
+# Fixed periods only, so the report cache has a bounded set of keys.
+ALLOWED_REPORT_DAYS = (7, 30, 90, 365)
 
 
 class ReportError(Exception):
@@ -45,9 +47,12 @@ def _period_bounds(days: int):
 
 def generate_report(report_type: str, days: int, force_refresh: bool = False) -> ReportResult:
     try:
-        normalized_days = max(1, int(days))
+        normalized_days = int(days)
     except (TypeError, ValueError):
-        raise ReportError("days must be a valid integer.", 400)
+        normalized_days = 0
+    if normalized_days not in ALLOWED_REPORT_DAYS:
+        allowed = ", ".join(str(value) for value in ALLOWED_REPORT_DAYS)
+        raise ReportError(f"days must be one of: {allowed}.", 400)
 
     allowed_report_types = {"overview", "users", "content", "engagement"}
     if report_type not in allowed_report_types:
@@ -55,7 +60,7 @@ def generate_report(report_type: str, days: int, force_refresh: bool = False) ->
 
     cache_key = f"{REPORT_CACHE_PREFIX}:{report_type}:{normalized_days}"
     if not force_refresh:
-        cached = cache.get(cache_key)
+        cached = best_effort_get(cache_key, source="admin report")
         if isinstance(cached, dict):
             return ReportResult(payload=cached, status_code=200)
 
@@ -75,7 +80,7 @@ def generate_report(report_type: str, days: int, force_refresh: bool = False) ->
         )
         raise ReportError("Failed to generate report data.", 500) from exc
 
-    cache.set(cache_key, payload, timeout=REPORT_CACHE_TIMEOUT_SECONDS)
+    best_effort_set(cache_key, payload, REPORT_CACHE_TIMEOUT_SECONDS, source="admin report")
     return ReportResult(payload=payload, status_code=200)
 
 
@@ -247,6 +252,46 @@ def _overview_payload(days: int) -> dict:
     }
 
 
+TOP_ACTIVE_CANDIDATES = 50
+TOP_ACTIVE_USERS = 10
+
+
+def _top_active_users(start) -> list[dict]:
+    """Most active users in the period: three grouped counts merged in Python.
+
+    Each grouped query is bounded to the period and its top 50 users; the old
+    version joined lists x reviews x favorites for every user on the site.
+    """
+
+    def top(queryset):
+        return dict(
+            queryset.values_list("user_id")
+            .annotate(total=Count("id"))
+            .order_by("-total")[:TOP_ACTIVE_CANDIDATES]
+        )
+
+    list_counts = top(UserAnimeList.objects.filter(updated_at__gte=start))
+    review_counts = top(Review.objects.filter(created_at__gte=start))
+    favorite_counts = top(UserFavorite.objects.filter(added_at__gte=start))
+    totals: dict[int, int] = {}
+    for counts in (list_counts, review_counts, favorite_counts):
+        for user_id, total in counts.items():
+            totals[user_id] = totals.get(user_id, 0) + total
+    ranked = sorted(totals, key=lambda user_id: (-totals[user_id], -user_id))[:TOP_ACTIVE_USERS]
+    usernames = dict(User.objects.filter(id__in=ranked).values_list("id", "username"))
+    return [
+        {
+            "id": user_id,
+            "username": usernames.get(user_id, ""),
+            "list_entries": list_counts.get(user_id, 0),
+            "reviews": review_counts.get(user_id, 0),
+            "favorites": favorite_counts.get(user_id, 0),
+        }
+        for user_id in ranked
+        if user_id in usernames
+    ]
+
+
 def _users_payload(days: int) -> dict:
     now, start, prev_start = _period_bounds(days)
     user_queryset = User.objects.all()
@@ -290,36 +335,7 @@ def _users_payload(days: int) -> dict:
         .order_by("date")
     )
 
-    active_users = list(
-        user_queryset.annotate(
-            activity_list_entries=Count("anime_lists", distinct=True),
-            activity_reviews=Count("reviews", distinct=True),
-            activity_favorites=Count("favorites", distinct=True),
-            actions=Count("anime_lists", distinct=True)
-            + Count("reviews", distinct=True)
-            + Count("favorites", distinct=True),
-        )
-        .filter(actions__gt=0)
-        .order_by("-actions", "-date_joined")
-        .values(
-            "id",
-            "username",
-            "activity_list_entries",
-            "activity_reviews",
-            "activity_favorites",
-        )[:10]
-    )
-
-    active_users = [
-        {
-            "id": item["id"],
-            "username": item["username"],
-            "list_entries": item["activity_list_entries"],
-            "reviews": item["activity_reviews"],
-            "favorites": item["activity_favorites"],
-        }
-        for item in active_users
-    ]
+    active_users = _top_active_users(start)
 
     return {
         "period_days": (now - start).days,

@@ -1,17 +1,19 @@
 import json
+import zlib
 from dataclasses import dataclass
 from datetime import timedelta
+from uuid import uuid4
 
 from celery import current_app
-from django.db.models import Avg, Count, Q
+from django.db import connection, transaction
 from django.utils import timezone
 
-from ..models import CeleryTaskResult, CeleryTaskSchedule, CeleryWorkerStatus
+from ..models import CeleryTaskResult
 
 AVAILABLE_TASKS = {
     "apps.animes.tasks.sync.sync_anime_catalog": {
         "name": "Refresh Anime Catalog Slice",
-        "description": "Refresh trending from Jikan and other catalog slices from local Anime fields",
+        "description": "Refresh trending from AniList and other catalog slices from local Anime fields",
         "args_schema": {
             "sync_type": {
                 "type": "string",
@@ -20,11 +22,10 @@ AVAILABLE_TASKS = {
             },
             "limit": {"type": "integer", "default": 50, "min": 1, "max": 500},
         },
-        "default_queue": "high_priority",
     },
     "apps.animes.tasks.metadata.enrich_metadata": {
         "name": "Enrich Metadata",
-        "description": "Enrich anime metadata from Jikan (self-hosted)",
+        "description": "Enrich anime metadata from AniList",
         "args_schema": {
             "mode": {
                 "type": "string",
@@ -33,16 +34,6 @@ AVAILABLE_TASKS = {
             },
             "batch_size": {"type": "integer", "default": 100, "min": 1, "max": 500},
         },
-        "default_queue": "batch",
-    },
-    "apps.animes.tasks.themes.sync_theme_songs": {
-        "name": "Sync Theme Songs",
-        "description": "Synchronize anime theme songs",
-        "args_schema": {
-            "limit": {"type": "integer", "default": 500, "min": 1, "max": 1000},
-            "retry_failed": {"type": "boolean", "default": False},
-        },
-        "default_queue": "default",
     },
     "apps.animes.tasks.recommendations.generate_recommendations": {
         "name": "Generate Recommendations",
@@ -50,7 +41,6 @@ AVAILABLE_TASKS = {
         "args_schema": {
             "limit": {"type": "integer", "default": 10, "min": 1, "max": 100},
         },
-        "default_queue": "low_priority",
     },
     "apps.animes.tasks.franchises.sync_franchises": {
         "name": "Sync Franchises",
@@ -64,7 +54,6 @@ AVAILABLE_TASKS = {
             },
             "batch_size": {"type": "integer", "default": 50, "min": 1, "max": 250},
         },
-        "default_queue": "default",
     },
     "apps.animes.tasks.franchises.update_relation_slugs": {
         "name": "Update Relation Slugs",
@@ -72,7 +61,6 @@ AVAILABLE_TASKS = {
         "args_schema": {
             "batch_size": {"type": "integer", "default": 100, "min": 1, "max": 500},
         },
-        "default_queue": "low_priority",
     },
     "apps.animes.tasks.images.generate_image_thumbnails": {
         "name": "Generate Image Thumbnails",
@@ -80,7 +68,6 @@ AVAILABLE_TASKS = {
         "args_schema": {
             "anime_id": {"type": "integer", "required": True, "min": 1},
         },
-        "default_queue": "low_priority",
     },
     "apps.users.tasks.cleanup_unverified_accounts": {
         "name": "Cleanup Unverified Accounts",
@@ -88,7 +75,6 @@ AVAILABLE_TASKS = {
         "args_schema": {
             "days": {"type": "integer", "default": 7, "min": 7, "max": 90},
         },
-        "default_queue": "low_priority",
     },
     "apps.users.tasks.run_user_maintenance_workflow": {
         "name": "User Maintenance Workflow",
@@ -99,11 +85,16 @@ AVAILABLE_TASKS = {
             "unverified_days": {"type": "integer", "default": 7, "min": 7, "max": 90},
             "import_days": {"type": "integer", "default": 30, "min": 7, "max": 365},
         },
-        "default_queue": "low_priority",
     },
 }
 
 MAX_ADMIN_TASK_PAYLOAD_BYTES = 4096
+MAX_BULK_DELETE_IDS = 500
+IN_FLIGHT_STATUSES = ("PENDING", "STARTED", "RETRY")
+# A pending/started row older than this no longer blocks a new run (a lost task).
+IN_FLIGHT_WINDOW = timedelta(hours=12)
+# First key of the two-int advisory lock, so G6's task locks share no space with others.
+ADVISORY_LOCK_NAMESPACE = 6006
 
 
 class CeleryTaskValidationError(ValueError):
@@ -197,9 +188,30 @@ def validate_task_invocation(*, task_path: str, args=None, kwargs=None) -> tuple
 
 def bulk_delete_task_results(*, ids=None, days=None) -> CeleryAdminActionResult:
     if ids:
-        queryset = CeleryTaskResult.objects.filter(id__in=ids)
+        if not isinstance(ids, list) or len(ids) > MAX_BULK_DELETE_IDS:
+            return CeleryAdminActionResult(
+                payload={"detail": f"ids must be a list of at most {MAX_BULK_DELETE_IDS}."},
+                status_code=400,
+            )
+        try:
+            clean_ids = [int(value) for value in ids if not isinstance(value, bool)]
+        except (TypeError, ValueError):
+            clean_ids = []
+        if len(clean_ids) != len(ids):
+            return CeleryAdminActionResult(
+                payload={"detail": "ids must be integers."}, status_code=400
+            )
+        queryset = CeleryTaskResult.objects.filter(id__in=clean_ids)
         deleted_count = queryset.delete()[0]
     elif days:
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            days = 0
+        if days < 1:
+            return CeleryAdminActionResult(
+                payload={"detail": "days must be a positive integer."}, status_code=400
+            )
         cutoff_date = timezone.now() - timedelta(days=days)
         queryset = CeleryTaskResult.objects.filter(date_created__lt=cutoff_date)
         deleted_count = queryset.delete()[0]
@@ -210,151 +222,122 @@ def bulk_delete_task_results(*, ids=None, days=None) -> CeleryAdminActionResult:
         )
 
     return CeleryAdminActionResult(
-        payload={"message": f"{deleted_count} task results deleted successfully."},
-        status_code=200,
-    )
-
-
-def build_task_result_stats() -> dict:
-    now = timezone.now()
-    last_24h = now - timedelta(hours=24)
-    last_7d = now - timedelta(days=7)
-
-    total_tasks = CeleryTaskResult.objects.count()
-    by_status = dict(CeleryTaskResult.objects.values_list("status").annotate(count=Count("id")))
-    by_task = dict(
-        CeleryTaskResult.objects.values_list("task_name")
-        .annotate(count=Count("id"))
-        .order_by("-count")[:10]
-    )
-
-    stats_24h = {
-        "total": CeleryTaskResult.objects.filter(date_created__gte=last_24h).count(),
-        "success": CeleryTaskResult.objects.filter(
-            date_created__gte=last_24h,
-            status="SUCCESS",
-        ).count(),
-        "failure": CeleryTaskResult.objects.filter(
-            date_created__gte=last_24h,
-            status="FAILURE",
-        ).count(),
-    }
-    stats_24h["success_rate"] = (
-        round((stats_24h["success"] / stats_24h["total"] * 100), 2) if stats_24h["total"] > 0 else 0
-    )
-
-    stats_7d = {
-        "total": CeleryTaskResult.objects.filter(date_created__gte=last_7d).count(),
-        "success": CeleryTaskResult.objects.filter(
-            date_created__gte=last_7d,
-            status="SUCCESS",
-        ).count(),
-        "failure": CeleryTaskResult.objects.filter(
-            date_created__gte=last_7d,
-            status="FAILURE",
-        ).count(),
-    }
-    stats_7d["success_rate"] = (
-        round((stats_7d["success"] / stats_7d["total"] * 100), 2) if stats_7d["total"] > 0 else 0
-    )
-
-    avg_execution = CeleryTaskResult.objects.filter(
-        status="SUCCESS",
-        execution_time__isnull=False,
-    ).aggregate(avg=Avg("execution_time"))["avg"]
-
-    return {
-        "total_tasks": total_tasks,
-        "by_status": by_status,
-        "by_task": by_task,
-        "last_24h": stats_24h,
-        "last_7d": stats_7d,
-        "average_execution_time": round(avg_execution, 2) if avg_execution else None,
-    }
-
-
-def create_task_result_record(
-    *, task_path: str, task_id: str, args=None, kwargs=None, queue: str, user
-):
-    return CeleryTaskResult.objects.create(
-        task_id=task_id,
-        task_name=task_path,
-        task_module=".".join(task_path.split(".")[:-1]),
-        status="PENDING",
-        task_args=args or [],
-        task_kwargs=kwargs or {},
-        queue=queue or "default",
-        triggered_by=user if getattr(user, "is_authenticated", False) else None,
-    )
-
-
-def trigger_task(*, task_path: str, args=None, kwargs=None, queue: str | None, user):
-    args, kwargs = validate_task_invocation(task_path=task_path, args=args, kwargs=kwargs)
-    task_info = AVAILABLE_TASKS[task_path]
-    resolved_queue = queue or task_info.get("default_queue", "default")
-    result = current_app.send_task(
-        task_path, args=args or [], kwargs=kwargs or {}, queue=resolved_queue
-    )
-    task_result = create_task_result_record(
-        task_path=task_path,
-        task_id=result.id,
-        args=args,
-        kwargs=kwargs,
-        queue=resolved_queue,
-        user=user,
-    )
-    return {
-        "message": f"Task {task_info['name']} triggered successfully.",
-        "task_id": result.id,
-        "task_result_id": task_result.id,
-        "status": "PENDING",
-    }
-
-
-def run_schedule_now(*, schedule, user) -> CeleryAdminActionResult:
-    if schedule.status != CeleryTaskSchedule.TaskStatus.ENABLED:
-        return CeleryAdminActionResult(
-            payload={"detail": "Cannot run disabled schedule."},
-            status_code=400,
-        )
-
-    args, kwargs = validate_task_invocation(
-        task_path=schedule.task_name,
-        args=schedule.task_args or [],
-        kwargs=schedule.task_kwargs or {},
-    )
-    result = current_app.send_task(
-        schedule.task_name,
-        args=args,
-        kwargs=kwargs,
-        queue=schedule.queue or "default",
-    )
-    task_result = create_task_result_record(
-        task_path=schedule.task_name,
-        task_id=result.id,
-        args=args,
-        kwargs=kwargs,
-        queue=schedule.queue,
-        user=user,
-    )
-    schedule.last_run_at = timezone.now()
-    schedule.total_run_count += 1
-    schedule.save(update_fields=["last_run_at", "total_run_count", "updated_at"])
-
-    return CeleryAdminActionResult(
         payload={
-            "message": f'Task "{schedule.name}" triggered successfully.',
-            "task_id": result.id,
-            "task_result_id": task_result.id,
+            "message": f"{deleted_count} task results deleted successfully.",
+            "deleted": deleted_count,
         },
         status_code=200,
     )
 
 
+class TaskAlreadyRunningError(Exception):
+    """An exclusive enqueue found the same task still pending or running."""
+
+
+def task_in_flight(task_path: str) -> bool:
+    """Whether a run of ``task_path`` is pending or running (rows from the last 12h only)."""
+    return CeleryTaskResult.objects.filter(
+        task_name=task_path,
+        status__in=IN_FLIGHT_STATUSES,
+        date_created__gte=timezone.now() - IN_FLIGHT_WINDOW,
+    ).exists()
+
+
+def _signed_int32(value: int) -> int:
+    return value - 2**32 if value >= 2**31 else value
+
+
+def _lock_task(task_path: str) -> None:
+    """Hold a Postgres advisory lock on ``task_path`` until the transaction ends."""
+    if connection.vendor != "postgresql":  # pragma: no cover - Postgres in every env
+        return
+    key = _signed_int32(zlib.crc32(task_path.encode("utf-8")))
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)", [ADVISORY_LOCK_NAMESPACE, key])
+
+
+def enqueue_tracked_task(
+    *,
+    task_path: str,
+    user,
+    kwargs: dict | None = None,
+    args: list | None = None,
+    queue: str | None = None,
+    task_module: str | None = None,
+    exclusive: bool = False,
+) -> CeleryTaskResult:
+    """Record the PENDING ``CeleryTaskResult``, then send the task with that ``task_id``.
+
+    The row exists before any worker can pick the task up, so ``task_prerun`` updates
+    it instead of racing it for the unique ``task_id``. With ``exclusive=True`` the
+    in-flight check and the insert run under a per-task advisory lock, so two
+    concurrent requests cannot both pass the check: the second raises
+    ``TaskAlreadyRunningError``. If sending fails, the row is marked failed (it never
+    blocks a retry) and the error propagates.
+    """
+    task_id = str(uuid4())
+    resolved_queue = queue or routed_queue(task_path)
+    with transaction.atomic():
+        if exclusive:
+            _lock_task(task_path)
+            if task_in_flight(task_path):
+                raise TaskAlreadyRunningError(task_path)
+        job = CeleryTaskResult.objects.create(
+            task_id=task_id,
+            task_name=task_path,
+            task_module=task_module or ".".join(task_path.split(".")[:-1]),
+            status=CeleryTaskResult.TaskStatus.PENDING,
+            task_args=args or [],
+            task_kwargs=kwargs or {},
+            queue=resolved_queue,
+            triggered_by=user if getattr(user, "is_authenticated", False) else None,
+        )
+
+    options = {"queue": queue} if queue else {}
+    try:
+        current_app.send_task(
+            task_path, args=args or [], kwargs=kwargs or {}, task_id=task_id, **options
+        )
+    except Exception:
+        CeleryTaskResult.objects.filter(pk=job.pk).update(
+            status=CeleryTaskResult.TaskStatus.FAILURE,
+            error_message="Could not enqueue the task.",
+            date_completed=timezone.now(),
+        )
+        raise
+    return job
+
+
+def trigger_task(*, task_path: str, args=None, kwargs=None, user):
+    """Send an allowlisted task with validated kwargs. Routing follows ``task_routes``.
+
+    Exclusive like the import triggers (several allowlisted tasks are import sources):
+    raises ``TaskAlreadyRunningError`` while a run of the same task is in flight.
+    """
+    args, kwargs = validate_task_invocation(task_path=task_path, args=args, kwargs=kwargs)
+    task_info = AVAILABLE_TASKS[task_path]
+    job = enqueue_tracked_task(
+        task_path=task_path, args=args, kwargs=kwargs, user=user, exclusive=True
+    )
+    return {
+        "message": f"Task {task_info['name']} triggered successfully.",
+        "task_id": job.task_id,
+        "task_result_id": job.id,
+        "status": "PENDING",
+        "kwargs": kwargs,
+    }
+
+
+def routed_queue(task_path: str) -> str:
+    """The queue ``task_routes`` sends ``task_path`` to (the default queue otherwise)."""
+    route = (current_app.conf.task_routes or {}).get(task_path) or {}
+    return route.get("queue") or current_app.conf.task_default_queue or "default"
+
+
 def control_task(*, task_id: str, action: str, terminate: bool) -> CeleryAdminActionResult:
     if action != "revoke":
         return CeleryAdminActionResult(
-            payload={"detail": f"Unknown action: {action}"},
+            payload={"detail": "Unknown action. Allowed: revoke."},
             status_code=400,
         )
 
@@ -365,146 +348,9 @@ def control_task(*, task_id: str, action: str, terminate: bool) -> CeleryAdminAc
     )
     return CeleryAdminActionResult(
         payload={
-            "message": f"Task {task_id} revoked successfully.",
+            "message": "Task revoked successfully.",
+            "task_id": task_id,
             "terminated": terminate,
         },
         status_code=200,
     )
-
-
-def get_worker_status_payload() -> dict:
-    inspector = current_app.control.inspect()
-    stats = inspector.stats() or {}
-    active = inspector.active() or {}
-    scheduled = inspector.scheduled() or {}
-    reserved = inspector.reserved() or {}
-
-    workers_data = []
-    heartbeat = timezone.now()
-    for worker_name, worker_stats in stats.items():
-        queues = []
-        worker_info = {
-            "name": worker_name,
-            "hostname": worker_stats.get("hostname", worker_name),
-            "pid": worker_stats.get("pid"),
-            "queues": queues,
-            "active_tasks": len(active.get(worker_name, [])),
-            "scheduled_tasks": len(scheduled.get(worker_name, [])),
-            "reserved_tasks": len(reserved.get(worker_name, [])),
-            "processed": worker_stats.get("total", {}).get("tasks", 0),
-            "status": "ONLINE",
-            "last_heartbeat": heartbeat.isoformat(),
-        }
-        workers_data.append(worker_info)
-
-        CeleryWorkerStatus.objects.update_or_create(
-            worker_name=worker_name,
-            defaults={
-                "status": CeleryWorkerStatus.WorkerStatus.ONLINE,
-                "hostname": worker_info["hostname"],
-                "pid": worker_info["pid"],
-                "queues": queues,
-                "active_tasks": worker_info["active_tasks"],
-                "processed_tasks": worker_info["processed"],
-                "last_heartbeat": heartbeat,
-            },
-        )
-
-    return {
-        "workers": workers_data,
-        "total_workers": len(workers_data),
-        "total_active_tasks": sum(worker["active_tasks"] for worker in workers_data),
-    }
-
-
-def perform_worker_control(*, action: str, worker: str | None) -> CeleryAdminActionResult:
-    if action == "ping":
-        result = current_app.control.ping(destination=[worker] if worker else None)
-        return CeleryAdminActionResult(payload={"pong": result}, status_code=200)
-    if action == "shutdown":
-        current_app.control.shutdown(destination=[worker] if worker else None)
-        return CeleryAdminActionResult(
-            payload={"message": "Shutdown signal sent to workers."},
-            status_code=200,
-        )
-    return CeleryAdminActionResult(
-        payload={"detail": f"Unknown action: {action}"},
-        status_code=400,
-    )
-
-
-def build_dashboard_payload() -> dict:
-    now = timezone.now()
-    last_24h = now - timedelta(hours=24)
-    last_7d = now - timedelta(days=7)
-
-    task_stats = {
-        "total": CeleryTaskResult.objects.count(),
-        "last_24h": CeleryTaskResult.objects.filter(date_created__gte=last_24h).count(),
-        "last_7d": CeleryTaskResult.objects.filter(date_created__gte=last_7d).count(),
-        "pending": CeleryTaskResult.objects.filter(status="PENDING").count(),
-        "running": CeleryTaskResult.objects.filter(status="STARTED").count(),
-        "success_today": CeleryTaskResult.objects.filter(
-            status="SUCCESS",
-            date_created__date=now.date(),
-        ).count(),
-        "failed_today": CeleryTaskResult.objects.filter(
-            status="FAILURE",
-            date_created__date=now.date(),
-        ).count(),
-    }
-    today_total = task_stats["success_today"] + task_stats["failed_today"]
-    task_stats["success_rate_today"] = (
-        round((task_stats["success_today"] / today_total * 100), 1) if today_total > 0 else 100.0
-    )
-
-    recent_tasks = CeleryTaskResult.objects.select_related("triggered_by").order_by(
-        "-date_created"
-    )[:10]
-    recent_tasks_data = [
-        {
-            "id": task.id,
-            "task_name": task.task_name.split(".")[-1] if "." in task.task_name else task.task_name,
-            "status": task.status,
-            "date_created": task.date_created.isoformat(),
-            "execution_time": task.execution_time,
-            "triggered_by": task.triggered_by.username if task.triggered_by else None,
-        }
-        for task in recent_tasks
-    ]
-
-    scheduled_count = CeleryTaskSchedule.objects.filter(
-        status=CeleryTaskSchedule.TaskStatus.ENABLED
-    ).count()
-
-    workers = CeleryWorkerStatus.objects.filter(last_heartbeat__gte=now - timedelta(minutes=5))
-    workers_data = [
-        {
-            "name": worker.worker_name,
-            "status": worker.status,
-            "active_tasks": worker.active_tasks,
-            "processed_tasks": worker.processed_tasks,
-            "last_heartbeat": worker.last_heartbeat.isoformat() if worker.last_heartbeat else None,
-        }
-        for worker in workers
-    ]
-
-    top_tasks = list(
-        CeleryTaskResult.objects.filter(date_created__gte=last_7d)
-        .values("task_name")
-        .annotate(
-            count=Count("id"),
-            success_count=Count("id", filter=Q(status="SUCCESS")),
-            avg_duration=Avg("execution_time", filter=Q(status="SUCCESS")),
-        )
-        .order_by("-count")[:5]
-    )
-
-    return {
-        "task_stats": task_stats,
-        "recent_tasks": recent_tasks_data,
-        "scheduled_count": scheduled_count,
-        "workers": workers_data,
-        "worker_count": len(workers_data),
-        "top_tasks": top_tasks,
-    }

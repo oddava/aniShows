@@ -1,0 +1,364 @@
+"""Throttles on account endpoints (A03, A09)."""
+
+import json
+from typing import Any
+from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from ..models import UserProfile
+
+User = get_user_model()
+
+STORED_LINKS = [
+    {
+        "platform": platform,
+        "url": url,
+        "value": url,
+        "normalized_url": url,
+        "domain": domain,
+        "detected_platform": platform,
+        "trust_level": "verified",
+        "metadata": {},
+        "metadata_pending": False,
+    }
+    for platform, url, domain in (
+        ("twitter", "https://twitter.com/someone", "twitter.com"),
+        ("github", "https://github.com/someone", "github.com"),
+        ("youtube", "https://youtube.com/@someone", "youtube.com"),
+    )
+]
+
+
+class SocialLinksThrottleTests(APITestCase):
+    """The 5/day social-links throttle (live in test settings) counts real changes only."""
+
+    def setUp(self):
+        # date_joined is now, so the stricter new-account rate (5/day) applies.
+        self.user = User.objects.create_user(
+            username="linker", email="linker@example.com", password="securepass123"
+        )
+        UserProfile.objects.filter(user=self.user).update(social_links=STORED_LINKS)
+        self.client.force_authenticate(self.user)
+        self.url = reverse("user_profile")
+
+    def _form_links(self):
+        # What Settings sends back: {platform, value} built from the stored links.
+        return json.dumps(
+            [{"platform": link["platform"], "value": link["url"]} for link in STORED_LINKS]
+        )
+
+    @patch("apps.core.services.url_validator.URLValidator.validate")
+    def test_bio_saves_resending_unchanged_links_skip_validation_and_throttle(self, validate):
+        for attempt in range(6):
+            with self.subTest(attempt=attempt):
+                response = self.client.patch(
+                    self.url,
+                    {"bio": f"bio {attempt}", "social_links": self._form_links()},
+                    format="multipart",
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+        validate.assert_not_called()
+        profile = UserProfile.objects.get(user=self.user)
+        self.assertEqual(profile.bio, "bio 5")
+        self.assertEqual(profile.social_links, STORED_LINKS)
+
+    @patch(
+        "apps.users.services.profile_update_service.SocialLinksService.validate_and_process",
+        side_effect=lambda links: [
+            {**link, "url": link["value"], "normalized_url": link["value"]} for link in links
+        ],
+    )
+    def test_real_link_changes_are_throttled_after_five(self, _validate):
+        statuses = []
+        for attempt in range(6):
+            body = json.dumps([{"platform": "website", "value": f"https://example{attempt}.com"}])
+            response = self.client.patch(self.url, {"social_links": body}, format="multipart")
+            statuses.append(response.status_code)
+        self.assertEqual(statuses[:5], [status.HTTP_200_OK] * 5)
+        self.assertEqual(statuses[5], status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_unparseable_links_still_report_a_validation_error(self):
+        response = self.client.patch(self.url, {"social_links": "{not json"}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+# Any-valued so mypy does not map it onto APIClient.post(follow: bool).
+XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+
+
+class LoginIdentifierThrottleTests(APITestCase):
+    """Failures per identifier lock it whatever IP they come from (A09)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="target", email="target@example.com", password="right-password-1"
+        )
+        self.url = reverse("token_obtain_pair")
+
+    def _login(self, password, ip, username="target"):
+        return self.client.post(
+            self.url,
+            {"username": username, "password": password},
+            format="json",
+            REMOTE_ADDR=ip,
+            **XHR,
+        )
+
+    def test_eleventh_failure_from_rotating_ips_is_429(self):
+        for attempt in range(10):
+            response = self._login("wrong", f"10.0.0.{attempt}")
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        response = self._login("wrong", "10.0.1.1")
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertGreater(int(response["Retry-After"]), 0)
+        self.assertLessEqual(int(response["Retry-After"]), 15 * 60)
+        # Even the right password waits until the lock ends.
+        self.assertEqual(
+            self._login("right-password-1", "10.0.1.2").status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    def test_identifier_case_and_spacing_share_one_counter(self):
+        for attempt in range(10):
+            self._login(
+                "wrong", f"10.0.2.{attempt}", username=" TARGET " if attempt % 2 else "target"
+            )
+        self.assertEqual(
+            self._login("wrong", "10.0.3.1").status_code, status.HTTP_429_TOO_MANY_REQUESTS
+        )
+
+    def test_success_releases_only_its_own_slot(self):
+        for attempt in range(9):
+            self._login("wrong", f"10.0.4.{attempt}")
+        self.assertEqual(
+            self._login("right-password-1", "10.0.4.99").status_code, status.HTTP_200_OK
+        )
+        # The 9 failures still count (they expire with the window): one more
+        # failure is allowed, the next attempt is locked.
+        self.assertEqual(self._login("wrong", "10.0.5.1").status_code, 401)
+        self.assertEqual(self._login("wrong", "10.0.5.2").status_code, 429)
+
+    def test_other_identifiers_are_unaffected(self):
+        for attempt in range(10):
+            self._login("wrong", f"10.0.6.{attempt}")
+        self.assertEqual(
+            self._login("wrong", "10.0.6.50", username="someone-else").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_validation_errors_do_not_count(self):
+        for attempt in range(12):
+            response = self.client.post(
+                self.url, {"password": "x"}, format="json", REMOTE_ADDR=f"10.0.7.{attempt}", **XHR
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ScopedThrottleTests(APITestCase):
+    """New scopes; their real rates are patched in (test settings relax every scope)."""
+
+    def test_resend_verification_has_its_own_bucket(self):
+        from ..throttling import PasswordResetRateThrottle, ResendVerificationRateThrottle
+
+        with (
+            patch.object(ResendVerificationRateThrottle, "rate", "3/hour", create=True),
+            patch.object(PasswordResetRateThrottle, "rate", "3/hour", create=True),
+        ):
+            for _ in range(3):
+                self.client.post(reverse("resend_verification"), {"email": "a@b.c"}, format="json")
+            resend = self.client.post(
+                reverse("resend_verification"), {"email": "a@b.c"}, format="json"
+            )
+            reset = self.client.post(reverse("password_reset"), {"email": "a@b.c"}, format="json")
+
+        self.assertEqual(resend.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(reset.status_code, status.HTTP_200_OK)
+
+    def test_change_email_is_limited_per_user(self):
+        from ..throttling import ChangeEmailRateThrottle
+
+        user = User.objects.create_user(
+            username="mover", email="mover@example.com", password="securepass123"
+        )
+        self.client.force_authenticate(user)
+        with patch.object(ChangeEmailRateThrottle, "rate", "5/hour", create=True):
+            statuses = [
+                self.client.post(
+                    reverse("change_email"),
+                    {"new_email": f"n{index}@example.com", "password": "securepass123"},
+                    format="json",
+                ).status_code
+                for index in range(6)
+            ]
+        self.assertEqual(statuses[:5], [status.HTTP_200_OK] * 5)
+        self.assertEqual(statuses[5], status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_configured_rates(self):
+        from django.conf import settings
+
+        from root.settings import base
+
+        rates = base.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+        assert isinstance(rates, dict)
+        self.assertEqual(rates["resend_verification"], "3/hour")
+        self.assertEqual(rates["change_email"], "5/hour")
+        self.assertEqual(settings.LOGIN_IDENTIFIER_MAX_FAILURES, 10)
+        self.assertEqual(settings.LOGIN_IDENTIFIER_WINDOW_SECONDS, 900)
+
+
+class LoginLockKeyTests(APITestCase):
+    """The lock is keyed on the identifier as typed, not the resolved account."""
+
+    def setUp(self):
+        User.objects.create_user(username="Twin", email="twin@example.com", password="right-pass-1")
+
+    def _fail(self, field, value, ip):
+        return self.client.post(
+            reverse("token_obtain_pair"),
+            {field: value, "password": "wrong"},
+            format="json",
+            REMOTE_ADDR=ip,
+            **XHR,
+        )
+
+    def test_a_locked_username_does_not_reveal_its_email(self):
+        for attempt in range(10):
+            self._fail("username", "twin", f"10.9.0.{attempt}")
+        self.assertEqual(
+            self._fail("username", "TWIN", "10.9.1.1").status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+        # The real email and an unknown one look the same: no oracle.
+        real = self._fail("email", "twin@example.com", "10.9.1.2")
+        unknown = self._fail("email", "nobody@example.com", "10.9.1.3")
+        self.assertEqual(real.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(real.data, unknown.data)
+
+
+class SocialLinksOrderTests(APITestCase):
+    def test_reordering_links_is_saved(self):
+        user = User.objects.create_user(username="orderly", email="ord@example.com", password="x")
+        UserProfile.objects.filter(user=user).update(social_links=STORED_LINKS)
+        self.client.force_authenticate(user)
+        reordered = [
+            {"platform": link["platform"], "value": link["url"]} for link in reversed(STORED_LINKS)
+        ]
+        with patch(
+            "apps.users.services.profile_update_service.SocialLinksService.validate_and_process",
+            side_effect=lambda links: [
+                {**link, "url": link["value"], "normalized_url": link["value"]} for link in links
+            ],
+        ):
+            response = self.client.patch(
+                reverse("user_profile"), {"social_links": json.dumps(reordered)}, format="multipart"
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stored = UserProfile.objects.get(user=user).social_links
+        self.assertEqual([link["platform"] for link in stored], ["youtube", "github", "twitter"])
+
+
+LONG_S, DOTLESS_I, DOTTED_I, SHARP_S = chr(0x17F), chr(0x131), chr(0x130), chr(0xDF)
+
+
+class IdentifierFoldingTests(APITestCase):
+    """Spellings the database treats as equal share one lock counter (council r3)."""
+
+    def test_fold_matches_or_exceeds_database_case_folding(self):
+        from ..throttling import fold_identifier
+
+        for variant in (
+            "Chris@Gmail.com",
+            f"chri{LONG_S}@gma{DOTLESS_I}l.com",
+            " CHRIS@GMAIL.COM ",
+        ):
+            with self.subTest(variant=variant):
+                self.assertEqual(fold_identifier(variant), "chris@gmail.com")
+        self.assertEqual(fold_identifier(f"{DOTTED_I}van"), fold_identifier("ivan"))
+        # Folding goes at least as far as the database: one account, one counter.
+        self.assertEqual(
+            fold_identifier("\u039f\u0394\u039f\u03a3"), fold_identifier("\u03bf\u03b4\u03bf\u03c3")
+        )
+        self.assertEqual(fold_identifier(chr(0x3C2)), fold_identifier(chr(0x3C3)))  # final sigma
+        self.assertEqual(fold_identifier(chr(0x1C82) + "@x.ru"), fold_identifier("\u043e@x.ru"))
+        # Over-merging is harmless (a success never clears a counter).
+        self.assertEqual(fold_identifier(f"Stra{SHARP_S}e"), fold_identifier("STRASSE"))
+        # Accented letters stay distinct: they are different usernames.
+        self.assertNotEqual(fold_identifier("Jos" + chr(0xE9)), fold_identifier("Jose"))
+        self.assertEqual(fold_identifier("K" + chr(0x212A)), "kk")  # Kelvin sign
+
+    def test_long_s_variants_do_not_get_fresh_counters(self):
+        User.objects.create_user(username="chris", email="chris@gmail.com", password="right-pass-1")
+        for attempt in range(10):
+            self.client.post(
+                reverse("token_obtain_pair"),
+                {"email": "chris@gmail.com", "password": "wrong"},
+                format="json",
+                REMOTE_ADDR=f"10.8.0.{attempt}",
+                **XHR,
+            )
+        response = self.client.post(
+            reverse("token_obtain_pair"),
+            {"email": f"chri{LONG_S}@gmail.com", "password": "wrong"},
+            format="json",
+            REMOTE_ADDR="10.8.1.1",
+            **XHR,
+        )
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+class LoginLockBurstTests(APITestCase):
+    """Attempts are counted before the password check, so a burst cannot overrun the limit."""
+
+    def test_eleventh_in_flight_attempt_is_refused_before_any_failure_is_recorded(self):
+        from ..throttling import LoginIdentifierThrottle
+
+        # Ten attempts are "in flight" (counted, none finished yet).
+        for _ in range(10):
+            self.assertIsNone(LoginIdentifierThrottle("burst").begin_attempt())
+        self.assertIsNotNone(LoginIdentifierThrottle("burst").begin_attempt())
+
+    def test_a_400_releases_its_slot(self):
+        from ..throttling import LoginIdentifierThrottle
+
+        for _ in range(12):
+            response = self.client.post(
+                reverse("token_obtain_pair"),
+                {"username": "slot", "password": 12345},
+                format="json",
+                **XHR,
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNone(LoginIdentifierThrottle("slot").begin_attempt())
+
+
+class CollidingAccountsLockTests(APITestCase):
+    """A second account cannot clear another account's lock (council r6 finding 1)."""
+
+    def test_logging_in_as_strasse_does_not_unlock_strasze(self):
+        victim = f"Stra{SHARP_S}e".lower()
+        User.objects.create_user(username=victim, email="v@example.com", password="victim-pass-1")
+        User.objects.create_user(username="strasse", email="a@example.com", password="attacker-p-1")
+
+        def login(username, password, ip):
+            return self.client.post(
+                reverse("token_obtain_pair"),
+                {"username": username, "password": password},
+                format="json",
+                REMOTE_ADDR=ip,
+                **XHR,
+            )
+
+        # The two names fold to one counter. Nine guesses at the victim, then
+        # the attacker's own successful login: it releases only its own slot.
+        for attempt in range(9):
+            login(victim, "wrong", f"10.7.0.{attempt}")
+        self.assertEqual(login("strasse", "attacker-p-1", "10.7.1.1").status_code, 200)
+        self.assertEqual(login(victim, "wrong", "10.7.1.2").status_code, 401)  # 10th guess
+        self.assertEqual(
+            login(victim, "wrong", "10.7.1.3").status_code, status.HTTP_429_TOO_MANY_REQUESTS
+        )

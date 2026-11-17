@@ -154,3 +154,36 @@ def build_viewer(anime_list: list[Anime]):
             defaults={"rating": 8, "text": f"Review of {anime.title}. " * 5},
         )
     return user
+
+
+# --- G2 additions (additive) --------------------------------------------------
+# The schedule ships only what airs within [now - 1 day, now + 8 days] (B7), so
+# tests that read it pin "now" a day before the fixtures' airing time.
+SCHEDULE_NOW = NEXT_AIRING_AT - timedelta(days=1)
+SHARED_CHARACTER_NAME = "Guard Shared Character"
+SHARED_STAFF_NAME = "Guard Shared Staff"
+
+
+def freeze_schedule_now(monkeypatch) -> None:
+    """Make the schedule window (and its cache key's day stamp) use ``SCHEDULE_NOW``."""
+    from apps.animes.services.public_anime_service import AnimeQueryService
+
+    monkeypatch.setattr(AnimeQueryService, "schedule_now", staticmethod(lambda: SCHEDULE_NOW))
+
+
+def build_shared_people(anime_list: list[Anime]) -> tuple[Character, Staff]:
+    """A character voiced by one staff member, who also has a crew credit, in every given anime.
+
+    So the character and staff pages list a role per catalog row and an N+1
+    query on their roles shows up as a growing query count. Idempotent.
+    """
+    character = Character.objects.get_or_create(name=SHARED_CHARACTER_NAME)[0]
+    staff = Staff.objects.get_or_create(name=SHARED_STAFF_NAME)[0]
+    for anime in anime_list:
+        AnimeCharacter.objects.get_or_create(
+            anime=anime,
+            character=character,
+            defaults={"role": AnimeCharacter.Role.MAIN, "voice_actor": staff},
+        )
+        AnimeStaff.objects.get_or_create(anime=anime, staff=staff, role="Producer")
+    return character, staff

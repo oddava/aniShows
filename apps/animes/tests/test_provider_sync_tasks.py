@@ -1,11 +1,10 @@
 """The Celery-side provider paths, run end to end on the sync stack.
 
 Each test runs a real task (``Task.apply`` or the task body under a worker-like
-request) against recorded Jikan payloads served by ``httpx.MockTransport``.
+request) against recorded AniList payloads served by ``httpx.MockTransport``.
 Nothing below the task is mocked: the service, its retries, rate limiter,
-circuit breaker, the concurrent detail fetch and the ORM writes all run.
-``time.sleep`` is recorded instead of slept, so the rate limiter's waits are
-visible without slowing the suite.
+circuit breaker and the ORM writes all run. ``time.sleep`` is recorded instead
+of slept, so the rate limiter's waits are visible without slowing the suite.
 """
 
 from __future__ import annotations
@@ -17,15 +16,14 @@ from celery._state import _task_stack
 from celery.exceptions import Retry
 
 from apps.animes.models import Anime, AnimeCharacter, ThemeSong
-from apps.animes.services.jikan import JikanService, get_jikan_base_url
+from apps.animes.services.anilist import AniListService
 from apps.animes.tasks import (
     enrich_metadata,
     sync_airing_workflow,
     sync_anime_catalog,
     sync_franchises,
-    sync_theme_songs,
 )
-from apps.animes.tests.provider_testing import JIKAN_ROUTES, ProviderHTTP, load_fixture
+from apps.animes.tests.provider_testing import AniListGraphQL, load_fixture
 
 pytestmark = pytest.mark.django_db
 
@@ -44,9 +42,41 @@ def sleeps(monkeypatch):
     return recorded
 
 
+def frieren():
+    return load_fixture("anilist/media_154587.json")["Media"]
+
+
+def sequel():
+    media = copy.deepcopy(frieren())
+    media.update(
+        id=182255,
+        idMal=59978,
+        title={
+            "romaji": "Sousou no Frieren 2nd Season",
+            "english": "Frieren: Beyond Journey's End Season 2",
+            "native": "葬送のフリーレン 第2期",
+        },
+        relations={"edges": []},
+        characterPreview={"edges": []},
+        staffPreview={"edges": []},
+    )
+    return media
+
+
+def media_by_id(variables, request):
+    by_id = {154587: frieren(), 182255: sequel()}
+    return {"Media": by_id.get(variables.get("id"))}
+
+
 @pytest.fixture
-def jikan_http(monkeypatch):
-    return ProviderHTTP(dict(JIKAN_ROUTES), base_url=get_jikan_base_url()).install(monkeypatch)
+def anilist_http(monkeypatch):
+    return AniListGraphQL(
+        {
+            "GetAnime": "anilist/page_trending.json",
+            "GetAnimeById": media_by_id,
+            "SearchByMalId": {"Media": frieren()},
+        }
+    ).install(monkeypatch)
 
 
 def make_anime(**fields):
@@ -60,27 +90,32 @@ def make_anime(**fields):
     return Anime.objects.create(**defaults)
 
 
-def test_trending_sync_saves_the_season_and_ranks_it(jikan_http, sleeps):
-    result = sync_anime_catalog.apply(kwargs={"sync_type": "trending", "limit": 4}).get()
+def test_trending_sync_saves_and_ranks_the_trending_page(anilist_http, sleeps):
+    result = sync_anime_catalog.apply(kwargs={"sync_type": "trending", "limit": 3}).get()
 
     assert result["status"] == "success"
-    assert result["fetched"] == 4
-    assert result["matched"] == 4
-    assert Anime.objects.count() == 4
-    assert Anime.objects.filter(trending_rank__isnull=False).count() == 4
-    # The current season (page 1 repeats a MAL ID, as Jikan can), then the
-    # top-airing fallback for the row still missing.
-    assert jikan_http.calls() == [
-        "GET /seasons/now?limit=2&page=2",
-        "GET /seasons/now?limit=4&page=1",
-        "GET /top/anime?filter=airing&limit=1&page=1",
+    assert result["fetched"] == 3
+    # The untitled, ID-less row in the fixture is skipped.
+    assert result["matched"] == 2
+    assert set(Anime.objects.values_list("anilist_id", flat=True)) == {171018, 21}
+    assert list(
+        Anime.objects.order_by("trending_rank").values_list("anilist_id", "trending_rank")
+    ) == [(171018, 1), (21, 2)]
+    assert anilist_http.operations() == [
+        ("GetAnime", {"sort": ["TRENDING_DESC"], "page": 1, "perPage": 3})
     ]
-    # Rate limited: the requests after the first were spaced out.
-    assert sum(1 for wait in sleeps if wait > 0.5) >= 2
 
 
-def test_enrich_metadata_hydrates_the_row_from_the_detail_endpoints(jikan_http, sleeps):
-    anime = make_anime(title="Frieren", mal_id=52991, synopsis="")
+def test_trending_sync_rejects_a_too_small_result(anilist_http, sleeps):
+    result = sync_anime_catalog.apply(kwargs={"sync_type": "trending", "limit": 10}).get()
+
+    assert result["status"] == "source_unhealthy"
+    assert result["reason"] == "provider_result_set_too_small"
+    assert not Anime.objects.exists()
+
+
+def test_enrich_metadata_hydrates_the_row(anilist_http, sleeps):
+    anime = make_anime(title="Frieren", anilist_id=154587, synopsis="")
 
     result = enrich_metadata.apply(kwargs={"anime_id": anime.id}).get()
 
@@ -89,86 +124,125 @@ def test_enrich_metadata_hydrates_the_row_from_the_detail_endpoints(jikan_http, 
         "mode": "single",
         "anime_id": anime.id,
         "status": "success",
-        "title": "Frieren: Beyond Journey's End",
+        "title": "Frieren: Beyond Journey\u2019s End",
     }
-    assert anime.title == "Frieren: Beyond Journey's End"
-    assert anime.synopsis.startswith("During their decade-long quest")
+    assert anime.mal_id == 52991
+    assert anime.synopsis
     assert anime.genres.filter(name="Adventure").exists()
-    assert AnimeCharacter.objects.filter(anime=anime).exists()
-    assert ThemeSong.objects.filter(anime=anime).count() >= 2
-    # The concurrent detail fetch asked for every part of the payload.
-    assert {
-        "GET /anime/52991/full",
-        "GET /anime/52991/characters",
-        "GET /anime/52991/staff",
-        "GET /anime/52991/themes",
-        "GET /anime/52991/statistics",
-        "GET /anime/52991",
-    } <= set(jikan_http.calls())
+    assert AnimeCharacter.objects.filter(anime=anime).count() == 3
+    assert not ThemeSong.objects.filter(anime=anime).exists()
+    assert anilist_http.operations() == [("GetAnimeById", {"id": 154587})]
 
 
-def test_airing_workflow_refreshes_the_schedule(jikan_http, sleeps):
-    anime = make_anime(title="One Piece", mal_id=21, status=Anime.AnimeStatus.airing)
+def test_enrich_metadata_by_mal_id(anilist_http, sleeps):
+    anime = make_anime(title="Frieren", mal_id=52991)
+
+    result = enrich_metadata.apply(kwargs={"anime_id": anime.id}).get()
+
+    assert result["status"] == "success"
+    anime.refresh_from_db()
+    assert anime.anilist_id == 154587
+    assert anilist_http.operations() == [("SearchByMalId", {"idMal": 52991})]
+
+
+def test_airing_workflow_refreshes_every_show_in_one_batch(monkeypatch, sleeps):
+    def airing_page(variables, request):
+        return {
+            "Page": {
+                "media": [
+                    {
+                        "id": anilist_id,
+                        "idMal": anilist_id,
+                        "title": {"romaji": f"Show {anilist_id}"},
+                        "status": "RELEASING",
+                        "nextAiringEpisode": {"episode": 12, "airingAt": 1798985760},
+                    }
+                    for anilist_id in variables["ids"]
+                ]
+            }
+        }
+
+    http = AniListGraphQL({"GetAiringByIds": airing_page}).install(monkeypatch)
+    shows = [
+        make_anime(title=f"Show {i}", anilist_id=i, status=Anime.AnimeStatus.airing)
+        for i in (21, 22, 23)
+    ]
 
     result = sync_airing_workflow.apply(kwargs={"phases": ["sync"]}).get()
 
     assert result["status"] == "success"
-    assert result["sync_summary"]["updated"] == 1
-    anime.refresh_from_db()
-    assert anime.broadcast_day == "Sunday"
-    # One past the newest episode on the last episodes page.
-    assert anime.next_airing_episode == 1124
-    assert anime.next_airing_date is not None
-    # The lightweight airing payload: no characters, staff or themes calls.
-    assert "GET /anime/21/characters" not in jikan_http.calls()
+    assert result["sync_summary"]["updated"] == 3
+    assert [name for name, _ in http.operations()] == ["GetAiringByIds"]
+    for show in shows:
+        show.refresh_from_db()
+        assert show.next_airing_episode == 12
+        assert (show.broadcast_day, show.broadcast_timezone) == ("Sunday", "Asia/Tokyo")
 
 
-def test_franchise_sync_links_relations_and_imports_missing_anime(jikan_http, sleeps):
-    sequel = copy.deepcopy(load_fixture("jikan/anime_52991_full.json"))
-    sequel["data"].update(
-        mal_id=59978,
-        title="Sousou no Frieren 2nd Season",
-        title_english="Frieren: Beyond Journey's End Season 2",
-        relations=[],
+def test_airing_cleanup_marks_finished_shows(monkeypatch, sleeps):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    AniListGraphQL(
+        {
+            "GetAiringByIds": {
+                "Page": {"media": [{"id": 30, "status": "FINISHED", "nextAiringEpisode": None}]}
+            }
+        }
+    ).install(monkeypatch)
+    anime = make_anime(
+        title="Ended",
+        anilist_id=30,
+        status=Anime.AnimeStatus.airing,
+        next_airing_episode=12,
+        next_airing_date=timezone.now() - timedelta(days=1),
     )
-    jikan_http.routes["/anime/59978/full"] = sequel
-    anime = make_anime(title="Frieren", mal_id=52991)
+
+    sync_airing_workflow.apply(kwargs={"phases": ["cleanup"]}).get()
+
+    anime.refresh_from_db()
+    assert anime.status == Anime.AnimeStatus.finished
+    assert (anime.next_airing_episode, anime.next_airing_date) == (None, None)
+
+
+def test_franchise_sync_links_relations_and_imports_missing_anime(anilist_http, sleeps):
+    anime = make_anime(title="Frieren", anilist_id=154587)
 
     result = sync_franchises.apply(kwargs={"anime_id": anime.id, "max_imports": 5}).get()
 
     assert result["status"] == "success"
     assert result["imported_count"] == 1
-    imported = Anime.objects.get(mal_id=59978)
-    assert anime.relations.filter(target_mal_id=59978, to_anime=imported).exists()
+    imported = Anime.objects.get(anilist_id=182255)
+    assert imported.mal_id == 59978
+    assert anime.relations.filter(target_anilist_id=182255, to_anime=imported).exists()
+    # Only the anime relation: the manga source edge is not imported.
+    assert [variables["id"] for name, variables in anilist_http.operations()] == [154587, 182255]
 
 
-def test_theme_sync_saves_openings_and_endings(jikan_http, sleeps):
-    anime = make_anime(title="Frieren", mal_id=52991)
+def test_franchise_sync_needs_an_id(anilist_http, sleeps):
+    anime = make_anime(title="No IDs")
 
-    result = sync_theme_songs.apply(kwargs={"anime_id": anime.id}).get()
+    result = sync_franchises.apply(
+        kwargs={"mode": "backfill", "anime_ids": [anime.id], "batch_size": 5}
+    ).get()
 
-    assert result["status"] == "success"
-    assert set(ThemeSong.objects.filter(anime=anime).values_list("song_type", flat=True)) == {
-        "opening",
-        "ending",
-    }
-    assert jikan_http.calls() == ["GET /anime/52991/themes"]
+    assert (result["updated"], result["errors"]) == (0, 1)
+    assert anilist_http.requests == []
 
 
-def test_provider_errors_schedule_a_retry_with_the_worker_request(jikan_http, sleeps, monkeypatch):
-    """The task body sees the worker's request, so self.retry() schedules a retry.
-
-    The async bridge used to need to carry Celery's thread-local task stack
-    onto its loop thread for this; the sync path runs on the worker thread.
-    """
-    anime = make_anime(title="Frieren", mal_id=52991)
+def test_provider_errors_schedule_a_retry_with_the_worker_request(
+    anilist_http, sleeps, monkeypatch
+):
+    """The task body sees the worker's request, so self.retry() schedules a retry."""
+    anime = make_anime(title="Frieren", anilist_id=154587)
     seen = {}
 
     def failing_refresh(service, row, media):
         seen["task_id"] = enrich_metadata.request.id
         raise RuntimeError("provider down")
 
-    monkeypatch.setattr(JikanService, "refresh_anime_metadata", failing_refresh)
+    monkeypatch.setattr(AniListService, "refresh_anime_metadata", failing_refresh)
     sent = []
     monkeypatch.setattr(
         "celery.canvas.Signature.apply_async", lambda sig, *a, **k: sent.append(sig)

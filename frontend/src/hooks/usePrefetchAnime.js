@@ -17,11 +17,15 @@ export function usePrefetchAnime() {
     const prefetchNextPage = useCallback((currentParams, nextPage) => {
         if (!nextPage) return;
 
+        // Same default as Browse (a search ranks by relevance), so the key and
+        // the request match the grid's.
+        const sort = currentParams.sort || (currentParams.search ? 'relevance' : 'popular');
+
         // Same builder as Browse's grid query, so the prefetch fills that entry.
         const queryKey = animeKeys.browseList({
             genres: currentParams.genres?.join(',') || '',
             tags: currentParams.tags?.join(',') || '',
-            sort: currentParams.sort || 'popular',
+            sort,
             search: currentParams.search || '',
             type: currentParams.type || '',
             status: currentParams.status || '',
@@ -51,7 +55,7 @@ export function usePrefetchAnime() {
                     page_size: currentParams.pageSize || 12,
                     genre: currentParams.genres?.length > 0 ? currentParams.genres.join(',') : undefined,
                     tags: currentParams.tags?.length > 0 ? currentParams.tags.join(',') : undefined,
-                    sort: currentParams.sort,
+                    sort,
                     q: currentParams.search || undefined,
                     type: currentParams.type || undefined,
                     status: currentParams.status || undefined,

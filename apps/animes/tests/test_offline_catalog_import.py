@@ -277,7 +277,7 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(result["records_created"], 2)
         self.assertEqual(result["metadata_queued"], 0)
         self.assertEqual(result["franchises_queued"], 0)
-        self.assertEqual(result["themes_queued"], 0)
+        self.assertNotIn("themes_queued", result)
         self.assertEqual(result["sync_states_total"], 2)
         self.assertEqual(OfflineAnimeSyncState.objects.count(), 2)
 
@@ -311,11 +311,10 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(result["records_created"], 1)
         self.assertEqual(result["metadata_queued"], 0)
         self.assertEqual(result["franchises_queued"], 0)
-        self.assertEqual(result["themes_queued"], 0)
+        self.assertNotIn("themes_queued", result)
         state = OfflineAnimeSyncState.objects.get()
         self.assertEqual(state.metadata_status, OfflineAnimeSyncState.StageStatus.PENDING)
         self.assertEqual(state.franchise_status, OfflineAnimeSyncState.StageStatus.PENDING)
-        self.assertEqual(state.themes_status, OfflineAnimeSyncState.StageStatus.PENDING)
 
     def test_run_import_tracks_stale_rows_without_deleting_them(self):
         stale_anime = Anime.objects.create(
@@ -635,7 +634,7 @@ class OfflineCatalogImportServiceTests(TestCase):
         self.assertEqual(result["records_created"], 1)
         self.assertEqual(result["metadata_queued"], 0)
         self.assertEqual(result["franchises_queued"], 0)
-        self.assertEqual(result["themes_queued"], 0)
+        self.assertNotIn("themes_queued", result)
         self.assertEqual(OfflineAnimeSyncState.objects.count(), 1)
 
     def test_zero_enrichment_chunk_size_is_ignored_by_state_pipeline(self):
@@ -649,7 +648,7 @@ class OfflineCatalogImportServiceTests(TestCase):
 
         self.assertEqual(result["metadata_queued"], 0)
         self.assertEqual(result["franchises_queued"], 0)
-        self.assertEqual(result["themes_queued"], 0)
+        self.assertNotIn("themes_queued", result)
 
     @patch("apps.animes.services.offline_catalog.httpx.Client")
     def test_open_remote_stream_uses_stream_context_response(self, mock_client_cls):
@@ -766,7 +765,7 @@ class OfflineCatalogRobustnessTests(TestCase):
         new = Anime.objects.create(title="New", slug="new")
         done = OfflineAnimeSyncState.StageStatus.SYNCED
         OfflineAnimeSyncState.objects.create(
-            anime=synced, metadata_status=done, franchise_status=done, themes_status=done
+            anime=synced, metadata_status=done, franchise_status=done
         )
         OfflineAnimeSyncState.objects.create(
             anime=merged,

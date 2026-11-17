@@ -1,32 +1,45 @@
 import re
-import time
+from datetime import datetime
 from typing import Literal
 from urllib.parse import quote_plus, urlparse
+from zoneinfo import ZoneInfo
 
-import httpx
 from django.core.cache import cache
 
 from ...shared.logger import logger
 from ...shared.parsing import positive_int
-from ...shared.retry import backoff, retry_after_seconds
+from ...shared.public_cache import best_effort_get, best_effort_set
 from ..models import Anime
-from .jikan import JIKAN_BASE_URL, JikanRateLimiter, JikanService
+from .anilist import TRANSIENT_ERROR_CODES, AniListService
+from .providers.base import BROADCAST_TIMEZONE
+
+BROADCAST_TZ = ZoneInfo(BROADCAST_TIMEZONE)
 
 
 class AnimeWatchEpisodeService:
-    """Fetch and cache merged episode watch data for an anime detail page."""
+    """Fetch and cache an anime's episode list for its detail page.
 
-    CACHE_VERSION = "v1"
+    One AniList query gives the aired schedule (dates), the next-episode marker
+    (how many are out) and the streaming links (titles, thumbnails, real
+    Crunchyroll URLs); other episodes link to a Crunchyroll search.
+    """
+
+    CACHE_VERSION = "v2"
     CACHE_TTL = 60 * 60 * 6
     EMPTY_CACHE_TTL = 60 * 30
-    REQUEST_BUDGET_DEFAULT = "default"
-    REQUEST_BUDGET_INTERACTIVE = "interactive"
+    # A list built from stored fields because AniList was busy or down.
+    DEGRADED_CACHE_TTL = 60
+    REQUEST_BUDGET_DEFAULT: Literal["default"] = "default"
+    REQUEST_BUDGET_INTERACTIVE: Literal["interactive"] = "interactive"
     _STREAMING_EPISODE_PATTERNS = (
         re.compile(r"(?i)\bepisode\s+(\d{1,4})\b"),
         re.compile(r"(?i)\bep\.?\s*(\d{1,4})\b"),
         re.compile(r"^(\d{1,4})(?:\b|\s*[:\-])"),
     )
-    _JIKAN_EPISODE_URL_PATTERN = re.compile(r"/episode/(\d+)")
+    # "Episode 3 - The Title" -> "The Title"
+    _EPISODE_TITLE_PREFIX = re.compile(
+        r"^(?:episode|ep\.?)\s*\d{1,4}\s*(?:[-:\u2013\u2014]\s*)?", re.I
+    )
 
     def get_for_anime(
         self,
@@ -35,12 +48,16 @@ class AnimeWatchEpisodeService:
         request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
     ) -> list[dict]:
         cache_key = self._cache_key(anime)
-        cached = cache.get(cache_key)
+        cached = best_effort_get(cache_key, source="watch episodes")
         if cached is not None:
             return cached
 
-        episodes = self._build_for_anime(anime, request_budget=request_budget)
-        cache.set(cache_key, episodes, timeout=self.CACHE_TTL if episodes else self.EMPTY_CACHE_TTL)
+        episodes, degraded = self._build_for_anime(anime, request_budget=request_budget)
+        if degraded:
+            timeout = self.DEGRADED_CACHE_TTL
+        else:
+            timeout = self.CACHE_TTL if episodes else self.EMPTY_CACHE_TTL
+        best_effort_set(cache_key, episodes, timeout, source="watch episodes")
         return episodes
 
     def invalidate_for_anime(self, anime: Anime) -> None:
@@ -66,49 +83,97 @@ class AnimeWatchEpisodeService:
         anime: Anime,
         *,
         request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
-    ) -> list[dict]:
-        episode_media: dict = {}
-        mal_id = anime.mal_id
+    ) -> tuple[list[dict], bool]:
+        """``(episodes, degraded)``; degraded when AniList could not be asked, or answered in part."""
+        if not (anime.anilist_id or anime.mal_id):
+            return self._build_fallback_episodes(anime), False
 
-        if anime.anilist_id or mal_id:
-            service = JikanService(enable_caching=True, enable_rate_limiting=True)
-            try:
-                episode_media = (
-                    service.get_streaming_episodes_for_anime(
-                        anilist_id=anime.anilist_id,
-                        mal_id=mal_id,
-                        request_budget=request_budget,
-                    )
-                    or {}
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Failed to fetch episode streaming metadata for %s: %s",
-                    anime.slug,
-                    exc,
-                    exc_info=True,
-                )
-            finally:
-                service.close()
+        service = AniListService(enable_caching=True, enable_rate_limiting=True)
+        try:
+            media = service.get_episode_schedule(
+                anilist_id=anime.anilist_id,
+                mal_id=anime.mal_id,
+                request_budget=request_budget,
+            )
+            degraded = bool(media and media.get("partial")) or (
+                media is None and service.last_error_code in TRANSIENT_ERROR_CODES
+            )
+        except Exception:
+            logger.warning("Failed to fetch episode data for %s", anime.slug, exc_info=True)
+            media, degraded = None, True
+        finally:
+            service.close()
 
-        mal_id = mal_id or positive_int(episode_media.get("idMal"))
-        if not mal_id:
-            return self._build_fallback_episodes(anime)
+        if not media:
+            return self._build_fallback_episodes(anime), degraded
 
-        jikan_episodes = self._fetch_jikan_episodes(mal_id, request_budget=request_budget)
-        if not jikan_episodes:
-            return self._build_fallback_episodes(anime)
+        aired_at = self._aired_dates(media.get("airingSchedule") or [])
+        streaming_index = self._index_streaming_episodes(media.get("streamingEpisodes") or [])
+        episode_total = self._released_episode_count(media, aired_at, streaming_index)
+        if episode_total <= 0:
+            if self._nothing_aired_yet(media):
+                return [], degraded
+            # AniList knows the show but not its episodes: use the stored row.
+            return self._build_fallback_episodes(anime), degraded
 
-        crunchyroll_index = self._index_streaming_episodes(
-            episode_media.get("streamingEpisodes") or []
-        )
-        return [
-            self._merge_episode(anime, episode, crunchyroll_index.get(episode["number"]))
-            for episode in jikan_episodes
+        episodes = [
+            self._merge_episode(
+                anime,
+                {
+                    "number": number,
+                    "title": (streaming_index.get(number) or {}).get("episode_title")
+                    or f"Episode {number}",
+                    "aired": aired_at.get(number),
+                },
+                streaming_index.get(number),
+            )
+            for number in range(1, episode_total + 1)
         ]
+        return episodes, degraded
+
+    @staticmethod
+    def _released_episode_count(media: dict, aired_at: dict, streaming_index: dict) -> int:
+        """How many episodes are out: AniList's next-episode marker, else its totals."""
+        next_airing = media.get("nextAiringEpisode") or {}
+        next_episode = positive_int(next_airing.get("episode"))
+        if next_episode:
+            return next_episode - 1
+        known = max([*aired_at, *streaming_index, 0])
+        if media.get("status") == "FINISHED":
+            return max(positive_int(media.get("episodes")) or 0, known)
+        return known
+
+    @staticmethod
+    def _nothing_aired_yet(media: dict) -> bool:
+        """AniList says no episode is out: not released yet, or episode 1 is next."""
+        next_episode = positive_int((media.get("nextAiringEpisode") or {}).get("episode"))
+        return media.get("status") == "NOT_YET_RELEASED" or next_episode == 1
+
+    @staticmethod
+    def _aired_dates(schedule: list[dict]) -> dict[int, str]:
+        """Episode number -> broadcast date (YYYY-MM-DD, Japan time)."""
+        dates: dict[int, str] = {}
+        for node in schedule:
+            number = positive_int(node.get("episode"))
+            airing_at = node.get("airingAt")
+            if not number or not isinstance(airing_at, int | float):
+                continue
+            dates[number] = datetime.fromtimestamp(airing_at, tz=BROADCAST_TZ).date().isoformat()
+        return dates
+
+    @staticmethod
+    def _stored_released_count(anime: Anime) -> int:
+        """How many episodes the stored row says are out (no unaired ones)."""
+        if anime.status == Anime.AnimeStatus.upcoming:
+            return 0
+        if anime.status == Anime.AnimeStatus.airing:
+            if anime.next_airing_episode:
+                return max(anime.next_airing_episode - 1, 0)
+            return int(anime.last_aired_episode or 0)
+        return int(anime.episode_count or 0)
 
     def _build_fallback_episodes(self, anime: Anime) -> list[dict]:
-        episode_count = int(anime.episode_count or 0)
+        episode_count = self._stored_released_count(anime)
         if episode_count <= 0:
             return []
 
@@ -123,134 +188,6 @@ class AnimeWatchEpisodeService:
             }
             for episode_number in range(1, episode_count + 1)
         ]
-
-    def _fetch_jikan_episodes(
-        self,
-        mal_id: int,
-        *,
-        request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
-    ) -> list[dict]:
-        limiter = JikanRateLimiter(base_delay=0.4)
-        url = f"{JIKAN_BASE_URL}/anime/{mal_id}/episodes"
-        episodes: list[dict] = []
-        page = 1
-        max_retries = 0 if request_budget == self.REQUEST_BUDGET_INTERACTIVE else 3
-        request_timeout = 8.0 if request_budget == self.REQUEST_BUDGET_INTERACTIVE else 15.0
-
-        with httpx.Client(timeout=request_timeout) as client:
-            while True:
-                payload = self._get_jikan_page(
-                    client,
-                    url,
-                    page,
-                    limiter,
-                    max_retries=max_retries,
-                )
-                if not payload:
-                    break
-
-                page_items = payload.get("data") or []
-                if not isinstance(page_items, list) or not page_items:
-                    break
-
-                for offset, item in enumerate(page_items, start=1):
-                    if not isinstance(item, dict):
-                        continue
-                    normalized = self._normalize_jikan_episode(
-                        item,
-                        fallback_number=((page - 1) * len(page_items)) + offset,
-                    )
-                    if normalized:
-                        episodes.append(normalized)
-
-                pagination = payload.get("pagination") or {}
-                if not pagination.get("has_next_page"):
-                    break
-                page += 1
-
-        return episodes
-
-    def _get_jikan_page(
-        self,
-        client: httpx.Client,
-        url: str,
-        page: int,
-        limiter: JikanRateLimiter,
-        max_retries: int = 3,
-    ) -> dict | None:
-        for attempt in range(max_retries + 1):
-            limiter.acquire()
-            try:
-                response = client.get(url, params={"page": page})
-            except (httpx.TimeoutException, httpx.ConnectError) as exc:
-                limiter.record_error()
-                if attempt < max_retries:
-                    backoff(min(2**attempt, 10))
-                    continue
-                logger.warning("Jikan episode fetch failed for page %s: %s", page, exc)
-                return None
-            except httpx.HTTPError as exc:
-                limiter.record_error()
-                logger.warning("Jikan episode fetch error for page %s: %s", page, exc)
-                return None
-
-            if response.status_code == 404:
-                return None
-
-            if response.status_code == 429:
-                wait_time = retry_after_seconds(response.headers.get("Retry-After"))
-                if wait_time is None:
-                    wait_time = min(2**attempt + 1, 60)
-                limiter.record_429(cooldown_hint=wait_time)
-                if attempt < max_retries:
-                    time.sleep(wait_time)
-                    continue
-                return None
-
-            if 500 <= response.status_code < 600:
-                limiter.record_error()
-                if attempt < max_retries:
-                    backoff(min(2**attempt, 10))
-                    continue
-                return None
-
-            if 400 <= response.status_code < 500:
-                logger.warning(
-                    "Jikan episode fetch returned non-retryable status %s for page %s",
-                    response.status_code,
-                    page,
-                )
-                return None
-
-            response.raise_for_status()
-            limiter.record_success()
-            return response.json()
-
-        return None
-
-    def _normalize_jikan_episode(self, item: dict, *, fallback_number: int) -> dict | None:
-        number = (
-            positive_int(item.get("mal_id"))
-            or positive_int(item.get("episode"))
-            or self._episode_number_from_jikan_url(item.get("url"))
-            or fallback_number
-        )
-        if not number:
-            return None
-
-        title = (
-            (item.get("title") or "").strip()
-            or (item.get("title_romanji") or "").strip()
-            or (item.get("title_japanese") or "").strip()
-            or f"Episode {number}"
-        )
-        aired = self._normalize_aired_date(item.get("aired"))
-
-        return {
-            "number": number,
-            "title": title,
-            "aired": aired,
-        }
 
     def _index_streaming_episodes(self, episodes: list[dict]) -> dict[int, dict]:
         index: dict[int, dict] = {}
@@ -268,26 +205,26 @@ class AnimeWatchEpisodeService:
             if not episode_number or episode_number in index:
                 continue
 
+            title = str(item.get("title") or "").strip()
             index[episode_number] = {
-                "title": str(item.get("title") or "").strip(),
-                "thumbnail": JikanService.normalize_external_image_url(item.get("thumbnail")),
+                "title": title,
+                "episode_title": self._EPISODE_TITLE_PREFIX.sub("", title).strip(),
+                "thumbnail": AniListService.normalize_external_image_url(item.get("thumbnail")),
                 "crunchyroll_url": url,
             }
 
         return index
 
-    def _merge_episode(
-        self, anime: Anime, jikan_episode: dict, streaming_episode: dict | None
-    ) -> dict:
-        number = jikan_episode["number"]
+    def _merge_episode(self, anime: Anime, episode: dict, streaming_episode: dict | None) -> dict:
+        number = episode["number"]
         crunchyroll_url = (
             streaming_episode.get("crunchyroll_url") if streaming_episode else ""
         ) or self._build_crunchyroll_search_url(anime.title, number)
 
         return {
             "number": number,
-            "title": jikan_episode.get("title") or f"Episode {number}",
-            "aired": jikan_episode.get("aired"),
+            "title": episode.get("title") or f"Episode {number}",
+            "aired": episode.get("aired"),
             "thumbnail": (streaming_episode or {}).get("thumbnail", ""),
             "crunchyroll_url": crunchyroll_url,
             "has_real_crunchyroll_url": bool((streaming_episode or {}).get("crunchyroll_url")),
@@ -309,24 +246,6 @@ class AnimeWatchEpisodeService:
             if match:
                 return positive_int(match.group(1))
         return None
-
-    @classmethod
-    def _episode_number_from_jikan_url(cls, url: str | None) -> int | None:
-        candidate = str(url or "").strip()
-        if not candidate:
-            return None
-
-        match = cls._JIKAN_EPISODE_URL_PATTERN.search(candidate)
-        if not match:
-            return None
-        return positive_int(match.group(1))
-
-    @staticmethod
-    def _normalize_aired_date(value: str | None) -> str | None:
-        candidate = str(value or "").strip()
-        if not candidate:
-            return None
-        return candidate[:10]
 
     @staticmethod
     def _is_crunchyroll_stream(site: str, url: str) -> bool:

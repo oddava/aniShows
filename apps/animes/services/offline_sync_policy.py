@@ -15,22 +15,20 @@ from ..models import OfflineAnimeSyncState
 
 STAGE_METADATA = "metadata"
 STAGE_FRANCHISE = "franchise"
-STAGE_THEMES = "themes"
-STAGES = (STAGE_METADATA, STAGE_FRANCHISE, STAGE_THEMES)
+STAGES = (STAGE_METADATA, STAGE_FRANCHISE)
 
 STATUS_FIELD_BY_STAGE = {
     STAGE_METADATA: "metadata_status",
     STAGE_FRANCHISE: "franchise_status",
-    STAGE_THEMES: "themes_status",
 }
 
 ATTEMPT_FIELD_BY_STAGE = {
     STAGE_METADATA: "metadata_attempt_count",
     STAGE_FRANCHISE: "franchise_attempt_count",
-    STAGE_THEMES: "themes_attempt_count",
 }
 
-TRANSIENT_REASON_CODES = {"rate_limited", "transport_error"}
+# AniList busy, unreachable, or rejecting the query: not the row's fault.
+TRANSIENT_REASON_CODES = {"rate_limited", "transport_error", "query_rejected"}
 NON_RETRYABLE_REASON_CODES = {"invalid_variable", "not_found"}
 BLOCKED_REASON_CODES = {"identity_conflict", "missing_ids", "invalid_ids"}
 
@@ -40,7 +38,6 @@ MAX_BACKOFF_SECONDS = 24 * 60 * 60
 NON_RETRYABLE_BACKOFF_SECONDS = [1800, 21600, 86400]
 NON_RETRYABLE_QUARANTINE_THRESHOLD = 2
 BLOCKED_QUARANTINE_THRESHOLD = 2
-TRANSIENT_QUARANTINE_THRESHOLD = 12
 IN_PROGRESS_LEASE_SECONDS = 10 * 60
 STATE_BULK_CREATE_BATCH_SIZE = 500
 
@@ -126,5 +123,8 @@ class OfflineSyncPolicy:
         if result.reason_code in NON_RETRYABLE_REASON_CODES:
             return attempts >= NON_RETRYABLE_QUARANTINE_THRESHOLD
         if result.transient or result.reason_code in TRANSIENT_REASON_CODES:
-            return attempts >= TRANSIENT_QUARANTINE_THRESHOLD
+            # Never for an AniList-side problem: a quarantined row is hidden
+            # from public lists, and an outage or a rejected query would hide
+            # every row it touched. These keep retrying, at most daily.
+            return False
         return attempts >= NON_RETRYABLE_QUARANTINE_THRESHOLD

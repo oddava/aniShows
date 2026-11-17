@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { LoadingBar } from '../components/LoadingBar';
 import ActiveFilterChips from '../components/browse/ActiveFilterChips';
 import AdvancedFiltersPanel from '../components/browse/AdvancedFiltersPanel';
 import ViewModeToggle from '../components/browse/ViewModeToggle';
+import SortSelect from '../components/browse/SortSelect';
 import BrowseResults from '../components/browse/BrowseResults';
 import useBrowseUrlFilters from '../components/browse/useBrowseUrlFilters';
 import useBrowseAnimeList from '../components/browse/useBrowseAnimeList';
@@ -16,6 +18,7 @@ import {
   STATUS_OPTIONS,
   TYPE_OPTIONS,
   YEAR_OPTIONS,
+  formatSeasonLabel,
 } from '../components/browse/browseFilterOptions';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -32,18 +35,43 @@ import { filterBrowseGenres } from '../utils/realGenres';
 import { animeKeys, genreQueries, studioQueries } from '../api/queries/anime';
 import { profileKeys } from '../api/queries/user';
 
+// localStorage can throw (private mode, blocked storage); these preferences
+// are conveniences, so a failure only means the default is used.
+const readStored = (key, fallback) => {
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeStored = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Not persisted; the choice still applies for this visit.
+  }
+};
+
 export default function Browse() {
   const searchInputRef = useRef(null);
+  const location = useLocation();
+
+  // Arriving from the mobile top bar's search button: put the cursor in the box.
+  useEffect(() => {
+    if (location.state?.focusSearch) {
+      searchInputRef.current?.focus();
+    }
+  }, [location.key, location.state]);
 
   // State
   const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState(() => localStorage.getItem('browse_view_mode') || 'grid');
-  const [titleLanguage, setTitleLanguage] = useState(() => localStorage.getItem('title_language') || 'en');
-  const [activeTab, setActiveTab] = useState('popular');
+  const [viewMode, setViewMode] = useState(() => readStored('browse_view_mode', 'grid'));
+  const [titleLanguage, setTitleLanguage] = useState(() => readStored('title_language', 'en'));
 
   const [collapsedSections, setCollapsedSections] = useState(() => {
     try {
-      const saved = localStorage.getItem('browse_collapsed_sections');
+      const saved = readStored('browse_collapsed_sections', null);
       return saved ? JSON.parse(saved) : { genres: false };
     } catch {
       return { genres: false };
@@ -53,7 +81,6 @@ export default function Browse() {
   // Filters live in the URL
   const filters = useBrowseUrlFilters();
   const {
-    searchParams,
     currentGenres,
     currentSort,
     currentSearch,
@@ -76,7 +103,10 @@ export default function Browse() {
     hasActiveFilters,
     localFilters,
     clearAllFilters,
+    searchWithoutFilters,
     updateParam,
+    setSort,
+    stepSeason,
     clearSeasonAndYear,
     clearYearRange,
     toggleArrayParam,
@@ -109,10 +139,10 @@ export default function Browse() {
     }
   });
 
-  // Track analytics
+  // Track analytics (the sort is what the old "tab" event described)
   useEffect(() => {
-    if (activeTab) trackTabChange(activeTab);
-  }, [activeTab, trackTabChange]);
+    trackTabChange(currentSort);
+  }, [currentSort, trackTabChange]);
 
   useEffect(() => {
     trackViewModeChange(viewMode);
@@ -150,31 +180,8 @@ export default function Browse() {
     refreshProfile,
   ]);
 
-  // Update active tab based on params
-  useEffect(() => {
-    if (currentSort === 'trending') setActiveTab('trending');
-    else if (currentSeason && currentYear) {
-      const d = new Date();
-      const m = d.getMonth();
-      const y = d.getFullYear();
-      let thisSeason = 'winter';
-      if (m >= 3 && m <= 5) thisSeason = 'spring';
-      else if (m >= 6 && m <= 8) thisSeason = 'summer';
-      else if (m >= 9 && m <= 11) thisSeason = 'fall';
-
-      if (currentSeason === thisSeason && parseInt(currentYear, 10) === y) {
-        setActiveTab('current');
-      } else {
-        setActiveTab('upcoming');
-      }
-    }
-    else if (currentSort === 'rating') setActiveTab('top');
-    else if (currentSort === 'newest') setActiveTab('newest');
-    else if (currentSort === 'title') setActiveTab('title');
-    else if (currentSearch && !searchParams.get('sort') && !currentSeason) setActiveTab('search');
-    else if (currentSort === 'popular') setActiveTab('popular');
-    else setActiveTab(null);
-  }, [currentSort, currentSeason, currentYear, currentSearch, searchParams]);
+  // "Fall 2026" heads the grid while a season is selected (P2-7).
+  const seasonLabel = formatSeasonLabel(currentSeason, currentYear);
 
   const shouldLoadStudios = showFilters || Boolean(currentStudio);
 
@@ -201,26 +208,21 @@ export default function Browse() {
     isFetching,
     isError,
     refetch,
-    isTabSwitching,
   } = useBrowseAnimeList({ filters, adultContentEnabled });
 
   // Persist view mode
   useEffect(() => {
-    localStorage.setItem('browse_view_mode', viewMode);
+    writeStored('browse_view_mode', viewMode);
   }, [viewMode]);
 
   useEffect(() => {
-    localStorage.setItem('title_language', titleLanguage);
+    writeStored('title_language', titleLanguage);
   }, [titleLanguage]);
-
-  useEffect(() => {
-    document.title = 'Browse Anime - AniShows';
-  }, []);
 
   const toggleSection = useCallback((section) => {
     const newCollapsed = { ...collapsedSections, [section]: !collapsedSections[section] };
     setCollapsedSections(newCollapsed);
-    localStorage.setItem('browse_collapsed_sections', JSON.stringify(newCollapsed));
+    writeStored('browse_collapsed_sections', JSON.stringify(newCollapsed));
   }, [collapsedSections]);
 
   // Filter sidebar props
@@ -248,10 +250,10 @@ export default function Browse() {
   return (
     <>
       <SEO page="browse" />
-      <LoadingBar isLoading={isLoading || isFetching || isTabSwitching} />
+      <LoadingBar isLoading={isLoading || isFetching} />
       {theme === 'retro-anime' && <SakuraAnimation />}
 
-      <div className="pt-4 pb-0 sm:py-8 px-3 sm:px-4 lg:px-6">
+      <div className="pt-4 pb-0 sm:py-8 px-4 md:px-6">
         <div className="max-w-[1600px] mx-auto">
 
 
@@ -286,15 +288,20 @@ export default function Browse() {
                 {/* Controls Bar - only show view controls in grid mode */}
                 {isGridMode && (
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                    {seasonLabel && <h1 className="page-title">{seasonLabel}</h1>}
+                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto sm:ml-auto">
+                      <SortSelect value={currentSort} hasSearch={Boolean(currentSearch)} onChange={setSort} />
                       <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
 
                       {/* Title Language Toggle */}
                       <button
                         onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
                         className="flex items-center justify-center px-3 h-9 bg-dark-100 border border-gray-700 rounded-lg text-[11px] font-bold text-gray-300 hover:border-accent transition-colors"
+                        type="button"
                         title="Toggle title language"
+                        aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}
                       >
+                        <span className="font-semibold text-gray-500 mr-1">Titles</span>
                         {titleLanguage === 'en' ? 'EN' : 'JP'}
                       </button>
                     </div>
@@ -328,6 +335,7 @@ export default function Browse() {
                   onClearType={() => updateParam('type', '')}
                   onClearStatus={() => updateParam('status', '')}
                   onClearSeason={clearSeasonAndYear}
+                  onStepSeason={stepSeason}
                   onClearYear={() => updateParam('year', '')}
                   onClearMinRating={() => updateParam('min_rating', '')}
                   onClearMaxRating={() => updateParam('max_rating', '')}
@@ -354,8 +362,8 @@ export default function Browse() {
                     currentSearch={currentSearch}
                     hasActiveFilters={hasActiveFilters}
                     clearAllFilters={clearAllFilters}
+                    searchWithoutFilters={searchWithoutFilters}
                     isLoading={isLoading}
-                    isTabSwitching={isTabSwitching}
                     isError={isError}
                     isFetchingNextPage={isFetchingNextPage}
                     refetch={refetch}

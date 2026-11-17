@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { followApi } from '../api/client';
 import { Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import logger from '../utils/logger';
 import { followKeys, profileKeys, userKeys } from '../api/queries/user';
+import { friendsWatchingKeys, getCommunityErrorMessage } from '../api/queries/social';
 
 /**
  * Follow button with support for different relationship states:
@@ -140,8 +142,10 @@ export default function FollowButton({
                 );
             }
 
-            // Invalidate follows list queries so modal data refreshes
+            // Invalidate follows list queries so modal data refreshes, and
+            // "Friends watching" (mutual follows) on anime pages.
             queryClient.invalidateQueries({ queryKey: followKeys.all });
+            queryClient.invalidateQueries({ queryKey: friendsWatchingKeys.all });
 
             if (onFollowChange) {
                 onFollowChange(newIsFollowing, followerCount);
@@ -181,6 +185,7 @@ export default function FollowButton({
             }
             
             logger.error('Follow error:', error);
+            toast.error(getCommunityErrorMessage(error, 'Could not update follow. Please try again.'));
         }
     });
 
@@ -264,10 +269,25 @@ export default function FollowButton({
         }
 
         if (isFollowBack) {
-            return 'bg-accent/80 text-white hover:bg-accent border border-accent';
+            return 'bg-accent-dark/85 text-white hover:bg-accent-dark border border-accent';
         }
 
-        return 'bg-accent text-white hover:bg-accent/80';
+        return 'bg-accent-dark text-white hover:bg-accent-dark/85';
+    };
+
+    const label = isFriends
+        ? 'Friends'
+        : isFollowing
+            ? 'Following'
+            : isFollowBack
+                ? 'Follow Back'
+                : 'Follow';
+    // The visible label (icon-only on phones unless showLabelOnMobile) plus
+    // who it is for; pressed = you follow them.
+    const a11yProps = {
+        'aria-label': `${label} ${username}`,
+        'aria-pressed': isFollowing,
+        'aria-busy': toggleMutation.isPending || undefined,
     };
 
     const title = isFriends 
@@ -281,6 +301,7 @@ export default function FollowButton({
     if (variant === 'compact') {
         return (
             <button
+                type="button"
                 onClick={handleClick}
                 disabled={toggleMutation.isPending}
                 className={`
@@ -291,6 +312,7 @@ export default function FollowButton({
                     ${className}
                 `}
                 title={title}
+                {...a11yProps}
             >
                 {getButtonContent()}
             </button>
@@ -299,6 +321,7 @@ export default function FollowButton({
 
     return (
         <button
+            type="button"
             onClick={handleClick}
             disabled={toggleMutation.isPending}
             className={`
@@ -309,6 +332,7 @@ export default function FollowButton({
                 ${className}
             `}
             title={title}
+            {...a11yProps}
         >
             {getButtonContent()}
         </button>

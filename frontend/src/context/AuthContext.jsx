@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { jwtDecode } from 'jwt-decode';
 import {
     AUTH_EXPIRED_EVENT,
@@ -15,6 +16,8 @@ import {
     syncStoredTimeZonePreference,
 } from '../utils/dateUtils';
 import logger from '../utils/logger';
+import { detachOnLogout } from '../components/notifications/pushClient';
+import { clearUserContext, setUserContext } from '../sentry';
 
 const AuthContext = createContext(null);
 
@@ -42,8 +45,37 @@ const userFromToken = (token) => {
 };
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
+    const queryClient = useQueryClient();
+    const [user, setUserState] = useState(null);
     const [loading, setLoading] = useState(true);
+    // Id of the account whose data may sit in the query cache.
+    const lastUserIdRef = useRef(null);
+
+    // Many query keys are not user-scoped (['ownProfile'], the watching list,
+    // recommendations, per-anime list status), so nothing cached for one
+    // account may survive into another's session on a shared device.
+    const clearUserData = useCallback(() => {
+        queryClient.clear();
+        clearUserContext();
+    }, [queryClient]);
+
+    const setUser = useCallback((nextUser) => {
+        const nextId = nextUser?.id ?? null;
+        if (lastUserIdRef.current !== null && nextId !== lastUserIdRef.current) {
+            clearUserData();
+        }
+        lastUserIdRef.current = nextId;
+        if (nextUser) setUserContext(nextUser);
+        setUserState(nextUser);
+    }, [clearUserData]);
+
+    const signOutLocally = useCallback(() => {
+        clearSession();
+        clearStoredTimeZonePreference();
+        clearUserData();
+        lastUserIdRef.current = null;
+        setUserState(null);
+    }, [clearUserData]);
 
     const loadProfileFor = useCallback(async (access) => {
         try {
@@ -57,7 +89,7 @@ export function AuthProvider({ children }) {
             setUser(fallbackUser);
             return fallbackUser;
         }
-    }, []);
+    }, [setUser]);
 
     // The access token lives in memory only, so every page load starts by
     // trading the httpOnly refresh cookie for a new one.
@@ -85,11 +117,10 @@ export function AuthProvider({ children }) {
 
     // Sign out locally when a refresh fails, or when another tab logs out.
     useEffect(() => {
-        const handleExpired = () => setUser(null);
+        const handleExpired = () => signOutLocally();
         const handleStorage = (event) => {
             if (event.key === SESSION_HINT_KEY && !event.newValue) {
-                clearSession();
-                setUser(null);
+                signOutLocally();
             }
         };
 
@@ -99,7 +130,7 @@ export function AuthProvider({ children }) {
             window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
             window.removeEventListener('storage', handleStorage);
         };
-    }, []);
+    }, [signOutLocally]);
 
     useEffect(() => {
         if (user) {
@@ -122,7 +153,7 @@ export function AuthProvider({ children }) {
             return userData;
         }
         return loadProfileFor(access);
-    }, [loadProfileFor]);
+    }, [loadProfileFor, setUser]);
 
     const login = useCallback(async (username, password) => {
         const response = await authApi.login({ username, password });
@@ -130,27 +161,26 @@ export function AuthProvider({ children }) {
     }, [startSession]);
 
     const register = useCallback(async (username, email, password) => {
-        const response = await authApi.register({
-            username,
-            email,
-            password,
-            password_confirm: password
-        });
+        // The API never read a password_confirm field; the form checks the match.
+        const response = await authApi.register({ username, email, password });
 
         return response.data;
     }, []);
 
     const logout = useCallback(async () => {
+        // C-G1-3: unsubscribe this browser from web push and delete its server
+        // row while the session can still authenticate that call, so the next
+        // person on this device doesn't get this account's pushes. Best effort:
+        // it never throws and is bounded at 1.5 s.
+        await detachOnLogout();
         try {
             // Blacklists the refresh token and clears its cookie.
             await authApi.logout();
         } catch (error) {
             logger.warn('Logout request failed, clearing local session anyway:', error.message);
         }
-        clearSession();
-        clearStoredTimeZonePreference();
-        setUser(null);
-    }, []);
+        signOutLocally();
+    }, [signOutLocally]);
 
     const refreshProfile = useCallback(async (profileData = null) => {
         if (profileData && typeof profileData === 'object') {
@@ -166,7 +196,7 @@ export function AuthProvider({ children }) {
             logger.error('Failed to refresh profile:', error);
             throw error;
         }
-    }, []);
+    }, [setUser]);
 
     const value = useMemo(() => ({
         user,

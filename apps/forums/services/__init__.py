@@ -15,6 +15,7 @@ from .queries import (
     build_category_queryset,
     build_post_queryset,
     build_thread_queryset,
+    get_post_subtree,
     get_threaded_posts_page,
 )
 
@@ -26,6 +27,7 @@ __all__ = [
     "create_thread",
     "delete_post",
     "delete_thread",
+    "get_post_subtree",
     "get_threaded_posts_page",
     "toggle_post_like",
     "toggle_thread_like",

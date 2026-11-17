@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { reviewApi } from '../../api/client';
-import { favoriteKeys, profileKeys, reviewKeys, reviewQueries } from '../../api/queries/user';
+import { favoriteKeys, profileKeys } from '../../api/queries/user';
+import { getReviewErrorMessage, reviewKeys, reviewQueries } from '../../api/queries/reviews';
 
 /**
  * The reviews block of the anime detail page: sort and rating filter, the
@@ -64,6 +66,8 @@ export default function useAnimeReviews({ slug, anime, user, isAuthenticated, qu
         mutationFn: (data) => reviewApi.create({ ...data, anime_slug: slug }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: reviewKeys.all });
+            // ['reviewStats', slug] sits outside the ['reviews'] prefix.
+            queryClient.invalidateQueries({ queryKey: reviewKeys.stats(slug) });
             queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
             queryClient.invalidateQueries({ queryKey: profileKeys.own });
             if (user?.username) {
@@ -77,6 +81,8 @@ export default function useAnimeReviews({ slug, anime, user, isAuthenticated, qu
         mutationFn: ({ id, data }) => reviewApi.update(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: reviewKeys.all });
+            // ['reviewStats', slug] sits outside the ['reviews'] prefix.
+            queryClient.invalidateQueries({ queryKey: reviewKeys.stats(slug) });
             queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
             setEditingReview(null);
         },
@@ -86,6 +92,8 @@ export default function useAnimeReviews({ slug, anime, user, isAuthenticated, qu
         mutationFn: (id) => reviewApi.delete(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: reviewKeys.all });
+            // ['reviewStats', slug] sits outside the ['reviews'] prefix.
+            queryClient.invalidateQueries({ queryKey: reviewKeys.stats(slug) });
             queryClient.invalidateQueries({ queryKey: animeDetailQueryKey });
             queryClient.invalidateQueries({ queryKey: profileKeys.own });
             if (user?.username) {
@@ -93,6 +101,9 @@ export default function useAnimeReviews({ slug, anime, user, isAuthenticated, qu
                 queryClient.invalidateQueries({ queryKey: favoriteKeys.byUser(user.username) });
                 queryClient.invalidateQueries({ queryKey: favoriteKeys.overview(user.username) });
             }
+        },
+        onError: (error) => {
+            toast.error(getReviewErrorMessage(error, "Couldn't delete the review."));
         },
     });
 

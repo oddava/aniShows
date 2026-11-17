@@ -13,12 +13,10 @@ def cleanup_old_task_results(self, days: int = 7, batch_size: int = 1000):
         "Custom Celery task result cleanup failed",
         extra={"days": days, "batch_size": batch_size},
     ):
-        return CoreTaskService.cleanup_old_task_results(days=days, batch_size=batch_size)
-
-
-@observed_shared_task(retry_policy="none")
-def cleanup_celery_backend(self, days: int = 1):
-    return CoreTaskService.cleanup_celery_backend(days=days)
+        result = CoreTaskService.cleanup_old_task_results(days=days, batch_size=batch_size)
+        # Retention for SystemLog/AuditLog rides on this daily run (no extra beat entry).
+        result["pruned"] = CoreTaskService.prune_admin_records()
+        return result
 
 
 @observed_shared_task(retry_policy="quick", time_limit_preset="quick")

@@ -1,10 +1,20 @@
 from dataclasses import dataclass
 
 from django.db import transaction
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, OuterRef, Subquery
 
-from ...animes.models import Anime, Character, Genre, OfflineAnimeSyncState, Staff, Studio
+from ...animes.models import (
+    Anime,
+    Character,
+    Genre,
+    OfflineAnimeSyncState,
+    Review,
+    Staff,
+    Studio,
+    UserFavorite,
+)
 from ...animes.services.offline_sync import OfflineSyncService
+from .query_helpers import related_count
 
 
 @dataclass(slots=True)
@@ -14,10 +24,17 @@ class AdminAnimeActionResult:
 
 
 def get_admin_anime_queryset():
+    # Correlated subqueries: two joined Counts would multiply each other (A13).
     return Anime.objects.prefetch_related("genres", Anime.studios_prefetch()).annotate(
-        favorites_count=Count("favorites"),
-        reviews_count=Count("reviews"),
-        avg_review_rating=Avg("reviews__rating"),
+        favorites_count=related_count(UserFavorite, "anime"),
+        reviews_count=related_count(Review, "anime"),
+        avg_review_rating=Subquery(
+            Review.objects.filter(anime=OuterRef("pk"))
+            .order_by()
+            .values("anime")
+            .annotate(avg=Avg("rating"))
+            .values("avg")[:1]
+        ),
     )
 
 
@@ -100,7 +117,7 @@ def get_admin_offline_sync_state_queryset(query_params, ordering):
 
     stage = query_params.get("stage")
     stage_status = query_params.get("status")
-    if stage in {"metadata", "franchise", "themes"} and stage_status:
+    if stage in {"metadata", "franchise"} and stage_status:
         queryset = queryset.filter(**{f"{stage}_status": stage_status})
 
     return queryset.order_by(*ordering)

@@ -13,7 +13,7 @@ from rest_framework.serializers import (
 
 from ..models import Anime
 from ..serializers_mixins import ImageUrlMixin, UserStatusMixin
-from ..services.jikan import JikanService
+from ..services.providers.anilist import mapper as anilist_mapper
 from .base import (
     AnimeCharacterSerializer,
     AnimeStaffSerializer,
@@ -21,6 +21,41 @@ from .base import (
     StudioSerializer,
     ThemeSongSerializer,
 )
+
+STATUS_DISTRIBUTION_KEYS = ("watching", "completed", "on_hold", "dropped", "plan_to_watch")
+# AniList's list statuses (stored as AniList sends them) mapped onto ours (B6, D-3);
+# the frontend's ``utils/statusDistribution.js`` uses the same table.
+STATUS_DISTRIBUTION_ALIASES = {
+    "watching": "watching",
+    "current": "watching",
+    "repeating": "watching",
+    "completed": "completed",
+    "on_hold": "on_hold",
+    "paused": "on_hold",
+    "dropped": "dropped",
+    "plan_to_watch": "plan_to_watch",
+    "planning": "plan_to_watch",
+}
+
+
+def normalize_status_distribution(distribution) -> dict[str, int]:
+    """The five list-status counts, from AniList's keys or ours, in any case.
+
+    Aliases of one status are summed (AniList's CURRENT and REPEATING are both
+    "watching"); unknown keys and non-numeric counts are ignored.
+    """
+    counts = dict.fromkeys(STATUS_DISTRIBUTION_KEYS, 0)
+    if not isinstance(distribution, dict):
+        return counts
+    for raw_key, raw_count in distribution.items():
+        key = STATUS_DISTRIBUTION_ALIASES.get(str(raw_key).strip().lower())
+        if key is None or isinstance(raw_count, bool):
+            continue
+        try:
+            counts[key] += max(int(raw_count or 0), 0)
+        except (TypeError, ValueError):
+            continue
+    return counts
 
 
 class AnimeWatchEpisodeSerializer(Serializer):
@@ -272,6 +307,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
             "title",
             "title_jp",
             "slug",
+            "is_adult",
             "synopsis",
             "cover_image",
             "cover_image_small",
@@ -364,24 +400,10 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         return None
 
     def get_status_distribution(self, obj):
-        """Return the denormalized site list counts stored on the anime record."""
+        """AniList's list counts stored on the anime, under our five status keys."""
         if not obj.pk:
-            return {
-                "watching": 0,
-                "completed": 0,
-                "on_hold": 0,
-                "dropped": 0,
-                "plan_to_watch": 0,
-            }
-
-        distribution = getattr(obj, "status_distribution", None)
-        if not isinstance(distribution, dict):
-            distribution = {}
-
-        return {
-            key: int(distribution.get(key, 0) or 0)
-            for key in ("watching", "completed", "on_hold", "dropped", "plan_to_watch")
-        }
+            return normalize_status_distribution(None)
+        return normalize_status_distribution(getattr(obj, "status_distribution", None))
 
     def get_characters_preview(self, obj):
         from ..models import AnimeCharacter
@@ -452,11 +474,6 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
                     "icon": str(link.get("icon") or "").strip(),
                 }
             )
-
-        has_banner_ref = bool(getattr(obj, "banner_image", None) or obj.banner_image_external_url)
-        if len(links) == 1 and links[0]["site"].lower() == "myanimelist" and not has_banner_ref:
-            return []
-
         return links
 
     def get_relations(self, obj):
@@ -468,7 +485,7 @@ class AnimeDetailSerializer(UserStatusMixin, ImageUrlMixin, ModelSerializer):
         relations = []
         for relation in rows:
             linked = relation.to_anime
-            cover = JikanService.normalize_external_image_url(relation.cover)
+            cover = anilist_mapper.normalize_external_image_url(relation.cover)
             if not cover and linked is not None:
                 cover = self.get_image_url(linked, "cover_image", "cover_image_external_url")
             relations.append(

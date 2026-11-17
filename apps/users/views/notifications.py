@@ -1,74 +1,32 @@
-from django.db.models import Q
-from rest_framework import generics, status
+from collections.abc import Mapping
+
+from allauth.socialaccount.models import SocialAccount
+from django.contrib.auth import get_user_model
+from django.core import signing
+from django.db.models import Prefetch, Q
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.fields import BooleanField, CharField, JSONField
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.serializers import ModelSerializer, Serializer
+from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 
 from ...animes.models import Anime
 from ...core.api_errors import error_response
 from ...core.models import Notification, PushSubscription
+from ...core.services import notification_preferences, notification_types
+from ...core.services.notification_email import read_unsubscribe_token
 from ...core.services.notification_service import NotificationService
 from ...core.services.push_service import PushService
-from ...core.services.url_validator import URLValidationError, URLValidator
+from ...shared.throttling import ResilientScopedRateThrottle
+from ..serializers.notifications import (
+    EmailUnsubscribeSerializer,
+    NotificationSerializer,
+    PushSubscriptionSerializer,
+)
 
-
-class NotificationSerializer(ModelSerializer):
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        cover_payload = getattr(instance, "_notification_cover_payload", None)
-        if cover_payload:
-            data = dict(representation.get("data") or {})
-            for key, value in cover_payload.items():
-                if value and not data.get(key):
-                    data[key] = value
-            representation["data"] = data
-        return representation
-
-    class Meta:
-        model = Notification
-        fields = [
-            "id",
-            "notification_type",
-            "title",
-            "message",
-            "data",
-            "is_read",
-            "created_at",
-            "read_at",
-        ]
-        read_only_fields = ["id", "created_at", "read_at"]
-
-
-class PushSubscriptionSerializer(ModelSerializer):
-    endpoint = CharField(required=True, max_length=2048)
-    p256dh = CharField(required=True)
-    auth = CharField(required=True)
-    device_type = CharField(default="browser")
-    device_info = JSONField(required=False, default=dict)
-
-    class Meta:
-        model = PushSubscription
-        fields = ["id", "endpoint", "p256dh", "auth", "device_type", "device_info", "created_at"]
-
-    def validate_endpoint(self, value):
-        # The worker POSTs to this URL; only public HTTPS push services qualify.
-        try:
-            URLValidator().validate_public_target(value)
-        except URLValidationError as exc:
-            raise ValidationError(f"Invalid push endpoint: {exc}") from exc
-        # Stored verbatim: unsubscribe matches the browser's endpoint exactly.
-        return value
-
-
-class NotificationPreferencesSerializer(Serializer):
-    email_new_episodes = BooleanField()
-    push_new_episodes = BooleanField()
-    push_review_replies = BooleanField()
-    push_new_follower = BooleanField()
+_BOOLEAN_PARAMS = {"true": True, "false": False}
 
 
 class NotificationViewSet(GenericViewSet):
@@ -76,6 +34,8 @@ class NotificationViewSet(GenericViewSet):
 
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
+    # Non-integer ids never reach the ORM (404 from the router, not a 500).
+    lookup_value_regex = r"\d+"
 
     def get_queryset(self):
         """Return notifications for the current user."""
@@ -145,22 +105,55 @@ class NotificationViewSet(GenericViewSet):
 
         return notifications
 
-    def list(self, request):
-        """List notifications with optional filtering."""
-        queryset = self.get_queryset()
+    def _filtered_queryset(self, params):
+        queryset = (
+            self.get_queryset()
+            .select_related("actor", "actor__userprofile")
+            # Avatar fallback reads the actor's Google account: one query, not one per row.
+            .prefetch_related(
+                Prefetch(
+                    "actor__socialaccount_set",
+                    queryset=SocialAccount.objects.filter(provider="google").only(
+                        "id", "user_id", "extra_data"
+                    ),
+                )
+            )
+        )
+        errors = {}
 
-        # Filter by read status
-        is_read = request.query_params.get("is_read")
+        is_read = params.get("is_read")
         if is_read is not None:
-            is_read_bool = is_read.lower() == "true"
-            queryset = queryset.filter(is_read=is_read_bool)
+            value = _BOOLEAN_PARAMS.get(is_read.strip().lower())
+            if value is None:
+                errors["is_read"] = ["Must be true or false."]
+            else:
+                queryset = queryset.filter(is_read=value)
 
-        # Filter by type
-        notification_type = request.query_params.get("type")
-        if notification_type:
-            queryset = queryset.filter(notification_type=notification_type)
+        category = params.get("category")
+        if category:
+            types = notification_types.TYPES_BY_CATEGORY.get(category)
+            if types is None:
+                errors["category"] = [f"Unknown category: {category}."]
+            else:
+                queryset = queryset.filter(notification_type__in=types)
 
-        # Paginate
+        raw_types = params.get("type")
+        if raw_types:
+            requested = [t.strip() for t in raw_types.split(",") if t.strip()]
+            unknown = [t for t in requested if t not in notification_types.TYPES]
+            if unknown:
+                errors["type"] = [f"Unknown notification type: {', '.join(unknown)}."]
+            elif requested:
+                queryset = queryset.filter(notification_type__in=requested)
+
+        if errors:
+            raise ValidationError(errors)
+        return queryset
+
+    def list(self, request):
+        """List notifications, filtered by ``is_read``, ``category`` and ``type`` (a,b)."""
+        queryset = self._filtered_queryset(request.query_params)
+
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(
@@ -184,7 +177,7 @@ class NotificationViewSet(GenericViewSet):
     @action(detail=True, methods=["patch"])
     def mark_read(self, request, pk=None):
         """Mark a specific notification as read."""
-        success = NotificationService.mark_as_read(pk, request.user)
+        success = NotificationService.mark_as_read(int(pk), request.user)
         if success:
             return Response(
                 {
@@ -206,7 +199,7 @@ class NotificationViewSet(GenericViewSet):
 
     def destroy(self, request, pk=None):
         """Delete a notification."""
-        if NotificationService.delete_notification(pk, request.user):
+        if NotificationService.delete_notification(int(pk), request.user):
             return Response(status=status.HTTP_204_NO_CONTENT)
         return error_response(
             "Notification not found",
@@ -215,32 +208,41 @@ class NotificationViewSet(GenericViewSet):
         )
 
 
-class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
-    """View for managing notification preferences."""
+class NotificationPreferenceView(APIView):
+    """``GET`` the preference matrix with its schema; ``PATCH`` part of it; ``PUT`` all of it."""
 
     permission_classes = [IsAuthenticated]
-    serializer_class = NotificationPreferencesSerializer
 
-    def get_object(self):
-        return self.request.user.userprofile
+    @staticmethod
+    def _payload(preferences):
+        return {"preferences": preferences, "schema": notification_preferences.schema()}
 
-    def get(self, request, *args, **kwargs):
-        """Get current notification preferences."""
-        return Response(self.get_serializer(self.get_object()).data)
+    def get(self, request):
+        return Response(self._payload(notification_preferences.get_preferences(request.user.pk)))
 
-    def update(self, request, *args, **kwargs):
-        """Update notification preferences."""
-        profile = self.get_object()
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+    def _update(self, request, *, replace: bool):
+        try:
+            preferences = notification_preferences.update_preferences(
+                request.user.pk, request.data, replace=replace
+            )
+        except notification_preferences.PreferenceError as exc:
+            raise ValidationError({"preferences": [str(exc)]}) from exc
+        return Response(self._payload(preferences))
 
-        update_fields = list(serializer.validated_data)
-        for field in update_fields:
-            setattr(profile, field, serializer.validated_data[field])
-        if update_fields:
-            profile.save(update_fields=update_fields)
+    def patch(self, request):
+        return self._update(request, replace=False)
 
-        return Response(serializer.data)
+    def put(self, request):
+        return self._update(request, replace=True)
+
+
+class PushConfigView(APIView):
+    """Whether web push is available, and the VAPID key for ``applicationServerKey``."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(PushService.public_config())
 
 
 class PushSubscriptionViewSet(GenericViewSet):
@@ -253,11 +255,22 @@ class PushSubscriptionViewSet(GenericViewSet):
         return PushSubscription.objects.filter(user=self.request.user, is_active=True)
 
     def create(self, request, *args, **kwargs):
-        """Register a new push subscription."""
+        """Register a push subscription (moves an endpoint to this account)."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
+        if data.get("refresh"):
+            refreshed = PushService.refresh_subscription(
+                request.user, data["endpoint"], data["p256dh"], data["auth"]
+            )
+            if refreshed is None:
+                return error_response(
+                    "Subscription not found",
+                    code="push_subscription_not_found",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+            return Response({"status": "refreshed", "id": refreshed.id})
         subscription = PushService.subscribe_user(
             user=request.user,
             endpoint=data["endpoint"],
@@ -273,17 +286,16 @@ class PushSubscriptionViewSet(GenericViewSet):
 
     @action(detail=False, methods=["delete"])
     def unsubscribe(self, request):
-        """Unsubscribe from push notifications."""
+        """Remove this device's subscription (by endpoint)."""
         endpoint = request.data.get("endpoint")
-        if not endpoint:
+        if not endpoint or not isinstance(endpoint, str):
             return error_response(
                 "endpoint is required",
                 code="missing_endpoint",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        success = PushService.unsubscribe_user(request.user, endpoint)
-        if success:
+        if PushService.unsubscribe_user(request.user, endpoint):
             return Response({"status": "unsubscribed"})
         return error_response(
             "Subscription not found",
@@ -292,6 +304,49 @@ class PushSubscriptionViewSet(GenericViewSet):
         )
 
     def list(self, request, *args, **kwargs):
-        """Get user's active push subscriptions."""
-        subscriptions = self.get_queryset().values("id", "device_type", "device_info", "created_at")
+        """Get user's active push subscriptions (never their endpoints)."""
+        subscriptions = self.get_queryset().values(
+            "id", "device_type", "device_info", "created_at", "last_used"
+        )
         return Response(list(subscriptions))
+
+    def destroy(self, request, pk=None):
+        """Remove one of this user's devices."""
+        if PushService.delete_device(request.user, int(pk)):
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return error_response(
+            "Subscription not found",
+            code="push_subscription_not_found",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+
+class EmailUnsubscribeView(APIView):
+    """One-click email unsubscribe (RFC 8058). POST only: link scanners prefetch GETs."""
+
+    authentication_classes: list = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ResilientScopedRateThrottle]
+    throttle_scope = "notification_email_unsubscribe"
+
+    def post(self, request):
+        body = request.data if isinstance(request.data, Mapping) else {}
+        token = request.query_params.get("token") or body.get("token")
+        serializer = EmailUnsubscribeSerializer(data={"token": token})
+        serializer.is_valid(raise_exception=True)
+        try:
+            user_id, category = read_unsubscribe_token(serializer.validated_data["token"])
+        except signing.BadSignature:
+            return error_response(
+                "This unsubscribe link is invalid.",
+                code="invalid_unsubscribe_token",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if not get_user_model().objects.filter(pk=user_id).exists():
+            return error_response(
+                "This unsubscribe link is invalid.",
+                code="invalid_unsubscribe_token",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        notification_preferences.disable_channel(user_id, category, notification_preferences.EMAIL)
+        return Response({"status": "unsubscribed", "category": category})

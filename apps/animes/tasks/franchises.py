@@ -4,11 +4,9 @@ from ...shared.logger import logger
 Franchise/Relations synchronization task.
 """
 
-import time
-
 from ...shared.celery import observed_shared_task
 from ..models import Anime
-from ..services.jikan import JikanService
+from ..services.anilist import AniListService
 from ..services.relation_links import (
     anime_relation_edges,
     link_pending_relations,
@@ -21,7 +19,7 @@ from .base import BaseTask
 class FranchiseSyncTask(BaseTask):
     """Unified task for syncing anime franchise/relations data."""
 
-    service_class = JikanService
+    service_class = AniListService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
     def execute(
@@ -106,10 +104,9 @@ class FranchiseSyncTask(BaseTask):
 
             for i, anime in enumerate(anime_list):
                 try:
-                    if skip_recently_updated and service.call_cache:
-                        if service.call_cache.is_recently_updated(
-                            anime.mal_id or 0, window=update_window
-                        ):
+                    recent_key = self._recent_key(anime)
+                    if skip_recently_updated and service.call_cache and recent_key:
+                        if service.call_cache.is_recently_updated(recent_key, window=update_window):
                             skipped_count += 1
                             continue
 
@@ -122,8 +119,8 @@ class FranchiseSyncTask(BaseTask):
                         total_imported += result.get("imported_count", 0)
                         total_linked += result.get("relations_linked", 0)
 
-                        if service.call_cache and anime.mal_id:
-                            service.call_cache.mark_updated(anime.mal_id)
+                        if service.call_cache and recent_key:
+                            service.call_cache.mark_updated(recent_key)
 
                         logger.info(
                             f"✓ ({i + 1}/{total}) {anime.title}: "
@@ -156,18 +153,30 @@ class FranchiseSyncTask(BaseTask):
                 "linked": total_linked,
             }
 
+    @staticmethod
+    def _recent_key(anime: Anime) -> str:
+        """Key for the "recently synced" marker (one namespace per ID type)."""
+        if anime.anilist_id:
+            return f"franchise:anilist:{anime.anilist_id}"
+        if anime.mal_id:
+            return f"franchise:mal:{anime.mal_id}"
+        return ""
+
     def _process_anime_franchises(
-        self, service: JikanService, anime: Anime, import_missing: bool, max_imports: int
+        self, service: AniListService, anime: Anime, import_missing: bool, max_imports: int
     ) -> dict:
         """Process franchises for a single anime."""
         try:
-            if not anime.mal_id:
-                return {"status": "error", "error": "No mal_id", "relations_count": 0}
+            if not (anime.anilist_id or anime.mal_id):
+                return {"status": "error", "error": "No AniList or MAL ID", "relations_count": 0}
 
-            data = service.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
+            if anime.anilist_id:
+                data = service.get_anime_by_id(anime.anilist_id)
+            else:
+                data = service.search_by_mal_id(anime.mal_id)
 
             if not data:
-                return {"status": "error", "error": "No data from Jikan", "relations_count": 0}
+                return {"status": "error", "error": "No data from AniList", "relations_count": 0}
 
             current_keys = self._relation_keys(anime)
             set_relations(anime, relations_from_edges(anime_relation_edges(data)))
@@ -175,14 +184,12 @@ class FranchiseSyncTask(BaseTask):
             imported_count = 0
             if import_missing:
                 # Imported anime link themselves to these relations when saved.
-                missing_mal_ids = list(
-                    anime.relations.filter(
-                        to_anime__isnull=True, target_mal_id__isnull=False
-                    ).values_list("target_mal_id", flat=True)
+                missing = list(
+                    anime.relations.filter(to_anime__isnull=True).values_list(
+                        "target_anilist_id", "target_mal_id"
+                    )
                 )
-                imported_count = self._import_missing_anime_batch(
-                    service, missing_mal_ids, max_imports
-                )
+                imported_count = self._import_missing_anime_batch(service, missing, max_imports)
 
             rows = list(
                 anime.relations.values_list("target_anilist_id", "target_mal_id", "to_anime_id")
@@ -219,24 +226,36 @@ class FranchiseSyncTask(BaseTask):
         return keys
 
     def _import_missing_anime_batch(
-        self, service: JikanService, mal_ids: list[int], max_imports: int
+        self,
+        service: AniListService,
+        targets: list[tuple[int | None, int | None]],
+        max_imports: int,
     ) -> int:
-        """Import related anime that are not in the catalog yet. Returns how many were created."""
+        """Import related anime not in the catalog yet, by (AniList ID, MAL ID).
+
+        Returns how many were created. The shared rate limiter paces the requests.
+        """
         imported = 0
-        for mal_id in list(dict.fromkeys(mal_ids))[:max_imports]:
+        targets = [target for target in dict.fromkeys(targets) if target[0] or target[1]]
+        for anilist_id, mal_id in targets[:max_imports]:
             try:
-                exists = Anime.objects.filter(mal_id=mal_id).exists()
-                if exists:
+                if (anilist_id and Anime.objects.filter(anilist_id=anilist_id).exists()) or (
+                    mal_id and Anime.objects.filter(mal_id=mal_id).exists()
+                ):
                     continue
 
-                time.sleep(0.3)
-                full_data = service.search_by_mal_id(mal_id)
+                if anilist_id:
+                    full_data = service.get_anime_by_id(anilist_id)
+                else:
+                    full_data = service.search_by_mal_id(mal_id)
                 if full_data:
                     anime = service.save_anime_to_db(full_data)
-                    logger.info(f"Imported: {anime.title} (MAL ID: {mal_id})")
+                    logger.info("Imported %s (AniList %s, MAL %s)", anime.title, anilist_id, mal_id)
                     imported += 1
             except Exception:
-                logger.warning("Could not import MAL ID %s", mal_id, exc_info=True)
+                logger.warning(
+                    "Could not import AniList %s / MAL %s", anilist_id, mal_id, exc_info=True
+                )
                 continue
 
         return imported
@@ -260,7 +279,7 @@ def sync_franchises(
     update_window: int = 3600,
     anime_ids: list[int] | None = None,
 ):
-    """Sync anime franchise/relations data from Jikan."""
+    """Sync anime franchise/relations data from AniList."""
     return self.execute(
         anime_id=anime_id,
         mode=mode,

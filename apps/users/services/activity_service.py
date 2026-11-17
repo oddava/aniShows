@@ -1,14 +1,15 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
-from django.db.models import Case, F, IntegerField, Sum, Value, When
+from django.db.models import Case, F, IntegerField, Q, Sum, Value, When
 from django.db.models.functions import Greatest, TruncDate
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from ...animes.models import Anime
-from ..models import UserActivity
+from ...shared.public_cache import best_effort_get, best_effort_set
+from ..models import UserActivity, UserAnimeList
 
 try:
     from .cache import get_user_heatmap_cache_key
@@ -58,7 +59,21 @@ def build_activity_queryset(request):
 
     activity_type = request.query_params.get("type")
     if activity_type:
+        if activity_type not in UserActivity.ActivityType.values:
+            raise ValidationError({"type": f"Unknown activity type '{activity_type}'."})
         queryset = queryset.filter(activity_type=activity_type)
+
+    # The feed's status filter ("Completed", "Plan to Watch", ...): rows that moved an
+    # entry into that status, or removed one that was in it.
+    list_status = request.query_params.get("status")
+    if list_status:
+        if list_status not in UserAnimeList.UserAnimeStatus.values:
+            raise ValidationError({"status": f"Unknown status '{list_status}'."})
+        removed = UserActivity.ActivityType.REMOVED
+        queryset = queryset.filter(
+            (~Q(activity_type=removed) & Q(new_status=list_status))
+            | Q(activity_type=removed, old_status=list_status)
+        )
 
     return queryset.order_by("-created_at")
 
@@ -70,7 +85,7 @@ def get_heatmap_data(request):
         return []
 
     cache_key = get_user_heatmap_cache_key(target_user.id)
-    cached = cache.get(cache_key)
+    cached = best_effort_get(cache_key, source="activity heatmap")
     if cached is not None:
         return cached
 
@@ -117,5 +132,5 @@ def get_heatmap_data(request):
         for entry in activities
     ]
 
-    cache.set(cache_key, result, timeout=HEATMAP_CACHE_TIMEOUT)
+    best_effort_set(cache_key, result, HEATMAP_CACHE_TIMEOUT, source="activity heatmap")
     return result

@@ -1,29 +1,48 @@
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Count, Prefetch
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from ...admin_api.permissions import AdminPolicyMixin
+from ...admin_api.services.audit import record_admin_action
 from ...core.models import AuditLog
-from ...core.permissions import IsAdminUser, SuperUserRequiredForActionsMixin
-from ...core.services.notification_service import NotificationService
-from ...shared.logger import logger
 from ..models import Badge, UserBadge
-from ..serializers.users import BadgeSerializer
+from ..serializers.badges import BadgeSerializer
 from ..services.avatar_service import get_user_avatar_url
+from ..services.badge_service import grant_badge, revoke_badge
 
 User = get_user_model()
 
+MAX_BADGE_USERS = 500
+BADGE_AUDIT_FIELDS = ("name", "description", "icon", "color", "priority", "is_active")
 
-class AdminBadgeViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
-    """Admin CRUD operations for Badges."""
 
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset(
-        {"create", "update", "partial_update", "destroy", "grant", "revoke"}
-    )
+def _clean_user_ids(raw):
+    """A non-empty list of at most ``MAX_BADGE_USERS`` integer ids, or ``None``."""
+    if not isinstance(raw, list) or not raw or len(raw) > MAX_BADGE_USERS:
+        return None
+    ids = []
+    for value in raw:
+        if isinstance(value, bool):
+            return None
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            return None
+    return sorted(set(ids))
+
+
+def _badge_snapshot(badge) -> dict:
+    return {field: getattr(badge, field) for field in BADGE_AUDIT_FIELDS if hasattr(badge, field)}
+
+
+class AdminBadgeViewSet(AdminPolicyMixin, ModelViewSet):
+    """Badges: staff read; superusers create, edit, delete, grant and revoke (audited)."""
+
     serializer_class = BadgeSerializer
     queryset = Badge.objects.annotate(holders_count=Count("user_badges")).order_by(
         "-priority", "name"
@@ -48,149 +67,101 @@ class AdminBadgeViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    def _audit(self, action_type, badge, **kwargs):
+        record_admin_action(
+            self.request,
+            action=action_type,
+            entity_type="Badge",
+            entity_id=badge.pk,
+            entity_repr=badge.name,
+            **kwargs,
+        )
+
+    @transaction.atomic
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        badge = serializer.save(created_by=self.request.user)
+        self._audit(AuditLog.ActionType.CREATE, badge, new=_badge_snapshot(badge))
 
-        AuditLog.objects.create(
-            user=self.request.user,
-            user_ip=self.request.META.get("REMOTE_ADDR"),
-            action=AuditLog.ActionType.CREATE,
-            entity_type="Badge",
-            entity_id=str(serializer.instance.id),
-            entity_repr=serializer.instance.name,
-            metadata={"name": serializer.instance.name},
+    @transaction.atomic
+    def perform_update(self, serializer):
+        previous = _badge_snapshot(serializer.instance)
+        badge = serializer.save()
+        self._audit(
+            AuditLog.ActionType.UPDATE, badge, previous=previous, new=_badge_snapshot(badge)
         )
 
+    @transaction.atomic
     def perform_destroy(self, instance):
-        AuditLog.objects.create(
-            user=self.request.user,
-            user_ip=self.request.META.get("REMOTE_ADDR"),
-            action=AuditLog.ActionType.DELETE,
-            entity_type="Badge",
-            entity_id=str(instance.id),
-            entity_repr=instance.name,
-            metadata={"name": instance.name},
-        )
+        self._audit(AuditLog.ActionType.DELETE, instance, previous=_badge_snapshot(instance))
         instance.delete()
 
     @action(detail=True, methods=["post"])
     def grant(self, request, pk=None):
-        """Grant a badge to multiple users."""
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": "Only superusers can grant badges."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+        """Grant a badge to several users (G5's ``grant_badge`` per user)."""
         badge = self.get_object()
-        user_ids = request.data.get("user_ids", [])
+        user_ids = _clean_user_ids(request.data.get("user_ids"))
         reason = request.data.get("reason", "")
-
-        if not user_ids or not isinstance(user_ids, list):
+        if user_ids is None:
             return Response(
-                {"detail": "Please provide a list of user_ids."},
+                {"detail": f"Provide a list of at most {MAX_BADGE_USERS} user_ids."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not isinstance(reason, str) or len(reason) > 500:
+            return Response(
+                {"detail": "reason must be a string of at most 500 characters."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        users = list(User.objects.filter(id__in=user_ids))
-        existing_user_ids = set(
-            UserBadge.objects.filter(
-                badge=badge, user_id__in=[user.id for user in users]
-            ).values_list("user_id", flat=True)
-        )
-        users_to_grant = [user for user in users if user.id not in existing_user_ids]
-
-        if users_to_grant:
-            UserBadge.objects.bulk_create(
-                [
-                    UserBadge(
-                        user=user,
-                        badge=badge,
-                        granted_by=request.user,
-                        reason=reason,
-                    )
-                    for user in users_to_grant
-                ]
+        with transaction.atomic():
+            granted_ids = [
+                user.pk
+                for user in User.objects.filter(id__in=user_ids)
+                if grant_badge(user, badge, granted_by=request.user, reason=reason) is not None
+            ]
+            self._audit(
+                AuditLog.ActionType.BULK_ACTION,
+                badge,
+                metadata={
+                    "operation": "grant",
+                    "badge_id": badge.pk,
+                    "user_ids": granted_ids,
+                    "users_granted": len(granted_ids),
+                    "total_requested": len(user_ids),
+                },
+                reason=reason.strip(),
             )
 
-        granted_count = len(users_to_grant)
-
-        for user in users_to_grant:
-            # Send notification (gracefully handle if notification type doesn't exist yet)
-            try:
-                NotificationService.create_badge_awarded_notification(
-                    user=user, badge=badge, granted_by=request.user
-                )
-            except Exception:
-                # The badges are already granted; a notification failure must not undo that.
-                logger.warning("Could not send badge notification", exc_info=True)
-
-        AuditLog.objects.create(
-            user=request.user,
-            user_ip=request.META.get("REMOTE_ADDR"),
-            action=AuditLog.ActionType.BULK_ACTION,
-            entity_type="UserBadge",
-            entity_repr=f"Grant {badge.name} to {granted_count} users",
-            metadata={
-                "action": "grant",
-                "badge_id": badge.id,
-                "badge_name": badge.name,
-                "users_granted": granted_count,
-                "total_requested": len(user_ids),
-            },
-        )
-
-        # Invalidate user caches for all affected users
-        from ..services.cache import invalidate_user_caches
-
-        for user in users_to_grant:
-            invalidate_user_caches(user.id, user.username, trigger_stats_update=False)
-
-        return Response({"message": f"Badge granted to {granted_count} users successfully."})
+        return Response({"message": f"Badge granted to {len(granted_ids)} users successfully."})
 
     @action(detail=True, methods=["post"])
     def revoke(self, request, pk=None):
-        """Revoke a badge from multiple users."""
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": "Only superusers can revoke badges."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
+        """Revoke a badge from several users (G5's ``revoke_badge`` per user)."""
         badge = self.get_object()
-        user_ids = request.data.get("user_ids", [])
-
-        if not user_ids or not isinstance(user_ids, list):
+        user_ids = _clean_user_ids(request.data.get("user_ids"))
+        if user_ids is None:
             return Response(
-                {"detail": "Please provide a list of user_ids."},
+                {"detail": f"Provide a list of at most {MAX_BADGE_USERS} user_ids."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        queryset = UserBadge.objects.filter(badge=badge, user_id__in=user_ids)
-        deleted_count, _ = queryset.delete()
+        with transaction.atomic():
+            revoked_ids = [
+                user.pk
+                for user in User.objects.filter(id__in=user_ids)
+                if revoke_badge(user, badge)
+            ]
+            self._audit(
+                AuditLog.ActionType.BULK_ACTION,
+                badge,
+                metadata={
+                    "operation": "revoke",
+                    "badge_id": badge.pk,
+                    "user_ids": revoked_ids,
+                    "users_revoked": len(revoked_ids),
+                },
+            )
 
-        AuditLog.objects.create(
-            user=request.user,
-            user_ip=request.META.get("REMOTE_ADDR"),
-            action=AuditLog.ActionType.BULK_ACTION,
-            entity_type="UserBadge",
-            entity_repr=f"Revoke {badge.name} from {deleted_count} users",
-            metadata={
-                "action": "revoke",
-                "badge_id": badge.id,
-                "badge_name": badge.name,
-                "users_revoked": deleted_count,
-            },
-        )
-
-        # Invalidate user caches for all affected users
-        from ..services.cache import invalidate_user_caches
-
-        users = User.objects.filter(id__in=user_ids)
-        for user in users:
-            invalidate_user_caches(user.id, user.username, trigger_stats_update=False)
-
-        return Response({"message": f"Badge revoked from {deleted_count} users successfully."})
+        return Response({"message": f"Badge revoked from {len(revoked_ids)} users successfully."})
 
     @action(detail=True, methods=["get"])
     def holders(self, request, pk=None):

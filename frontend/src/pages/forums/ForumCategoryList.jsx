@@ -1,18 +1,21 @@
 import React, { useState, useEffect, memo } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Pin, Lock, Plus, Search, MessageSquare, Eye, Flame, Clock3 } from 'lucide-react';
+import { Pin, Lock, Plus, Search, MessageSquare, Eye, Clock3 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import Pagination from '../../components/common/Pagination';
-import { preloadForumChunks } from '../../App';
+import ErrorState from '../../components/common/ErrorState';
+import { preloadForumChunks } from '../../app/routes/community';
+import { getTotalPages } from '../../components/forums/buildPostTree';
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import Avatar from '../../components/forums/Avatar';
 import { ForumCategoryPageSkeleton } from '../../components/forums/ForumSkeletons';
 import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
 import { forumQueries } from '../../api/queries/forums';
+import { DeletedAuthorAvatar, DeletedAuthorName } from '../../components/forums/DeletedAuthor';
 
 const CATEGORY_DOT_COLORS = [
     'var(--forums-accent)',
@@ -23,8 +26,9 @@ const CATEGORY_DOT_COLORS = [
     '#9489ac',
 ];
 
-const getThreadPreview = (content) => {
-    const plainText = content?.replace(/[#*`]/g, '').replace(/\s+/g, ' ').trim() || '';
+// List items carry a server-made `excerpt` (markup and spoilers stripped); `content` is a fallback.
+const getThreadPreview = (thread) => {
+    const plainText = (thread?.excerpt ?? thread?.content)?.replace(/[#*`]/g, '').replace(/\s+/g, ' ').trim() || '';
     if (!plainText) {
         return 'No content yet.';
     }
@@ -102,24 +106,33 @@ const ThreadRow = memo(({ thread }) => {
                 </div>
 
                 <p className="forums-body-text line-clamp-2">
-                    {getThreadPreview(thread.content)}
+                    {getThreadPreview(thread)}
                 </p>
 
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div className="flex min-w-0 flex-wrap items-center gap-3">
                         <div onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-2">
-                                <MiniProfileHoverCard user={thread.author}>
-                                    <Link to={`/u/${thread.author?.username}`} className="shrink-0">
-                                        <Avatar user={thread.author} size="xs" />
-                                    </Link>
-                                </MiniProfileHoverCard>
-                                <Link
-                                    to={`/u/${thread.author?.username}`}
-                                    className="truncate text-sm font-semibold text-[var(--forums-accent-text)] transition-colors hover:text-[var(--forums-accent-text-hover)]"
-                                >
-                                    {thread.author?.username}
-                                </Link>
+                                {thread.author ? (
+                                    <>
+                                        <MiniProfileHoverCard user={thread.author}>
+                                            <Link to={`/u/${thread.author.username}`} className="shrink-0">
+                                                <Avatar user={thread.author} size="xs" />
+                                            </Link>
+                                        </MiniProfileHoverCard>
+                                        <Link
+                                            to={`/u/${thread.author.username}`}
+                                            className="truncate text-sm font-semibold text-[var(--forums-accent-text)] transition-colors hover:text-[var(--forums-accent-text-hover)]"
+                                        >
+                                            {thread.author.username}
+                                        </Link>
+                                    </>
+                                ) : (
+                                    <>
+                                        <DeletedAuthorAvatar size="xs" />
+                                        <DeletedAuthorName className="truncate text-sm italic forums-meta-text" />
+                                    </>
+                                )}
                             </div>
                         </div>
                         <span className="forums-meta-text">•</span>
@@ -172,7 +185,7 @@ const RailThreadItem = memo(({ thread, variant }) => {
             <p className="line-clamp-2 text-sm font-semibold text-[var(--forums-text)]">
                 {thread.title}
             </p>
-            {variant === 'trending' ? (
+            {variant === 'replies' ? (
                 <div className="forums-meta-text mt-1.5 flex items-center gap-3 text-xs">
                     <span className="inline-flex items-center gap-1">
                         <MessageSquare size={11} />
@@ -217,7 +230,9 @@ const ForumCategoryList = () => {
     const {
         data: categories,
         isLoading: categoriesLoading,
-        isPlaceholderData: isCategoriesPlaceholder
+        isPlaceholderData: isCategoriesPlaceholder,
+        error: categoriesError,
+        refetch: refetchCategories,
     } = useQuery({
         ...forumQueries.categories(),
         staleTime: 5 * 60 * 1000,
@@ -228,7 +243,9 @@ const ForumCategoryList = () => {
         data: activeThreads,
         isLoading: activeLoading,
         isFetching: activeFetching,
-        isPlaceholderData: activePlaceholder
+        isPlaceholderData: activePlaceholder,
+        error: activeError,
+        refetch: refetchActive,
     } = useQuery({
         ...forumQueries.activeThreads(page),
         placeholderData: keepPreviousData,
@@ -238,31 +255,45 @@ const ForumCategoryList = () => {
         data: newThreads,
         isLoading: newLoading,
         isFetching: newFetching,
-        isPlaceholderData: newPlaceholder
+        isPlaceholderData: newPlaceholder,
+        error: newError,
+        refetch: refetchNew,
     } = useQuery({
         ...forumQueries.newThreads(page),
         placeholderData: keepPreviousData,
         enabled: activeTab === 'new',
     });
 
-    const { data: searchResults, isFetching: searchFetching } = useQuery({
+    const {
+        data: searchResults,
+        isFetching: searchFetching,
+        error: searchError,
+        refetch: refetchSearch,
+    } = useQuery({
         ...forumQueries.search(debouncedSearch, page),
         placeholderData: keepPreviousData,
         enabled: debouncedSearch.length >= 2,
     });
 
+    // The rail reads the first page of recently active threads (the same
+    // query as the Overview list on page 1, so no second request)
     const {
         data: railFeed,
         isLoading: railLoading,
-        isPlaceholderData: railPlaceholder
+        isPlaceholderData: railPlaceholder,
+        error: railError,
+        refetch: refetchRail,
     } = useQuery({
-        ...forumQueries.railFeed(),
-        staleTime: 30 * 1000,
+        ...forumQueries.activeThreads(1),
         placeholderData: keepPreviousData,
     });
 
     const isSearching = debouncedSearch.length >= 2;
     const displayedData = isSearching ? searchResults : (activeTab === 'active' ? activeThreads : newThreads);
+    const contentError = isSearching ? searchError : (activeTab === 'active' ? activeError : newError);
+    const refetchContent = isSearching ? refetchSearch : (activeTab === 'active' ? refetchActive : refetchNew);
+    // The rail shares the Overview page-1 query; its failure is shown once, in the list
+    const railSharesContentQuery = !isSearching && activeTab === 'active' && page === 1;
     const isContentLoading = isSearching ? searchFetching : (activeTab === 'new' ? newLoading : activeLoading);
     const isContentPlaceholder = isSearching ? false : (activeTab === 'new' ? newPlaceholder : activePlaceholder);
     const isContentRefetching = isSearching
@@ -282,6 +313,7 @@ const ForumCategoryList = () => {
     const showRailLoading = isInitialRailLoad || delayedRailLoading;
 
     const shouldShowInitialPageSkeleton = !categories && !displayedData && !railFeed
+        && !categoriesError && !contentError && !railError
         && (categoriesLoading || isContentLoading || railLoading);
 
     const threadResults = displayedData?.results || [];
@@ -289,10 +321,11 @@ const ForumCategoryList = () => {
     const regularThreads = pinnedThreads.length > 0
         ? threadResults.filter((thread) => !thread.is_pinned)
         : threadResults;
-    const totalPages = displayedData?.count ? Math.ceil(displayedData.count / 20) : 0;
+    const totalPages = getTotalPages(displayedData, page);
 
     const railThreads = railFeed?.results || [];
-    const trendingThreads = [...railThreads]
+    // Honest label: page 1 of recent activity, ordered by reply count
+    const mostRepliedThreads = [...railThreads]
         .sort((a, b) => (b.reply_count || 0) - (a.reply_count || 0))
         .slice(0, 5);
     const latestActivityThreads = [...railThreads]
@@ -316,6 +349,19 @@ const ForumCategoryList = () => {
                             />
                         ))}
                     </div>
+                </aside>
+            );
+        }
+
+        if (categoriesError && !categories) {
+            return (
+                <aside className="h-fit xl:sticky xl:top-24">
+                    <ErrorState
+                        title="Couldn't load categories"
+                        message="Check your connection and try again."
+                        onRetry={() => refetchCategories()}
+                        className="py-6"
+                    />
                 </aside>
             );
         }
@@ -390,22 +436,36 @@ const ForumCategoryList = () => {
             );
         }
 
-        if (!trendingThreads.length && !latestActivityThreads.length) {
+        if (railError && !railFeed) {
+            if (railSharesContentQuery) return null;
+            return (
+                <aside className="space-y-4 xl:sticky xl:top-24">
+                    <ErrorState
+                        title="Couldn't load activity"
+                        message="Check your connection and try again."
+                        onRetry={() => refetchRail()}
+                        className="py-6"
+                    />
+                </aside>
+            );
+        }
+
+        if (!mostRepliedThreads.length && !latestActivityThreads.length) {
             return null;
         }
 
         return (
             <aside className="space-y-4 xl:sticky xl:top-24">
-                {trendingThreads.length > 0 && (
+                {mostRepliedThreads.length > 0 && (
                     <section className="forums-rail-card">
                         <div className="mb-3 flex items-center gap-2">
                             <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--forums-meta)]">
-                                Trending
+                                Most replies
                             </h3>
                         </div>
                         <div className="space-y-2">
-                            {trendingThreads.map((thread) => (
-                                <RailThreadItem key={`trend-${thread.id}`} thread={thread} variant="trending" />
+                            {mostRepliedThreads.map((thread) => (
+                                <RailThreadItem key={`replies-${thread.id}`} thread={thread} variant="replies" />
                             ))}
                         </div>
                     </section>
@@ -524,7 +584,12 @@ const ForumCategoryList = () => {
                                 </div>
                             ) : null}
 
-                            {threadResults.length > 0 ? (
+                            {contentError && !displayedData ? (
+                                <ErrorState
+                                    title="Couldn't load threads"
+                                    onRetry={() => refetchContent()}
+                                />
+                            ) : threadResults.length > 0 ? (
                                 <div className="forums-thread-list">
                                     {regularThreads.map((thread) => (
                                         <ThreadRow key={thread.id} thread={thread} />

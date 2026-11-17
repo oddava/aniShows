@@ -1,61 +1,88 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Loader2, LogIn } from 'lucide-react';
 
-import {
-    notificationImageQueries,
-    notificationKeys,
-    notificationQueries,
-} from '../api/queries/notifications';
+import { notificationKeys, notificationQueries } from '../api/queries/notifications';
+import ErrorState from '../components/common/ErrorState';
+import PageLoader from '../components/common/PageLoader';
 import SEO from '../components/SEO';
 import { useAuth } from '../context/AuthContext';
 import {
     flattenFeed,
     updateNotificationFeeds,
+    useDeleteNotification,
     useMarkAllNotificationsRead,
     useMarkNotificationRead,
+    useUnreadNotificationCount,
 } from '../hooks/useNotifications';
 import { useFreshError, useReportError } from '../hooks/useQueryErrorReport';
-import { useWebSocket } from '../hooks/useWebSocket';
 import logger from '../utils/logger';
 import { getNotificationTarget } from '../utils/notificationUtils';
 import NotificationItem from '../components/notifications/NotificationItem';
-import { getAnimeSlug, hasEmbeddedImage } from '../components/notifications/notificationDisplay';
+import { useNotificationSocket } from '../components/notifications/notificationSocket';
 
+/** Chips map to the API's server-side `category=` filter. */
 const NOTIFICATION_FILTERS = [
     { value: 'all', label: 'All' },
-    { value: 'new_episode', label: 'Episodes' },
-    { value: 'review_reply', label: 'Review Replies' },
-    { value: 'review_like', label: 'Review Likes' },
-    { value: 'new_follower', label: 'Followers' },
-    { value: 'forum', label: 'Forum' },
-    { value: 'badge_awarded', label: 'Badges' },
-    { value: 'system', label: 'System' },
+    { value: 'episodes', label: 'Episodes' },
+    { value: 'replies', label: 'Replies' },
+    { value: 'likes', label: 'Likes' },
+    { value: 'follows', label: 'Follows' },
+    { value: 'account', label: 'Account' },
 ];
 
-const FORUM_FILTER_TYPES = new Set(['forum_reply', 'forum_mention', 'forum_like']);
-const PAGE_SIZE = 30;
-
-// Image lookups stay bounded, as before: covers for the first 24 items, 12 requests at a time; avatars 8 at a time.
-const COVER_LOOKUP_ITEMS = 24;
-const COVER_BATCH = 12;
-const AVATAR_BATCH = 8;
-
-/** Fetches `queryOptionsFor(name)` for each name, `batchSize` at a time, into `{ name: value }`. */
-const fetchInBatches = async (queryClient, names, batchSize, queryOptionsFor) => {
-    const result = {};
-    for (let index = 0; index < names.length; index += batchSize) {
-        const batch = names.slice(index, index + batchSize);
-        const values = await Promise.all(batch.map((name) => queryClient.fetchQuery(queryOptionsFor(name))));
-        batch.forEach((name, offset) => {
-            result[name] = values[offset];
-        });
-    }
-    return result;
+const EMPTY_STATES = {
+    all: {
+        title: 'No notifications yet.',
+        hint: 'New episodes of shows you’re watching, replies, likes and follows show up here.',
+    },
+    episodes: {
+        title: 'No episode alerts yet.',
+        hint: 'Add airing shows to Watching to get them.',
+    },
+    replies: {
+        title: 'No replies or mentions yet.',
+        hint: 'Replies to your forum posts and @mentions show up here.',
+    },
+    likes: {
+        title: 'No likes yet.',
+        hint: 'Likes on your reviews and posts show up here.',
+    },
+    follows: {
+        title: 'No new followers yet.',
+        hint: 'When someone follows you, it shows up here.',
+    },
+    account: {
+        title: 'No account notifications yet.',
+        hint: 'Badges and announcements show up here.',
+    },
 };
 
-const EMPTY_MAP = {};
+const PAGE_SIZE = 30;
+
+/** Whether a notification belongs in a feed filtered to `category`. */
+const fitsFeed = (notification, category) => !category || notification?.category === category;
+
+const sortNewestFirst = (items) => [...items].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+);
+
+function FeedSkeleton() {
+    return (
+        <div className="mt-4 sm:mt-5 w-full space-y-2.5 sm:space-y-3.5" aria-hidden="true">
+            {Array.from({ length: 6 }, (_, index) => (
+                <div key={index} className="flex overflow-hidden rounded-md bg-dark-100/80">
+                    <div className="w-14 h-20 sm:w-16 sm:h-24 flex-shrink-0 animate-pulse bg-dark-50" />
+                    <div className="flex-1 px-3 sm:px-4 py-3 space-y-2">
+                        <div className="h-3.5 w-3/4 rounded animate-pulse bg-dark-50" />
+                        <div className="h-3.5 w-1/2 rounded animate-pulse bg-dark-50" />
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
 
 export default function Notifications() {
     const { user, isAuthenticated, loading: authLoading } = useAuth();
@@ -65,12 +92,12 @@ export default function Notifications() {
     const userId = user?.id;
     const [activeFilter, setActiveFilter] = useState('all');
     const [actionError, setActionError] = useState('');
-    const [brokenThumbIds, setBrokenThumbIds] = useState(new Set());
+    const category = activeFilter === 'all' ? undefined : activeFilter;
 
     // Every visit starts from page 1 (gcTime 0), as it did when the list lived in state.
-    const feedKey = notificationKeys.feed(userId, PAGE_SIZE);
+    const feedKey = notificationKeys.feed(userId, PAGE_SIZE, category);
     const feedQuery = useInfiniteQuery({
-        ...notificationQueries.feed(userId, PAGE_SIZE),
+        ...notificationQueries.feed(userId, PAGE_SIZE, category),
         enabled: isAuthenticated,
         staleTime: 0,
         gcTime: 0,
@@ -83,100 +110,78 @@ export default function Notifications() {
     const loadingInitial = feedQuery.isLoading;
     const loadingMore = feedQuery.isFetchingNextPage;
     const nextPage = feedQuery.hasNextPage;
-    const fetchError = feedError ? 'Failed to load notifications. Please try again.' : '';
 
-    const retryFeed = useCallback(() => {
-        // Back to page 1 with the spinner, like the old Retry.
-        queryClient.resetQueries({ queryKey: notificationKeys.feed(userId, PAGE_SIZE), exact: true });
-    }, [queryClient, userId]);
+    // Read only: the navbar owns the fetch; the socket keeps it current.
+    const { data: unreadCount = 0 } = useUnreadNotificationCount(userId, { enabled: false });
+
+    const retryFeed = useCallback(() => (
+        // Back to page 1 with the skeleton, like the old Retry.
+        queryClient.resetQueries({ queryKey: feedKey, exact: true })
+    ), [feedKey, queryClient]);
 
     const markReadMutation = useMarkNotificationRead(userId);
     const markAllReadMutation = useMarkAllNotificationsRead(userId);
+    const deleteMutation = useDeleteNotification(userId);
     const markingAllRead = markAllReadMutation.isPending;
     const { mutateAsync: markOneRead } = markReadMutation;
     const { mutateAsync: markAllRead } = markAllReadMutation;
+    const { mutateAsync: deleteOne } = deleteMutation;
+    const deletingId = deleteMutation.isPending ? deleteMutation.variables : null;
 
     const markNotificationRead = useCallback(async (notification) => {
         if (notification.is_read) return;
         await markOneRead(notification.id);
     }, [markOneRead]);
 
-    // Covers for anime notifications that carry no image of their own.
-    const coverSlugs = useMemo(() => Array.from(
-        new Set(
-            notifications
-                .slice(0, COVER_LOOKUP_ITEMS)
-                .map((item) => (hasEmbeddedImage(item) ? null : getAnimeSlug(item)))
-                .filter(Boolean)
-        )
-    ), [notifications]);
-    const { data: coverBySlug = EMPTY_MAP } = useQuery({
-        queryKey: ['notificationImages', 'covers', coverSlugs],
-        queryFn: () => fetchInBatches(queryClient, coverSlugs, COVER_BATCH, notificationImageQueries.animeCover),
-        enabled: coverSlugs.length > 0,
-        staleTime: Infinity,
-        placeholderData: keepPreviousData,
-    });
-
-    // Avatars for follower notifications.
-    const followerUsernames = useMemo(() => Array.from(
-        new Set(
-            notifications
-                .filter((item) => item.notification_type === 'new_follower')
-                .map((item) => item?.data?.follower_username)
-                .filter((username) => typeof username === 'string' && username.trim().length > 0)
-        )
-    ), [notifications]);
-    const { data: followerAvatarByUsername = EMPTY_MAP } = useQuery({
-        queryKey: ['notificationImages', 'avatars', followerUsernames],
-        queryFn: () => fetchInBatches(queryClient, followerUsernames, AVATAR_BATCH, notificationImageQueries.userAvatar),
-        enabled: followerUsernames.length > 0,
-        staleTime: Infinity,
-        placeholderData: keepPreviousData,
-    });
-
     const handleWsMessage = useCallback((data) => {
         const setNotifications = (updater) => updateNotificationFeeds(queryClient, userId, updater);
 
         if (data.type === 'notification' && data.notification) {
-            setNotifications((prev) => {
-                const exists = prev.some((item) => item.id === data.notification.id);
-                if (exists) return prev;
+            setNotifications((prev, feedCategory) => {
+                if (!fitsFeed(data.notification, feedCategory)) return prev;
+                if (prev.some((item) => item.id === data.notification.id)) return prev;
                 return [data.notification, ...prev];
             });
             return;
         }
 
         if (data.type === 'notification_updated' && data.notification) {
-            setNotifications((prev) => {
+            setNotifications((prev, feedCategory) => {
                 const hasExisting = prev.some((item) => item.id === data.notification.id);
+                if (!hasExisting && !fitsFeed(data.notification, feedCategory)) return prev;
                 const merged = hasExisting
-                    ? prev.map((item) => (item.id === data.notification.id ? data.notification : item))
+                    ? prev.map((item) => (item.id === data.notification.id ? { ...item, ...data.notification } : item))
                     : [data.notification, ...prev];
-                return [...merged].sort(
-                    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                );
+                return sortNewestFirst(merged);
             });
             return;
         }
 
         if (data.type === 'notification_read' && data.notification_id) {
-            setNotifications((prev) => prev.map((item) => (
-                item.id === data.notification_id ? { ...item, is_read: true } : item
-            )));
+            setNotifications((prev) => (
+                prev.some((item) => item.id === data.notification_id && !item.is_read)
+                    ? prev.map((item) => (item.id === data.notification_id ? { ...item, is_read: true } : item))
+                    : prev
+            ));
             return;
         }
 
         if (data.type === 'notification_deleted' && data.notification_id) {
-            setNotifications((prev) => prev.filter((item) => item.id !== data.notification_id));
+            setNotifications((prev) => (
+                prev.some((item) => item.id === data.notification_id)
+                    ? prev.filter((item) => item.id !== data.notification_id)
+                    : prev
+            ));
         }
     }, [queryClient, userId]);
 
-    useWebSocket(
-        user ? '/ws/notifications/' : null,
-        { onMessage: handleWsMessage },
-        { autoConnect: !!user }
-    );
+    // The same socket as the navbar's (one per tab).
+    useNotificationSocket({
+        userId,
+        queryClient,
+        onMessage: handleWsMessage,
+        enabled: Boolean(isAuthenticated && userId != null),
+    });
 
     const handleNotificationOpen = useCallback(async (notification) => {
         const target = getNotificationTarget(notification);
@@ -205,28 +210,26 @@ export default function Notifications() {
         }
     }, [markAllRead]);
 
+    const handleDelete = useCallback(async (notification) => {
+        setActionError('');
+        try {
+            await deleteOne(notification.id);
+        } catch (error) {
+            logger.error('Failed to delete notification:', error);
+            setActionError('Could not delete this notification.');
+        }
+    }, [deleteOne]);
+
     const { fetchNextPage } = feedQuery;
     const handleLoadMore = useCallback(async () => {
         if (!nextPage || loadingMore) return;
         await fetchNextPage();
     }, [fetchNextPage, loadingMore, nextPage]);
 
-    const hasUnread = notifications.some((item) => !item.is_read);
-    const filteredNotifications = notifications.filter((item) => {
-        if (activeFilter === 'all') return true;
-        if (activeFilter === 'forum') return FORUM_FILTER_TYPES.has(item.notification_type);
-        return item.notification_type === activeFilter;
-    });
+    const hasUnread = unreadCount > 0 || notifications.some((item) => !item.is_read);
 
     if (authLoading) {
-        return (
-            <div className="min-h-[60vh] flex items-center justify-center px-4">
-                <div className="flex items-center gap-3 text-gray-300">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Loading notifications...</span>
-                </div>
-            </div>
-        );
+        return <PageLoader />;
     }
 
     if (!isAuthenticated) {
@@ -246,87 +249,58 @@ export default function Notifications() {
         );
     }
 
-    return (
-        <div className="max-w-5xl mx-auto px-4 py-5 sm:py-6">
-            <SEO page="notifications" noIndex />
-
-            {loadingInitial ? (
-                <div className="min-h-[40vh] flex items-center justify-center text-gray-400">
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                </div>
-            ) : (
-                <>
-                    {fetchError && (
-                        <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 flex items-center justify-between gap-3">
-                            <span>{fetchError}</span>
-                            <button
-                                type="button"
-                                onClick={retryFeed}
-                                className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/70"
-                            >
-                                Retry
-                            </button>
-                        </div>
-                    )}
-
-                    {actionError && (
-                        <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                            {actionError}
-                        </div>
-                    )}
-
-                    <div className="mb-6 sm:mb-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="overflow-x-auto scrollbar-hide w-full sm:w-auto">
-                            <div className="inline-flex items-center gap-1.5 min-w-max">
-                                {NOTIFICATION_FILTERS.map((filter) => (
-                                    <button
-                                        key={filter.value}
-                                        type="button"
-                                        onClick={() => setActiveFilter(filter.value)}
-                                        className={`px-2.5 py-1.5 rounded-lg text-xs sm:text-sm transition-colors ${activeFilter === filter.value
-                                            ? 'bg-accent text-white'
-                                            : 'bg-dark-100 text-gray-300 hover:text-white'
-                                            }`}
-                                    >
-                                        {filter.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+    const emptyState = EMPTY_STATES[activeFilter] || EMPTY_STATES.all;
+    let content;
+    if (loadingInitial) {
+        content = <FeedSkeleton />;
+    } else if (feedError && notifications.length === 0) {
+        content = (
+            <ErrorState
+                className="mt-4 sm:mt-5"
+                title="Couldn’t load notifications"
+                message="Check your connection and try again."
+                onRetry={retryFeed}
+            />
+        );
+    } else if (notifications.length === 0) {
+        content = (
+            <div className="min-h-[40vh] flex flex-col items-center justify-center text-center text-gray-400 px-4">
+                <Bell aria-hidden="true" className="w-10 h-10 mb-3 text-gray-600" />
+                <p className="text-sm text-gray-300">{emptyState.title}</p>
+                <p className="text-sm text-gray-500 mt-1">{emptyState.hint}</p>
+            </div>
+        );
+    } else {
+        content = (
+            <>
+                {feedError && (
+                    <div className="mt-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 flex items-center justify-between gap-3">
+                        <span>Failed to load notifications. Please try again.</span>
                         <button
                             type="button"
-                            onClick={handleMarkAllAsRead}
-                            disabled={!hasUnread || markingAllRead}
-                            className="self-end sm:self-auto text-xs sm:text-sm px-2.5 py-1.5 rounded-lg bg-dark-100 text-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                            onClick={retryFeed}
+                            className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/70"
                         >
-                            {markingAllRead ? 'Marking...' : 'Mark all read'}
+                            Retry
                         </button>
                     </div>
-
-                    {filteredNotifications.length === 0 ? (
-                <div className="min-h-[40vh] flex flex-col items-center justify-center text-gray-400">
-                    <Bell className="w-10 h-10 mb-3 text-gray-600" />
-                    <p className="text-sm text-gray-300">No notifications for this filter</p>
-                </div>
-            ) : (
-                <>
-                <div className="mt-4 sm:mt-5 w-full space-y-2.5 sm:space-y-3.5">
-                    {filteredNotifications.map((notification, index) => (
-                        <NotificationItem
-                            key={notification.id}
-                            notification={notification}
-                            index={index}
-                            coverBySlug={coverBySlug}
-                            followerAvatarByUsername={followerAvatarByUsername}
-                            brokenThumbIds={brokenThumbIds}
-                            setBrokenThumbIds={setBrokenThumbIds}
-                            handleNotificationOpen={handleNotificationOpen}
-                            markNotificationRead={markNotificationRead}
-                            setActionError={setActionError}
-                            navigate={navigate}
-                        />
+                )}
+                <ul className="mt-4 sm:mt-5 w-full space-y-2.5 sm:space-y-3.5">
+                    {notifications.map((notification, index) => (
+                        <li key={notification.id}>
+                            <NotificationItem
+                                notification={notification}
+                                index={index}
+                                handleNotificationOpen={handleNotificationOpen}
+                                markNotificationRead={markNotificationRead}
+                                setActionError={setActionError}
+                                navigate={navigate}
+                                onDelete={handleDelete}
+                                isDeleting={deletingId === notification.id}
+                            />
+                        </li>
                     ))}
-                </div>
+                </ul>
                 {nextPage && (
                     <div className="mt-4 sm:mt-5 flex justify-center">
                         <button
@@ -337,7 +311,7 @@ export default function Notifications() {
                         >
                             {loadingMore ? (
                                 <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />
                                     Loading
                                 </>
                             ) : (
@@ -346,10 +320,52 @@ export default function Notifications() {
                         </button>
                     </div>
                 )}
-                </>
+            </>
+        );
+    }
+
+    return (
+        <div className="max-w-5xl mx-auto px-4 py-5 sm:py-6">
+            <SEO page="notifications" noIndex />
+
+            <div className="mb-4 sm:mb-5 flex items-center justify-between gap-3">
+                <h1 className="page-title">Notifications</h1>
+                <button
+                    type="button"
+                    onClick={handleMarkAllAsRead}
+                    disabled={!hasUnread || markingAllRead}
+                    className="text-xs sm:text-sm px-2.5 py-1.5 rounded-lg bg-dark-100 text-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                >
+                    {markingAllRead ? 'Marking...' : 'Mark all read'}
+                </button>
+            </div>
+
+            {actionError && (
+                <div role="alert" className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                    {actionError}
+                </div>
             )}
-                </>
-            )}
+
+            <div className="overflow-x-auto scrollbar-hide w-full">
+                <div className="inline-flex items-center gap-1.5 min-w-max" role="group" aria-label="Filter notifications">
+                    {NOTIFICATION_FILTERS.map((filter) => (
+                        <button
+                            key={filter.value}
+                            type="button"
+                            aria-pressed={activeFilter === filter.value}
+                            onClick={() => setActiveFilter(filter.value)}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs sm:text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 ${activeFilter === filter.value
+                                ? 'bg-accent-dark text-white'
+                                : 'bg-dark-100 text-gray-300 hover:text-white'
+                                }`}
+                        >
+                            {filter.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {content}
         </div>
     );
 }

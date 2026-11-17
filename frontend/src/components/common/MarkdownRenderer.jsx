@@ -4,6 +4,11 @@ import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeRaw from "rehype-raw";
 import DOMPurify from "dompurify";
+import { toJsxRuntime } from "hast-util-to-jsx-runtime";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+import AccessibleSpoiler from "./Spoiler";
+import { exceedsContainerLimits } from "../forums/remarkCommunity";
+import { useCommunityTree } from "../forums/useCommunityTree";
 
 const ReactMarkdown = lazy(() => import("react-markdown"));
 
@@ -383,7 +388,98 @@ const decodeHtmlEntities = (text = "") => {
         .replace(/&amp;/gi, "&");
 };
 
-const MarkdownRenderer = ({ content, className = "" }) => {
+/*
+ * mode="markdown": markdown only, no raw HTML anywhere (no rehype-raw, no HTML strings, no DOMPurify).
+ * The tree comes from components/forums/communityMarkdownTree.js (remark plugins in remarkCommunity.js)
+ * under a parse time budget (useCommunityTree.js); the Tailwind classes are the legacy ones so both
+ * modes look the same.
+ */
+// Legacy-only handlers (`span.is-spoiler`, `alignedblock`) are left out; the rest is shared.
+const { span: _legacySpan, alignedblock: _legacyAlignedBlock, ...sharedMarkdownComponents } = markdownComponents;
+
+const communityComponents = {
+    ...sharedMarkdownComponents,
+    p: ({ node, ...props }) => (
+        <p className="mb-4 last:mb-0 text-gray-200 leading-relaxed" {...props} />
+    ),
+    spoiler: ({ children }) => <AccessibleSpoiler>{children}</AccessibleSpoiler>,
+    youtube: ({ "data-video-id": videoId }) => (
+        <span className="block relative w-full max-w-3xl aspect-video rounded-xl overflow-hidden my-4 border border-gray-800">
+            <iframe
+                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+                title="YouTube video player"
+                allow="fullscreen"
+                allowFullScreen
+                className="absolute top-0 left-0 w-full h-full"
+            ></iframe>
+        </span>
+    ),
+};
+
+/**
+ * Community markdown from its hast tree (built in communityMarkdownTree.js, on the main thread for
+ * short text or in a worker under a time budget). Rendering the tree is what react-markdown does too.
+ * Plain text while a long text is parsing, or when it couldn't be parsed in time.
+ */
+const CommunityMarkdown = ({ source }) => {
+    const result = useCommunityTree(source);
+    if (!result.tree) return <PlainTextFallback source={source} />;
+    return toJsxRuntime(result.tree, {
+        Fragment,
+        jsx,
+        jsxs,
+        components: communityComponents,
+        ignoreInvalidStyle: true,
+        passKeys: true,
+        passNode: true,
+    });
+};
+
+/** Community text the markdown parser couldn't handle, shown as typed. */
+const PlainTextFallback = ({ source }) => (
+    <p className="mb-4 last:mb-0 text-gray-200 leading-relaxed whitespace-pre-wrap break-words">{source}</p>
+);
+
+/**
+ * One hostile post must not take down the page: if rendering its markdown throws, that post
+ * falls back to plain text and the rest of the thread keeps working. Keyed by the source,
+ * so edited text gets a fresh attempt.
+ */
+class CommunityMarkdownBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { failed: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { failed: true };
+    }
+
+    render() {
+        return this.state.failed ? <PlainTextFallback source={this.props.source} /> : this.props.children;
+    }
+}
+
+const MarkdownRenderer = ({ content, className = "", mode = "legacy" }) => {
+    if (mode === "markdown") {
+        // Forum text is stored as typed (forums 0010 unescaped the old bleach-encoded rows),
+        // so it is shown as typed: no entity decoding here or in the parser.
+        const source = content || "";
+        return (
+            <div className={`markdown-preview max-w-none ${className}`}>
+                {exceedsContainerLimits(source) ? (
+                    // Too deep, or too many containers, stalls or overflows the parser. The server
+                    // refuses such text now; any older row still renders, as plain text.
+                    <PlainTextFallback source={source} />
+                ) : (
+                    <CommunityMarkdownBoundary key={source} source={source}>
+                        <CommunityMarkdown source={source} />
+                    </CommunityMarkdownBoundary>
+                )}
+            </div>
+        );
+    }
+
     const cleanContent = preprocessMarkdown(content || "");
 
     return (

@@ -14,9 +14,13 @@ function buildFormState(entry) {
         started_at: entry?.started_at || '',
         finished_at: entry?.finished_at || '',
         total_rewatches: entry?.total_rewatches > 0 ? String(entry.total_rewatches) : '',
+        is_rewatching: Boolean(entry?.is_rewatching),
         notes: entry?.notes || '',
     };
 }
+
+/** The server's limit on list notes (G3 normaliser bounds). */
+export const NOTES_MAX_LENGTH = 5000;
 
 function extractErrorMessage(error) {
     const details = error?.response?.data;
@@ -51,6 +55,7 @@ export default function ListEntryEditModal({
     totalEpisodes,
     statusOptions,
     isSaving,
+    animeTitle,
 }) {
     const [form, setForm] = useState(() => buildFormState(initialEntry));
     const [errorMessage, setErrorMessage] = useState('');
@@ -108,13 +113,10 @@ export default function ListEntryEditModal({
             const currentEpisodes =
                 current.episodes_watched === '' ? 0 : Number.parseInt(current.episodes_watched, 10) || 0;
 
-            if (nextStatus === 'Completed') {
+            // Visible in the form, and what the server does anyway. Other statuses keep
+            // the typed progress: the server's normaliser decides, the selector shows it.
+            if (nextStatus === 'Completed' && currentEpisodes < episodeCap) {
                 nextForm.episodes_watched = String(episodeCap);
-                return nextForm;
-            }
-
-            if (currentEpisodes >= episodeCap) {
-                nextForm.episodes_watched = String(Math.max(episodeCap - 1, 0));
             }
 
             return nextForm;
@@ -126,7 +128,7 @@ export default function ListEntryEditModal({
         setErrorMessage('');
 
         const score = form.score === '' ? 0 : Number(form.score);
-        let episodesWatched = form.episodes_watched === '' ? 0 : Number(form.episodes_watched);
+        const episodesWatched = form.episodes_watched === '' ? 0 : Number(form.episodes_watched);
         const totalRewatches = form.total_rewatches === '' ? 0 : Number(form.total_rewatches);
 
         if (!Number.isInteger(score) || score < 0 || score > 10) {
@@ -144,12 +146,13 @@ export default function ListEntryEditModal({
             return;
         }
 
-        if (episodeCap != null && form.status !== 'Completed' && episodesWatched >= episodeCap) {
-            episodesWatched = Math.max(episodeCap - 1, 0);
-        }
-
         if (!Number.isInteger(totalRewatches) || totalRewatches < 0) {
             setErrorMessage('Total rewatches must be a non-negative whole number.');
+            return;
+        }
+
+        if (form.notes.length > NOTES_MAX_LENGTH) {
+            setErrorMessage(`Notes can be at most ${NOTES_MAX_LENGTH.toLocaleString()} characters.`);
             return;
         }
 
@@ -166,6 +169,7 @@ export default function ListEntryEditModal({
                 started_at: form.started_at || null,
                 finished_at: form.finished_at || null,
                 total_rewatches: totalRewatches,
+                is_rewatching: form.is_rewatching,
                 notes: form.notes,
             });
         } catch (error) {
@@ -186,10 +190,20 @@ export default function ListEntryEditModal({
                 className="flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-dark-100 shadow-[0_24px_120px_rgba(0,0,0,0.55)] sm:max-h-[90dvh] sm:rounded-3xl"
             >
                 <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
-                    <div>
+                    <div className="min-w-0">
                         <h2 id="list-entry-modal-title" className="mt-2 text-xl font-black text-white sm:text-2xl">
-                            Edit List Entry
+                            {animeTitle ? (
+                                <>
+                                    <span className="sr-only">Edit list entry for </span>
+                                    <span className="block truncate">{animeTitle}</span>
+                                </>
+                            ) : 'Edit List Entry'}
                         </h2>
+                        {animeTitle ? (
+                            <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-gray-500" aria-hidden="true">
+                                Edit list entry
+                            </p>
+                        ) : null}
                     </div>
                     <button
                         type="button"
@@ -291,11 +305,45 @@ export default function ListEntryEditModal({
                         </Field>
                     </div>
 
+                    <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-dark-200 px-4 py-3">
+                        <div className="min-w-0">
+                            <span id="list-entry-rewatching-label" className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
+                                Rewatching
+                            </span>
+                            <p className="mt-1 text-xs text-gray-500">
+                                Finishing a rewatch adds one to total rewatches.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={form.is_rewatching}
+                            aria-labelledby="list-entry-rewatching-label"
+                            onClick={() => updateField('is_rewatching', !form.is_rewatching)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors motion-reduce:transition-none ${form.is_rewatching ? 'bg-accent-dark' : 'bg-white/10'}`}
+                        >
+                            <span
+                                aria-hidden="true"
+                                className={`inline-block h-5 w-5 rounded-full bg-white transition-transform motion-reduce:transition-none ${form.is_rewatching ? 'translate-x-5' : 'translate-x-0.5'}`}
+                            />
+                        </button>
+                    </div>
+
                     <div className="mt-4">
-                        <Field label="Notes" htmlFor="list-entry-notes">
+                        <Field
+                            label="Notes"
+                            htmlFor="list-entry-notes"
+                            hint={(
+                                <span id="list-entry-notes-count" className={form.notes.length > NOTES_MAX_LENGTH ? 'text-red-300' : undefined}>
+                                    {form.notes.length.toLocaleString()} / {NOTES_MAX_LENGTH.toLocaleString()}
+                                </span>
+                            )}
+                        >
                             <textarea
                                 id="list-entry-notes"
                                 rows="5"
+                                maxLength={NOTES_MAX_LENGTH}
+                                aria-describedby="list-entry-notes-count"
                                 value={form.notes}
                                 onChange={(event) => updateField('notes', event.target.value)}
                                 placeholder=""
@@ -322,7 +370,7 @@ export default function ListEntryEditModal({
                         <button
                             type="submit"
                             disabled={isSaving}
-                            className="inline-flex items-center justify-center rounded-2xl bg-accent px-5 py-3 text-sm font-black text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex items-center justify-center rounded-2xl bg-accent-dark px-5 py-3 text-sm font-black text-white transition-colors hover:bg-accent-dark/90 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             {isSaving ? 'Saving...' : 'Save'}
                         </button>

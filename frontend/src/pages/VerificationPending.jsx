@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { authApi } from '../api/client';
 import { Mail, CheckCircle, Loader2, RefreshCw } from 'lucide-react';
 
 export default function VerificationPending() {
     const [searchParams] = useSearchParams();
-    const email = searchParams.get('email') || '';
+    const location = useLocation();
+    // Register passes the address in router state; older links use ?email=.
+    const email = location.state?.email ?? searchParams.get('email') ?? '';
+    const stateMessage = typeof location.state?.message === 'string' ? location.state.message : '';
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [resendEmail, setResendEmail] = useState(email);
@@ -18,7 +21,7 @@ export default function VerificationPending() {
         setMessage('');
 
         try {
-            await authApi.resendVerification({ email: resendEmail });
+            await authApi.resendVerification(resendEmail.trim());
             setMessage('If an account exists with this email and is pending verification, a new link has been sent.');
         } catch {
             setMessage('Something went wrong. Please try again.');
@@ -36,8 +39,12 @@ export default function VerificationPending() {
 
                 <h2 className="text-2xl font-bold text-white mb-2">Check Your Email</h2>
                 <p className="text-gray-400 mb-8">
-                    We've sent a verification link to your email address.
-                    Please click the link to activate your account.
+                    {stateMessage || (
+                        <>
+                            We've sent a verification link to your email address.
+                            Please click the link to activate your account.
+                        </>
+                    )}
                 </p>
 
                 <div className="bg-dark-200 rounded-xl p-4 mb-6">
@@ -49,7 +56,13 @@ export default function VerificationPending() {
                     <div className="relative group">
                         <Mail className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
                         <input
+                            id="resend-email"
                             type="email"
+                            inputMode="email"
+                            autoComplete="email"
+                            autoCapitalize="none"
+                            spellCheck={false}
+                            aria-label="Email address"
                             required
                             className="input !pl-12 w-full"
                             placeholder="Enter your email"

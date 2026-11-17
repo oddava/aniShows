@@ -6,81 +6,151 @@ Optimized for small EC2 instances with minimal Redis overhead.
 """
 
 import contextlib
+import hashlib
 import time
 from datetime import datetime
 from typing import Any
 
+from django.conf import settings
 from django.core.cache import cache
 
 from ...shared.errors import CACHE_ERRORS
 
+# Reading the shared pause value: the cache can fail, or hold something odd.
+_PAUSE_ERRORS: tuple[type[Exception], ...] = (TypeError, ValueError, *CACHE_ERRORS)
+# Breaker state: the cache can fail, or hold a value of the wrong type.
+_STATE_ERRORS: tuple[type[Exception], ...] = (TypeError, *CACHE_ERRORS)
+
 
 class AniListRateLimiter:
     """Distributed rate limiter using Redis for multi-worker coordination.
-    AniList allows 90 requests per minute per IP.
 
-    Optimized for small EC2 instances:
-    - Minimal Redis operations
-    - Local caching to reduce Redis load
-    - Conservative rate limiting
+    AniList documents 90 requests per minute per IP but has run in a degraded
+    mode at 30; ``ANILIST_RATE_LIMIT_PER_MINUTE`` sets the limit (default 30).
+    Every worker counts against one per-minute Redis counter, keeping a 10%
+    margin under the limit, and background callers also space their own
+    requests. A 429 from AniList pauses every worker (``pause``), not only the
+    one that got it.
     """
 
-    RATE_LIMIT = 85  # Stay well under the 90 limit
     WINDOW_SECONDS = 60
-    SAFETY_MARGIN = 5
+    # Requests made while a user waits may use only this share of a minute's
+    # budget, so web traffic (a crawler walking detail pages) cannot starve
+    # the background sync; background work in turn leaves a few slots
+    # (``web_reserve``) so a running sync cannot starve users.
+    INTERACTIVE_SHARE = 0.5
+    PAUSE_KEY = "anilist:paused_until"
+    # How long to sleep before asking again when this minute's slots are gone.
+    FULL_WINDOW_RETRY_SECONDS = 1.0
 
-    def __init__(self):
-        self.min_delay = self.WINDOW_SECONDS / (self.RATE_LIMIT - self.SAFETY_MARGIN)
-        self._local_last_request = 0
-        self._local_count = 0
+    def __init__(self, rate_limit: int | None = None):
+        limit = rate_limit or settings.ANILIST_RATE_LIMIT_PER_MINUTE
+        self.rate_limit = max(int(limit), 1)
+        self.safety_margin = max(self.rate_limit // 10, 1) if self.rate_limit > 1 else 0
+        self.min_delay = self.WINDOW_SECONDS / (self.rate_limit - self.safety_margin)
+        self._local_last_request = 0.0
 
     def _get_current_window_key(self) -> str:
         """Get Redis key for current minute window."""
         current_minute = int(time.time()) // self.WINDOW_SECONDS
         return f"anilist:rate:{current_minute}"
 
-    def acquire(self) -> None:
-        """Acquire permission to make an API request.
-        Blocks until it's safe to proceed.
-        """
-        while True:
-            # Local throttling first (faster, no Redis call)
-            now = time.time()
-            time_since_last = now - self._local_last_request
+    def acquire(self, max_wait: float | None = None) -> bool:
+        """Wait for a request slot; False if none is free within ``max_wait`` seconds.
 
-            if time_since_last < self.min_delay:
-                wait_time = self.min_delay - time_since_last
-                time.sleep(wait_time)
+        ``max_wait=None`` (background tasks) waits as long as needed and keeps
+        this process's requests spaced out. A bounded wait (requests made while
+        a user waits) skips the spacing and gives up instead of holding the
+        web worker; the caller reports it as rate limited.
+        """
+        deadline = None if max_wait is None else time.monotonic() + max(max_wait, 0.0)
+
+        def can_wait(seconds: float) -> bool:
+            return deadline is None or time.monotonic() + seconds <= deadline
+
+        while True:
+            wait = self._paused_for()
+            if max_wait is None:
+                wait = max(wait, self.min_delay - (time.time() - self._local_last_request))
+            if wait > 0:
+                if not can_wait(wait):
+                    return False
+                time.sleep(wait)
                 continue
 
-            # Check global rate limit via Redis
-            current_key = self._get_current_window_key()
+            if self._take_shared_slot(interactive=max_wait is not None):
+                self._local_last_request = time.time()
+                return True
 
-            try:
-                # Use pipeline for atomic operation
-                redis_client = cache.client.get_client()
-                pipe = redis_client.pipeline()
-                pipe.incr(current_key)
-                pipe.expire(current_key, self.WINDOW_SECONDS + 10)
-                results = pipe.execute()
-                count = results[0]
+            logger.warning("AniList rate limit reached for this minute (%s/min)", self.rate_limit)
+            if not can_wait(self.FULL_WINDOW_RETRY_SECONDS):
+                return False
+            time.sleep(self.FULL_WINDOW_RETRY_SECONDS)
 
-                if count <= self.RATE_LIMIT - self.SAFETY_MARGIN:
-                    self._local_last_request = time.time()
-                    return
+    def _take_shared_slot(self, *, interactive: bool = False) -> bool:
+        """Count one request against this minute's shared budget; False if it is used up.
 
-                # Rate limit hit, wait until next window
-                logger.warning(f"Rate limit approaching: {count}/{self.RATE_LIMIT} requests")
-                time.sleep(1)
+        Web requests (``interactive``) are also counted on their own key: they
+        may use at most ``INTERACTIVE_SHARE`` of the budget themselves, and
+        background work stops ``WEB_RESERVE`` slots short of the total so a
+        running sync never leaves users with nothing. A refused try gives its
+        counts back.
+        """
+        total_key = self._get_current_window_key()
+        cache_client = getattr(cache, "client", None)
+        if cache_client is None:
+            # A cache backend without a raw Redis client (tests, local
+            # development): only this process's spacing applies.
+            return True
+        redis_client = cache_client.get_client()
+        budget = self.rate_limit - self.safety_margin
+        keys = [total_key, f"{total_key}:web"] if interactive else [total_key]
+        try:
+            pipe = redis_client.pipeline()
+            for key in keys:
+                pipe.incr(key)
+                pipe.expire(key, self.WINDOW_SECONDS + 10)
+            counts = pipe.execute()[::2]
+            if interactive:
+                allowed = counts[0] <= budget and counts[1] <= self.web_share(budget)
+            else:
+                allowed = counts[0] <= budget - self.web_reserve(budget)
+            if not allowed:
+                for key in keys:
+                    redis_client.decr(key)
+            return allowed
+        except CACHE_ERRORS:
+            logger.warning(
+                "Redis rate limiter unavailable; using local spacing only", exc_info=True
+            )
+            return True
 
-            except (AttributeError, *CACHE_ERRORS):
-                # Redis failure, or a cache backend without a raw Redis client
-                # (AttributeError): fall back to local rate limiting.
-                logger.exception("Redis rate limiter failed; using local fallback")
-                if time_since_last >= self.min_delay:
-                    self._local_last_request = time.time()
-                    return
-                time.sleep(self.min_delay)
+    @classmethod
+    def web_share(cls, budget: int) -> int:
+        """Most of a minute's budget web requests may use."""
+        return max(int(budget * cls.INTERACTIVE_SHARE), 1)
+
+    @staticmethod
+    def web_reserve(budget: int) -> int:
+        """Slots background work leaves free each minute for web requests."""
+        return min(max(budget // 10, 1), budget - 1) if budget > 1 else 0
+
+    def _paused_for(self) -> float:
+        """Seconds left on a pause set after a 429 by any worker."""
+        try:
+            paused_until = float(cache.get(self.PAUSE_KEY) or 0.0)
+        except _PAUSE_ERRORS:
+            return 0.0
+        return max(paused_until - time.time(), 0.0)
+
+    def pause(self, seconds: float) -> None:
+        """Stop every worker's requests for ``seconds`` (AniList answered 429)."""
+        if seconds <= 0:
+            return
+        until = time.time() + seconds
+        with contextlib.suppress(*_PAUSE_ERRORS):
+            if until > float(cache.get(self.PAUSE_KEY) or 0.0):
+                cache.set(self.PAUSE_KEY, until, timeout=int(seconds) + 5)
 
 
 class CircuitBreaker:
@@ -152,7 +222,7 @@ class CircuitBreaker:
 
             return False  # CLOSED state - normal operation
 
-        except (TypeError, *CACHE_ERRORS):
+        except _STATE_ERRORS:
             # TypeError: a last-failure value that is not a datetime.
             logger.exception("Circuit breaker check failed")
             return False  # Fail open on error
@@ -194,7 +264,7 @@ class CircuitBreaker:
                     f"API calls will fail fast for {self.recovery_timeout}s"
                 )
 
-        except (TypeError, *CACHE_ERRORS):
+        except _STATE_ERRORS:
             # TypeError: a failure counter that is not a number.
             logger.exception("Failed to record circuit breaker failure")
 
@@ -208,10 +278,15 @@ class APICallCache:
         self.ttl = ttl
 
     def _get_cache_key(self, endpoint: str, params: str) -> str:
-        """Generate cache key from endpoint and params."""
-        return f"api:cache:{endpoint}:{hash(params) & 0xFFFFFFFF}"
+        """Cache key from endpoint and params.
 
-    def _get_recent_key(self, anilist_id: int) -> str:
+        A digest, not ``hash()``: string hashes are salted per process, so
+        workers would never share an entry.
+        """
+        digest = hashlib.sha256(params.encode("utf-8")).hexdigest()[:32]
+        return f"api:cache:{endpoint}:{digest}"
+
+    def _get_recent_key(self, anilist_id: int | str) -> str:
         return f"api:recent:{anilist_id}"
 
     def get(self, endpoint: str, params: str) -> Any | None:
@@ -228,19 +303,19 @@ class APICallCache:
         except CACHE_ERRORS:
             logger.warning("Failed to cache API response", exc_info=True)
 
-    def is_recently_updated(self, anilist_id: int, window: int = 1800) -> bool:
+    def is_recently_updated(self, anilist_id: int | str, window: int = 1800) -> bool:
         """Check if anime was updated within the window (seconds)."""
         try:
             return cache.get(self._get_recent_key(anilist_id)) is not None
         except CACHE_ERRORS:
             return False
 
-    def mark_updated(self, anilist_id: int, window: int = 1800) -> None:
+    def mark_updated(self, anilist_id: int | str, window: int = 1800) -> None:
         """Mark anime as recently updated."""
         with contextlib.suppress(*CACHE_ERRORS):
             cache.set(self._get_recent_key(anilist_id), True, window)
 
-    def invalidate(self, anilist_id: int) -> None:
+    def invalidate(self, anilist_id: int | str) -> None:
         """Invalidate cache for specific anime."""
         with contextlib.suppress(*CACHE_ERRORS):
             cache.delete(self._get_recent_key(anilist_id))

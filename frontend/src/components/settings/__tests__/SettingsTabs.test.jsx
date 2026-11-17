@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import NotificationsTab from '../NotificationsTab';
 import SettingsTabs from '../SettingsTabs';
 import SocialLinksEditor from '../SocialLinksEditor';
 
@@ -12,75 +11,48 @@ vi.mock('../../SmartLinkInput', () => ({
     normalizeUrl: (_platform, value) => value,
 }));
 
-const notificationState = (overrides = {}) => ({
-    preferences: {
-        email_new_episodes: true,
-        push_new_episodes: false,
-        push_review_replies: true,
-        push_new_follower: false,
-    },
-    isLoadingPreferences: false,
-    isSavingPreferences: false,
-    preferencesMessage: '',
-    handleTogglePreference: vi.fn(),
-    ...overrides,
-});
-
-describe('NotificationsTab', () => {
-    it('renders one switch per preference with its saved state', () => {
-        render(<NotificationsTab notifications={notificationState()} />);
-
-        const switches = screen.getAllByRole('switch');
-        expect(switches).toHaveLength(4);
-        expect(switches.map((el) => el.getAttribute('aria-checked'))).toEqual([
-            'true', 'false', 'true', 'false',
-        ]);
-        expect(screen.getByRole('switch', { name: 'Review Replies' })).toHaveAttribute('aria-checked', 'true');
-    });
-
-    it('calls the toggle handler with the preference key', () => {
-        const state = notificationState();
-        render(<NotificationsTab notifications={state} />);
-
-        fireEvent.click(screen.getByRole('switch', { name: 'New Followers' }));
-
-        expect(state.handleTogglePreference).toHaveBeenCalledWith('push_new_follower');
-    });
-
-    it('disables the switches while saving and shows the message', () => {
-        render(
-            <NotificationsTab
-                notifications={notificationState({
-                    isSavingPreferences: true,
-                    preferencesMessage: 'Preferences saved successfully',
-                })}
-            />
-        );
-
-        screen.getAllByRole('switch').forEach((el) => expect(el).toBeDisabled());
-        expect(screen.getByText('Preferences saved successfully')).toBeInTheDocument();
-    });
-
-    it('shows spinners instead of switches while loading', () => {
-        render(<NotificationsTab notifications={notificationState({ isLoadingPreferences: true })} />);
-
-        expect(screen.queryAllByRole('switch')).toHaveLength(0);
-    });
-});
-
 describe('SettingsTabs', () => {
     it('offers the badges tab only to users with badges', () => {
         const setActiveTab = vi.fn();
         const { rerender } = render(
             <SettingsTabs user={{ total_badges_count: 0 }} activeTab="profile" setActiveTab={setActiveTab} />
         );
-        expect(screen.queryByRole('button', { name: 'Badges' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: 'Badges' })).not.toBeInTheDocument();
 
         rerender(
             <SettingsTabs user={{ total_badges_count: 2 }} activeTab="profile" setActiveTab={setActiveTab} />
         );
-        fireEvent.click(screen.getByRole('button', { name: 'Badges' }));
+        fireEvent.click(screen.getByRole('tab', { name: 'Badges' }));
         expect(setActiveTab).toHaveBeenCalledWith('badges');
+    });
+
+    it('is a tablist with a roving tabIndex', () => {
+        render(<SettingsTabs user={{}} activeTab="account" setActiveTab={vi.fn()} />);
+
+        expect(screen.getByRole('tablist')).toBeInTheDocument();
+        const account = screen.getByRole('tab', { name: 'Account' });
+        expect(account).toHaveAttribute('aria-selected', 'true');
+        expect(account).toHaveAttribute('tabindex', '0');
+        expect(account).toHaveAttribute('aria-controls', 'settings-panel-account');
+        const profile = screen.getByRole('tab', { name: 'Profile' });
+        expect(profile).toHaveAttribute('aria-selected', 'false');
+        expect(profile).toHaveAttribute('tabindex', '-1');
+    });
+
+    it.each([
+        ['ArrowRight', 'account', 'notifications'],
+        ['ArrowRight', 'notifications', 'profile'],
+        ['ArrowLeft', 'profile', 'notifications'],
+        ['ArrowLeft', 'account', 'profile'],
+        ['Home', 'notifications', 'profile'],
+        ['End', 'profile', 'notifications'],
+    ])('%s from %s selects %s', (key, from, to) => {
+        const setActiveTab = vi.fn();
+        render(<SettingsTabs user={{}} activeTab={from} setActiveTab={setActiveTab} />);
+
+        fireEvent.keyDown(screen.getByRole('tab', { selected: true }), { key });
+
+        expect(setActiveTab).toHaveBeenCalledWith(to);
     });
 });
 

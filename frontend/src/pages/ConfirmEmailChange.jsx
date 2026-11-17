@@ -1,19 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import { getApiErrorMessage } from '../api/errors';
-import { useParams, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import useTokenLinkParams from '../components/auth/useTokenLinkParams';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function ConfirmEmailChange() {
-    const { uid, token, new_email } = useParams();
-    const { isAuthenticated, refreshProfile } = useAuth();
+    // The token moves out of the address bar before anything else runs (A14).
+    // `new_email` exists only on links sent before pending_email (one release).
+    const { linkParams, isRedirecting } = useTokenLinkParams(
+        ['uid', 'token'],
+        '/confirm-email-change',
+        ['new_email'],
+    );
+    const uid = linkParams?.uid;
+    const token = linkParams?.token;
+    const new_email = linkParams?.new_email;
+    const { isAuthenticated, loading, logout } = useAuth();
     const [status, setStatus] = useState('loading'); // loading, success, error
     const [message, setMessage] = useState('Confirming your new email address...');
     // The link is single-use; never submit it twice (StrictMode, auth changes).
     const submittedLink = useRef(null);
 
     useEffect(() => {
+        // Wait for the session restore: a link opened in a new tab arrives
+        // before AuthContext knows whether this browser is signed in, and the
+        // local sign-out below must not be skipped.
+        if (isRedirecting || loading) return;
         const linkKey = `${uid}/${token}/${new_email}`;
         if (submittedLink.current === linkKey) return;
         submittedLink.current = linkKey;
@@ -23,29 +37,30 @@ export default function ConfirmEmailChange() {
                 // Decode base64 email for display if needed (but API handles token validation)
                 await authApi.confirmEmailChange(uid, token, new_email);
 
+                // The change signed out every device, this one too: end the
+                // local session now so "Sign in" works instead of bouncing.
                 if (isAuthenticated) {
-                    try {
-                        await refreshProfile();
-                    } catch {
-                        // The email change succeeded; a stale local profile refresh should not fail the page.
-                    }
+                    await logout();
                 }
 
                 setStatus('success');
-                setMessage('Your email has been successfully updated!');
+                setMessage(
+                    'Your email has been updated. For your security every device was signed out, '
+                    + 'so sign in again with your new address.'
+                );
             } catch (err) {
                 setStatus('error');
                 setMessage(getApiErrorMessage(err, 'Invalid or expired confirmation link.'));
             }
         };
 
-        if (uid && token && new_email) {
+        if (uid && token) {
             confirmChange();
         } else {
             setStatus('error');
             setMessage('Invalid verification link.');
         }
-    }, [uid, token, new_email, isAuthenticated, refreshProfile]);
+    }, [uid, token, new_email, isRedirecting, loading, isAuthenticated, logout]);
 
     return (
         <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4">
@@ -65,8 +80,8 @@ export default function ConfirmEmailChange() {
                         </div>
                         <h2 className="text-2xl font-bold text-white mb-2">Email Updated!</h2>
                         <p className="text-gray-400 mb-8">{message}</p>
-                        <Link to="/settings" className="btn-primary w-full block">
-                            Back to Settings
+                        <Link to="/login" className="btn-primary w-full block">
+                            Sign in
                         </Link>
                     </div>
                 )}

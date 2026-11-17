@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import AnimeDetail from '../AnimeDetail';
 import { animeApi, reviewApi } from '../../api/client';
+import { retryUnlessClientError } from '../../api/queries/retry';
 
 vi.mock('../../api/client', () => ({
     animeApi: {
@@ -63,14 +65,6 @@ vi.mock('../../components/ReviewSummary', () => ({
     default: () => <div data-testid="review-summary" />,
 }));
 
-vi.mock('../../components/CharacterModal', () => ({
-    default: () => <div data-testid="character-modal" />,
-}));
-
-vi.mock('../../components/StaffModal', () => ({
-    default: () => <div data-testid="staff-modal" />,
-}));
-
 vi.mock('../../components/StatsTab', () => ({
     default: () => <div data-testid="stats-tab" />,
 }));
@@ -81,10 +75,6 @@ vi.mock('../../components/InformationBox', () => ({
 
 vi.mock('../../components/FriendsWatching', () => ({
     default: () => <div data-testid="friends-watching" />,
-}));
-
-vi.mock('../../components/SEOHelmet', () => ({
-    default: () => <div data-testid="seo-helmet" />,
 }));
 
 vi.mock('../../components/DetailTabs', () => ({
@@ -148,25 +138,28 @@ const mockAnime = {
     staff_count: 0,
 };
 
-function createHarness(initialEntry = '/anime/frieren') {
+function createHarness(initialEntry = '/anime/frieren', queryDefaults = {}) {
     const queryClient = new QueryClient({
         defaultOptions: {
             queries: {
                 retry: false,
                 staleTime: 0,
                 gcTime: 0,
+                ...queryDefaults,
             },
         },
     });
 
     const wrapper = ({ children }) => (
-        <QueryClientProvider client={queryClient}>
-            <MemoryRouter initialEntries={[initialEntry]}>
-                <Routes>
-                    <Route path="/anime/:slug/*" element={children} />
-                </Routes>
-            </MemoryRouter>
-        </QueryClientProvider>
+        <HelmetProvider>
+            <QueryClientProvider client={queryClient}>
+                <MemoryRouter initialEntries={[initialEntry]}>
+                    <Routes>
+                        <Route path="/anime/:slug/*" element={children} />
+                    </Routes>
+                </MemoryRouter>
+            </QueryClientProvider>
+        </HelmetProvider>
     );
 
     return { queryClient, wrapper };
@@ -225,9 +218,15 @@ describe('AnimeDetail list update invalidation', () => {
         reviewApi.getStats.mockResolvedValue({ data: { total_reviews: 0 } });
     });
 
-    it('invalidates anime/list caches when status selector reports an update', async () => {
+    it('patches cached cards and invalidates list caches when status selector reports an update', async () => {
         const { queryClient, wrapper } = createHarness();
         const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+        // A Browse grid page that shows the same title (B20: patched, not refetched).
+        const gridKey = ['anime', 'list', 'grid'];
+        queryClient.setQueryDefaults(gridKey, { gcTime: Infinity });
+        queryClient.setQueryData(gridKey, {
+            results: [{ id: 1, user_list_status: null }, { id: 2, user_list_status: null }],
+        });
 
         render(<AnimeDetail />, { wrapper });
 
@@ -247,8 +246,11 @@ describe('AnimeDetail list update invalidation', () => {
                 .map(([arg]) => JSON.stringify(arg?.queryKey))
                 .filter(Boolean);
 
-            expect(keys).toContain(JSON.stringify(['anime']));
-            expect(keys).toContain(JSON.stringify(['anime', 'frieren', 77]));
+            expect(keys).not.toContain(JSON.stringify(['anime']));
+            expect(queryClient.getQueryData(gridKey).results).toEqual([
+                { id: 1, user_list_status: { id: 1, status: 'Watching' } },
+                { id: 2, user_list_status: null },
+            ]);
             expect(keys).toContain(JSON.stringify(['user', 'list', 'watching']));
             expect(keys).toContain(JSON.stringify(['lists']));
             expect(keys).toContain(JSON.stringify(['ownProfile']));
@@ -359,8 +361,12 @@ describe('AnimeDetail list update invalidation', () => {
             page_size: 50,
         });
         expect(animeApi.getEpisodeRatings).toHaveBeenCalledWith('frieren');
-        const watchLink = screen.getByRole('link', { name: /watch/i });
-        expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch1');
+        // The count settles once the watch preview resolves (before that it
+        // falls back to the anime's episode_count).
+        await waitFor(() => {
+            const watchLink = screen.getByRole('link', { name: /watch/i });
+            expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch1');
+        });
         expect(animeApi.getCharacters).not.toHaveBeenCalled();
         expect(animeApi.getStaff).not.toHaveBeenCalled();
     });
@@ -387,5 +393,191 @@ describe('AnimeDetail list update invalidation', () => {
             const watchLink = screen.getByRole('link', { name: /watch/i });
             expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch');
         });
+    });
+
+    it('fetches only the 4-episode preview on Overview, not the 50-episode Watch page', async () => {
+        const { wrapper } = createHarness();
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(animeApi.getWatchEpisodes).toHaveBeenCalledWith('frieren', { page: 1, page_size: 4 });
+        });
+        expect(animeApi.getWatchEpisodes).toHaveBeenCalledTimes(1);
+        expect(animeApi.getWatchEpisodes).not.toHaveBeenCalledWith('frieren', expect.objectContaining({ page_size: 50 }));
+    });
+});
+
+describe('AnimeDetail sidebar recommendations (B18)', () => {
+    const originalObserver = window.IntersectionObserver;
+    let observers;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        observers = [];
+        animeApi.getBySlug.mockResolvedValue({ data: mockAnime });
+        animeApi.getWatchEpisodes.mockResolvedValue({ data: { count: 0, results: [] } });
+        animeApi.getRecommendations.mockResolvedValue({ data: [] });
+        reviewApi.getAll.mockResolvedValue({ data: { results: [], count: 0, next: null } });
+        reviewApi.getStats.mockResolvedValue({ data: { total_reviews: 0 } });
+    });
+
+    afterEach(() => {
+        window.IntersectionObserver = originalObserver;
+    });
+
+    it('waits until the sidebar is about to show', async () => {
+        window.IntersectionObserver = class {
+            constructor(callback, options) {
+                this.callback = callback;
+                this.options = options;
+                observers.push(this);
+            }
+            observe(element) { this.element = element; }
+            disconnect() {}
+            unobserve() {}
+        };
+        const { wrapper } = createHarness();
+
+        render(<AnimeDetail />, { wrapper });
+
+        await screen.findByTestId('overview-tab');
+        const sidebarObserver = observers.find((observer) => observer.options?.rootMargin);
+        expect(sidebarObserver).toBeDefined();
+        expect(animeApi.getRecommendations).not.toHaveBeenCalled();
+
+        act(() => {
+            sidebarObserver.callback([{ isIntersecting: true, target: sidebarObserver.element }]);
+        });
+
+        await waitFor(() => {
+            expect(animeApi.getRecommendations).toHaveBeenCalledWith('frieren');
+        });
+    });
+
+    it('fetches straight away where IntersectionObserver is missing', async () => {
+        delete window.IntersectionObserver;
+        const { wrapper } = createHarness();
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(animeApi.getRecommendations).toHaveBeenCalledWith('frieren');
+        });
+    });
+});
+
+describe('AnimeDetail head tags (B21)', () => {
+    const headContent = (selector, attribute = 'content') =>
+        document.head.querySelector(selector)?.getAttribute(attribute);
+    const jsonLd = () => JSON.parse(document.head.querySelector('script[type="application/ld+json"]')?.textContent || 'null');
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        animeApi.getWatchEpisodes.mockResolvedValue({ data: { count: 0, results: [] } });
+        animeApi.getRecommendations.mockResolvedValue({ data: [] });
+        reviewApi.getAll.mockResolvedValue({ data: { results: [], count: 0, next: null } });
+        reviewApi.getStats.mockResolvedValue({ data: { total_reviews: 0 } });
+    });
+
+    it('writes a canonical, an absolute og:image, a plain-text description and TVSeries JSON-LD', async () => {
+        animeApi.getBySlug.mockResolvedValue({
+            data: {
+                ...mockAnime,
+                synopsis: `<p>Frieren &amp; Fern <i>travel</i> north.</p><br>${'x'.repeat(300)}`,
+            },
+        });
+        const { wrapper } = createHarness();
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(headContent('link[rel="canonical"]', 'href')).toBe('https://anishows.com/anime/frieren');
+        });
+        expect(headContent('meta[property="og:image"]')).toBe('https://anishows.com/cover.jpg');
+        expect(headContent('meta[property="og:type"]')).toBe('video.tv_show');
+        const description = headContent('meta[name="description"]');
+        expect(description.startsWith('Frieren & Fern travel north.')).toBe(true);
+        expect(description).not.toMatch(/[<>]/);
+        expect(description.length).toBeLessThanOrEqual(160);
+        expect(document.title).toBe("Frieren: Beyond Journey's End Season 2 | AniShows");
+        expect(jsonLd()).toMatchObject({
+            '@type': 'TVSeries',
+            name: "Frieren: Beyond Journey's End Season 2",
+            url: 'https://anishows.com/anime/frieren',
+            image: 'https://anishows.com/cover.jpg',
+        });
+    });
+
+    it('declares a movie as a Movie', async () => {
+        animeApi.getBySlug.mockResolvedValue({
+            data: { ...mockAnime, slug: 'frieren-movie', anime_type: 'Movie' },
+        });
+        const { wrapper } = createHarness('/anime/frieren-movie');
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(headContent('meta[property="og:type"]')).toBe('video.movie');
+        });
+        expect(jsonLd()?.['@type']).toBe('Movie');
+    });
+
+    it('marks a missing anime noindex', async () => {
+        animeApi.getBySlug.mockRejectedValue(Object.assign(new Error('HTTP 404'), { response: { status: 404 } }));
+        const { wrapper } = createHarness('/anime/missing');
+
+        render(<AnimeDetail />, { wrapper });
+
+        await screen.findByRole('heading', { name: 'Anime not found' });
+        await waitFor(() => {
+            expect(headContent('meta[name="robots"]')).toBe('noindex, nofollow');
+        });
+    });
+});
+
+describe('AnimeDetail with the app retry policy (smoke finding S-2)', () => {
+    const appRetry = { retry: retryUnlessClientError, retryDelay: 0 };
+    const httpError = (status) => Object.assign(new Error(`HTTP ${status}`), { response: { status } });
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        animeApi.getRecommendations.mockResolvedValue({ data: [] });
+        reviewApi.getAll.mockResolvedValue({ data: { results: [] } });
+        reviewApi.getStats.mockResolvedValue({ data: {} });
+    });
+
+    it('asks for a missing slug once, then shows Not found', async () => {
+        animeApi.getBySlug.mockRejectedValue(httpError(404));
+        const { wrapper } = createHarness('/anime/missing', appRetry);
+
+        render(<AnimeDetail />, { wrapper });
+
+        expect(await screen.findByRole('heading', { name: 'Anime not found' })).toBeInTheDocument();
+        expect(animeApi.getBySlug).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the 18+ opt-in gate, asked once, for an adult title (D-2)', async () => {
+        animeApi.getBySlug.mockRejectedValue(Object.assign(httpError(403), {
+            response: { status: 403, data: { code: 'adult_content_opt_in_required' } },
+        }));
+        const { wrapper } = createHarness('/anime/explicit-show', appRetry);
+
+        render(<AnimeDetail />, { wrapper });
+
+        expect(await screen.findByRole('heading', { name: '18+ title' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Show adult content' })).toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'Anime not found' })).not.toBeInTheDocument();
+        expect(animeApi.getBySlug).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries a server error once before showing the error state', async () => {
+        animeApi.getBySlug.mockRejectedValue(httpError(500));
+        const { wrapper } = createHarness('/anime/frieren', appRetry);
+
+        render(<AnimeDetail />, { wrapper });
+
+        expect(await screen.findByText('Couldn’t load this anime')).toBeInTheDocument();
+        expect(animeApi.getBySlug).toHaveBeenCalledTimes(2);
     });
 });

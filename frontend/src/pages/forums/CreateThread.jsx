@@ -6,12 +6,13 @@ import { ShieldAlert, Send, ArrowLeft, ChevronRight, Eye, Hash } from 'lucide-re
 import toast from 'react-hot-toast';
 
 import { forumsApi } from '../../api/client';
+import { getApiErrorMessage } from '../../api/errors';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import CustomSelect from '../../components/common/CustomSelect';
 import RichTextEditor from '../../components/forums/RichTextEditor';
 import MarkdownRenderer from '../../components/common/MarkdownRenderer';
-import { preloadForumChunks } from '../../App';
+import { preloadForumChunks } from '../../app/routes/community';
 import React, { memo } from 'react';
 import { forumQueries } from '../../api/queries/forums';
 
@@ -77,7 +78,9 @@ const CreateThread = () => {
             navigate(`/forums/thread/${data.id}`);
         },
         onError: (error) => {
-            toast.error(error.response?.data?.detail || 'Failed to create thread');
+            toast.error(error?.response?.status === 429
+                ? 'You are doing that too fast. Please wait a moment.'
+                : getApiErrorMessage(error, 'Failed to create thread'));
         },
     });
 
@@ -159,7 +162,7 @@ const CreateThread = () => {
                                     autoFocus
                                 />
                                 {/* Character Limit Progress Bar */}
-                                <div className="absolute bottom-0 left-0 h-[2px] bg-accent transition-all duration-300" style={{ width: `${(title.length / 100) * 100}%`, opacity: title.length > 0 ? 1 : 0 }} />
+                                <div className="absolute bottom-0 left-0 h-[2px] bg-accent-dark transition-all duration-300" style={{ width: `${(title.length / 100) * 100}%`, opacity: title.length > 0 ? 1 : 0 }} />
                             </div>
 
                             {/* Rich Text Editor */}
@@ -275,7 +278,7 @@ const CreateThread = () => {
                                                 </div>
                                             )}
                                             {content ? (
-                                                <MarkdownRenderer content={content} className="text-[15px] leading-relaxed opacity-90" />
+                                                <MarkdownRenderer mode="markdown" content={content} className="text-[15px] leading-relaxed opacity-90" />
                                             ) : (
                                                 <p className="text-sm text-gray-600 italic">Start writing in the body field...</p>
                                             )}

@@ -19,9 +19,16 @@ class LargePagination(PageNumberPagination):
 
 
 class NoCountPagination(PageNumberPagination):
+    """Pages without a COUNT query: ``next`` exists when one more row does.
+
+    Pages past ``max_page`` are 404: nobody browses that deep, and a deep
+    OFFSET reads and discards every row before it (B11).
+    """
+
     page_size = 20
     page_size_query_param = "page_size"
     max_page_size = 200
+    max_page = 500
     invalid_page_message = "Invalid page."
 
     def paginate_queryset(self, queryset, request, view=None):
@@ -43,9 +50,12 @@ class NoCountPagination(PageNumberPagination):
     def get_page_number(self, request):
         page_number = request.query_params.get(self.page_query_param, 1)
         try:
-            return _positive_int(page_number, strict=True, cutoff=None)
+            number = _positive_int(page_number, strict=True, cutoff=None)
         except (TypeError, ValueError):
             raise NotFound(self.invalid_page_message)
+        if number > self.max_page:
+            raise NotFound(self.invalid_page_message)
+        return number
 
     def get_next_link(self):
         if not getattr(self, "has_next", False):

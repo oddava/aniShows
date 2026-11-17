@@ -75,16 +75,9 @@ class OfflineAnimeSyncState(TimestampMixin, Model):
         default=StageStatus.PENDING,
         db_index=True,
     )
-    themes_status = CharField(
-        max_length=30,
-        choices=StageStatus.choices,
-        default=StageStatus.PENDING,
-        db_index=True,
-    )
 
     metadata_attempt_count = IntegerField(default=0)
     franchise_attempt_count = IntegerField(default=0)
-    themes_attempt_count = IntegerField(default=0)
     attempt_count = IntegerField(default=0)
 
     last_attempt_at = DateTimeField(null=True, blank=True, db_index=True)
@@ -102,8 +95,25 @@ class OfflineAnimeSyncState(TimestampMixin, Model):
             Index(fields=["quarantined", "next_attempt_at"], name="anime_sync_q_due_idx"),
             Index(fields=["metadata_status", "next_attempt_at"], name="anime_sync_meta_due_idx"),
             Index(fields=["franchise_status", "next_attempt_at"], name="anime_sync_fr_due_idx"),
-            Index(fields=["themes_status", "next_attempt_at"], name="anime_sync_th_due_idx"),
         ]
 
     def __str__(self):
         return f"Offline sync state for anime #{self.anime_id}"
+
+
+class PendingPublicCacheInvalidation(Model):
+    """An anime whose cached public payloads could not be dropped (the cache was down).
+
+    ``adult_content`` changes ``is_adult`` with ``update()`` and drops the cached
+    lists and detail pages after the commit. When Redis is unreachable then, the
+    slug is kept here, and ``replay_public_cache_invalidations`` (every 5 minutes)
+    drops them once Redis is back: a title just flagged adult must not come back
+    from a persisted cache entry, and re-running the sync would not help (the rows
+    already carry the right flag, so nothing changes and nothing is invalidated).
+    """
+
+    slug = CharField(max_length=200, unique=True)
+    created_at = DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.slug

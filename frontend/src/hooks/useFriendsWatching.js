@@ -1,37 +1,31 @@
-import { useState, useEffect } from 'react';
-import { followApi } from '../api/client';
+import { useQuery } from '@tanstack/react-query';
+import { socialQueries } from '../api/queries/social';
 import { useAuth } from '../context/AuthContext';
 
+const EMPTY = [];
+
+/**
+ * Mutual follows who have this anime on their list (cached per anime and
+ * viewer for 60 s, shared by every mount, refreshed when a follow changes).
+ *
+ * `error` is set only when the request failed, so callers can tell it apart
+ * from "no friends watching" (`friends` empty, `error` null).
+ */
 export function useFriendsWatching(animeId) {
-    const [friends, setFriends] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const { isAuthenticated, user } = useAuth();
+    const viewerId = isAuthenticated ? (user?.id ?? null) : null;
 
-    useEffect(() => {
-        const fetchFriendsWatching = async () => {
-            // Don't fetch if not authenticated or no animeId
-            if (!animeId || !isAuthenticated) {
-                setFriends([]);
-                setLoading(false);
-                return;
-            }
+    const options = socialQueries.friendsWatching(animeId, viewerId);
+    const query = useQuery({
+        ...options,
+        enabled: viewerId !== null && options.enabled !== false,
+    });
 
-            try {
-                setLoading(true);
-                const response = await followApi.getFriendsWatching(animeId);
-                setFriends(response.data || []);
-                setError(null);
-            } catch (err) {
-                setError(err);
-                setFriends([]);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchFriendsWatching();
-    }, [animeId, isAuthenticated, user?.id]);
-
-    return { friends, loading, error };
+    return {
+        friends: query.data?.results ?? EMPTY,
+        total: query.data?.total ?? 0,
+        loading: query.isLoading,
+        error: query.error ?? null,
+        refetch: query.refetch,
+    };
 }

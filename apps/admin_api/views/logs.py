@@ -7,8 +7,8 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from ...core.models import AuditLog, SystemLog
-from ...core.permissions import IsAdminUser
 from ...users.admin_serializers import AuditLogSerializer, SystemLogSerializer
+from ..permissions import AdminPolicyMixin
 from ..services.logs_service import build_system_log_stats
 
 
@@ -27,16 +27,17 @@ class SystemLogFilter(FilterSet):
 class AuditLogFilter(FilterSet):
     action = CharFilter(field_name="action")
     entity_type = CharFilter(field_name="entity_type")
+    entity_id = CharFilter(field_name="entity_id")
+    user = NumberFilter(field_name="user_id")
 
     class Meta:
         model = AuditLog
-        fields = ["action", "entity_type"]
+        fields = ["action", "entity_type", "entity_id", "user"]
 
 
-class AdminSystemLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
-    """System error and event logs for admins."""
+class AdminSystemLogViewSet(AdminPolicyMixin, ListModelMixin, RetrieveModelMixin, GenericViewSet):
+    """System error and event logs. Superuser-only: rows hold IPs and user agents."""
 
-    permission_classes = [IsAdminUser]
     serializer_class = SystemLogSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = SystemLogFilter
@@ -45,19 +46,20 @@ class AdminSystemLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     ordering = ["-timestamp"]
 
     def get_queryset(self):
-        queryset = SystemLog.objects.all()
-        return queryset
+        return SystemLog.objects.select_related("user")
 
     @action(detail=False, methods=["get"])
     def stats(self, request):
-        queryset = self.filter_queryset(self.get_queryset())
-        return Response(build_system_log_stats(queryset))
+        queryset = self.filter_queryset(SystemLog.objects.all())
+        filtered = any(
+            request.query_params.get(name) for name in (*SystemLogFilter.base_filters, "search")
+        )
+        return Response(build_system_log_stats(queryset, last_24h_only=not filtered))
 
 
-class AdminAuditLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
-    """Admin action audit logs."""
+class AdminAuditLogViewSet(AdminPolicyMixin, ListModelMixin, RetrieveModelMixin, GenericViewSet):
+    """Admin action audit logs (staff read)."""
 
-    permission_classes = [IsAdminUser]
     serializer_class = AuditLogSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AuditLogFilter
@@ -66,5 +68,4 @@ class AdminAuditLogViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     ordering = ["-timestamp"]
 
     def get_queryset(self):
-        queryset = AuditLog.objects.select_related("user")
-        return queryset
+        return AuditLog.objects.select_related("user")

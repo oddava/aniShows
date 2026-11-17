@@ -1,13 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { Helmet } from 'react-helmet-async';
 import { Link, useParams } from 'react-router-dom';
 import { characterFavoriteApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import SEO from '../components/SEO';
 import EntityFavoriteButton from '../components/common/EntityFavoriteButton';
 import AnimeMediaImage from '../components/common/AnimeMediaImage';
 import { characterKeys, characterQueries } from '../api/queries/anime';
 import { characterFavoriteKeys } from '../api/queries/user';
+import { groupRolesByAnime, markupToPlainText, toSafeHttpUrl } from '../utils/characterRoles';
+import { SITE_ORIGIN, absoluteMediaUrl } from '../utils/imageUtils';
+
+// Prolific characters can have hundreds of appearances; show this many first.
+const INITIAL_APPEARANCES = 60;
 
 function Spoiler({ children }) {
     const [revealed, setRevealed] = useState(false);
@@ -34,8 +39,20 @@ function parseInlineMarkdown(text, keyPrefix = '') {
         const key = `${keyPrefix}-${index}`;
         const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
         if (linkMatch) {
-            const [, linkText] = linkMatch;
-            return <span key={key}>{linkText}</span>;
+            const [, linkText, url] = linkMatch;
+            const href = toSafeHttpUrl(url);
+            if (!href) return <span key={key}>{linkText}</span>;
+            return (
+                <a
+                    key={key}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 underline transition-colors"
+                >
+                    {linkText}
+                </a>
+            );
         }
 
         const boldMatch = part.match(/\*\*(.+?)\*\*|__(.+?)__/);
@@ -115,7 +132,9 @@ export default function CharacterDetail() {
     const { isAuthenticated, user } = useAuth();
     const queryClient = useQueryClient();
     const [favoriteState, setFavoriteState] = useState({ isFavorite: false, favoriteCount: 0 });
-
+    // Which character the full list is open for (resets on navigation).
+    const [showAllFor, setShowAllFor] = useState(null);
+    const showAllAppearances = showAllFor === id;
 
     const { data: character, isLoading, error } = useQuery({
         ...characterQueries.detail(id),
@@ -148,11 +167,18 @@ export default function CharacterDetail() {
         [character?.description]
     );
 
+    // One entry per anime, with all of its voice actors.
+    const appearances = useMemo(
+        () => groupRolesByAnime(character?.anime_roles, { personField: 'voice_actor' }),
+        [character?.anime_roles]
+    );
+
     if (isLoading) return <CharacterDetailSkeleton />;
 
     if (error || !character) {
         return (
             <div className="min-h-screen bg-dark flex items-center justify-center">
+                <SEO page="notFound" noIndex />
                 <div className="text-center">
                     <h2 className="mb-2 text-xl font-bold text-white">Character Not Found</h2>
                     <p className="mb-6 text-gray-400">The character you&apos;re looking for doesn&apos;t exist.</p>
@@ -164,17 +190,21 @@ export default function CharacterDetail() {
         );
     }
 
-    const appearanceCount = character.anime_roles?.length || 0;
+    const appearanceCount = appearances.length;
+    const visibleAppearances = showAllAppearances
+        ? appearances
+        : appearances.slice(0, INITIAL_APPEARANCES);
+    const descriptionText = markupToPlainText(character.description, 120);
 
     return (
         <>
-            <Helmet>
-                <title>{character.name} - aniShows</title>
-                <meta
-                    name="description"
-                    content={`${character.name} - character profile. ${character.description?.slice(0, 120) || ''}`}
-                />
-            </Helmet>
+            <SEO
+                customTitle={`${character.name} | AniShows`}
+                customDescription={`${character.name}: character profile.${descriptionText ? ` ${descriptionText}` : ''}`}
+                canonical={`${SITE_ORIGIN}/character/${character.id ?? id}`}
+                ogImage={absoluteMediaUrl(character.image) || undefined}
+                ogType="profile"
+            />
 
             <div className="min-h-screen bg-dark">
                 <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6 sm:pt-8">
@@ -246,48 +276,66 @@ export default function CharacterDetail() {
                                 <p className="text-sm text-gray-400">No anime appearances available.</p>
                             </div>
                         ) : (
+                            <>
                             <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {character.anime_roles.map((role) => (
+                                {visibleAppearances.map((appearance) => (
                                     <div
-                                        key={role.id}
+                                        key={appearance.key}
                                         className="group flex gap-4 py-3 transition-colors"
                                     >
                                         <div className="relative h-20 w-14 flex-shrink-0 overflow-hidden rounded bg-dark-200">
-                                            <Link to={`/anime/${role.anime?.slug}`} className="block h-full w-full">
+                                            <Link to={`/anime/${appearance.anime?.slug}`} className="block h-full w-full">
                                                 <AnimeMediaImage
-                                                    anime={role.anime}
+                                                    anime={appearance.anime}
                                                     kind="cover"
                                                     size="small"
-                                                    alt={role.anime?.title}
+                                                    alt={appearance.anime?.title}
                                                     className="h-full w-full object-cover transition-opacity hover:opacity-80"
+                                                    loading="lazy"
                                                 />
                                             </Link>
                                         </div>
                                         <div className="min-w-0 flex-1 flex flex-col justify-center">
                                             <Link
-                                                to={`/anime/${role.anime?.slug}`}
+                                                to={`/anime/${appearance.anime?.slug}`}
                                                 className="truncate text-sm font-medium text-gray-200 transition-colors hover:text-white"
                                             >
-                                                {role.anime?.title}
+                                                {appearance.anime?.title}
                                             </Link>
                                             <p className="mt-0.5 text-xs text-gray-500">
-                                                {role.role}
+                                                {appearance.roles.join(' · ')}
                                             </p>
-                                            {role.voice_actor ? (
-                                                <div className="mt-1.5">
-                                                    <Link
-                                                        to={`/staff/${role.voice_actor.id}`}
-                                                        onClick={(event) => event.stopPropagation()}
-                                                        className="truncate block text-xs text-gray-400 transition-colors hover:text-gray-300"
-                                                    >
-                                                        {role.voice_actor.name}
-                                                    </Link>
-                                                </div>
+                                            {appearance.people.length > 0 ? (
+                                                <p className="mt-1.5 text-xs text-gray-400 line-clamp-2">
+                                                    {appearance.people.map((voiceActor, index) => (
+                                                        <span key={voiceActor.id ?? voiceActor.name}>
+                                                            {index > 0 && ', '}
+                                                            <Link
+                                                                to={`/staff/${voiceActor.id}`}
+                                                                className="transition-colors hover:text-gray-300"
+                                                            >
+                                                                {voiceActor.name}
+                                                            </Link>
+                                                        </span>
+                                                    ))}
+                                                </p>
                                             ) : null}
                                         </div>
                                     </div>
                                 ))}
                             </div>
+                            {!showAllAppearances && appearanceCount > INITIAL_APPEARANCES && (
+                                <div className="mt-6 text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAllFor(id)}
+                                        className="btn-secondary text-sm"
+                                    >
+                                        Show all {appearanceCount}
+                                    </button>
+                                </div>
+                            )}
+                            </>
                         )}
                     </section>
                 </div>

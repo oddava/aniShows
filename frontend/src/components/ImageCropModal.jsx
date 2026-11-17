@@ -1,11 +1,20 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Cropper from 'react-easy-crop';
 import { X, ZoomIn, ZoomOut } from 'lucide-react';
 import getCroppedImg from '../utils/cropImage';
+import useFocusTrap from '../hooks/useFocusTrap';
 
-export default function ImageCropModal({
-    isOpen,
+/**
+ * The crop dialog. It mounts only while open, so the focus trap's unmount
+ * hands focus back to whatever opened it (the file input).
+ */
+export default function ImageCropModal({ isOpen, imageSrc, ...props }) {
+    if (!isOpen || !imageSrc) return null;
+    return <CropDialog imageSrc={imageSrc} {...props} />;
+}
+
+function CropDialog({
     imageSrc,
     aspect,
     mediaType = 'image',
@@ -19,27 +28,25 @@ export default function ImageCropModal({
     const [zoom, setZoom] = useState(1);
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const titleId = useId();
+    const zoomId = useId();
+
+    // Escape closes, but not while a crop is being written out.
+    const isProcessingRef = useRef(false);
+    isProcessingRef.current = isProcessing;
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+    const handleEscape = useCallback(() => {
+        if (!isProcessingRef.current) onCloseRef.current?.();
+    }, []);
+    const dialogRef = useFocusTrap(true, handleEscape);
 
     useEffect(() => {
-        if (isOpen) {
-            document.body.style.overflow = 'hidden';
-            setCrop({ x: 0, y: 0 });
-            setZoom(1);
-        } else {
-            document.body.style.overflow = 'unset';
-        }
+        document.body.style.overflow = 'hidden';
         return () => {
             document.body.style.overflow = 'unset';
         };
-    }, [isOpen]);
-
-    useEffect(() => {
-        const handleEscape = (e) => {
-            if (e.key === 'Escape' && isOpen && !isProcessing) onClose();
-        };
-        document.addEventListener('keydown', handleEscape);
-        return () => document.removeEventListener('keydown', handleEscape);
-    }, [isOpen, onClose, isProcessing]);
+    }, []);
 
     const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
         setCroppedAreaPixels(croppedAreaPixels);
@@ -79,8 +86,6 @@ export default function ImageCropModal({
         }
     };
 
-    if (!isOpen || !imageSrc) return null;
-
     return createPortal(
         <div className="fixed inset-0 z-[2000] flex items-center justify-center sm:p-4">
             <div
@@ -88,21 +93,29 @@ export default function ImageCropModal({
                 onClick={() => !isProcessing && onClose()}
             />
 
-            <div className="relative w-full h-svh sm:h-auto max-h-full sm:max-w-2xl sm:max-h-[90vh] bg-dark-100 sm:rounded-2xl border border-gray-800 overflow-hidden shadow-2xl flex flex-col animate-modal-in">
+            <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                className="relative w-full h-svh sm:h-auto max-h-full sm:max-w-2xl sm:max-h-[90vh] bg-dark-100 sm:rounded-2xl border border-gray-800 overflow-hidden shadow-2xl flex flex-col animate-modal-in">
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-2 sm:py-3 border-b border-white/10 bg-dark-200 shrink-0 z-10">
                     <div className="flex items-center gap-2 sm:gap-4">
                         <button
+                            type="button"
                             onClick={onClose}
                             disabled={isProcessing}
+                            aria-label="Close"
                             className="p-2 -ml-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-50"
                         >
-                            <X className="w-5 h-5 text-white" />
+                            <X className="w-5 h-5 text-white" aria-hidden="true" />
                         </button>
-                        <h2 className="text-base sm:text-lg font-bold text-white truncate">{title}</h2>
+                        <h2 id={titleId} className="text-base sm:text-lg font-bold text-white truncate">{title}</h2>
                     </div>
                     <button
+                        type="button"
                         onClick={handleApply}
                         disabled={isProcessing}
                         className="px-4 py-1.5 bg-white text-black hover:bg-gray-200 font-bold rounded-full transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
@@ -134,28 +147,33 @@ export default function ImageCropModal({
                 <div className="px-6 py-3 sm:py-4 bg-dark-200 border-t border-white/10 shrink-0 z-10">
                     <div className="flex items-center gap-4 max-w-md mx-auto">
                         <button
+                            type="button"
                             onClick={() => setZoom(z => Math.max(1, z - 0.1))}
+                            aria-label="Zoom out"
                             className="p-2 text-gray-400 hover:text-white transition-colors"
                         >
-                            <ZoomOut className="w-5 h-5" />
+                            <ZoomOut className="w-5 h-5" aria-hidden="true" />
                         </button>
 
+                        <label htmlFor={zoomId} className="sr-only">Zoom</label>
                         <input
+                            id={zoomId}
                             type="range"
                             value={zoom}
                             min={1}
                             max={3}
                             step={0.01}
-                            aria-labelledby="Zoom"
                             onChange={(e) => setZoom(Number(e.target.value))}
                             className="flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-accent"
                         />
 
                         <button
+                            type="button"
                             onClick={() => setZoom(z => Math.min(3, z + 0.1))}
+                            aria-label="Zoom in"
                             className="p-2 text-gray-400 hover:text-white transition-colors"
                         >
-                            <ZoomIn className="w-5 h-5" />
+                            <ZoomIn className="w-5 h-5" aria-hidden="true" />
                         </button>
                     </div>
                 </div>

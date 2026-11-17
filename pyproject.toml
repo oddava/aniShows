@@ -36,7 +36,6 @@ dependencies = [
     "whitenoise>=6.11.0",
     "celery[redis]>=5.3.6",
     "redis>=5.0.1",
-    "django-celery-beat>=2.5.0",
     "django-storages[s3]>=1.14.2",
     "boto3>=1.34.0",
     "django-imagekit>=5.0.0",
@@ -156,7 +155,6 @@ known-first-party = ["apps", "root"]
 # BLE001: files that still need a broad `except Exception` that is neither
 # re-raised nor logged with logger.exception. This list may only get shorter.
 # - Provider layer, rewritten in Phase 4: leave as is until then.
-"apps/animes/services/jikan.py" = ["BLE001"]
 "apps/animes/services/offline_catalog.py" = ["BLE001"]
 "apps/animes/services/offline_sync.py" = ["BLE001"]
 # - Best effort through the provider layer (any failure means "no data"),
@@ -182,7 +180,6 @@ known-first-party = ["apps", "root"]
 "apps/animes/management/commands/copy_thumbnails_to_s3.py" = ["BLE001"]
 "apps/animes/management/commands/generate_thumbnails.py" = ["BLE001"]
 "apps/animes/management/commands/populate_franchises.py" = ["BLE001"]
-"apps/animes/management/commands/populate_themes.py" = ["BLE001"]
 "apps/animes/management/commands/warm_watch_episodes.py" = ["BLE001"]
 "apps/users/management/commands/populate_user_stats.py" = ["BLE001"]
 

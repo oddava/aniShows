@@ -21,7 +21,7 @@ DATABASES = {
         "CONN_MAX_AGE": 0,
         # Fail a lock wait instead of hanging: pytest-timeout's signal can't
         # interrupt a blocked libpq call (e.g. two connections in one test).
-        "OPTIONS": {"options": "-c lock_timeout=30000"},
+        "OPTIONS": {"options": f"-c lock_timeout=30000 {DB_CONNECTION_OPTIONS}"},
     }
 }
 DATABASES["default"]["TEST"] = {
@@ -54,7 +54,7 @@ CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = False
 ANIME_WATCH_EPISODE_AUTO_SYNC_ENABLED = False
 # Creating an Anime would otherwise run eager metadata enrichment, which calls
-# Jikan and backs off for ~15s once the network guard (conftest.py) fails it.
+# AniList and backs off once the network guard (conftest.py) fails it.
 ANIME_METADATA_AUTO_ENRICH_ENABLED = False
 RETRY_BACKOFF_SCALE = 0
 
@@ -71,6 +71,9 @@ CHANNEL_LAYERS = {
 }
 # Avoid cross-test pollution from cached runtime policy settings.
 ADMIN_SETTINGS_USE_CACHE = False
+# No look for pending cache invalidations (query budgets stay exact); the
+# tests of public_caches_are_current override this.
+PUBLIC_CACHE_PENDING_CHECK_SECONDS = None
 
 # Speed up password hashing in tests
 PASSWORD_HASHERS = [

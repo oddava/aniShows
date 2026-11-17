@@ -14,6 +14,7 @@ from .models import (
     Genre,
     Review,
     ReviewReaction,
+    ReviewReport,
     ReviewVote,
     Staff,
     Studio,
@@ -580,3 +581,25 @@ class UserRecommendationAdmin(admin.ModelAdmin):
     search_fields = ["user__username", "anime__title"]
     raw_id_fields = ["user", "anime"]
     ordering = ["-created_at"]
+
+
+@admin.register(ReviewReport)
+class ReviewReportAdmin(admin.ModelAdmin):
+    """Inspect review reports. Resolve them in the admin SPA's Moderation queue (audited)."""
+
+    list_display = ["created_at", "review", "reporter", "reason", "status", "resolved_by"]
+    list_filter = ["status", "reason"]
+    search_fields = ["reporter__username", "review__user__username", "description"]
+    list_select_related = ["review__user", "review__anime", "reporter", "resolved_by"]
+    raw_id_fields = ["review", "reporter", "resolved_by"]
+    readonly_fields = ["review", "reporter", "reason", "description", "created_at", "updated_at"]
+
+    # Resolving here would skip the audit trail; the SPA queue audits every outcome.
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

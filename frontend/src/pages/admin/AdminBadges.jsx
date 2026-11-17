@@ -1,17 +1,25 @@
 import React, { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 import { adminBadgeApi } from '../../api/client';
 import { Search, Plus, Edit2, Trash2, UserPlus } from 'lucide-react';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import ErrorState from '../../components/common/ErrorState';
 import { adminBadgeKeys, adminBadgeQueries } from '../../api/queries/admin';
 import { AVAILABLE_COLORS, AVAILABLE_ICONS } from './components/badges/badgeOptions';
 import BadgeFormModal from './components/badges/BadgeFormModal';
 import BadgeGrantModal from './components/badges/BadgeGrantModal';
 import BadgeHoldersModal from './components/badges/BadgeHoldersModal';
+import { useConfirm } from './components/ConfirmDialog';
+import useAdminRole from './hooks/useAdminRole';
+import useDebouncedValue from './hooks/useDebouncedValue';
 
 export default function AdminBadges() {
     const queryClient = useQueryClient();
+    const { isSuperuser } = useAdminRole();
+    const [confirm, confirmDialog] = useConfirm();
     const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearch = useDebouncedValue(searchTerm.trim());
     const [page] = useState(1);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
@@ -24,14 +32,16 @@ export default function AdminBadges() {
     const [holdersPage, setHoldersPage] = useState(1);
     const [revokingUserIds, setRevokingUserIds] = useState(new Set());
 
-    const { data, isLoading } = useQuery({
-        ...adminBadgeQueries.list(page, searchTerm),
+    const { data, isLoading, error: loadError, refetch } = useQuery({
+        ...adminBadgeQueries.list(page, debouncedSearch),
         placeholderData: keepPreviousData,
     });
 
+    // One user search per pause in typing, not per keystroke.
+    const debouncedUserTerm = useDebouncedValue(searchUserTerm.trim());
     const { data: usersData } = useQuery({
-        ...adminBadgeQueries.userSearch(searchUserTerm),
-        enabled: searchUserTerm.length >= 2,
+        ...adminBadgeQueries.userSearch(debouncedUserTerm),
+        enabled: debouncedUserTerm.length >= 2,
     });
 
     const [formError, setFormError] = useState(null);
@@ -67,7 +77,7 @@ export default function AdminBadges() {
             queryClient.invalidateQueries({ queryKey: adminBadgeKeys.all });
         },
         onError: (error) => {
-            alert(error.response?.data?.detail || 'Failed to delete badge');
+            toast.error(error.response?.data?.detail || 'Failed to delete badge');
         }
     });
 
@@ -81,7 +91,7 @@ export default function AdminBadges() {
             setSelectedBadge(null);
         },
         onError: (error) => {
-            alert(error.response?.data?.detail || 'Failed to grant badge');
+            toast.error(error.response?.data?.detail || 'Failed to grant badge');
         }
     });
 
@@ -154,28 +164,40 @@ export default function AdminBadges() {
                     <div className="flex items-center gap-4 w-full sm:w-auto">
                         <div className="relative flex-1 sm:w-64">
                             <input
-                                type="text"
+                                type="search"
+                                aria-label="Search badges"
                                 placeholder="Search badges..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full bg-dark-200 border border-dark-300 rounded-lg pl-10 pr-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-accent"
                             />
-                            <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-500" />
+                            <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-500" aria-hidden="true" />
                         </div>
                         
-                        <button
-                            onClick={() => {
-                                setEditingBadge(null);
-                                setIsModalOpen(true);
-                            }}
-                            className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dark text-white rounded-lg transition-colors shrink-0"
-                        >
-                            <Plus className="w-5 h-5" />
-                            <span className="hidden sm:inline">Create Badge</span>
-                        </button>
+                        {isSuperuser && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEditingBadge(null);
+                                    setIsModalOpen(true);
+                                }}
+                                aria-label="Create badge"
+                                className="flex items-center gap-2 px-4 py-2 min-h-[44px] sm:min-h-0 bg-accent-dark hover:bg-violet-700 text-white rounded-lg transition-colors shrink-0"
+                            >
+                                <Plus className="w-5 h-5" aria-hidden="true" />
+                                <span className="hidden sm:inline">Create Badge</span>
+                            </button>
+                        )}
                     </div>
                 </div>
 
+                {loadError ? (
+                    <ErrorState
+                        title="Couldn’t load badges"
+                        message={loadError.response?.data?.detail || 'Failed to load badges'}
+                        onRetry={() => refetch()}
+                    />
+                ) : (
                 <div className="bg-dark-200 border border-dark-300 rounded-xl overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
@@ -228,44 +250,56 @@ export default function AdminBadges() {
                                                             setIsHoldersModalOpen(true);
                                                         }}
                                                         className="text-white font-semibold hover:text-accent transition-colors underline decoration-dotted underline-offset-4"
-                                                        title="View holders"
+                                                        aria-label={`View ${badge.holders_count || 0} holders of ${badge.name}`}
                                                     >
                                                         {badge.holders_count?.toLocaleString() || 0}
                                                     </button>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex justify-end gap-2">
-                                                        <button
-                                                            onClick={() => {
-                                                                setSelectedBadge(badge);
-                                                                setIsGrantModalOpen(true);
-                                                            }}
-                                                            className="p-2 text-green-400 hover:bg-green-400/10 rounded transition-colors"
-                                                            title="Grant Badge"
-                                                        >
-                                                            <UserPlus className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                setEditingBadge(badge);
-                                                                setIsModalOpen(true);
-                                                            }}
-                                                            className="p-2 text-blue-400 hover:bg-blue-400/10 rounded transition-colors"
-                                                            title="Edit Badge"
-                                                        >
-                                                            <Edit2 className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (window.confirm('Are you sure you want to delete this badge? This will remove it from all users.')) {
-                                                                    deleteMutation.mutate(badge.id);
-                                                                }
-                                                            }}
-                                                            className="p-2 text-red-400 hover:bg-red-400/10 rounded transition-colors"
-                                                            title="Delete Badge"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
+                                                        {isSuperuser && (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setSelectedBadge(badge);
+                                                                        setIsGrantModalOpen(true);
+                                                                    }}
+                                                                    className="inline-flex items-center justify-center w-11 h-11 sm:w-9 sm:h-9 text-green-400 hover:bg-green-400/10 rounded-lg transition-colors"
+                                                                    aria-label={`Grant ${badge.name}`}
+                                                                >
+                                                                    <UserPlus className="w-4 h-4" aria-hidden="true" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setEditingBadge(badge);
+                                                                        setIsModalOpen(true);
+                                                                    }}
+                                                                    className="inline-flex items-center justify-center w-11 h-11 sm:w-9 sm:h-9 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+                                                                    aria-label={`Edit ${badge.name}`}
+                                                                >
+                                                                    <Edit2 className="w-4 h-4" aria-hidden="true" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={async () => {
+                                                                        const ok = await confirm({
+                                                                            title: `Delete ${badge.name}?`,
+                                                                            message: 'The badge is removed from every user who holds it. This cannot be undone.',
+                                                                            confirmLabel: 'Delete badge',
+                                                                            destructive: true,
+                                                                            requireText: badge.holders_count > 10 ? badge.name : undefined,
+                                                                        });
+                                                                        if (ok) deleteMutation.mutate(badge.id);
+                                                                    }}
+                                                                    className="inline-flex items-center justify-center w-11 h-11 sm:w-9 sm:h-9 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                                                    aria-label={`Delete ${badge.name}`}
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" aria-hidden="true" />
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -276,9 +310,10 @@ export default function AdminBadges() {
                         </table>
                     </div>
                 </div>
+                )}
 
                 {/* Create/Edit Modal */}
-                {isModalOpen && (
+                {isSuperuser && isModalOpen && (
                     <BadgeFormModal
                         editingBadge={editingBadge}
                         formError={formError}
@@ -291,7 +326,7 @@ export default function AdminBadges() {
                 )}
 
                 {/* Grant Modal */}
-                {isGrantModalOpen && selectedBadge && (
+                {isSuperuser && isGrantModalOpen && selectedBadge && (
                     <BadgeGrantModal
                         selectedBadge={selectedBadge}
                         handleGrant={handleGrant}
@@ -320,8 +355,10 @@ export default function AdminBadges() {
                         revokingUserIds={revokingUserIds}
                         setRevokingUserIds={setRevokingUserIds}
                         revokeMutation={revokeMutation}
+                        canRevoke={isSuperuser}
                     />
                 )}
+                {confirmDialog}
             </ErrorBoundary>
         </div>
     );

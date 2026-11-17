@@ -3,7 +3,6 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 
-from apps.forums.cache_utils import flush_buffered_thread_views
 from apps.forums.models import Category, Post, Tag, Thread, ThreadLike
 from apps.users.models import UserProfile
 
@@ -152,19 +151,6 @@ class TestForumsAPI:
         response = api_client.get(url, {"ordering": "-updated_at"})
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["results"]) >= 1
-
-    def test_public_thread_detail_buffers_view_count(self, api_client, thread):
-        url = reverse("forums:thread-detail", args=[thread.id])
-
-        first = api_client.get(url)
-        thread.refresh_from_db()
-        assert first.status_code == status.HTTP_200_OK
-        assert first["X-Cache-Status"] == "miss"
-        assert thread.view_count == 0
-
-        flush_buffered_thread_views()
-        thread.refresh_from_db()
-        assert thread.view_count == 1
 
     def test_toggle_pin_as_staff(self, api_client, thread, user):
         user.is_staff = True

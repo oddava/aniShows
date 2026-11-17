@@ -1,4 +1,6 @@
-"""Writing AniList payloads: anime rows, relationships, people, themes, media."""
+"""Writing AniList payloads: anime rows, relationships, cast, media."""
+
+from typing import TYPE_CHECKING
 
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
@@ -13,7 +15,6 @@ from ....models import (
     Genre,
     Staff,
     Studio,
-    ThemeSong,
 )
 from ...relation_links import sync_relations_from_media
 from ..base import with_creation_defaults
@@ -36,12 +37,128 @@ def _upsert_person(model, fields: dict):
     return model.objects.update_or_create(name=name, defaults=defaults)[0]
 
 
-class AniListPersistence:
-    """Persistence half of ``AniListService``; mixed in with ``AniListClient``."""
+# Jikan (before D1) stored people under synthetic IDs: 1.6e9 + MAL ID for
+# characters, 1.7e9 + MAL ID for staff. Real AniList IDs are far below.
+LEGACY_CHARACTER_ID_MIN = 1_600_000_000
+LEGACY_STAFF_ID_MIN = 1_700_000_000
+
+
+def _name_key(name: str | None) -> str:
+    return " ".join((name or "").split()).casefold()
+
+
+def _legacy_name_keys(name: str | None) -> set[str]:
+    """Keys a Jikan-era name may match: as stored, and "Family, Given" turned around.
+
+    Jikan (MyAnimeList) wrote people as "Tanezaki, Atsumi"; AniList says
+    "Atsumi Tanezaki".
+    """
+    keys = {_name_key(name)}
+    family, comma, given = (name or "").partition(",")
+    if comma and family.strip() and given.strip():
+        keys.add(_name_key(f"{given} {family}"))
+    return keys
+
+
+def _replacement(name: str | None, people_by_name: dict):
+    return next(
+        (people_by_name[key] for key in _legacy_name_keys(name) if key in people_by_name), None
+    )
+
+
+def _move_favorites(model, field: str, old, new) -> None:
+    """Point ``old``'s favourites at ``new``; drop the ones a user already has on ``new``."""
+    favorites = model.objects.filter(**{field: old})
+    favorites.filter(user__in=model.objects.filter(**{field: new}).values("user")).delete()
+    favorites.update(**{field: new})
+
+
+def _retire_legacy_cast(anime, characters_by_name: dict, staff_by_name: dict) -> None:
+    """Fold ``anime``'s Jikan-era links into the people the AniList payload brought.
+
+    A matched character's old link goes (the payload's link replaces it). A
+    matched voice actor's or staff member's other links on this anime are
+    moved onto the AniList person, role and all: the payload is a preview, so
+    it may list one of several roles or characters. Favourites move with the
+    person, one per user.
+    """
+    from ....models import UserFavoriteCharacter, UserFavoriteStaff
+
+    moved_staff: set[int] = set()
+
+    def fold_staff(old_staff):
+        """The AniList row for a Jikan-era staff member, favourites moved; or None."""
+        replacement = _replacement(old_staff.name, staff_by_name)
+        if replacement is not None and old_staff.pk not in moved_staff:
+            _move_favorites(UserFavoriteStaff, "staff", old_staff, replacement)
+            moved_staff.add(old_staff.pk)
+        return replacement
+
+    legacy_characters = AnimeCharacter.objects.filter(
+        anime=anime, character__anilist_id__gte=LEGACY_CHARACTER_ID_MIN
+    ).select_related("character", "voice_actor")
+    for link in legacy_characters:
+        replacement = _replacement(link.character.name, characters_by_name)
+        if replacement is None:
+            continue
+        _move_favorites(UserFavoriteCharacter, "character", link.character, replacement)
+        if link.voice_actor and (link.voice_actor.anilist_id or 0) >= LEGACY_STAFF_ID_MIN:
+            fold_staff(link.voice_actor)
+        link.delete()
+
+    # A matched voice actor may also voice characters outside the preview:
+    # point those links at the AniList person too.
+    legacy_voices = AnimeCharacter.objects.filter(
+        anime=anime, voice_actor__anilist_id__gte=LEGACY_STAFF_ID_MIN
+    ).select_related("voice_actor")
+    for link in legacy_voices:
+        replacement = fold_staff(link.voice_actor)
+        if replacement is None:
+            continue
+        if AnimeCharacter.objects.filter(
+            anime=anime, character_id=link.character_id, voice_actor=replacement
+        ).exists():
+            link.delete()
+        else:
+            link.voice_actor = replacement
+            link.save(update_fields=["voice_actor"])
+
+    legacy_staff = AnimeStaff.objects.filter(
+        anime=anime, staff__anilist_id__gte=LEGACY_STAFF_ID_MIN
+    ).select_related("staff")
+    for staff_link in legacy_staff:
+        replacement = fold_staff(staff_link.staff)
+        if replacement is None:
+            continue
+        if AnimeStaff.objects.filter(anime=anime, staff=replacement, role=staff_link.role).exists():
+            staff_link.delete()
+        else:
+            staff_link.staff = replacement
+            staff_link.save(update_fields=["staff"])
+
+
+if TYPE_CHECKING:
+    from .client import AniListClient
+
+    _ClientBase = AniListClient
+else:
+    _ClientBase = object
+
+
+class AniListPersistence(_ClientBase):
+    """Persistence half of ``AniListService``; mixed in with ``AniListClient``.
+
+    At runtime this is a plain mixin; type checkers see the client as its base
+    so the client methods it calls are known.
+    """
+
+    if TYPE_CHECKING:
+
+        def resolve_media_for_anime(self, anime: Anime) -> dict | None: ...
 
     def process_media_list(self, media_list: list[dict], progress_callback=None):
         """Process a list of media items and save/update them in the database.
-        Returns stats dict with created anime IDs for theme sync.
+        Returns a stats dict, with the IDs of the anime it created.
         """
         stats = {"created": 0, "updated": 0, "skipped": 0, "created_anime_ids": []}
 
@@ -118,9 +235,43 @@ class AniListPersistence:
             self._download_and_save_images(anime, item)
 
             return True
-        except Exception as e:
-            logger.error(f"Error manual update anime {anime.id}: {e}")
-            raise e
+        except Exception:
+            logger.exception("Error in manual update of anime %s", anime.id)
+            raise
+
+    def refresh_anime_metadata(self, anime: Anime, item: dict | None = None) -> bool:
+        """Fetch (unless given) and apply a full payload: fields, cast, relations, media.
+
+        False when no matching media was found or the payload belongs to
+        another identity.
+        """
+        media = item or self.resolve_media_for_anime(anime)
+        if not media:
+            logger.info("Skipped metadata refresh for Anime ID %s: no matching media", anime.id)
+            return False
+        return self.update_anime_manual(anime, media)
+
+    def update_airing_fields(self, anime: Anime, item: dict) -> bool:
+        """Apply an airing payload's schedule and status, nothing heavier.
+
+        The hourly airing refresh only needs fresh schedule fields, not a cast,
+        relation or image refresh; unknown values keep what is stored.
+        """
+        if not item:
+            return False
+        if anime.anilist_id and item.get("id") and item["id"] != anime.anilist_id:
+            logger.info(
+                "Skipped airing update for Anime ID %s: payload is AniList ID %s, not %s",
+                anime.id,
+                item["id"],
+                anime.anilist_id,
+            )
+            return False
+        title, title_native = mapper.media_titles(item)
+        anime_data = self._prepare_anime_data(item, title or anime.title, title_native, anime.slug)
+        anime_data.pop("slug", None)
+        self._update_anime(anime, anime_data)
+        return True
 
     def _resolve_manual_update_item(self, anime: Anime, item: dict) -> dict | None:
         """Resolve identity mismatches before applying a manual update.
@@ -183,15 +334,17 @@ class AniListPersistence:
         slug: str | None = None,
         title: str | None = None,
     ) -> Anime | None:
-        if anilist_id:
-            anime = Anime.objects.filter(anilist_id=anilist_id).first()
-            if anime:
-                return anime
+        """Find the local row for a payload by AniList, then MAL ID.
 
-        if mal_id:
-            anime = Anime.objects.filter(mal_id=mal_id).first()
-            if anime:
-                return anime
+        (The offline-catalog import copies its IDs onto these columns too.)
+        Titles are not unique, so slug and title are only used for payloads
+        with no IDs at all.
+        """
+        for lookup, value in (("anilist_id", anilist_id), ("mal_id", mal_id)):
+            if value:
+                anime = Anime.objects.filter(**{lookup: value}).first()
+                if anime:
+                    return anime
 
         if anilist_id or mal_id:
             return None
@@ -253,29 +406,49 @@ class AniListPersistence:
         sync_relations_from_media(anime, item)
 
     def _handle_extended_info(self, anime, item):
+        """Store the payload's cast and staff next to the anime's existing ones.
+
+        AniList payloads carry a preview (the top 10 of each), so links to
+        people missing from it are kept: deleting them would cut a 40-person
+        cast down to 10. For a character in the payload, its link is the
+        current one (one per character). Staff roles only accumulate: the
+        preview may list one of a person's several roles. People written
+        before D1 from Jikan, under synthetic IDs, are folded into the AniList
+        rows that match them by name (``_retire_legacy_cast``).
+        """
+        characters_by_name: dict[str, Character] = {}
+        staff_by_name: dict[str, Staff] = {}
         with transaction.atomic():
             for edge in mapper.character_edges(item):
                 node = edge["node"]
                 role = edge["role"]  # MAIN, SUPPORTING, etc.
                 character = _upsert_person(Character, mapper.character_fields(node))
+                characters_by_name[_name_key(character.name)] = character
 
                 # Japanese voice actor, if any.
                 voice_actors = edge.get("voiceActors") or []
                 voice_actor = None
                 if voice_actors:
                     voice_actor = _upsert_person(Staff, mapper.person_fields(voice_actors[0]))
+                    staff_by_name[_name_key(voice_actor.name)] = voice_actor
 
-                AnimeCharacter.objects.update_or_create(
+                link, _ = AnimeCharacter.objects.update_or_create(
                     anime=anime,
                     character=character,
                     voice_actor=voice_actor,
                     defaults={"role": ROLE_MAP.get(role, AnimeCharacter.Role.SUPPORTING)},
                 )
+                # The payload names this character's voice actor: an older link
+                # with another one (recast, credited later) is out of date.
+                AnimeCharacter.objects.filter(anime=anime, character=character).exclude(
+                    pk=link.pk
+                ).delete()
 
             for edge in mapper.staff_edges(item):
                 node = edge["node"]
                 role = edge["role"]
                 staff_member = _upsert_person(Staff, mapper.person_fields(node))
+                staff_by_name[_name_key(staff_member.name)] = staff_member
 
                 AnimeStaff.objects.update_or_create(
                     anime=anime,
@@ -283,41 +456,7 @@ class AniListPersistence:
                     role=role,  # Keep exact role string
                 )
 
-        self._process_theme_songs(anime, item)
-
-    def _process_theme_songs(self, anime, item):
-        """Process openings and endings from AniList data"""
-        openings = item.get("openings") or []
-        endings = item.get("endings") or []
-
-        # AniList doesn't provide themes, so this will typically be empty;
-        # themes are fetched separately via the Jikan API.
-        if not openings and not endings:
-            return
-
-        # Clear existing theme songs to avoid duplicates (only if we have data)
-        ThemeSong.objects.filter(anime=anime).delete()
-
-        for song_type, entries in (
-            (ThemeSong.SongType.OPENING, openings),
-            (ThemeSong.SongType.ENDING, endings),
-        ):
-            for idx, text in enumerate(entries, 1):
-                if text:
-                    parsed = mapper.parse_theme_song(text)
-                    ThemeSong.objects.create(
-                        anime=anime,
-                        song_type=song_type,
-                        track_number=idx,
-                        title=parsed["title"],
-                        artist=parsed["artist"],
-                        episodes=parsed["episodes"],
-                        anilist_raw=text,
-                    )
-
-    def _parse_theme_song(self, text: str) -> dict:
-        """Parse AniList theme song format: 'Song Title' by Artist (eps X-Y)"""
-        return mapper.parse_theme_song(text)
+            _retire_legacy_cast(anime, characters_by_name, staff_by_name)
 
     def _download_and_save_images(self, anime, item):
         try:
@@ -337,15 +476,7 @@ class AniListPersistence:
             has_cover = bool(anime.cover_image)
             has_banner = bool(anime.banner_image)
 
-            # Pass mal_id for Jikan fallback
-            mal_id = item.get("idMal")
-
-            if (
-                (cover_url and not has_cover)
-                or (banner_url and not has_banner)
-                or (not has_banner and mal_id)
-                or force_replace
-            ):
+            if (cover_url and not has_cover) or (banner_url and not has_banner) or force_replace:
                 from ....tasks.images import _queue_image_fetch
 
                 logger.info(f"Queueing background image fetch for {anime.title}")
@@ -353,7 +484,6 @@ class AniListPersistence:
                     anime_id=anime.id,
                     cover_url=cover_url,
                     banner_url=banner_url,
-                    mal_id=mal_id,
                     force_replace=force_replace,
                 )
 
@@ -398,27 +528,13 @@ class AniListPersistence:
 
         base_slug = slugify(title)
 
-        # Try to find existing anime by AniList ID, then MAL ID.
-        for field, label, value in (
-            ("anilist_id", "AniList", anilist_id),
-            ("mal_id", "MAL", mal_id),
-        ):
-            if not value:
-                continue
-            try:
-                anime = Anime.objects.get(**{field: value})
-            except Anime.DoesNotExist:
-                continue
-            logger.debug(f"Found anime by {label} ID {value}: {anime.title}")
-            self._update_anime_from_media(anime, item, title, title_native, anime.slug)
-            return anime
-
-        # Titles are not unique: only fall back to slug matching for payloads without IDs.
-        if not (anilist_id or mal_id):
-            existing = Anime.objects.filter(slug=base_slug).first()
-            if existing:
-                self._update_anime_from_media(existing, item, title, title_native, existing.slug)
-                return existing
+        # By AniList, then MAL ID; titles are not unique, so the slug is only
+        # tried for a payload without IDs.
+        existing = self._lookup_existing_anime(anilist_id=anilist_id, mal_id=mal_id, slug=base_slug)
+        if existing:
+            logger.debug("Found anime %s for AniList ID %s", existing.id, anilist_id)
+            self._update_anime_from_media(existing, item, title, title_native, existing.slug)
+            return existing
 
         final_slug = Anime.available_slug(base_slug, year=item.get("seasonYear"))
 
@@ -451,10 +567,8 @@ class AniListPersistence:
             logger.error(f"Failed to create anime '{title}' with slug '{final_slug}': {e}")
             raise
 
-        # Handle relationships
         self._handle_relationships(anime, item)
-
-        # Download images
+        self._handle_extended_info(anime, item)
         self._download_and_save_images(anime, item)
 
         return anime
@@ -462,11 +576,12 @@ class AniListPersistence:
     def _update_anime_from_media(
         self, anime: Anime, item: dict, title: str, title_native: str, slug: str
     ):
-        """Update an existing anime asynchronously"""
+        """Apply a full payload to an existing row: fields, relations, cast, media."""
         anime_data = self._prepare_anime_data(item, title, title_native, slug)
         anime_data["anilist_id"] = item.get("id") or anime.anilist_id
         anime_data["mal_id"] = item.get("idMal") or anime.mal_id
 
         self._update_anime(anime, anime_data)
         self._handle_relationships(anime, item)
+        self._handle_extended_info(anime, item)
         self._download_and_save_images(anime, item)

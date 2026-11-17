@@ -34,7 +34,7 @@ export const LIST_STATUS_COLORS = {
 export const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-dark/90 backdrop-blur-xl border border-white/10 p-3 rounded-xl shadow-2xl">
+      <div className="bg-dark-100 border border-white/10 p-3 rounded-xl">
         <p className="text-gray-400 text-xs font-medium mb-2">{label}</p>
         {payload.map((entry, index) => (
           <p key={index} className="text-sm font-bold flex items-center gap-2 mb-0.5" style={{ color: '#fff' }}>
@@ -48,7 +48,7 @@ export const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export const StatCard = ({ title, value, change, changeType, icon: Icon, link, linkText, colorClass, bgClass }) => (
-  <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
+  <div className="bg-white/5 border border-white/10 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
     <div className="flex justify-between items-start mb-4">
       <div className="text-gray-400">
         <Icon size={24} strokeWidth={1.5} />
@@ -79,7 +79,7 @@ export const StatCard = ({ title, value, change, changeType, icon: Icon, link, l
 );
 
 export const ChartCard = ({ title, subtitle, icon: Icon, iconColor, iconBg, children, className = "" }) => (
-  <div className={`bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 relative overflow-hidden flex flex-col ${className}`}>
+  <div className={`bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden flex flex-col ${className}`}>
     <div className="flex items-center justify-between mb-8 z-10">
       <div>
         <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -127,13 +127,13 @@ export const LoadingSpinner = ({ text = "Loading..." }) => (
   <div className="flex items-center justify-center min-h-[300px]">
     <div className="flex flex-col items-center">
       <div className="w-10 h-10 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-3" />
-      <p className="text-gray-400 font-medium text-sm animate-pulse">{text}</p>
+      <p className="text-gray-400 font-medium text-sm">{text}</p>
     </div>
   </div>
 );
 
 export const EmptyState = ({ onRetry }) => (
-  <div className="flex flex-col items-center justify-center min-h-[300px] bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl border-dashed">
+  <div className="flex flex-col items-center justify-center min-h-[300px] bg-white/5 border border-white/10 rounded-2xl border-dashed">
     <Activity size={48} className="text-gray-600 mb-4" />
     <h3 className="text-lg font-bold text-white mb-2">No Data Available</h3>
     <p className="text-gray-400 mb-6 text-sm text-center max-w-md">Could not load analytics data for this period.</p>

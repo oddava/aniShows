@@ -22,11 +22,19 @@ export const authApi = {
     requestPasswordReset: (email) => api.post('/auth/password-reset/', { email }),
     resetPassword: (uid, token, password) =>
         api.post('/auth/password-reset-confirm/', { uid, token, password }),
-    verifyEmail: (uid, token) => api.post(`/verify-email/${uid}/${token}/`),
+    // Body, not path: the token stays out of access logs (A14).
+    verifyEmail: (uid, token) => api.post('/verify-email/', { uid, token }),
     resendVerification: (email) => api.post('/auth/resend-verification/', { email }),
     changeEmail: (data) => api.post('/auth/change-email/', data),
+    // `newEmail` only for links sent before pending_email (one release).
     confirmEmailChange: (uid, token, newEmail) =>
-        api.post('/auth/confirm-email-change/', { uid, token, new_email: newEmail }),
+        api.post('/auth/confirm-email-change/', newEmail ? { uid, token, new_email: newEmail } : { uid, token }),
+    resendEmailChange: () => api.post('/auth/resend-email-change/'),
+    cancelEmailChange: () => api.post('/auth/cancel-email-change/'),
+    // Under the refresh cookie's path, like logout: the cookie identifies this device.
+    getSessions: () => api.get('/auth/refresh/sessions/', { _skipProactiveRefresh: true }),
+    revokeOtherSessions: () =>
+        api.post('/auth/refresh/sessions/revoke-others/', null, { _skipProactiveRefresh: true }),
     googleLogin: (code, callbackUrl) =>
         api.post('/auth/google/', { code, callback_url: callbackUrl }),
     deleteAccount: (data) => api.delete('/auth/delete-account/', { data }),

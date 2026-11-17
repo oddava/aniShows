@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -6,8 +7,10 @@ from django.db.models import Count, Q
 from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 
-from ...animes.models import OfflineAnimeSyncState, OfflineCatalogImport
+from ...animes.models import Anime, OfflineAnimeSyncState, OfflineCatalogImport
+from ...animes.services.offline_catalog import DEFAULT_ASSET_NAME
 from ..models import CeleryTaskResult
+from .celery_admin_service import TaskAlreadyRunningError, enqueue_tracked_task
 
 CATALOG_SYNC_TASK = "apps.animes.tasks.sync.sync_anime_catalog"
 METADATA_ENRICHMENT_TASK = "apps.animes.tasks.metadata.enrich_metadata"
@@ -22,9 +25,12 @@ IMPORT_TASKS = [
 FULL_CATALOG_LIMIT = 5000
 BUSINESS_FAILURE_STATUSES = ("no_data", "source_unhealthy")
 
-# Backward-compatible alias retained for older tests/callers.
-ANILIST_SYNC_TASK = CATALOG_SYNC_TASK
-TRENDING_REFRESH_TASK = CATALOG_SYNC_TASK
+# Trigger bounds (the AniList budget is shared with the whole site).
+SLICE_LIMIT_MAX = 500
+BATCH_SIZE_MAX = 500
+OFFLINE_IMPORT_LIMIT_MAX = 100_000
+CATALOG_SYNC_TYPES = ("seasonal", "next_season", "airing", "full_catalog")
+RELEASE_TAG_RE = re.compile(r"latest|[0-9A-Za-z._-]{1,40}")
 
 
 @dataclass(slots=True)
@@ -133,7 +139,7 @@ def summarize_task_group(*, queued_count: int, task_ids: list[str]):
 
 def describe_catalog_sync(sync_type: str) -> tuple[str, str]:
     mapping = {
-        "trending": ("Jikan (self-hosted)", "Trending"),
+        "trending": ("AniList", "Trending"),
         "seasonal": ("Anime Model Fields", "Seasonal"),
         "next_season": ("Anime Model Fields", "Next Season"),
         "airing": ("Anime Model Fields", "Airing"),
@@ -180,11 +186,9 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
 
         metadata_progress = stage_progress("metadata_status")
         franchise_progress = stage_progress("franchise_status")
-        theme_progress = stage_progress("themes_status")
         complete_states = state_queryset.filter(
             metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-            themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             quarantined=False,
         ).count()
         transient_backlog = (
@@ -192,7 +196,6 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
             .filter(
                 Q(metadata_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
                 | Q(franchise_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
-                | Q(themes_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
             )
             .count()
         )
@@ -209,15 +212,10 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
             return {
                 "metadata": metadata_progress,
                 "franchises": franchise_progress,
-                "themes": theme_progress,
                 "overall": {
                     "queued": total_states,
                     "completed": complete_states,
-                    "running": (
-                        metadata_progress["running"]
-                        + franchise_progress["running"]
-                        + theme_progress["running"]
-                    ),
+                    "running": metadata_progress["running"] + franchise_progress["running"],
                     "completion_percent": round((complete_states / total_states) * 100),
                     "transient_backlog": transient_backlog,
                     "quarantined_count": quarantined_count,
@@ -236,22 +234,10 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
         queued_count=summary.get("franchises_queued", 0),
         task_ids=summary.get("franchises_task_ids", []),
     )
-    theme_progress = summarize_task_group(
-        queued_count=summary.get("themes_queued", 0),
-        task_ids=summary.get("themes_task_ids", []),
-    )
 
-    overall_queued = (
-        metadata_progress["queued"] + franchise_progress["queued"] + theme_progress["queued"]
-    )
-    overall_completed = (
-        metadata_progress["completed"]
-        + franchise_progress["completed"]
-        + theme_progress["completed"]
-    )
-    overall_running = (
-        metadata_progress["running"] + franchise_progress["running"] + theme_progress["running"]
-    )
+    overall_queued = metadata_progress["queued"] + franchise_progress["queued"]
+    overall_completed = metadata_progress["completed"] + franchise_progress["completed"]
+    overall_running = metadata_progress["running"] + franchise_progress["running"]
     overall_percent = (
         round((overall_completed / overall_queued) * 100) if overall_queued > 0 else None
     )
@@ -259,7 +245,6 @@ def build_offline_enrichment_progress(import_run: OfflineCatalogImport):
     return {
         "metadata": metadata_progress,
         "franchises": franchise_progress,
-        "themes": theme_progress,
         "overall": {
             "queued": overall_queued,
             "completed": overall_completed,
@@ -303,7 +288,7 @@ def format_task_result(result):
 
     elif result.task_name == METADATA_ENRICHMENT_TASK:
         mode = task_kwargs.get("mode", "backfill")
-        source = "Jikan (self-hosted)"
+        source = "AniList"
         source_type = describe_metadata_mode(mode)
         if isinstance(result.result_data, dict):
             if mode == "single":
@@ -362,7 +347,7 @@ def format_task_result(result):
 
     elif result.task_name == OFFLINE_RECONCILE_TASK:
         source = "Offline Sync Reconcile"
-        source_type = "Metadata + relations + themes"
+        source_type = "Metadata + relations"
         if isinstance(result.result_data, dict):
             complete_items = coerce_int_or_none(result.result_data.get("complete")) or 0
             pending_items = coerce_int_or_none(result.result_data.get("pending")) or 0
@@ -400,110 +385,96 @@ def format_task_result(result):
 
 
 def create_pending_job(*, user, task_path: str, task_module: str, kwargs, queue: str):
-    result = current_app.send_task(task_path, kwargs=kwargs, queue=queue)
-    job, created = CeleryTaskResult.objects.get_or_create(
-        task_id=result.id,
-        defaults={
-            "task_name": task_path,
-            "task_module": task_module,
-            "status": "PENDING",
-            "task_kwargs": kwargs,
-            "queue": queue,
-            "triggered_by": user if user and user.is_authenticated else None,
-        },
+    """Queue one import job exclusively (raises ``TaskAlreadyRunningError`` if one is in flight)."""
+    return enqueue_tracked_task(
+        task_path=task_path,
+        task_module=task_module,
+        kwargs=kwargs,
+        queue=queue,
+        user=user,
+        exclusive=True,
     )
-    if not created:
-        update_fields = ["task_name", "task_module", "task_kwargs", "queue"]
-        job.task_name = job.task_name or task_path
-        job.task_module = job.task_module or task_module
-        if not job.task_kwargs:
-            job.task_kwargs = kwargs
-        job.queue = job.queue or queue
-        if user and user.is_authenticated and not job.triggered_by_id:
-            job.triggered_by = user
-            update_fields.append("triggered_by")
-        job.save(update_fields=update_fields)
-    return job
+
+
+class ImportTriggerError(ValueError):
+    """A trigger payload the API refuses (400), with a message safe to show."""
+
+
+def _bounded_int(payload, key: str, *, default: int | None, minimum: int, maximum: int, label: str):
+    raw = payload.get(key)
+    if raw in (None, ""):
+        return default
+    if isinstance(raw, bool):
+        raise ImportTriggerError(f"{label} must be an integer.")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ImportTriggerError(f"{label} must be an integer.") from exc
+    if value < minimum or value > maximum:
+        raise ImportTriggerError(f"{label} must be between {minimum} and {maximum}.")
+    return value
+
+
+def _queue_job(user, *, task_path: str, task_module: str, kwargs: dict, queue: str, message: str):
+    try:
+        job = create_pending_job(
+            user=user, task_path=task_path, task_module=task_module, kwargs=kwargs, queue=queue
+        )
+    except TaskAlreadyRunningError:
+        return AdminImportJobActionResult(
+            payload={
+                "detail": "A job of this kind is already pending or running. "
+                "Wait for it, or cancel it first."
+            },
+            status_code=409,
+        )
+    return AdminImportJobActionResult(
+        payload={"message": message, "job_id": job.id, "status": "pending"},
+        status_code=202,
+    )
 
 
 def trigger_trending_refresh(payload, user) -> AdminImportJobActionResult:
-    limit = payload.get("limit", 50)
-    try:
-        limit = int(limit)
-    except (TypeError, ValueError):
-        return AdminImportJobActionResult(
-            payload={"detail": "Limit must be an integer."},
-            status_code=400,
-        )
-
-    job = create_pending_job(
-        user=user,
-        task_path=TRENDING_REFRESH_TASK,
+    limit = _bounded_int(
+        payload, "limit", default=50, minimum=1, maximum=SLICE_LIMIT_MAX, label="Limit"
+    )
+    return _queue_job(
+        user,
+        task_path=CATALOG_SYNC_TASK,
         task_module="apps.animes.tasks.sync",
         kwargs={"sync_type": "trending", "limit": limit},
         queue="high_priority",
-    )
-    return AdminImportJobActionResult(
-        payload={
-            "message": "Jikan trending sync job triggered successfully.",
-            "job_id": job.id,
-            "status": "pending",
-        },
-        status_code=202,
+        message="AniList trending sync job triggered successfully.",
     )
 
 
 def trigger_catalog_import(payload, user) -> AdminImportJobActionResult:
     sync_type = payload.get("sync_type", "seasonal")
-    default_limit = FULL_CATALOG_LIMIT if sync_type == "full_catalog" else 50
-    limit = payload.get("limit", default_limit)
-    allowed_sync_types = ["seasonal", "next_season", "airing", "full_catalog"]
-    if sync_type not in allowed_sync_types:
-        return AdminImportJobActionResult(
-            payload={"detail": f"Invalid sync_type. Allowed: {allowed_sync_types}"},
-            status_code=400,
-        )
-
-    try:
-        limit = int(limit)
-    except (TypeError, ValueError):
-        return AdminImportJobActionResult(
-            payload={"detail": "Limit must be an integer."},
-            status_code=400,
-        )
-
-    job = create_pending_job(
-        user=user,
+    if sync_type not in CATALOG_SYNC_TYPES:
+        raise ImportTriggerError(f"Invalid sync_type. Allowed: {', '.join(CATALOG_SYNC_TYPES)}.")
+    full = sync_type == "full_catalog"
+    limit = _bounded_int(
+        payload,
+        "limit",
+        default=FULL_CATALOG_LIMIT if full else 50,
+        minimum=1,
+        maximum=FULL_CATALOG_LIMIT if full else SLICE_LIMIT_MAX,
+        label="Limit",
+    )
+    return _queue_job(
+        user,
         task_path=CATALOG_SYNC_TASK,
         task_module="apps.animes.tasks.sync",
         kwargs={"sync_type": sync_type, "limit": limit},
-        queue="high_priority" if sync_type in {"trending", "airing"} else "default",
-    )
-    return AdminImportJobActionResult(
-        payload={
-            "message": "Catalog sync job triggered successfully.",
-            "job_id": job.id,
-            "status": "pending",
-        },
-        status_code=202,
+        queue="high_priority" if sync_type == "airing" else "default",
+        message="Catalog sync job triggered successfully.",
     )
 
 
 def trigger_metadata_enrichment(payload, user) -> AdminImportJobActionResult:
-    try:
-        batch_size = int(payload.get("batch_size", 100))
-    except (TypeError, ValueError):
-        return AdminImportJobActionResult(
-            payload={"detail": "Batch size must be an integer."},
-            status_code=400,
-        )
-
-    if batch_size < 1:
-        return AdminImportJobActionResult(
-            payload={"detail": "Batch size must be at least 1."},
-            status_code=400,
-        )
-
+    batch_size = _bounded_int(
+        payload, "batch_size", default=100, minimum=1, maximum=BATCH_SIZE_MAX, label="Batch size"
+    )
     kwargs = {
         "mode": "backfill",
         "batch_size": batch_size,
@@ -511,61 +482,90 @@ def trigger_metadata_enrichment(payload, user) -> AdminImportJobActionResult:
     }
     status_filter = payload.get("status")
     if status_filter:
+        if status_filter not in Anime.AnimeStatus.values:
+            raise ImportTriggerError(
+                f"Invalid status. Allowed: {', '.join(Anime.AnimeStatus.values)}."
+            )
         kwargs["filters"] = {"status": status_filter}
 
-    job = create_pending_job(
-        user=user,
+    return _queue_job(
+        user,
         task_path=METADATA_ENRICHMENT_TASK,
         task_module="apps.animes.tasks.metadata",
         kwargs=kwargs,
         queue="batch",
+        message="AniList metadata enrichment job triggered successfully.",
     )
-    return AdminImportJobActionResult(
-        payload={
-            "message": "Jikan metadata enrichment job triggered successfully.",
-            "job_id": job.id,
-            "status": "pending",
-        },
-        status_code=202,
-    )
-
-
-def trigger_anilist_import(payload, user) -> AdminImportJobActionResult:
-    """Backward-compatible wrapper for legacy callers."""
-    sync_type = payload.get("sync_type", "trending")
-    if sync_type == "trending":
-        return trigger_trending_refresh(payload, user)
-    return trigger_catalog_import(payload, user)
 
 
 def trigger_offline_import(payload, user) -> AdminImportJobActionResult:
+    # ``source_url``/``source_path`` are management-command only: from the API they
+    # would let a caller make the worker fetch any URL or open any local file.
+    release_tag = str(payload.get("release_tag") or "latest").strip()
+    if not RELEASE_TAG_RE.fullmatch(release_tag):
+        raise ImportTriggerError("Invalid release_tag.")
+    asset_name = payload.get("asset_name") or DEFAULT_ASSET_NAME
+    if asset_name != DEFAULT_ASSET_NAME:
+        raise ImportTriggerError(f"asset_name must be {DEFAULT_ASSET_NAME}.")
+
+    import_limit_key = "import_limit" if payload.get("import_limit") not in (None, "") else "limit"
     kwargs = {
-        "release_tag": payload.get("release_tag", "latest"),
-        "asset_name": payload.get("asset_name", "anime-offline-database.jsonl.zst"),
-        "source_url": payload.get("source_url") or None,
-        "source_path": payload.get("source_path") or None,
-        "limit": coerce_int_or_none(payload.get("import_limit", payload.get("limit"))),
+        "release_tag": release_tag,
+        "asset_name": DEFAULT_ASSET_NAME,
+        "limit": _bounded_int(
+            payload,
+            import_limit_key,
+            default=None,
+            minimum=1,
+            maximum=OFFLINE_IMPORT_LIMIT_MAX,
+            label="Import limit",
+        ),
         "resume": coerce_bool(payload.get("resume"), default=True),
         "enqueue_enrichment": coerce_bool(payload.get("enqueue_enrichment"), default=True),
         "enforce_full_sync": True,
-        "batch_size": coerce_int_or_none(payload.get("batch_size")) or 250,
-        "enrichment_chunk_size": coerce_int_or_none(payload.get("enrichment_chunk_size")) or 100,
+        "batch_size": _bounded_int(
+            payload,
+            "batch_size",
+            default=250,
+            minimum=1,
+            maximum=BATCH_SIZE_MAX,
+            label="Batch size",
+        ),
+        "enrichment_chunk_size": _bounded_int(
+            payload,
+            "enrichment_chunk_size",
+            default=100,
+            minimum=1,
+            maximum=BATCH_SIZE_MAX,
+            label="Enrichment chunk size",
+        ),
     }
-    job = create_pending_job(
-        user=user,
+    return _queue_job(
+        user,
         task_path=OFFLINE_IMPORT_TASK,
         task_module="apps.animes.tasks.offline_catalog",
         kwargs=kwargs,
         queue="batch",
+        message="Offline catalog import job triggered successfully.",
     )
-    return AdminImportJobActionResult(
-        payload={
-            "message": "Offline catalog import job triggered successfully.",
-            "job_id": job.id,
-            "status": "pending",
-        },
-        status_code=202,
-    )
+
+
+TRIGGERS = {
+    "trending": trigger_trending_refresh,
+    "anime_catalog": trigger_catalog_import,
+    "metadata_enrichment": trigger_metadata_enrichment,
+    "offline_catalog": trigger_offline_import,
+}
+
+
+def trigger_import_job(payload, user) -> AdminImportJobActionResult:
+    """Validate one trigger request and queue it. Raises ``ImportTriggerError`` on bad input."""
+    if not isinstance(payload, dict):
+        raise ImportTriggerError("Invalid payload.")
+    trigger = TRIGGERS.get(str(payload.get("source") or ""))
+    if trigger is None:
+        raise ImportTriggerError(f"Invalid source. Allowed: {', '.join(TRIGGERS)}.")
+    return trigger(payload, user)
 
 
 def cancel_import_job(job) -> AdminImportJobActionResult:
@@ -579,7 +579,7 @@ def cancel_import_job(job) -> AdminImportJobActionResult:
     job.status = "REVOKED"
     job.date_completed = timezone.now()
     job.error_message = "Cancelled by admin"
-    job.save()
+    job.save(update_fields=["status", "date_completed", "error_message"])
     return AdminImportJobActionResult(
         payload={"message": "Import job cancelled successfully."},
         status_code=200,

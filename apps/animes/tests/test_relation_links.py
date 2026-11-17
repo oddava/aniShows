@@ -1,7 +1,6 @@
 from django.test import TestCase
 
 from ..models import Anime, AnimeRelation
-from ..services.jikan import JikanService
 from ..services.relation_links import (
     link_pending_relations,
     link_relations_to,
@@ -40,7 +39,7 @@ class SetRelationsTests(TestCase):
     def test_links_local_targets_keeps_order_and_drops_repeated_ids(self):
         source = make_anime("source", anilist_id=1, mal_id=11)
         sequel = make_anime("sequel", anilist_id=2, mal_id=22)
-        jikan_only = make_anime("jikan-only", mal_id=33)
+        mal_only = make_anime("mal-only", mal_id=33)
 
         linked = set_relations(
             source,
@@ -56,12 +55,12 @@ class SetRelationsTests(TestCase):
         self.assertEqual(linked, 2)
         self.assertEqual(
             list(source.relations.values_list("relation_type", "to_anime_id", "position")),
-            [("SEQUEL", sequel.id, 0), ("SIDE_STORY", jikan_only.id, 1), ("PREQUEL", None, 2)],
+            [("SEQUEL", sequel.id, 0), ("SIDE_STORY", mal_only.id, 1), ("PREQUEL", None, 2)],
         )
         # Franchise queries now run in SQL.
         self.assertEqual(
             set(Anime.objects.filter(incoming_relations__from_anime=source)),
-            {sequel, jikan_only},
+            {sequel, mal_only},
         )
 
     def test_replaces_previous_relations(self):
@@ -147,19 +146,35 @@ class SyncRelationsFromMediaTests(TestCase):
         self.assertIsNone(sync_relations_from_media(anime, {"relations": None}))
         self.assertEqual(anime.relations.count(), 1)
 
-    def test_jikan_list_payloads_carry_no_relations(self):
-        service = JikanService(enable_caching=False, enable_rate_limiting=False)
+    def test_airing_payloads_without_a_relations_key_keep_stored_ones(self):
+        anime = make_anime("me")
+        set_relations(anime, [{"id": 1, "type": "SEQUEL", "title": "Kept"}])
 
-        self.assertIsNone(
-            service._normalize_anime_item({"mal_id": 5, "title": "List"})["relations"]
-        )
-        full = service._normalize_anime_item(
+        # The light airing payload has no "relations" key at all.
+        self.assertIsNone(sync_relations_from_media(anime, {"id": 5, "status": "RELEASING"}))
+        self.assertEqual(anime.relations.count(), 1)
+
+    def test_anilist_edges_carry_both_ids(self):
+        anime = make_anime("me")
+        edges = [
             {
-                "mal_id": 5,
-                "title": "Full",
-                "relations": [
-                    {"relation": "Sequel", "entry": [{"mal_id": 6, "type": "anime", "name": "S2"}]}
-                ],
-            }
+                "relationType": "SEQUEL",
+                "node": {
+                    "id": 182255,
+                    "idMal": 59978,
+                    "type": "ANIME",
+                    "title": {"english": "Season 2"},
+                    "format": "TV",
+                    "status": "RELEASING",
+                    "coverImage": {"large": "https://s4.anilist.co/s2.jpg"},
+                },
+            },
+            {"relationType": "SOURCE", "node": {"id": 1, "type": "MANGA", "title": {}}},
+        ]
+
+        sync_relations_from_media(anime, {"relations": {"edges": edges}})
+
+        self.assertEqual(
+            list(anime.relations.values_list("target_anilist_id", "target_mal_id", "title")),
+            [(182255, 59978, "Season 2")],
         )
-        self.assertEqual(full["relations"]["edges"][0]["node"]["idMal"], 6)

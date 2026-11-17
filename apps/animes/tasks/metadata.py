@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from ...shared.celery import observed_shared_task
 from ..models import Anime
-from ..services.jikan import JikanService
+from ..services.anilist import AniListService
 from ..services.metadata_health import build_missing_metadata_query
 from .base import BaseTask
 
@@ -48,7 +48,7 @@ class MetadataEnrichmentTask(BaseTask):
         )
     """
 
-    service_class = JikanService
+    service_class = AniListService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
     def execute(
@@ -135,8 +135,8 @@ class MetadataEnrichmentTask(BaseTask):
                 logger.exception("Error enriching metadata for %s", anime_id)
                 raise self.retry(exc=e, countdown=60)
 
-    def _resolve_media_for_anime(self, service: JikanService, anime: Anime) -> dict | None:
-        """Resolve the best Jikan media payload for a local Anime row."""
+    def _resolve_media_for_anime(self, service: AniListService, anime: Anime) -> dict | None:
+        """Resolve the best AniList media payload for a local Anime row."""
         return service.resolve_media_for_anime(anime)
 
     def _enrich_batch(
@@ -266,7 +266,7 @@ def enrich_metadata(
     anime_ids: list[int] | None = None,
     missing_tags_only: bool = False,
 ):
-    """Enrich anime metadata from Jikan.
+    """Enrich anime metadata from AniList.
 
     Args:
         anime_id: Specific anime ID (for single mode)

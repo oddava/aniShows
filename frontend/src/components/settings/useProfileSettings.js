@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { authApi } from '../../api/client';
+import { getApiErrorMessage } from '../../api/errors';
 import { profileKeys } from '../../api/queries/user';
 import logger from '../../utils/logger';
 import {
@@ -16,6 +17,8 @@ import {
     getResponsiveBannerAspect,
     getSocialLinkDuplicateKey,
     normalizeProfilePrimaryColor,
+    socialLinksChanged,
+    toComparableSocialLinks,
 } from './settingsUtils';
 
 /**
@@ -30,6 +33,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
     const [avatarFile, setAvatarFile] = useState(null);
     const [bannerFile, setBannerFile] = useState(null);
     const [removeBanner, setRemoveBanner] = useState(false);
+    const [removeAvatar, setRemoveAvatar] = useState(false);
     const [socialLinks, setSocialLinks] = useState([]);
     const [isPrivate, setIsPrivate] = useState(false);
     const [profilePrimaryColor, setProfilePrimaryColor] = useState(DEFAULT_PROFILE_PRIMARY_COLOR);
@@ -149,16 +153,18 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
         const normalizedSelectedProfileColor = normalizeProfilePrimaryColor(profilePrimaryColor);
         const normalizedCurrentTimezone = normalizeTimeZonePreference(user.preferred_timezone);
         const normalizedSelectedTimezone = normalizeTimeZonePreference(preferredTimezone);
+        const linksChanged = socialLinksChanged(nonEmptyLinks, user.social_links);
         const hasChanges = (
             bio !== normalizedUserBio ||
             username.trim() !== user.username ||
-            JSON.stringify(nonEmptyLinks) !== JSON.stringify(user.social_links || []) ||
+            linksChanged ||
             isPrivate !== user.is_private ||
             normalizedSelectedProfileColor !== normalizedCurrentProfileColor ||
             normalizedSelectedTimezone !== normalizedCurrentTimezone ||
             avatarFile !== null ||
             bannerFile !== null ||
-            removeBanner
+            removeBanner ||
+            removeAvatar
         );
 
         if (!hasChanges) {
@@ -177,11 +183,10 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             if (bio !== normalizedUserBio) formData.append('bio', bio);
             if (username.trim() !== user.username) formData.append('username', username.trim());
 
-            // Only send social links if they changed
-            const currentLinks = user.social_links || [];
-            const linksChanged = JSON.stringify(nonEmptyLinks) !== JSON.stringify(currentLinks);
+            // Only send social links if they changed: each send is validated
+            // over the network and counts against a 5/day limit.
             if (linksChanged) {
-                formData.append('social_links', JSON.stringify(nonEmptyLinks));
+                formData.append('social_links', JSON.stringify(toComparableSocialLinks(nonEmptyLinks)));
             }
 
             if (isPrivate !== user.is_private) formData.append('is_private', isPrivate);
@@ -191,6 +196,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
                 formData.append('preferred_timezone', normalizedSelectedTimezone);
             }
             if (avatarFile) formData.append('avatar', avatarFile);
+            else if (removeAvatar) formData.append('remove_avatar', 'true');
             if (bannerFile) formData.append('banner', bannerFile);
             if (removeBanner) formData.append('remove_banner', 'true');
 
@@ -213,6 +219,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             setAvatarPreviewUrl(null);
             setBannerPreviewUrl(null);
             setRemoveBanner(false);
+            setRemoveAvatar(false);
 
             // Use PATCH response as source of truth to avoid stale re-fetch fallback
             if (updatedProfile && typeof updatedProfile === 'object') {
@@ -228,20 +235,9 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             queryClient.invalidateQueries({ queryKey: profileKeys.all });
         } catch (err) {
             logger.error('Failed to update profile:', err);
-            let msg = 'Failed to update profile';
-
-            if (err.response?.data) {
-                const data = err.response.data;
-                if (typeof data === 'object') {
-                    const firstKey = Object.keys(data)[0];
-                    const firstVal = data[firstKey];
-                    const errorDetails = Array.isArray(firstVal) ? firstVal[0] : firstVal;
-                    msg = `${firstKey}: ${errorDetails}`;
-                } else if (typeof data === 'string' && data.length < 100) {
-                    msg = data;
-                }
-            }
-            setProfileError(msg);
+            // The API's {detail, code, errors} envelope already puts the first
+            // field error in `detail`.
+            setProfileError(getApiErrorMessage(err, 'Failed to update profile'));
             setProfileSuccess('');
         } finally {
             setIsSavingProfile(false);
@@ -268,6 +264,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
         setAvatarFile,
         setBannerFile,
         removeBanner, setRemoveBanner,
+        removeAvatar, setRemoveAvatar,
         socialLinks, setSocialLinks,
         isPrivate,
         profilePrimaryColor, setProfilePrimaryColor,

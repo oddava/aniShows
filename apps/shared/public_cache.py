@@ -2,12 +2,81 @@ import random
 import time
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from django.conf import settings
 from django.core.cache import cache
 
+from .errors import CACHE_ERRORS
+from .throttling import warn_cache_outage
+
 PayloadValidator = Callable[[object], bool]
 PayloadBuilder = Callable[[], object]
+
+
+# A key built while its version/namespace lookup failed carries this marker.
+# Such a key is never read or written: Redis can come back between the failed
+# lookup and the payload read/write, and a fixed outage version would then let
+# a payload outlive the invalidations made under the real version (a profile
+# made private, a title flagged adult). Each outage version is also unique, so
+# a write that slips past the bypass lands under a key nobody reads again.
+CACHE_OUTAGE_MARKER = "cache-outage-"
+
+
+def cache_outage_version() -> str:
+    """The version/namespace part of a key whose version lookup failed (never cached)."""
+    return f"{CACHE_OUTAGE_MARKER}{uuid.uuid4().hex}"
+
+
+def is_cache_outage_key(key: str) -> bool:
+    return CACHE_OUTAGE_MARKER in key
+
+
+# How long a payload built while a dependency failed is kept (``Degraded``).
+DEGRADED_TTL_SECONDS = 60
+# The longest a request waits for another builder before building itself, whatever
+# ``PUBLIC_API_CACHE_WAIT_TIMEOUT_MS`` says (``PUBLIC_API_CACHE_WAIT_CAP_MS``).
+DEFAULT_WAIT_CAP_MS = 3000
+
+
+@dataclass(frozen=True, slots=True)
+class Degraded:
+    """What a builder returns when it had to fall back (a provider failed).
+
+    The payload is served, but cached only briefly and reported with the
+    cache status "degraded", so a fallback is not kept as if it were the
+    real answer; it never replaces the stale copy of a good payload.
+    """
+
+    payload: object
+
+
+def best_effort_get(key: str, *, source: str, default=None):
+    """``cache.get`` for a read path: the default (a miss) when the cache is down.
+
+    For caches of computed payloads only. Invalidations (deletes, version or
+    namespace bumps) must keep raising: a dropped invalidation would serve the
+    stale entry again once Redis is back.
+    """
+    if is_cache_outage_key(key):
+        return default
+    try:
+        return cache.get(key, default)
+    except CACHE_ERRORS:
+        warn_cache_outage(source)
+        return default
+
+
+def best_effort_set(key: str, value, timeout, *, source: str) -> bool:
+    """``cache.set`` of a computed payload; False (nothing stored) when the cache is down."""
+    if is_cache_outage_key(key):
+        return False
+    try:
+        cache.set(key, value, timeout=timeout)
+    except CACHE_ERRORS:
+        warn_cache_outage(source)
+        return False
+    return True
 
 
 def public_cache_stale_key(cache_key: str) -> str:
@@ -36,9 +105,22 @@ def invalidate_public_cache_keys(*cache_keys: str) -> None:
 def _is_valid(payload, validator: PayloadValidator | None) -> bool:
     if payload is None:
         return False
+    if isinstance(payload, Degraded):
+        return _is_valid(payload.payload, validator)
     if validator is None:
         return True
     return bool(validator(payload))
+
+
+def lock_wait_timeout_ms() -> int:
+    """How long to poll for another builder's payload before rebuilding.
+
+    The configured timeout, capped: a slow builder (or one that died holding
+    the lock) must not hold every other reader for the lock TTL.
+    """
+    configured = max(int(settings.PUBLIC_API_CACHE_WAIT_TIMEOUT_MS), 0)
+    cap = max(int(getattr(settings, "PUBLIC_API_CACHE_WAIT_CAP_MS", DEFAULT_WAIT_CAP_MS)), 0)
+    return min(configured, cap)
 
 
 def _jittered_ttl(base_ttl: int) -> int:
@@ -55,9 +137,45 @@ def get_or_build_public_payload(
     ttl: int,
     validator: PayloadValidator | None = None,
 ) -> tuple[object, str]:
+    """The cached payload, or a freshly built one stored for ``ttl`` seconds.
+
+    Returns the payload and a cache status (hit, miss, stale, lock-wait,
+    rebuild, degraded). With the cache (Redis) down, the page is still served:
+    it is built for this request only and reported as "bypass".
+    """
+    if is_cache_outage_key(cache_key):
+        # The version lookup failed: build for this request only (see CACHE_OUTAGE_MARKER).
+        result = builder()
+        if isinstance(result, Degraded):
+            return result.payload, "degraded"
+        return result, "bypass"
+
+    built: list[object] = []
+
+    def build() -> object:
+        built.append(builder())
+        return built[-1]
+
+    try:
+        return _get_or_build(cache_key, build, ttl=ttl, validator=validator)
+    except CACHE_ERRORS:
+        warn_cache_outage("public payload cache")
+        result = built[-1] if built else builder()
+        if isinstance(result, Degraded):
+            return result.payload, "degraded"
+        return result, "bypass"
+
+
+def _get_or_build(
+    cache_key: str,
+    builder: PayloadBuilder,
+    *,
+    ttl: int,
+    validator: PayloadValidator | None,
+) -> tuple[object, str]:
     fresh = cache.get(cache_key)
     if _is_valid(fresh, validator):
-        return fresh, "hit"
+        return _served(fresh, "hit")
     if fresh is not None:
         invalidate_public_cache_keys(cache_key)
 
@@ -76,13 +194,9 @@ def get_or_build_public_payload(
         try:
             fresh = cache.get(cache_key)
             if _is_valid(fresh, validator):
-                return fresh, "hit"
+                return _served(fresh, "hit")
 
-            payload = builder()
-            ttl_with_jitter = _jittered_ttl(ttl)
-            cache.set(cache_key, payload, ttl_with_jitter)
-            cache.set(stale_key, payload, ttl_with_jitter + stale_ttl)
-            return payload, "miss"
+            return _store(cache_key, stale_key, builder(), ttl, stale_ttl, "miss", validator)
         finally:
             if cache.get(lock_key) == lock_token:
                 cache.delete(lock_key)
@@ -90,7 +204,7 @@ def get_or_build_public_payload(
     if stale_payload is not None:
         return stale_payload, "stale"
 
-    wait_timeout_ms = max(int(settings.PUBLIC_API_CACHE_WAIT_TIMEOUT_MS), 0)
+    wait_timeout_ms = lock_wait_timeout_ms()
     poll_interval_ms = max(int(settings.PUBLIC_API_CACHE_WAIT_POLL_INTERVAL_MS), 1)
     deadline = time.monotonic() + (wait_timeout_ms / 1000.0)
 
@@ -98,14 +212,31 @@ def get_or_build_public_payload(
         time.sleep(poll_interval_ms / 1000.0)
         fresh = cache.get(cache_key)
         if _is_valid(fresh, validator):
-            return fresh, "lock-wait"
+            return _served(fresh, "lock-wait")
 
     stale_payload = cache.get(stale_key)
     if _is_valid(stale_payload, validator):
         return stale_payload, "stale"
 
-    payload = builder()
+    return _store(cache_key, stale_key, builder(), ttl, stale_ttl, "rebuild", validator)
+
+
+def _served(cached, status: str) -> tuple[object, str]:
+    if isinstance(cached, Degraded):
+        return cached.payload, "degraded"
+    return cached, status
+
+
+def _store(cache_key, stale_key, result, ttl: int, stale_ttl: int, status: str, validator):
+    if isinstance(result, Degraded):
+        # A good copy, even an old one, beats the fallback: serve it for now.
+        stale_payload = cache.get(stale_key)
+        if _is_valid(stale_payload, validator):
+            cache.set(cache_key, stale_payload, DEGRADED_TTL_SECONDS)
+            return stale_payload, "stale"
+        cache.set(cache_key, result, DEGRADED_TTL_SECONDS)
+        return result.payload, "degraded"
     ttl_with_jitter = _jittered_ttl(ttl)
-    cache.set(cache_key, payload, ttl_with_jitter)
-    cache.set(stale_key, payload, ttl_with_jitter + stale_ttl)
-    return payload, "rebuild"
+    cache.set(cache_key, result, ttl_with_jitter)
+    cache.set(stale_key, result, ttl_with_jitter + stale_ttl)
+    return result, status

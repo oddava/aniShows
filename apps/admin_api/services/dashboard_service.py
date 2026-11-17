@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from ...animes.models import Anime, Genre, Review, Studio, UserFavorite, UserHistory
 from ...users.models import UserAnimeList, UserProfile
+from .media import poster_url
 
 User = get_user_model()
 
@@ -45,7 +46,7 @@ def build_admin_dashboard_payload():
     popular_anime = (
         anime_queryset.annotate(favorite_count=Count("favorites"))
         .order_by("-favorite_count")[:5]
-        .values("id", "title", "slug", "cover_image", "favorite_count")
+        .values("id", "title", "slug", "cover_image", "cover_image_external_url", "favorite_count")
     )
     recent_reviews = review_queryset.select_related("user", "anime").order_by("-created_at")[:5]
     recent_reviews_data = [
@@ -84,7 +85,16 @@ def build_admin_dashboard_payload():
             },
         },
         "charts": {"user_growth": list(user_growth)},
-        "popular_anime": list(popular_anime),
+        "popular_anime": [
+            {
+                "id": item["id"],
+                "title": item["title"],
+                "slug": item["slug"],
+                "favorite_count": item["favorite_count"],
+                "poster": poster_url(item["cover_image"], item["cover_image_external_url"]),
+            }
+            for item in popular_anime
+        ],
         "recent_reviews": recent_reviews_data,
         "recent_users": list(recent_users),
     }

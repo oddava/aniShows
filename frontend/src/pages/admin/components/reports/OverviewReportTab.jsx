@@ -133,7 +133,7 @@ const OverviewTab = ({ stats }) => {
 
       {/* Activity Log & Export */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6">
+        <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-2xl p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <Bell size={20} className="text-amber-400" /> Activity Log
@@ -166,7 +166,7 @@ const OverviewTab = ({ stats }) => {
           </div>
         </div>
 
-        <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
           <Download size={48} className="text-purple-400 mb-4 opacity-50" />
           <h3 className="text-xl font-bold text-white mb-2">Export Data</h3>
           <p className="text-sm text-gray-400 mb-6">Download a full JSON export of all platform statistics.</p>

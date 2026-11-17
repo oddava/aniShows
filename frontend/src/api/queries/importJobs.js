@@ -11,6 +11,13 @@ export const importJobKeys = {
 };
 
 export const ACTIVE_IMPORT_STATUSES = ['pending', 'processing'];
+/** A job in one of these states will not change again. */
+export const FINISHED_IMPORT_STATUSES = ['completed', 'failed', 'cancelled'];
+
+/* The signed-in user's linked AniList account (pull-only sync). */
+export const anilistLinkKeys = {
+    forUser: (userId) => ['anilistLink', userId ?? 'anonymous'],
+};
 
 /** The jobs endpoint has answered both as a bare list and as a DRF page. */
 export const normalizeJobsResponse = (payload) => {
@@ -42,5 +49,13 @@ export const importJobQueries = {
                 ? 2000
                 : false
         ),
+    }),
+};
+
+export const anilistLinkQueries = {
+    /** `{linked: false}` or the link with its sync state and last job. */
+    forUser: (userId) => queryOptions({
+        queryKey: anilistLinkKeys.forUser(userId),
+        queryFn: () => importExportApi.getAniListLink().then((response) => response.data),
     }),
 };

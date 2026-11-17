@@ -9,7 +9,7 @@ from ...shared.errors import ENQUEUE_ERRORS
 from ...shared.logger import logger
 from ...users.models import SocialLinkChangeLog
 from .metadata_service import MetadataService
-from .url_validator import URLValidationError, URLValidator
+from .url_validator import URLValidator
 
 
 class SocialLinkValidationError(Exception):
@@ -28,7 +28,7 @@ class SocialLinksService:
 
     def __init__(self):
         self.validator = URLValidator(
-            google_safe_browsing_api_key=getattr(settings, "GOOGLE_SAFE_BROWSING_API_KEY", None),
+            google_safe_browsing_api_key=settings.GOOGLE_SAFE_BROWSING_API_KEY or None,
             safe_browsing_fail_open=settings.GOOGLE_SAFE_BROWSING_FAIL_OPEN,
         )
         self.metadata_service = MetadataService()
@@ -81,7 +81,11 @@ class SocialLinksService:
                 raise SocialLinkValidationError(f"Invalid URL scheme detected: '{scheme}'")
 
         normalized_url = self.validator.normalize_username(platform, value)
-        is_valid, error_message, validation_metadata = self.validator.validate(normalized_url)
+        # Fast checks only: WHOIS and Safe Browsing run after the save, in the
+        # metadata task (flag_suspicious_links), so the request never waits on them.
+        is_valid, error_message, validation_metadata = self.validator.validate(
+            normalized_url, check_reputation=False
+        )
 
         if not is_valid:
             raise SocialLinkValidationError(error_message)
@@ -105,6 +109,52 @@ class SocialLinksService:
                 "domain_age_days": validation_metadata.get("domain_age_days"),
             },
         }
+
+    def reputation_problems(self, urls: List[str]) -> Dict[str, str]:
+        """``{url: reason}`` for the URLs that fail the slow reputation checks."""
+        problems = {}
+        for url in urls:
+            problem = self.validator.reputation_problem(url)
+            if problem:
+                problems[url] = problem
+        return problems
+
+    def flag_suspicious_links(self, user_id: int, problems: Dict[str, str]) -> int:
+        """Mark saved links that failed the reputation checks; return how many changed.
+
+        A link to a days-old domain or a Safe Browsing match is kept, shown with
+        a warning (``trust_level="suspicious"``), rather than rejected after the
+        save (spec R4). Links are re-read under a row lock, as the metadata
+        writer does, so concurrent edits are not overwritten.
+        """
+        if not problems:
+            return 0
+        from ...users.models import UserProfile
+
+        with transaction.atomic():
+            profile = UserProfile.objects.select_for_update().filter(user_id=user_id).first()
+            if profile is None:
+                return 0
+            links = profile.social_links or []
+            changed = 0
+            for link in links:
+                if not isinstance(link, dict):
+                    continue
+                url = link.get("url") or link.get("value")
+                if url not in problems:
+                    continue
+                link["trust_level"] = self.TRUST_SUSPICIOUS
+                link["metadata_pending"] = False
+                validation = link.get("validation")
+                link["validation"] = {
+                    **(validation if isinstance(validation, dict) else {}),
+                    "warning": problems[url],
+                }
+                changed += 1
+            if changed:
+                profile.social_links = links
+                profile.save(update_fields=["social_links"])
+        return changed
 
     @staticmethod
     def schedule_metadata_fetch(urls: List[str], user_id: int) -> None:
@@ -224,54 +274,3 @@ class SocialLinksService:
             # The audit trail is best effort. AttributeError: a stored link that
             # is not a dict; TypeError: a link value that is not JSON-serialisable.
             logger.exception("Error logging social link changes")
-
-    def validate_single_url(self, url: str) -> Dict:
-        """
-        Validate a single URL for real-time frontend validation.
-        Returns validation result with metadata.
-        """
-        try:
-            dangerous_schemes = ["javascript:", "data:", "vbscript:", "file:"]
-            url_lower = url.lower()
-            for scheme in dangerous_schemes:
-                if url_lower.startswith(scheme):
-                    return {
-                        "valid": False,
-                        "error": f"Invalid URL scheme detected: '{scheme}'",
-                        "trust_level": self.TRUST_SUSPICIOUS,
-                    }
-
-            normalized = self.validator._normalize_url(url)
-            is_valid, error_message, validation_metadata = self.validator.validate(normalized)
-
-            if not is_valid:
-                return {
-                    "valid": False,
-                    "error": error_message,
-                    "trust_level": self.TRUST_SUSPICIOUS,
-                }
-
-            trust_level = self._determine_trust_level(
-                validation_metadata.get("platform"), validation_metadata
-            )
-            validated_url = validation_metadata.get("normalized_url", normalized)
-
-            return {
-                "valid": True,
-                "url": validated_url,
-                "platform": validation_metadata.get("platform", "website"),
-                "domain": validation_metadata.get("domain", ""),
-                "trust_level": trust_level,
-                "subdomain_count": validation_metadata.get("subdomain_count", 0),
-                "domain_age_days": validation_metadata.get("domain_age_days"),
-            }
-        except (URLValidationError, ValueError) as e:
-            # _normalize_url rejects credentials and bad ports (URLValidationError);
-            # urlparse rejects malformed IPv6 hosts (ValueError). validate()
-            # handles its own unexpected errors.
-            logger.warning("Rejected URL %s: %s", url, e)
-            return {
-                "valid": False,
-                "error": str(e),
-                "trust_level": self.TRUST_SUSPICIOUS,
-            }

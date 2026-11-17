@@ -1,13 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Star, AlertTriangle, Eye, EyeOff, MoreVertical, Edit2, Trash2, Check, Book, Film, Music, Users, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Star, AlertTriangle, Eye, EyeOff, MoreVertical, Edit2, Trash2, Check, Book, Film, Music, Users, ThumbsUp, ThumbsDown, Flag, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewApi } from '../api/client';
 import MiniProfileHoverCard from './common/MiniProfileHoverCard';
 import AnimeMediaImage from './common/AnimeMediaImage';
-import { reviewKeys } from '../api/queries/user';
+import Spoiler from './common/Spoiler';
+import CustomSelect from './common/CustomSelect';
+import {
+    applyReviewReaction,
+    applyReviewVote,
+    getReviewErrorMessage,
+    patchCachedReview,
+    pickReviewCounts,
+    REVIEW_REPORT_REASONS,
+} from '../api/queries/reviews';
 
 // Generate consistent color from string
 const stringToColor = (str) => {
@@ -44,24 +55,6 @@ const LetterAvatar = ({ name, size = 'md' }) => {
     );
 };
 
-// Helper for inline spoilers
-const Spoiler = ({ children }) => {
-    const [revealed, setRevealed] = useState(false);
-    return (
-        <span
-            onClick={(e) => { e.stopPropagation(); setRevealed(!revealed); }}
-            className={`cursor-pointer transition-all duration-200 rounded px-1 inline-block align-baseline
-                ${revealed
-                    ? 'bg-red-500/10 text-red-100'
-                    : 'bg-gray-800 text-transparent select-none hover:bg-gray-700'
-                }`}
-            title="Click to toggle spoiler"
-        >
-            {children}
-        </span>
-    );
-};
-
 // Custom parser for spoilers and plain text
 const renderText = (text) => {
     if (!text) return null;
@@ -72,7 +65,11 @@ const renderText = (text) => {
     return parts.map((part, i) => {
         if (part.startsWith('>!') && part.endsWith('!<')) {
             const content = part.slice(2, -2);
-            return <Spoiler key={i}>{content}</Spoiler>;
+            return (
+                <Spoiler key={i}>
+                    <span className="whitespace-pre-wrap">{content}</span>
+                </Spoiler>
+            );
         }
         return <span key={i} className="whitespace-pre-wrap">{part}</span>;
     });
@@ -111,14 +108,174 @@ const DEFAULT_REACTIONS = [
     { type: 'sad', emoji: '😢', count: 0, active: false, label: 'Sad' },
 ];
 
+const REPORT_NOTE_MAX_LENGTH = 500;
+const FOCUSABLE_SELECTOR = 'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
+/** Small modal for reporting someone else's review (reason + optional note). */
+function ReviewReportDialog({ reviewId, onClose }) {
+    const titleId = useId();
+    const reasonId = useId();
+    const noteId = useId();
+    const panelRef = useRef(null);
+    const doneRef = useRef(null);
+    const [reason, setReason] = useState('');
+    const [description, setDescription] = useState('');
+    const [result, setResult] = useState(null);
+    const [error, setError] = useState('');
+
+    const reportMutation = useMutation({
+        mutationFn: () => reviewApi.report(reviewId, { reason, description: description.trim() }),
+        onSuccess: (response) => {
+            setError('');
+            setResult(response?.data?.created === false ? 'existing' : 'created');
+        },
+        onError: (err) => setError(getReviewErrorMessage(err, "Couldn't send the report. Please try again.")),
+    });
+
+    useEffect(() => {
+        if (result) {
+            doneRef.current?.focus();
+        } else {
+            document.getElementById(reasonId)?.focus();
+        }
+    }, [result, reasonId]);
+
+    const handleKeyDown = (event) => {
+        if (event.key === 'Escape') {
+            // An open reason list closes itself first.
+            const target = event.target;
+            if (target?.getAttribute?.('aria-haspopup') === 'listbox' && target.getAttribute('aria-expanded') === 'true') return;
+            event.stopPropagation();
+            onClose();
+            return;
+        }
+        if (event.key !== 'Tab' || !panelRef.current) return;
+        const focusable = Array.from(panelRef.current.querySelectorAll(FOCUSABLE_SELECTOR));
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    };
+
+    const handleSubmit = (event) => {
+        event.preventDefault();
+        if (!reason || reportMutation.isPending) return;
+        reportMutation.mutate();
+    };
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+            onKeyDown={handleKeyDown}
+        >
+            <div
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                className="w-full max-w-sm rounded-2xl border border-gray-800 bg-dark-100 shadow-xl"
+            >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+                    <h2 id={titleId} className="text-sm font-bold text-white">Report review</h2>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="p-1.5 rounded-lg hover:bg-gray-800 transition-colors"
+                        aria-label="Close"
+                    >
+                        <X className="w-4 h-4 text-gray-400" />
+                    </button>
+                </div>
+
+                {result ? (
+                    <div className="p-4 space-y-4">
+                        <p className="text-sm text-gray-300" role="status">
+                            {result === 'existing' ? "You've already reported this review." : "Thanks, we'll take a look."}
+                        </p>
+                        <div className="flex justify-end">
+                            <button ref={doneRef} type="button" onClick={onClose} className="btn-secondary text-sm px-4 py-2">
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                        <div>
+                            <label htmlFor={reasonId} className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-2">
+                                Reason
+                            </label>
+                            <CustomSelect
+                                id={reasonId}
+                                value={reason}
+                                onChange={setReason}
+                                options={REVIEW_REPORT_REASONS}
+                                placeholder="Choose a reason"
+                                triggerClassName="bg-dark-50 border-gray-700 rounded-lg px-3 py-2 text-sm font-normal"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor={noteId} className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-2">
+                                Note (optional)
+                            </label>
+                            <textarea
+                                id={noteId}
+                                value={description}
+                                onChange={(event) => setDescription(event.target.value.slice(0, REPORT_NOTE_MAX_LENGTH))}
+                                maxLength={REPORT_NOTE_MAX_LENGTH}
+                                rows={3}
+                                placeholder="Anything the moderators should know?"
+                                className="input w-full resize-y text-sm"
+                            />
+                            <div className="mt-1 px-1 text-right text-[10px] font-medium text-gray-500">
+                                {description.length} / {REPORT_NOTE_MAX_LENGTH}
+                            </div>
+                        </div>
+                        {error && (
+                            <p className="text-xs text-red-400" role="alert">{error}</p>
+                        )}
+                        <div className="flex items-center justify-end gap-3">
+                            <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors">
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={!reason || reportMutation.isPending}
+                                className="btn-primary text-sm px-4 py-2"
+                            >
+                                {reportMutation.isPending ? 'Sending...' : 'Report'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+        </div>,
+        document.body
+    );
+}
+
 export default function ReviewCard({ review, onEdit, onDelete, showAnime = false, forceHideSpoilers = false, compact = false, accentColor = null }) {
     const { user, isAuthenticated } = useAuth();
     const [showSpoilers, setShowSpoilers] = useState(!review.has_spoilers && !forceHideSpoilers);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isReportOpen, setIsReportOpen] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const queryClient = useQueryClient();
+    const menuId = useId();
+    const menuContainerRef = useRef(null);
+    const menuTriggerRef = useRef(null);
+    const menuRef = useRef(null);
 
-    const isOwner = user?.username === review.user?.username;
+    const isOwner = Boolean(user?.username) && user.username === review.user?.username;
+    const canManage = isOwner && Boolean(onDelete || onEdit);
+    const canReport = isAuthenticated && !isOwner;
+    const hasMenu = canManage || canReport;
     const hasText = review.text && review.text.trim().length > 0;
     const hasSubRatings = review.rating_story || review.rating_animation || review.rating_music || review.rating_characters;
     const shouldShowReadMore = hasText && (
@@ -130,18 +287,50 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
         ? review.reactions
         : DEFAULT_REACTIONS;
 
+    // Votes and reactions patch this review in the cached lists (optimistic),
+    // reconcile with the counts the response carries, and put the previous
+    // fields back on error. No list is refetched.
     const voteMutation = useMutation({
         mutationFn: (voteType) => reviewApi.vote(review.id, voteType),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: reviewKeys.all });
-        }
+        onMutate: (voteType) => {
+            const previous = {
+                helpful_count: review.helpful_count || 0,
+                dislike_count: review.dislike_count || 0,
+                user_votes: userVotes,
+            };
+            patchCachedReview(queryClient, review.id, (cached) => applyReviewVote(cached, voteType));
+            return { previous };
+        },
+        onSuccess: (response) => {
+            const fresh = pickReviewCounts(response?.data);
+            if (fresh) patchCachedReview(queryClient, review.id, fresh);
+        },
+        onError: (err, _voteType, context) => {
+            if (context?.previous) patchCachedReview(queryClient, review.id, context.previous);
+            toast.error(getReviewErrorMessage(err, "Couldn't save your vote."));
+        },
     });
 
     const reactionMutation = useMutation({
         mutationFn: (reactionType) => reviewApi.react(review.id, reactionType),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: reviewKeys.all });
-        }
+        onMutate: (reactionType) => {
+            const previous = { reactions: review.reactions || [] };
+            patchCachedReview(queryClient, review.id, (cached) => ({
+                reactions: applyReviewReaction(
+                    Array.isArray(cached.reactions) && cached.reactions.length > 0 ? cached.reactions : DEFAULT_REACTIONS,
+                    reactionType
+                ),
+            }));
+            return { previous };
+        },
+        onSuccess: (response) => {
+            const fresh = pickReviewCounts(response?.data);
+            if (fresh) patchCachedReview(queryClient, review.id, fresh);
+        },
+        onError: (err, _reactionType, context) => {
+            if (context?.previous) patchCachedReview(queryClient, review.id, context.previous);
+            toast.error(getReviewErrorMessage(err, "Couldn't save your reaction."));
+        },
     });
 
     const handleVote = (voteType) => {
@@ -153,9 +342,65 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
     const dislikeCount = review.dislike_count || 0;
 
     const handleReaction = (reactionType) => {
-        if (!isAuthenticated || reactionMutation.isPending) return;
+        if (!isAuthenticated || isOwner || reactionMutation.isPending) return;
         reactionMutation.mutate(reactionType);
     };
+
+    const closeMenu = ({ returnFocus = false } = {}) => {
+        setIsMenuOpen(false);
+        if (returnFocus) menuTriggerRef.current?.focus();
+    };
+
+    useEffect(() => {
+        if (!isMenuOpen) return undefined;
+        menuRef.current?.querySelector('[role="menuitem"]')?.focus();
+
+        const onPointerDown = (event) => {
+            if (!menuContainerRef.current?.contains(event.target)) setIsMenuOpen(false);
+        };
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setIsMenuOpen(false);
+                menuTriggerRef.current?.focus();
+            }
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        document.addEventListener('touchstart', onPointerDown);
+        document.addEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('mousedown', onPointerDown);
+            document.removeEventListener('touchstart', onPointerDown);
+            document.removeEventListener('keydown', onKeyDown);
+        };
+    }, [isMenuOpen]);
+
+    const handleMenuKeyDown = (event) => {
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+        event.preventDefault();
+        const items = Array.from(menuRef.current?.querySelectorAll('[role="menuitem"]') || []);
+        if (items.length === 0) return;
+        const index = items.indexOf(document.activeElement);
+        const next = event.key === 'ArrowDown' ? (index + 1) % items.length : (index - 1 + items.length) % items.length;
+        items[next].focus();
+    };
+
+    const handleDelete = () => {
+        closeMenu();
+        if (window.confirm("Delete this review? This can't be undone.")) {
+            onDelete(review.id);
+        } else {
+            menuTriggerRef.current?.focus();
+        }
+    };
+
+    const handleCloseReport = () => {
+        setIsReportOpen(false);
+        menuTriggerRef.current?.focus();
+    };
+
+    const reactionLabel = (reaction) => reaction.label
+        || DEFAULT_REACTIONS.find((item) => item.type === reaction.type)?.label
+        || reaction.type;
 
     // Compact mode for rating-only reviews
     if (compact || (!hasText && !showAnime)) {
@@ -285,36 +530,66 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                             </div>
                         </div>
 
-                        {/* Menu (Owner Only) */}
-                        {isOwner && onDelete && (
-                            <div className="relative shrink-0">
+                        {/* Options: edit/delete for the owner, report for everyone else */}
+                        {hasMenu && (
+                            <div ref={menuContainerRef} className="relative shrink-0">
                                 <button
-                                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                                    ref={menuTriggerRef}
+                                    type="button"
+                                    onClick={() => setIsMenuOpen((open) => !open)}
+                                    aria-label="Review options"
+                                    aria-haspopup="menu"
+                                    aria-expanded={isMenuOpen}
+                                    aria-controls={isMenuOpen ? menuId : undefined}
                                     className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-gray-300 transition-colors"
                                 >
                                     <MoreVertical className="w-4 h-4" />
                                 </button>
 
                                 {isMenuOpen && (
-                                    <>
-                                        <div className="fixed inset-0 z-10" onClick={() => setIsMenuOpen(false)} />
-                                        <div className="absolute right-0 top-full mt-1 w-28 bg-dark-200 rounded-lg border border-gray-700  z-20 overflow-hidden">
-                                            {onEdit && (
-                                                <button
-                                                    onClick={() => { onEdit(review); setIsMenuOpen(false); }}
-                                                    className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-white/10 flex items-center gap-2"
-                                                >
-                                                    <Edit2 className="w-3 h-3" /> Edit
-                                                </button>
-                                            )}
+                                    <div
+                                        ref={menuRef}
+                                        id={menuId}
+                                        role="menu"
+                                        aria-label="Review options"
+                                        onKeyDown={handleMenuKeyDown}
+                                        className="absolute right-0 top-full mt-1 w-28 bg-dark-200 rounded-lg border border-gray-700  z-20 overflow-hidden"
+                                    >
+                                        {canManage && onEdit && (
                                             <button
-                                                onClick={() => { onDelete(review.id); setIsMenuOpen(false); }}
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={() => { closeMenu(); onEdit(review); }}
+                                                className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-white/10 flex items-center gap-2"
+                                            >
+                                                <Edit2 className="w-3 h-3" /> Edit
+                                            </button>
+                                        )}
+                                        {canManage && onDelete && (
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={handleDelete}
                                                 className="w-full text-left px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2"
                                             >
                                                 <Trash2 className="w-3 h-3" /> Delete
                                             </button>
-                                        </div>
-                                    </>
+                                        )}
+                                        {canReport && (
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={() => { closeMenu(); setIsReportOpen(true); }}
+                                                className="w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-white/10 flex items-center gap-2"
+                                            >
+                                                <Flag className="w-3 h-3" /> Report
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {isReportOpen && (
+                                    <ReviewReportDialog reviewId={review.id} onClose={handleCloseReport} />
                                 )}
                             </div>
                         )}
@@ -391,7 +666,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                             <button
                                 onClick={() => handleVote('helpful')}
                                 disabled={!isAuthenticated || isOwner || voteMutation.isPending}
-                                aria-pressed={userVotes.helpful}
+                                aria-pressed={Boolean(userVotes.helpful)}
                                 className={`flex items-center gap-1.5 text-[11px] transition-all rounded-full px-2.5 py-1 ${userVotes.helpful
                                     ? 'bg-green-500/10 text-green-400 border border-green-500/30'
                                     : 'text-gray-500 hover:text-gray-300 border border-gray-800/60 hover:border-gray-700'
@@ -406,7 +681,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                             <button
                                 onClick={() => handleVote('dislike')}
                                 disabled={!isAuthenticated || isOwner || voteMutation.isPending}
-                                aria-pressed={userVotes.dislike}
+                                aria-pressed={Boolean(userVotes.dislike)}
                                 className={`flex items-center gap-1.5 text-[11px] transition-all rounded-full px-2.5 py-1 ${userVotes.dislike
                                     ? 'bg-red-500/10 text-red-400 border border-red-500/30'
                                     : 'text-gray-500 hover:text-gray-300 border border-gray-800/60 hover:border-gray-700'
@@ -424,14 +699,14 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                                 <button
                                     key={reaction.type}
                                     onClick={() => handleReaction(reaction.type)}
-                                    disabled={!isAuthenticated || reactionMutation.isPending}
-                                    aria-label={reaction.label}
-                                    aria-pressed={reaction.active}
+                                    disabled={!isAuthenticated || isOwner || reactionMutation.isPending}
+                                    aria-label={`${reactionLabel(reaction)} (${reaction.count || 0})`}
+                                    aria-pressed={Boolean(reaction.active)}
                                     className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${reaction.active
                                         ? 'border-accent/40 bg-accent/10 text-white'
                                         : 'border-gray-800/60 bg-dark-50/60 text-gray-400 hover:border-gray-700 hover:text-gray-200'
-                                        } ${!isAuthenticated ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                    title={!isAuthenticated ? 'Login to react' : reaction.label}
+                                        } ${(!isAuthenticated || isOwner) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                    title={!isAuthenticated ? 'Login to react' : isOwner ? 'Cannot react to your own review' : reactionLabel(reaction)}
                                 >
                                     <span className="text-sm leading-none">{reaction.emoji}</span>
                                     <span>{reaction.count || 0}</span>

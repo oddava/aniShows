@@ -4,7 +4,9 @@ from django.core.cache import cache
 from django.db import DatabaseError
 from django.utils import timezone
 
+from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
+from ...shared.throttling import warn_cache_outage
 
 # At most one profile write per user per minute.
 DB_UPDATE_THROTTLE = 60
@@ -30,7 +32,16 @@ class UserActivityMiddleware:
         return response
 
     def _track_activity(self, user_id):
-        if not cache.add(activity_throttle_key(user_id), True, timeout=DB_UPDATE_THROTTLE):
+        try:
+            first_in_window = cache.add(
+                activity_throttle_key(user_id), True, timeout=DB_UPDATE_THROTTLE
+            )
+        except CACHE_ERRORS:
+            # Redis is down: skip this best-effort stamp rather than turn every
+            # signed-in response into a 500.
+            warn_cache_outage("activity stamp; not tracking")
+            return
+        if not first_in_window:
             return
         try:
             from ..models import UserProfile

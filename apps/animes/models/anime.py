@@ -30,7 +30,6 @@ from imagekit.processors import ResizeToFit
 from root.storage_backends import MediaStorage
 
 from ...shared.models import SlugMixin, TimestampMixin
-from ..adult_content import ADULT_GENRE_SLUGS, tags_are_adult
 from ..services.public_query.sorting import popular_list_index_expressions
 
 
@@ -153,8 +152,7 @@ class Anime(TimestampMixin, SlugMixin, Model):
     synonyms = JSONField(default=list, blank=True)
     producers = JSONField(default=list, blank=True)
     tags = JSONField(default=list, blank=True)
-    # Denormalized adult-content rule (adult genre or explicit tag), kept in sync
-    # by save() and the genre signals; see ``apps/animes/adult_content.py``.
+    # AniList's Media.isAdult (owner decision); see ``apps/animes/adult_content.py``.
     is_adult = BooleanField(default=False, editable=False)
     source_urls = JSONField(default=list, blank=True)
     offline_db_payload = JSONField(default=dict, blank=True)
@@ -187,14 +185,13 @@ class Anime(TimestampMixin, SlugMixin, Model):
     )
     season_year = IntegerField(null=True, blank=True)
 
-    # Real provider IDs only. Jikan-only rows have anilist_id=NULL and are deduped by mal_id.
+    # Real provider IDs only. Rows from before D1 (Jikan) may have only mal_id.
     mal_id = IntegerField(null=True, blank=True, unique=True)
     anilist_id = IntegerField(null=True, blank=True, unique=True)
     offline_db_last_seen_at = DateTimeField(null=True, blank=True, db_index=True)
     # When the daily backfills last tried this row, so each run moves on to
     # rows not tried recently instead of re-fetching the same ones.
     metadata_checked_at = DateTimeField(null=True, blank=True)
-    themes_checked_at = DateTimeField(null=True, blank=True)
     offline_db_last_update = DateField(null=True, blank=True)
 
     class Meta:
@@ -242,36 +239,8 @@ class Anime(TimestampMixin, SlugMixin, Model):
     def __str__(self):
         return self.title
 
-    def save(self, *args, **kwargs):
-        update_fields = kwargs.get("update_fields")
-        if update_fields is None or "tags" in update_fields:
-            if self._sync_is_adult() and update_fields is not None:
-                kwargs["update_fields"] = {*update_fields, "is_adult"}
-        super().save(*args, **kwargs)
-
     def get_absolute_url(self):
         return f"/anime/{self.slug}/"
-
-    def _sync_is_adult(self) -> bool:
-        """Re-derive ``is_adult`` from ``tags``; True when the flag changed.
-
-        Genre changes are handled by the ``m2m_changed`` receiver, so the stored
-        flag already reflects the genres. It only needs a genre lookup when the
-        tags no longer make an adult-flagged row adult.
-        """
-        if "tags" in self.get_deferred_fields():
-            return False
-        if tags_are_adult(self.tags):
-            resolved = True
-        elif self._state.adding or not self.is_adult:
-            # New rows keep what the provider payload said; their genres are
-            # added after the insert and the genre signal re-checks them.
-            resolved = self.is_adult
-        else:
-            resolved = self.genres.filter(slug__in=ADULT_GENRE_SLUGS).exists()
-        changed = resolved != self.is_adult
-        self.is_adult = resolved
-        return changed
 
     @staticmethod
     def studios_prefetch(prefix: str = "") -> Prefetch:
@@ -403,11 +372,16 @@ class AnimeCharacter(Model):
 
     class Meta:
         ordering = ["role", "character__name"]
-        unique_together = (
-            "anime",
-            "character",
-            "voice_actor",
-        )
+        constraints = [
+            # NULLs not distinct: a character without a voice actor must not be
+            # stored twice by concurrent refreshes either (update_or_create
+            # would then fail on every later refresh).
+            UniqueConstraint(
+                fields=["anime", "character", "voice_actor"],
+                nulls_distinct=False,
+                name="anime_character_unique_voice",
+            ),
+        ]
 
 
 class AnimeStaff(Model):
@@ -417,6 +391,11 @@ class AnimeStaff(Model):
 
     class Meta:
         ordering = ["id"]
+        constraints = [
+            # Concurrent refreshes of one anime could otherwise write the same
+            # credit twice, after which update_or_create fails on every refresh.
+            UniqueConstraint(fields=["anime", "staff", "role"], name="anime_staff_unique_credit"),
+        ]
 
 
 class ThemeSong(TimestampMixin, Model):

@@ -1,4 +1,3 @@
-import json
 import re
 from dataclasses import dataclass
 
@@ -10,6 +9,7 @@ from ...shared.celery import redact_task_kwargs
 from ...shared.logger import logger
 from ..models import UserImportJob
 from ..tasks import process_import_job
+from .import_service.entries import ImportedEntry
 
 USERNAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,50}$")
 ACTIVE_IMPORT_STATUSES = (
@@ -28,23 +28,17 @@ def is_valid_import_username(username: str | None) -> bool:
     return bool(username and USERNAME_PATTERN.match(username))
 
 
-def _task_payload_size_bytes(task_kwargs: dict) -> int:
-    try:
-        return len(json.dumps(task_kwargs, default=str).encode("utf-8"))
-    except TypeError:
-        return 10**12
+def _validate_import_limits(user) -> ImportJobActionResult | None:
+    """One active job and ``MAX_IMPORT_JOBS_PER_DAY`` per user.
 
-
-def _validate_import_limits(user, task_kwargs: dict | None = None) -> ImportJobActionResult | None:
-    max_active_jobs = settings.MAX_ACTIVE_IMPORT_JOBS_PER_USER
-    max_daily_jobs = settings.MAX_IMPORT_JOBS_PER_DAY
-    max_task_payload_bytes = settings.MAX_IMPORT_TASK_PAYLOAD_BYTES
-
+    Task kwargs carry only ids and usernames now (file entries live on the job), so
+    there is no broker payload limit to check.
+    """
     active_count = UserImportJob.objects.filter(
         user=user,
         status__in=ACTIVE_IMPORT_STATUSES,
     ).count()
-    if active_count >= max_active_jobs:
+    if active_count >= settings.MAX_ACTIVE_IMPORT_JOBS_PER_USER:
         return ImportJobActionResult(
             payload={
                 "detail": "You already have an import in progress.",
@@ -55,22 +49,13 @@ def _validate_import_limits(user, task_kwargs: dict | None = None) -> ImportJobA
 
     today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
     daily_count = UserImportJob.objects.filter(user=user, created_at__gte=today_start).count()
-    if daily_count >= max_daily_jobs:
+    if daily_count >= settings.MAX_IMPORT_JOBS_PER_DAY:
         return ImportJobActionResult(
             payload={
                 "detail": "Daily import limit reached. Please try again tomorrow.",
                 "code": "daily_import_limit_reached",
             },
             status_code=429,
-        )
-
-    if task_kwargs and _task_payload_size_bytes(task_kwargs) > max_task_payload_bytes:
-        return ImportJobActionResult(
-            payload={
-                "detail": "Import payload is too large.",
-                "code": "import_payload_too_large",
-            },
-            status_code=400,
         )
 
     return None
@@ -80,104 +65,91 @@ def _queue_import_job(job_id: int, **task_kwargs) -> None:
     def _enqueue():
         try:
             kwargs = {"job_id": job_id, **task_kwargs}
-            # kwargsrepr is what the result backend stores: no tokens, no XML.
             process_import_job.apply_async(
                 kwargs=kwargs, kwargsrepr=repr(redact_task_kwargs(kwargs))
             )
         except Exception:
             logger.exception("Failed to queue import job", extra={"job_id": job_id})
-            try:
-                job = UserImportJob.objects.get(id=job_id)
-            except UserImportJob.DoesNotExist:
-                logger.warning(
-                    "Import job disappeared before queue failure could be persisted",
-                    extra={"job_id": job_id},
-                )
-                return
-
-            if job.status == UserImportJob.ImportStatus.pending:
-                errors = list(job.errors or [])
-                errors.append("Failed to queue import job")
-                job.status = UserImportJob.ImportStatus.failed
-                job.errors = errors[-10:]
-                job.save(update_fields=["status", "errors"])
+            UserImportJob.objects.filter(
+                id=job_id, status=UserImportJob.ImportStatus.pending
+            ).update(
+                status=UserImportJob.ImportStatus.failed,
+                failure_reason="The import could not be started. Please try again.",
+                errors=["Failed to queue import job"],
+                payload=None,
+            )
 
     transaction.on_commit(_enqueue)
 
 
+def _started(job: UserImportJob) -> ImportJobActionResult:
+    return ImportJobActionResult(
+        payload={"message": "Import started", "job_id": job.id, "status": "pending"},
+        status_code=202,
+    )
+
+
+def _create_job(user, *, source, source_identifier, mode=UserImportJob.ImportMode.full, **fields):
+    """Lock the user, check the limits, create the job and queue it on commit."""
+    with transaction.atomic():
+        locked_user = user.__class__.objects.select_for_update().get(pk=user.pk)
+        limit_error = _validate_import_limits(locked_user)
+        if limit_error:
+            return limit_error, None
+        job = UserImportJob.objects.create(
+            user=locked_user,
+            source=source,
+            source_identifier=source_identifier,
+            mode=mode,
+            **fields,
+        )
+        _queue_import_job(job.id)
+    return None, job
+
+
 def create_mal_import_job(user, username):
-    with transaction.atomic():
-        locked_user = user.__class__.objects.select_for_update().get(pk=user.pk)
-        limit_error = _validate_import_limits(locked_user, {"username": username})
-        if limit_error:
-            return limit_error
-
-        job = UserImportJob.objects.create(
-            user=locked_user,
-            source=UserImportJob.ImportSource.myanimelist_api,
-            source_identifier=username,
-        )
-        _queue_import_job(job.id, username=username)
-    return ImportJobActionResult(
-        payload={"message": "Import started", "job_id": job.id, "status": "pending"},
-        status_code=202,
+    error, job = _create_job(
+        user, source=UserImportJob.ImportSource.myanimelist_api, source_identifier=username
     )
+    return error or _started(job)
 
 
-def create_mal_xml_import_job(user, file_name, xml_content):
-    with transaction.atomic():
-        locked_user = user.__class__.objects.select_for_update().get(pk=user.pk)
-        limit_error = _validate_import_limits(locked_user, {"xml_content": xml_content})
-        if limit_error:
-            return limit_error
-
-        job = UserImportJob.objects.create(
-            user=locked_user,
-            source=UserImportJob.ImportSource.myanimelist_xml,
-            source_identifier=file_name,
-        )
-        _queue_import_job(job.id, xml_content=xml_content)
-    return ImportJobActionResult(
-        payload={"message": "Import started", "job_id": job.id, "status": "pending"},
-        status_code=202,
+def create_mal_xml_import_job(user, file_name: str, entries: list[ImportedEntry]):
+    error, job = _create_job(
+        user,
+        source=UserImportJob.ImportSource.myanimelist_xml,
+        source_identifier=file_name[:255],
+        payload={"entries": [entry.to_payload() for entry in entries]},
     )
+    return error or _started(job)
 
 
-def create_anilist_import_job(user, username, access_token):
-    with transaction.atomic():
-        locked_user = user.__class__.objects.select_for_update().get(pk=user.pk)
-        limit_error = _validate_import_limits(
-            locked_user,
-            {"username": username, "access_token": access_token},
-        )
-        if limit_error:
-            return limit_error
-
-        job = UserImportJob.objects.create(
-            user=locked_user,
-            source=UserImportJob.ImportSource.anilist,
-            source_identifier=username,
-        )
-        _queue_import_job(job.id, username=username, access_token=access_token)
-    return ImportJobActionResult(
-        payload={"message": "Import started", "job_id": job.id, "status": "pending"},
-        status_code=202,
+def create_anilist_import_job(user, username, *, mode=UserImportJob.ImportMode.full):
+    """Queue an AniList import. No credential is accepted or forwarded (P0-5)."""
+    error, job = _create_job(
+        user,
+        source=UserImportJob.ImportSource.anilist,
+        source_identifier=username,
+        mode=mode,
     )
+    return error or _started(job)
 
 
 def cancel_import_job(job):
-    if job.status not in [
-        UserImportJob.ImportStatus.pending,
-        UserImportJob.ImportStatus.processing,
-    ]:
+    """Stop a pending or processing job; the running importer sees it on its next flush."""
+    cancelled = UserImportJob.objects.filter(pk=job.pk, status__in=ACTIVE_IMPORT_STATUSES).update(
+        status=UserImportJob.ImportStatus.cancelled,
+        completed_at=timezone.now(),
+        payload=None,
+    )
+    if not cancelled:
         return ImportJobActionResult(
-            payload={"error": "Cannot cancel a job that is already completed or failed"},
+            payload={
+                "detail": "This import has already finished.",
+                "code": "import_job_not_active",
+            },
             status_code=400,
         )
-
-    job.status = UserImportJob.ImportStatus.failed
-    job.errors.append("Cancelled by user")
-    job.save(update_fields=["status", "errors"])
     return ImportJobActionResult(
         payload={"message": "Import job cancelled", "job_id": job.id},
         status_code=200,

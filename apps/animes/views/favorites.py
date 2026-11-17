@@ -1,18 +1,23 @@
 from rest_framework import mixins
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
-from rest_framework.response import Response
-from rest_framework.viewsets import GenericViewSet, ModelViewSet
+from rest_framework.viewsets import GenericViewSet
 
+from ...core.api_errors import api_response
+from ...shared.throttling import ResilientUserRateThrottle
 from ...users.permissions import VerifiedEmailForWrites
-from ...users.serializers.users import (
+from ...users.serializers.favorites import (
+    AnimeFavoriteToggleSerializer,
     CharacterFavoriteSerializer,
+    CharacterFavoriteToggleSerializer,
     FavoriteCompactSerializer,
+    FavoriteReorderSerializer,
     FavoriteSerializer,
     StaffFavoriteSerializer,
+    StaffFavoriteToggleSerializer,
 )
 from ..services.favorites import (
+    FavoriteActionResult,
     delete_favorite,
     get_character_favorite_queryset,
     get_favorite_queryset,
@@ -24,17 +29,45 @@ from ..services.favorites import (
 )
 
 
-class FavoriteViewSet(ModelViewSet):
-    """Manage user favorites."""
+class FavoriteWriteThrottle(ResilientUserRateThrottle):
+    scope = "favorite_write"
+
+
+class _FavoriteViewSetBase(
+    mixins.ListModelMixin,
+    mixins.DestroyModelMixin,
+    GenericViewSet,
+):
+    """List + delete for one favorite kind; ``toggle``/``reorder`` add the write throttle."""
+
+    permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]
+    throttled_actions = frozenset({"toggle"})
+
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.action in self.throttled_actions:
+            throttles.append(FavoriteWriteThrottle())
+        return throttles
+
+    def perform_destroy(self, instance):
+        delete_favorite(instance, self.request.user)
+
+    def _respond(self, result: FavoriteActionResult, *, default_code: str):
+        return api_response(
+            result.payload, status_code=result.status_code, default_code=default_code
+        )
+
+
+class FavoriteViewSet(_FavoriteViewSetBase):
+    """Anime favorites: list, delete, toggle and reorder (no create / update)."""
 
     serializer_class = FavoriteSerializer
+    throttled_actions = frozenset({"toggle", "reorder"})
 
     def get_serializer_class(self):
         if self.request and self.request.query_params.get("compact") == "true":
             return FavoriteCompactSerializer
         return super().get_serializer_class()
-
-    permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]
 
     def get_queryset(self):
         return get_favorite_queryset(
@@ -42,35 +75,23 @@ class FavoriteViewSet(ModelViewSet):
             username=self.request.query_params.get("username"),
         )
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-    def perform_update(self, serializer):
-        if serializer.instance.user != self.request.user:
-            raise PermissionDenied("You can only modify your own favorites.")
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        delete_favorite(instance, self.request.user)
-
     @action(detail=False, methods=["post"])
     def toggle(self, request):
-        result = toggle_favorite(request.user, request.data.get("anime_id"))
-        return Response(result.payload, status=result.status_code)
+        serializer = AnimeFavoriteToggleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = toggle_favorite(request.user, serializer.validated_data["anime_id"])
+        return self._respond(result, default_code="favorite_toggle_failed")
 
     @action(detail=False, methods=["post"])
     def reorder(self, request):
-        result = reorder_favorites(request.user, request.data.get("items", []))
-        return Response(result.payload, status=result.status_code)
+        serializer = FavoriteReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = reorder_favorites(request.user, serializer.validated_data["ids"])
+        return self._respond(result, default_code="favorite_reorder_failed")
 
 
-class CharacterFavoriteViewSet(
-    mixins.ListModelMixin,
-    mixins.DestroyModelMixin,
-    GenericViewSet,
-):
+class CharacterFavoriteViewSet(_FavoriteViewSetBase):
     serializer_class = CharacterFavoriteSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]
 
     def get_queryset(self):
         return get_character_favorite_queryset(
@@ -78,22 +99,16 @@ class CharacterFavoriteViewSet(
             username=self.request.query_params.get("username"),
         )
 
-    def perform_destroy(self, instance):
-        delete_favorite(instance, self.request.user)
-
     @action(detail=False, methods=["post"])
     def toggle(self, request):
-        result = toggle_character_favorite(request.user, request.data.get("character_id"))
-        return Response(result.payload, status=result.status_code)
+        serializer = CharacterFavoriteToggleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = toggle_character_favorite(request.user, serializer.validated_data["character_id"])
+        return self._respond(result, default_code="favorite_toggle_failed")
 
 
-class StaffFavoriteViewSet(
-    mixins.ListModelMixin,
-    mixins.DestroyModelMixin,
-    GenericViewSet,
-):
+class StaffFavoriteViewSet(_FavoriteViewSetBase):
     serializer_class = StaffFavoriteSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]
 
     def get_queryset(self):
         return get_staff_favorite_queryset(
@@ -101,10 +116,9 @@ class StaffFavoriteViewSet(
             username=self.request.query_params.get("username"),
         )
 
-    def perform_destroy(self, instance):
-        delete_favorite(instance, self.request.user)
-
     @action(detail=False, methods=["post"])
     def toggle(self, request):
-        result = toggle_staff_favorite(request.user, request.data.get("staff_id"))
-        return Response(result.payload, status=result.status_code)
+        serializer = StaffFavoriteToggleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = toggle_staff_favorite(request.user, serializer.validated_data["staff_id"])
+        return self._respond(result, default_code="favorite_toggle_failed")

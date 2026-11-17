@@ -46,13 +46,39 @@ export const forumsApi = {
         const response = await api.post(`/forums/threads/${id}/unlike/`);
         return response.data;
     },
-    toggleThreadLike: async (id) => {
-        const response = await api.post(`/forums/threads/${id}/like/`);
+    toggleThreadLock: async (id) => {
+        const response = await api.post(`/forums/threads/${id}/toggle_lock/`);
+        return response.data;
+    },
+    removeThread: async (id, reason) => {
+        const response = await api.post(`/forums/threads/${id}/remove/`, reason ? { reason } : {});
+        return response.data;
+    },
+    restoreThread: async (id) => {
+        const response = await api.post(`/forums/threads/${id}/restore/`);
+        return response.data;
+    },
+    subscribeThread: async (id) => {
+        const response = await api.post(`/forums/threads/${id}/subscription/`);
+        return response.data;
+    },
+    unsubscribeThread: async (id) => {
+        const response = await api.delete(`/forums/threads/${id}/subscription/`);
         return response.data;
     },
     getPosts: async (threadId, page = 1) => {
         const response = await api.get('/forums/posts/', {
             params: { thread__id: threadId, page, ordering: 'created_at' },
+        });
+        return response.data;
+    },
+    /**
+     * One post and its subtree ("Continue this thread"), even off the current page.
+     * `page` pages the post's direct replies, so a very wide reply list stays reachable.
+     */
+    getPostSubtree: async (threadId, rootId, page = 1) => {
+        const response = await api.get('/forums/posts/', {
+            params: { thread__id: threadId, root: rootId, page },
         });
         return response.data;
     },
@@ -75,8 +101,12 @@ export const forumsApi = {
         const response = await api.post(`/forums/posts/${id}/unlike/`);
         return response.data;
     },
-    togglePostLike: async (id) => {
-        const response = await api.post(`/forums/posts/${id}/like/`);
+    removePost: async (id, reason) => {
+        const response = await api.post(`/forums/posts/${id}/remove/`, reason ? { reason } : {});
+        return response.data;
+    },
+    restorePost: async (id) => {
+        const response = await api.post(`/forums/posts/${id}/restore/`);
         return response.data;
     },
     getTags: async () => {

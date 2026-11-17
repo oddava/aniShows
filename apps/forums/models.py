@@ -1,7 +1,9 @@
 from django.db.models import (
     CASCADE,
+    SET_NULL,
     BooleanField,
     CharField,
+    DateTimeField,
     F,
     ForeignKey,
     Index,
@@ -12,6 +14,7 @@ from django.db.models import (
     PositiveSmallIntegerField,
     SlugField,
     TextField,
+    UniqueConstraint,
     Value,
 )
 from django.db.models.functions import Greatest
@@ -54,10 +57,28 @@ class Tag(Model):
         return self.name
 
 
-class Thread(TimestampMixin, Model):
+class ModerationFields(Model):
+    """Edit marker and soft-removal state shared by threads and posts."""
+
+    edited_at = DateTimeField(null=True, blank=True)
+    is_removed = BooleanField(default=False, db_index=True)
+    removed_by = ForeignKey("users.CustomUser", SET_NULL, null=True, blank=True, related_name="+")
+    removed_at = DateTimeField(null=True, blank=True)
+    removal_reason = CharField(max_length=200, blank=True)
+
+    class Meta:
+        abstract = True
+
+
+class Thread(TimestampMixin, ModerationFields, Model):
     category = ForeignKey(Category, CASCADE, related_name="threads")
+    # Mention notifications sent for this thread across all its edits (capped).
+    mentions_notified = PositiveSmallIntegerField(default=0)
     title = CharField(max_length=255, db_index=True)
-    author = ForeignKey("users.CustomUser", CASCADE, related_name="forum_threads")
+    # D-6: a deleted account's threads stay, shown as by "deleted user" (author NULL).
+    author = ForeignKey(
+        "users.CustomUser", SET_NULL, null=True, blank=True, related_name="forum_threads"
+    )
     content = TextField()
     is_pinned = BooleanField(default=False, db_index=True)
     is_locked = BooleanField(default=False)
@@ -89,15 +110,21 @@ class Thread(TimestampMixin, Model):
             like_count=Greatest(F("like_count") + delta, Value(0))
         )
 
-    def increment_view_count(self):
-        queryset = self.__class__.objects.filter(pk=self.pk)
-        queryset.update(view_count=F("view_count") + 1)
-        self.refresh_from_db(fields=["view_count"])
 
+class Post(TimestampMixin, ModerationFields, Model):
+    # Absolute depth of the deepest reply (0 = top level); a post at this depth
+    # cannot be replied to.
+    MAX_DEPTH = 10
 
-class Post(TimestampMixin, Model):
     thread = ForeignKey(Thread, CASCADE, related_name="posts")
-    author = ForeignKey("users.CustomUser", CASCADE, related_name="forum_posts")
+    # D-6: a deleted account's posts stay, shown as by "deleted user" (author NULL).
+    author = ForeignKey(
+        "users.CustomUser", SET_NULL, null=True, blank=True, related_name="forum_posts"
+    )
+    # The author deleted it (shown as "[deleted]"), as opposed to a moderator removal.
+    removed_by_author = BooleanField(default=False)
+    # Mention notifications sent for this post across all its edits (capped).
+    mentions_notified = PositiveSmallIntegerField(default=0)
     content = TextField()
     like_count = PositiveIntegerField(default=0)
     parent = ForeignKey(
@@ -117,12 +144,20 @@ class Post(TimestampMixin, Model):
         ]
 
     def __str__(self):
-        return f"Post by {self.author.username} in {self.thread.title}"
+        author = self.author.username if self.author is not None else "deleted user"
+        return f"Post by {author} in {self.thread.title}"
 
     def adjust_like_count(self, delta: int):
         self.__class__.objects.filter(pk=self.pk).update(
             like_count=Greatest(F("like_count") + delta, Value(0))
         )
+
+    @property
+    def removal(self) -> str | None:
+        """``None``, ``"author"`` (the author deleted it) or ``"moderator"``."""
+        if not self.is_removed:
+            return None
+        return "author" if self.removed_by_author else "moderator"
 
 
 class ThreadLike(CreatedAtMixin, Model):
@@ -145,3 +180,19 @@ class PostLike(CreatedAtMixin, Model):
 
     def __str__(self):
         return f"{self.user.username} likes Post {self.post.id}"
+
+
+class ThreadSubscription(CreatedAtMixin, Model):
+    """A user who is notified about new posts in a thread."""
+
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="forum_thread_subscriptions")
+    thread = ForeignKey(Thread, CASCADE, related_name="subscriptions")
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(fields=["user", "thread"], name="forums_threadsub_user_thread_uniq"),
+        ]
+        indexes = [Index(fields=["thread"], name="forums_threadsub_thread_idx")]
+
+    def __str__(self):
+        return f"{self.user_id} follows thread {self.thread_id}"

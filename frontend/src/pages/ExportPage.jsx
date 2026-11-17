@@ -73,8 +73,11 @@ const ExportPage = () => {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
-            
-            setSuccess('Export downloaded successfully!');
+
+            const skipped = Number(response.headers?.['x-export-skipped']) || 0;
+            setSuccess(skipped > 0
+                ? `Export downloaded. ${skipped} ${skipped === 1 ? 'entry' : 'entries'} without a MyAnimeList ID ${skipped === 1 ? 'was' : 'were'} left out.`
+                : 'Export downloaded successfully!');
         } catch (err) {
             setError(getApiErrorMessage(err, 'Failed to export data'));
         } finally {
@@ -87,8 +90,10 @@ const ExportPage = () => {
         setError('');
 
         try {
+            // `{data: <object>}`; an older server sent the export as a JSON string.
             const response = await importExportApi.exportDataJSON();
-            setJsonPreview(JSON.parse(response.data.data));
+            const exported = response.data?.data;
+            setJsonPreview(typeof exported === 'string' ? JSON.parse(exported) : exported);
             setShowPreview(true);
         } catch (err) {
             setError(getApiErrorMessage(err, 'Failed to load preview'));
@@ -131,7 +136,7 @@ const ExportPage = () => {
                             you always have access to your information.
                         </p>
                         <ul className="text-sm text-gray-400 list-disc list-inside space-y-1">
-                            <li>Exports include your anime list, favorites, reviews, and profile data</li>
+                            <li>Exports include your anime list, favorites, reviews, episode ratings, follows, and profile data</li>
                             <li>Your data is exported in standard formats (JSON/XML) for easy portability</li>
                             <li>Exports do not include your password or authentication tokens</li>
                             <li>Data is prepared on-demand and not stored after download</li>
@@ -163,7 +168,7 @@ const ExportPage = () => {
                         <button
                             onClick={handleExportJSON}
                             disabled={loading}
-                            className="w-full px-4 py-2 bg-accent text-dark font-semibold rounded-lg hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                            className="w-full px-4 py-2 bg-accent-dark text-dark font-semibold rounded-lg hover:bg-accent-dark/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                         >
                             {loading ? (
                                 <>
@@ -203,6 +208,10 @@ const ExportPage = () => {
                     <p className="text-gray-400 text-sm mb-4">
                         Download your anime list in MyAnimeList XML format. This format is compatible 
                         with other anime tracking platforms that support MAL imports.
+                    </p>
+                    <p className="text-gray-500 text-xs mb-4">
+                        Entries without a MyAnimeList ID are left out of the XML, since other sites could not
+                        match them. The JSON export includes every entry.
                     </p>
                     
                     <button

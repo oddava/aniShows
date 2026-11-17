@@ -75,7 +75,8 @@ class ProfileSharePreviewViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         self.assertIn('http-equiv="refresh"', content)
-        self.assertIn("window.location.replace", content)
+        # No inline script: the page's CSP would block it (A17).
+        self.assertNotIn("<script", content)
 
     def test_missing_profile_does_not_redirect_a_browser_to_itself(self):
         response = self.client.get(
@@ -86,3 +87,38 @@ class ProfileSharePreviewViewTests(TestCase):
         content = response.content.decode()
         self.assertIn('content="0;url=http://testserver/profile/missing-user"', content)
         self.assertNotIn('content="0;url=http://testserver/u/', content)
+
+
+class SharePreviewHardeningTests(TestCase):
+    """Hostile profile data stays inert in the preview HTML (A17, P1-15)."""
+
+    BROWSER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="Hostile", password="pw")
+        UserProfile.objects.filter(user=self.user).update(
+            bio='"><script>alert(1)</script><img src=x onerror=alert(2)> Likes <b>mecha</b> & more'
+        )
+
+    def test_hostile_bio_is_escaped_for_crawlers_and_browsers(self):
+        for agent in ("Discordbot/2.0", self.BROWSER):
+            with self.subTest(agent=agent):
+                content = self.client.get("/u/hostile", HTTP_USER_AGENT=agent).content.decode()
+                self.assertNotIn("<script", content)
+                self.assertNotIn("<img", content)
+                self.assertNotIn("onerror=alert", content.replace("&quot;", ""))
+                self.assertIn("Likes mecha &amp; more", content)
+
+    def test_section_path_and_canonical_case(self):
+        content = self.client.get(
+            "/u/HOSTILE/reviews", HTTP_USER_AGENT=self.BROWSER
+        ).content.decode()
+        self.assertIn("Hostile - Reviews | AniShows", content)
+        self.assertIn('href="http://testserver/u/Hostile/reviews"', content)
+        self.assertIn("url=http://testserver/profile/Hostile/reviews", content)
+
+    def test_hostile_section_is_escaped(self):
+        content = self.client.get(
+            "/u/hostile/%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E", HTTP_USER_AGENT=self.BROWSER
+        ).content.decode()
+        self.assertNotIn("<script", content)

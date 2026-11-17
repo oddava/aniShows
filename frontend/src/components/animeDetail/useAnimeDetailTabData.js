@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
 import { animeApi } from '../../api/client';
 import { animeKeys, animeQueries } from '../../api/queries/anime';
@@ -13,9 +13,10 @@ import {
  * episode list, episode ratings and recommendations, each fetched only for
  * the tab that shows it, plus the derived totals and the episode-rating
  * mutations. Called from AnimeDetail before its loading return so the
- * queries keep their timing.
+ * queries keep their timing. Overview fetches only the 4-episode preview;
+ * the 50-episode Watch page loads when the Watch tab opens.
  */
-export default function useAnimeDetailTabData({ slug, user, anime, activeTab, queryClient }) {
+export default function useAnimeDetailTabData({ slug, user, anime, activeTab, queryClient, loadRecommendations = true }) {
     const watchPreviewQueryKey = useMemo(() => animeKeys.watchPreview(slug), [slug]);
     const watchEpisodesQueryKey = useMemo(() => animeKeys.watchEpisodes(slug, WATCH_TAB_PAGE_SIZE), [slug]);
     const shouldLoadWatchPreview = activeTab === 'overview';
@@ -76,9 +77,12 @@ export default function useAnimeDetailTabData({ slug, user, anime, activeTab, qu
         staleTime: 60000,
     });
 
+    // Only once the sidebar is about to show (see useNearViewport): on a cold
+    // key the backend may spend an AniList call, and crawlers render JS.
     const { data: recommendations } = useQuery({
         ...animeQueries.recommendations(slug),
-        enabled: !!anime,
+        enabled: !!anime && loadRecommendations,
+        staleTime: 30 * 60 * 1000,
     });
 
     const watchEpisodes = useMemo(() =>
@@ -113,17 +117,6 @@ export default function useAnimeDetailTabData({ slug, user, anime, activeTab, qu
     const staffTotal = Number.isFinite(parsedStaffCount) && parsedStaffCount >= 0
         ? parsedStaffCount
         : (anime?.staff_count || 0);
-
-    useEffect(() => {
-        if (!anime || activeTab !== 'overview') {
-            return;
-        }
-
-        queryClient.prefetchInfiniteQuery({
-            ...animeQueries.watchEpisodes(slug, WATCH_TAB_PAGE_SIZE),
-            staleTime: 300000,
-        });
-    }, [anime, activeTab, queryClient, slug]);
 
     const setEpisodeRatingMutation = useMutation({
         mutationFn: ({ episodeNumber, rating }) =>

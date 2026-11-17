@@ -7,7 +7,13 @@ from django.core.cache import cache
 from django.db.models import F
 
 from ..shared.errors import CACHE_ERRORS
-from ..shared.public_cache import invalidate_public_cache_keys
+from ..shared.public_cache import (
+    best_effort_get,
+    best_effort_set,
+    cache_outage_version,
+    invalidate_public_cache_keys,
+)
+from ..shared.throttling import warn_cache_outage
 
 # Cache key templates
 THREAD_LIST_CACHE_KEY = "forum:threads:{version}:{category_slug}:{tag_slug}:{page}:{ordering}"
@@ -34,10 +40,15 @@ TAG_LIST_CACHE_TTL = 3600  # 1 hour (tags rarely change)
 
 
 def _current_version(version_key: str) -> str:
-    version = cache.get(version_key)
-    if version is None:
-        cache.add(version_key, uuid.uuid4().hex, timeout=CACHE_VERSION_TTL)
+    try:
         version = cache.get(version_key)
+        if version is None:
+            cache.add(version_key, uuid.uuid4().hex, timeout=CACHE_VERSION_TTL)
+            version = cache.get(version_key)
+    except CACHE_ERRORS:
+        # The cache is down: the payload read after this bypasses it too.
+        warn_cache_outage("forum cache version")
+        return cache_outage_version()
     return version
 
 
@@ -106,14 +117,14 @@ def invalidate_thread_detail_cache(thread_id):
 def cache_post_list(thread_id, page, data, timeout=None):
     """Cache post list data"""
     key = get_post_list_cache_key(thread_id, page)
-    cache.set(key, data, timeout or POST_LIST_CACHE_TTL)
+    best_effort_set(key, data, timeout or POST_LIST_CACHE_TTL, source="forum post list")
     return data
 
 
 def get_cached_post_list(thread_id, page=1):
     """Get cached post list data"""
     key = get_post_list_cache_key(thread_id, page)
-    return cache.get(key)
+    return best_effort_get(key, source="forum post list")
 
 
 def invalidate_post_list_cache(thread_id):
@@ -124,14 +135,14 @@ def invalidate_post_list_cache(thread_id):
 def cache_category_list(data, timeout=None):
     """Cache category list data"""
     key = get_category_list_cache_key()
-    cache.set(key, data, timeout or CATEGORY_LIST_CACHE_TTL)
+    best_effort_set(key, data, timeout or CATEGORY_LIST_CACHE_TTL, source="forum category list")
     return data
 
 
 def get_cached_category_list():
     """Get cached category list data"""
     key = get_category_list_cache_key()
-    return cache.get(key)
+    return best_effort_get(key, source="forum category list")
 
 
 def invalidate_category_list_cache():
@@ -143,14 +154,14 @@ def invalidate_category_list_cache():
 def cache_category_detail(slug, data, timeout=None):
     """Cache category detail data"""
     key = get_category_detail_cache_key(slug)
-    cache.set(key, data, timeout or CATEGORY_DETAIL_CACHE_TTL)
+    best_effort_set(key, data, timeout or CATEGORY_DETAIL_CACHE_TTL, source="forum category detail")
     return data
 
 
 def get_cached_category_detail(slug):
     """Get cached category detail data"""
     key = get_category_detail_cache_key(slug)
-    return cache.get(key)
+    return best_effort_get(key, source="forum category detail")
 
 
 def invalidate_category_detail_cache(slug):
@@ -162,14 +173,14 @@ def invalidate_category_detail_cache(slug):
 def cache_tag_list(data, timeout=None):
     """Cache tag list data"""
     key = get_tag_list_cache_key()
-    cache.set(key, data, timeout or TAG_LIST_CACHE_TTL)
+    best_effort_set(key, data, timeout or TAG_LIST_CACHE_TTL, source="forum tag list")
     return data
 
 
 def get_cached_tag_list():
     """Get cached tag list data"""
     key = get_tag_list_cache_key()
-    return cache.get(key)
+    return best_effort_get(key, source="forum tag list")
 
 
 def invalidate_tag_list_cache():
@@ -191,13 +202,16 @@ def get_thread_view_buffer_key(thread_id: int) -> str:
     return THREAD_VIEW_BUFFER_KEY.format(thread_id=thread_id)
 
 
+# NotImplementedError: the cache backend is not django-redis.
+_REDIS_CONNECTION_ERRORS: tuple[type[BaseException], ...] = (NotImplementedError, *CACHE_ERRORS)
+
+
 def _get_redis_connection():
     try:
         from django_redis import get_redis_connection
 
         return get_redis_connection("default")
-    except (NotImplementedError, *CACHE_ERRORS):
-        # NotImplementedError: the cache backend is not django-redis.
+    except _REDIS_CONNECTION_ERRORS:
         return None
 
 

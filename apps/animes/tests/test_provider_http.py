@@ -1,130 +1,129 @@
-"""HTTP behaviour of the provider clients: retries, error codes, caching, rate limits.
+"""HTTP behaviour of the AniList client: retries, error codes, caching, rate limits.
 
-Requests go through ``httpx.MockTransport`` (see ``provider_testing``); the
-tests use ``resolve`` so they hold for the async and the sync provider API.
+Requests go through ``httpx.MockTransport`` (see ``provider_testing``), routed
+by GraphQL operation name. ``RETRY_BACKOFF_SCALE`` is 0 in tests, so retry
+waits cost nothing.
 """
 
 from __future__ import annotations
 
+import hashlib
 import time
 from datetime import datetime
+from types import SimpleNamespace
 
 import httpx
 import pytest
 from django.core.cache import cache
+from django.test import override_settings
 
 from apps.animes.services.anilist import AniListService
-from apps.animes.services.jikan import (
-    JIKAN_COOLDOWN_CACHE_KEY,
-    JikanRateLimiter,
-    JikanService,
-    fetch_themes_from_jikan,
-    fetch_themes_from_jikan_with_reason,
-    get_jikan_base_url,
+from apps.animes.services.rate_limiting import AniListRateLimiter, APICallCache
+from apps.animes.tests.provider_testing import (
+    ANILIST_NOT_FOUND,
+    AniListGraphQL,
+    ProviderHTTP,
+    resolve,
+    sequence,
 )
-from apps.animes.tests.provider_testing import ProviderHTTP, http_client_for, resolve
 
-ANIME = {"data": {"mal_id": 1, "title": "Cowboy Bebop"}}
-
-
-def sequence(*steps):
-    """A route answering with each step in turn (a Response, or an exception to raise)."""
-    remaining = list(steps)
-
-    def route(request):
-        step = remaining.pop(0) if len(remaining) > 1 else remaining[0]
-        if isinstance(step, Exception):
-            raise step
-        return step
-
-    return route
+MEDIA = {"Media": {"id": 1, "idMal": 1, "title": {"romaji": "Cowboy Bebop"}}}
+QUERY = "query GetThing($id: Int) { Media(id: $id) { id } }"
 
 
 def install(monkeypatch, routes):
-    return ProviderHTTP(routes, base_url=get_jikan_base_url()).install(monkeypatch)
+    return AniListGraphQL(routes).install(monkeypatch)
 
 
 @pytest.fixture
-def jikan():
-    service = JikanService(enable_caching=False, enable_rate_limiting=False)
+def anilist():
+    service = AniListService(enable_caching=False, enable_rate_limiting=False)
     yield service
     resolve(service.close())
 
 
-def get(service, path="/anime/1/full", **kwargs):
-    return resolve(service._get(path, endpoint="anime_full", **kwargs))
+def query(service, **kwargs):
+    return service._query(QUERY, {"id": 1}, **kwargs)
 
 
-class TestJikanGet:
-    def test_retries_after_429_then_returns_payload(self, monkeypatch, jikan):
+def ok(data):
+    return httpx.Response(200, json={"data": data})
+
+
+class TestQuery:
+    def test_success_returns_the_data_object(self, monkeypatch, anilist):
+        http = install(monkeypatch, {"GetThing": MEDIA})
+
+        assert query(anilist) == MEDIA
+        (request,) = http.requests
+        assert request.method == "POST"
+        assert str(request.url) == "https://graphql.anilist.co"
+        assert http.operations() == [("GetThing", {"id": 1})]
+        assert anilist.last_error_code == ""
+
+    @override_settings(ANILIST_API_URL="https://anilist.internal/graphql")
+    def test_endpoint_comes_from_settings(self, monkeypatch):
+        http = install(monkeypatch, {"GetThing": MEDIA})
+        service = AniListService(enable_caching=False, enable_rate_limiting=False)
+
+        assert query(service) == MEDIA
+        assert str(http.requests[0].url) == "https://anilist.internal/graphql"
+        service.close()
+
+    def test_retries_after_429_then_returns_data(self, monkeypatch, anilist):
+        http = install(
+            monkeypatch,
+            {"GetThing": sequence(httpx.Response(429, headers={"Retry-After": "2"}), ok(MEDIA))},
+        )
+
+        assert query(anilist) == MEDIA
+        assert len(http.requests) == 2
+        assert anilist.last_error_code == ""
+
+    def test_429_with_rate_limit_reset_header_is_retried(self, monkeypatch, anilist):
         http = install(
             monkeypatch,
             {
-                "/anime/1/full": sequence(
-                    httpx.Response(429, headers={"Retry-After": "0"}),
-                    httpx.Response(200, json=ANIME),
+                "GetThing": sequence(
+                    httpx.Response(429, headers={"X-RateLimit-Reset": "1"}), ok(MEDIA)
                 )
             },
         )
 
-        assert get(jikan) == ANIME
+        assert query(anilist) == MEDIA
         assert len(http.requests) == 2
-        assert jikan.last_error_code == ""
 
-    def test_429_beyond_the_wait_budget_fails_fast(self, monkeypatch, jikan):
+    def test_429_beyond_the_wait_budget_fails_fast(self, monkeypatch, anilist):
         http = install(
-            monkeypatch,
-            {"/anime/1/full": httpx.Response(429, headers={"Retry-After": "30"})},
+            monkeypatch, {"GetThing": httpx.Response(429, headers={"Retry-After": "30"})}
         )
 
-        assert get(jikan, max_rate_limit_wait=0.0) == {}
+        assert query(anilist, max_rate_limit_wait=0.0) == {}
         assert len(http.requests) == 1
-        assert (jikan.last_error_code, jikan.last_error_message) == (
+        assert (anilist.last_error_code, anilist.last_error_message) == (
             "rate_limited",
-            "http_429:anime_full",
+            "http_429:GetThing",
         )
+        # Being throttled is not an outage: the breaker is untouched.
+        assert cache.get("cb:anilist_api:failures") is None
 
-    def test_429_until_retries_run_out(self, monkeypatch, jikan):
-        http = install(
-            monkeypatch,
-            {"/anime/1/full": httpx.Response(429, headers={"Retry-After": "0"})},
-        )
+    def test_429_until_retries_run_out(self, monkeypatch, anilist):
+        http = install(monkeypatch, {"GetThing": httpx.Response(429, headers={"Retry-After": "0"})})
 
-        assert get(jikan, retry_count=2) == {}
+        assert query(anilist, retry_count=2) == {}
         assert len(http.requests) == 2
-        assert jikan.last_error_code == "rate_limited"
+        assert anilist.last_error_code == "rate_limited"
 
-    def test_server_errors_are_retried_then_recorded_as_a_failure(self, monkeypatch, jikan):
-        http = install(monkeypatch, {"/anime/1/full": httpx.Response(503)})
+    def test_server_errors_are_retried_then_trip_the_breaker(self, monkeypatch, anilist):
+        http = install(monkeypatch, {"GetThing": httpx.Response(503)})
 
-        assert get(jikan, retry_count=3) == {}
+        assert query(anilist, retry_count=3) == {}
         assert len(http.requests) == 3
-        assert (jikan.last_error_code, jikan.last_error_message) == (
+        assert (anilist.last_error_code, anilist.last_error_message) == (
             "transport_error",
             "http_503",
         )
-        assert cache.get("cb:jikan_api:failures") == 1
-
-    @pytest.mark.parametrize(
-        ("response", "expected"),
-        [
-            (
-                httpx.Response(404, json={"message": "Resource does not exist"}),
-                ("not_found", "Resource does not exist"),
-            ),
-            (httpx.Response(404, json={}), ("not_found", "{}")),
-            (httpx.Response(422, json={"error": "bad q"}), ("invalid_variable", "bad q")),
-            (httpx.Response(400, json=["x"]), ("invalid_variable", '["x"]')),
-            (httpx.Response(403, text="Forbidden"), ("transport_error", "Forbidden")),
-            (httpx.Response(418, text=""), ("transport_error", "http_418")),
-        ],
-    )
-    def test_client_errors_are_not_retried(self, monkeypatch, jikan, response, expected):
-        http = install(monkeypatch, {"/anime/1/full": response})
-
-        assert get(jikan) == {}
-        assert len(http.requests) == 1
-        assert (jikan.last_error_code, jikan.last_error_message) == expected
+        assert cache.get("cb:anilist_api:failures") == 1
 
     @pytest.mark.parametrize(
         "error",
@@ -134,220 +133,302 @@ class TestJikanGet:
             httpx.RemoteProtocolError("peer closed connection"),
         ],
     )
-    def test_transport_errors_are_retried_then_reported(self, monkeypatch, jikan, error):
-        http = install(monkeypatch, {"/anime/1/full": sequence(error)})
+    def test_transport_errors_are_retried_then_reported(self, monkeypatch, anilist, error):
+        http = install(monkeypatch, {"GetThing": sequence(error)})
 
-        assert get(jikan, retry_count=2) == {}
+        assert query(anilist, retry_count=2) == {}
         assert len(http.requests) == 2
-        assert (jikan.last_error_code, jikan.last_error_message) == (
+        assert (anilist.last_error_code, anilist.last_error_message) == (
             "transport_error",
             str(error),
         )
 
-    def test_transport_error_then_success(self, monkeypatch, jikan):
-        install(
-            monkeypatch,
-            {
-                "/anime/1/full": sequence(
-                    httpx.ConnectError("refused"), httpx.Response(200, json=ANIME)
-                )
-            },
-        )
+    def test_transport_error_then_success(self, monkeypatch, anilist):
+        install(monkeypatch, {"GetThing": sequence(httpx.ConnectError("refused"), ok(MEDIA))})
 
-        assert get(jikan) == ANIME
-        assert jikan.last_error_code == ""
+        assert query(anilist) == MEDIA
+        assert anilist.last_error_code == ""
 
-    def test_invalid_json_is_retried_then_reported(self, monkeypatch, jikan):
-        http = install(monkeypatch, {"/anime/1/full": httpx.Response(200, text="<html>")})
+    @pytest.mark.parametrize(
+        "response",
+        [httpx.Response(200, text="<html>"), httpx.Response(200, json=["not", "a", "dict"])],
+    )
+    def test_undecodable_bodies_are_retried_then_reported(self, monkeypatch, anilist, response):
+        http = install(monkeypatch, {"GetThing": response})
 
-        assert get(jikan, retry_count=2) == {}
+        assert query(anilist, retry_count=2) == {}
         assert len(http.requests) == 2
-        assert jikan.last_error_code == "transport_error"
+        assert anilist.last_error_code == "transport_error"
 
-    def test_drops_empty_params_and_passes_the_timeout(self, monkeypatch, jikan):
-        http = install(monkeypatch, {"/anime": {"data": []}})
+    def test_graphql_not_found_is_final(self, monkeypatch, anilist):
+        http = install(monkeypatch, {"GetThing": httpx.Response(404, json=ANILIST_NOT_FOUND)})
 
-        resolve(
-            jikan._get(
-                "/anime",
-                params={"q": "bebop", "page": None, "genres": [], "type": ""},
-                request_timeout=8.0,
-            )
-        )
+        assert query(anilist) == {}
+        assert len(http.requests) == 1
+        assert (anilist.last_error_code, anilist.last_error_message) == ("not_found", "Not Found.")
+        assert cache.get("cb:anilist_api:failures") is None
 
-        (request,) = http.requests
-        assert dict(request.url.params) == {"q": "bebop"}
-        assert request.extensions["timeout"]["read"] == 8.0
+    def test_not_found_inside_a_200_is_still_not_found(self, monkeypatch, anilist):
+        install(monkeypatch, {"GetThing": httpx.Response(200, json=ANILIST_NOT_FOUND)})
 
-    def test_successful_payloads_are_cached(self, monkeypatch):
-        http = install(monkeypatch, {"/anime/1/full": ANIME, "/anime/2/full": {}})
-        service = JikanService(enable_caching=True, enable_rate_limiting=False)
-
-        assert get(service) == ANIME
-        assert get(service) == ANIME
-        assert get(service, use_cache=False) == ANIME
-        # Empty payloads are not cached.
-        assert get(service, "/anime/2/full") == {}
-        assert get(service, "/anime/2/full") == {}
-        resolve(service.close())
-
-        assert http.calls() == [
-            "GET /anime/1/full",
-            "GET /anime/1/full",
-            "GET /anime/2/full",
-            "GET /anime/2/full",
-        ]
-
-    def test_open_circuit_breaker_skips_the_request(self, monkeypatch, jikan):
-        http = install(monkeypatch, {"/anime/1/full": ANIME})
-        cache.set("cb:jikan_api:state", "OPEN")
-        cache.set("cb:jikan_api:last_failure", datetime.now())
-
-        assert get(jikan) == {}
-        assert http.requests == []
-        assert jikan.last_error_message == "circuit_breaker_open"
-
-    def test_rate_limited_service_records_successes(self, monkeypatch):
-        install(monkeypatch, {"/anime/1/full": ANIME})
-        service = JikanService(enable_caching=False, enable_rate_limiting=True)
-        service.rate_limiter.current_delay = 0.0
-
-        assert get(service) == ANIME
-        assert service.rate_limiter.total_requests == 1
-        resolve(service.close())
-
-
-class TestJikanRateLimiter:
-    def test_success_streak_shortens_the_delay(self):
-        limiter = JikanRateLimiter(base_delay=2.0, min_delay=1.0, success_streak_threshold=2)
-        limiter.record_success()
-        assert limiter.current_delay == 2.0
-        limiter.record_success()
-        assert limiter.current_delay == pytest.approx(1.9)
-        assert limiter.success_streak == 0
-
-    def test_429_backs_off_and_sets_a_shared_cooldown(self):
-        limiter = JikanRateLimiter(base_delay=1.0, max_delay=5.0)
-        before = time.time()
-        limiter.record_429(cooldown_hint=12.0)
-
-        assert limiter.consecutive_429s == 1
-        assert 3.0 <= limiter.current_delay <= 3.6
-        assert cache.get(JIKAN_COOLDOWN_CACHE_KEY) >= before + 12.0
-        assert limiter.get_stats()["total_429s"] == 1
-
-        limiter.record_error()
-        assert limiter.current_delay <= 5.0
-        assert limiter.success_streak == 0
-
-    def test_acquire_waits_out_the_shared_cooldown_and_spacing(self):
-        limiter = JikanRateLimiter(base_delay=0.05, min_delay=0.05)
-        cache.set(JIKAN_COOLDOWN_CACHE_KEY, time.time() + 0.05)
-
-        started = time.monotonic()
-        resolve(limiter.acquire())
-        resolve(limiter.acquire())
-        elapsed = time.monotonic() - started
-
-        assert elapsed >= 0.09
-        assert limiter.total_requests == 2
-
-
-class TestJikanThemes:
-    URL = "/anime/5/themes"
-
-    def fetch(
-        self, monkeypatch, response, *, max_retries=0, func=fetch_themes_from_jikan_with_reason
-    ):
-        http = install(monkeypatch, {self.URL: response})
-        limiter = JikanRateLimiter(base_delay=0.0, min_delay=0.0)
-        client = http_client_for(func, timeout=15.0)
-        try:
-            result = resolve(
-                func(http_client=client, mal_id=5, rate_limiter=limiter, max_retries=max_retries)
-            )
-        finally:
-            resolve(client.aclose() if isinstance(client, httpx.AsyncClient) else client.close())
-        return result, http, limiter
-
-    def test_success(self, monkeypatch):
-        result, http, limiter = self.fetch(
-            monkeypatch, {"data": {"openings": ["1: A by B"], "endings": []}}
-        )
-
-        assert result.success is True
-        assert result.themes == {"openings": ["1: A by B"], "endings": []}
-        assert limiter.success_streak == 1
-        assert http.calls() == ["GET /anime/5/themes"]
-
-    def test_wrapper_returns_themes_or_none(self, monkeypatch):
-        themes, _, _ = self.fetch(monkeypatch, {"data": {}}, func=fetch_themes_from_jikan)
-        assert themes == {"openings": [], "endings": []}
-
-        missing, _, _ = self.fetch(
-            monkeypatch, httpx.Response(404, json={}), func=fetch_themes_from_jikan
-        )
-        assert missing is None
+        assert query(anilist) == {}
+        assert anilist.last_error_code == "not_found"
 
     @pytest.mark.parametrize(
         ("response", "expected"),
         [
-            (httpx.Response(404, json={}), ("not_found", "http_404", False)),
-            (httpx.Response(422, json={}), ("invalid_variable", "http_422", False)),
-            (httpx.Response(403, json={}), ("transport_error", "http_403", False)),
-            (httpx.Response(429, headers={"Retry-After": "0"}), ("rate_limited", "http_429", True)),
-            (httpx.Response(503), ("transport_error", "http_503", True)),
+            (
+                httpx.Response(
+                    400,
+                    json={
+                        "errors": [{"message": 'Variable "$id" got invalid value', "status": 400}],
+                        "data": None,
+                    },
+                ),
+                ("invalid_variable", 'Variable "$id" got invalid value'),
+            ),
+            # The query itself was rejected (schema change, complexity limit):
+            # not the row's fault, so it stays retryable later.
+            (
+                httpx.Response(400, json={"errors": [{"message": "Syntax Error", "status": 400}]}),
+                ("query_rejected", "Syntax Error"),
+            ),
+            (httpx.Response(403, json={}), ("transport_error", "http_403:GetThing")),
         ],
     )
-    def test_failures_carry_a_reason(self, monkeypatch, response, expected):
-        result, http, _ = self.fetch(monkeypatch, response)
+    def test_client_errors_are_not_retried(self, monkeypatch, anilist, response, expected):
+        http = install(monkeypatch, {"GetThing": response})
 
-        assert result.success is False
-        assert (result.reason_code, result.message, result.transient) == expected
+        assert query(anilist) == {}
+        assert len(http.requests) == 1
+        assert (anilist.last_error_code, anilist.last_error_message) == expected
+
+    def test_partial_data_with_errors_is_returned(self, monkeypatch, anilist):
+        install(
+            monkeypatch,
+            {
+                "GetThing": httpx.Response(
+                    200, json={"data": MEDIA, "errors": [{"message": "staff unavailable"}]}
+                )
+            },
+        )
+
+        assert query(anilist) == MEDIA
+
+    def test_passes_the_request_timeout(self, monkeypatch, anilist):
+        http = install(monkeypatch, {"GetThing": MEDIA})
+
+        query(anilist, request_timeout=8.0)
+
+        assert http.requests[0].extensions["timeout"]["read"] == 8.0
+
+    def test_successful_responses_are_cached(self, monkeypatch):
+        # GetOther is unrouted: AniList's 404, an error response.
+        http = install(monkeypatch, {"GetThing": MEDIA})
+        service = AniListService(enable_caching=True, enable_rate_limiting=False)
+
+        assert query(service) == MEDIA
+        assert query(service) == MEDIA
+        assert query(service, use_cache=False) == MEDIA
+        other = "query GetOther { Media { id } }"
+        # Error responses are not cached.
+        assert service._query(other, {}) == {}
+        assert service._query(other, {}) == {}
+        service.close()
+
+        assert [name for name, _ in http.operations()] == [
+            "GetThing",
+            "GetThing",
+            "GetOther",
+            "GetOther",
+        ]
+
+    def test_cache_key_is_a_stable_digest(self):
+        params = '{"query": "q", "variables": {}}'
+        digest = hashlib.sha256(params.encode()).hexdigest()[:32]
+
+        assert APICallCache()._get_cache_key("GetThing", params) == f"api:cache:GetThing:{digest}"
+
+    def test_open_circuit_breaker_skips_the_request(self, monkeypatch, anilist):
+        http = install(monkeypatch, {"GetThing": MEDIA})
+        cache.set("cb:anilist_api:state", "OPEN")
+        cache.set("cb:anilist_api:last_failure", datetime.now())
+
+        assert query(anilist) == {}
+        assert http.requests == []
+        assert (anilist.last_error_code, anilist.last_error_message) == (
+            "transport_error",
+            "circuit_breaker_open",
+        )
+
+    def test_rate_limiter_is_consulted_per_attempt(self, monkeypatch):
+        install(monkeypatch, {"GetThing": sequence(httpx.Response(503), ok(MEDIA))})
+        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        calls = []
+        monkeypatch.setattr(
+            service.rate_limiter, "acquire", lambda max_wait=None: calls.append(max_wait) or True
+        )
+
+        assert query(service) == MEDIA
+        assert calls == [None, None]
+        service.close()
+
+
+class TestRateLimiter:
+    @override_settings(ANILIST_RATE_LIMIT_PER_MINUTE=90)
+    def test_limit_comes_from_settings(self):
+        limiter = AniListRateLimiter()
+
+        assert (limiter.rate_limit, limiter.safety_margin) == (90, 9)
+        assert limiter.min_delay == pytest.approx(60 / 81)
+
+    def test_default_is_the_degraded_limit(self):
+        limiter = AniListRateLimiter()
+
+        assert (limiter.rate_limit, limiter.safety_margin) == (30, 3)
+        assert limiter.min_delay == pytest.approx(60 / 27)
+
+    def test_explicit_limit_and_a_limit_of_one(self):
+        assert AniListRateLimiter(rate_limit=10).min_delay == pytest.approx(60 / 9)
+        single = AniListRateLimiter(rate_limit=1)
+        assert (single.safety_margin, single.min_delay) == (0, 60.0)
+
+
+class TestBatchAndDetailQueries:
+    def test_airing_ids_are_fetched_fifty_per_request(self, monkeypatch, anilist):
+        def page(variables, request):
+            return {"Page": {"media": [{"id": i, "idMal": i + 1000} for i in variables["ids"]]}}
+
+        http = install(monkeypatch, {"GetAiringByIds": page})
+
+        results = anilist.get_airing_by_ids(anilist_ids=[*range(1, 52), 1, 0, -3])
+
+        assert [len(variables["ids"]) for _, variables in http.operations()] == [50, 1]
+        assert [variables["perPage"] for _, variables in http.operations()] == [50, 1]
+        assert [item["id"] for item in results] == list(range(1, 52))
+
+    def test_airing_by_mal_ids_uses_the_mal_filter(self, monkeypatch, anilist):
+        http = install(monkeypatch, {"GetAiringByIds": {"Page": {"media": [{"id": 5}]}}})
+
+        assert anilist.get_airing_by_ids(mal_ids=[21]) == [{"id": 5}]
+        body = http.requests[0].content.decode()
+        assert "idMal_in: $ids" in body
+        assert anilist.get_airing_by_ids() == []
         assert len(http.requests) == 1
 
-    @pytest.mark.parametrize(
-        "error",
-        [httpx.ConnectError("refused"), httpx.RemoteProtocolError("closed")],
-    )
-    def test_transport_errors_are_transient(self, monkeypatch, error):
-        result, _, limiter = self.fetch(monkeypatch, sequence(error))
-
-        assert (result.success, result.reason_code, result.transient) == (
-            False,
-            "transport_error",
-            True,
-        )
-        assert result.message == str(error)
-        assert limiter.current_delay > 0.0 or limiter.success_streak == 0
-
-    def test_invalid_json_is_reported(self, monkeypatch):
-        result, _, _ = self.fetch(monkeypatch, httpx.Response(200, text="nope"))
-
-        assert (result.success, result.reason_code) == (False, "transport_error")
-
-    def test_retries_after_429(self, monkeypatch):
-        result, http, limiter = self.fetch(
-            monkeypatch,
-            sequence(
-                httpx.Response(429, headers={"Retry-After": "0"}),
-                httpx.Response(200, json={"data": {"openings": [], "endings": ["1: E"]}}),
-            ),
-            max_retries=1,
+    def test_single_airing_payload_and_its_errors(self, monkeypatch, anilist):
+        http = install(
+            monkeypatch, {"GetAiringAnime": {"Media": {"id": 21, "status": "RELEASING"}}}
         )
 
-        assert result.success is True
-        assert result.themes["endings"] == ["1: E"]
+        assert anilist.get_airing_anime(anilist_id=21) == {"id": 21, "status": "RELEASING"}
+        assert anilist.get_airing_anime(mal_id=21) == {"id": 21, "status": "RELEASING"}
+        assert http.operations() == [
+            ("GetAiringAnime", {"id": 21}),
+            ("GetAiringAnime", {"idMal": 21}),
+        ]
+
+        assert anilist.get_airing_anime() is None
+        assert anilist.last_error_code == "invalid_variable"
         assert len(http.requests) == 2
-        assert limiter.total_429s == 1
+
+    def test_missing_airing_payload_is_not_found(self, monkeypatch, anilist):
+        install(monkeypatch, {"GetAiringAnime": {"Media": None}})
+
+        assert anilist.get_airing_anime(anilist_id=99) is None
+        assert (anilist.last_error_code, anilist.last_error_message) == ("not_found", "airing:99")
+
+    def test_episode_schedule_follows_pages(self, monkeypatch, anilist):
+        def schedule(variables, request):
+            page = variables["page"]
+            return {
+                "Media": {
+                    "id": 21,
+                    "idMal": 21,
+                    "episodes": None,
+                    "status": "RELEASING",
+                    "nextAiringEpisode": {"episode": 4, "airingAt": 1},
+                    "streamingEpisodes": [{"title": "Episode 1 - A"}, "junk"],
+                    "airingSchedule": {
+                        "pageInfo": {"hasNextPage": page < 3},
+                        "nodes": [{"episode": page, "airingAt": page * 10}, None],
+                    },
+                }
+            }
+
+        http = install(monkeypatch, {"GetAnimeEpisodes": schedule})
+
+        result = anilist.get_episode_schedule(anilist_id=21)
+
+        assert [variables["page"] for _, variables in http.operations()] == [1, 2, 3]
+        assert result == {
+            "id": 21,
+            "idMal": 21,
+            "episodes": None,
+            "status": "RELEASING",
+            "nextAiringEpisode": {"episode": 4, "airingAt": 1},
+            "streamingEpisodes": [{"title": "Episode 1 - A"}],
+            "airingSchedule": [
+                {"episode": 1, "airingAt": 10},
+                {"episode": 2, "airingAt": 20},
+                {"episode": 3, "airingAt": 30},
+            ],
+            "partial": False,
+        }
+
+    def test_interactive_episode_schedule_caps_pages_and_retries(self, monkeypatch, anilist):
+        endless = {
+            "Media": {
+                "id": 1,
+                "airingSchedule": {"pageInfo": {"hasNextPage": True}, "nodes": []},
+            }
+        }
+        http = install(monkeypatch, {"GetAnimeEpisodes": endless})
+
+        anilist.get_episode_schedule(mal_id=1, request_budget="interactive")
+
+        assert len(http.requests) == AniListService.EPISODE_SCHEDULE_INTERACTIVE_PAGES
+        # Streaming links only on the first page.
+        assert [variables for _, variables in http.operations()[:2]] == [
+            {"idMal": 1, "page": 1, "withStreaming": True},
+            {"idMal": 1, "page": 2, "withStreaming": False},
+        ]
+        assert http.requests[0].extensions["timeout"]["read"] == 8.0
+
+    def test_episode_schedule_not_found(self, monkeypatch, anilist):
+        install(monkeypatch, {})
+
+        assert anilist.get_episode_schedule(anilist_id=5) is None
+        assert anilist.last_error_code == "not_found"
+        assert anilist.get_episode_schedule() is None
+        assert anilist.last_error_code == "invalid_variable"
+
+    def test_recommendations_by_mal_id(self, monkeypatch, anilist):
+        http = install(
+            monkeypatch, {"GetAnimeRecommendations": "anilist/recommendations_154587.json"}
+        )
+
+        recommendations = anilist.get_recommendations_for_anime(mal_id=52991, limit=3)
+
+        assert recommendations
+        assert http.operations() == [("GetAnimeRecommendations", {"idMal": 52991, "perPage": 3})]
+        assert "idMal: $idMal" in http.requests[0].content.decode()
+
+    def test_recommendations_prefer_the_anilist_id(self, monkeypatch, anilist):
+        http = install(monkeypatch, {"GetAnimeRecommendations": {"Media": None}})
+
+        assert anilist.get_recommendations_for_anime(154587, mal_id=52991) == []
+        assert http.operations() == [("GetAnimeRecommendations", {"id": 154587, "perPage": 8})]
+        assert anilist.get_recommendations_for_anime(None) == []
+        assert anilist.last_error_code == "invalid_variable"
 
 
 class TestImageDownloads:
     IMAGE = "https://cdn.myanimelist.net/images/anime/1/1.jpg"
 
-    @pytest.fixture(params=[JikanService, AniListService])
-    def service(self, request):
-        service = request.param(enable_caching=False, enable_rate_limiting=False)
+    @pytest.fixture
+    def service(self):
+        service = AniListService(enable_caching=False, enable_rate_limiting=False)
         yield service
         resolve(service.close())
 
@@ -404,3 +485,258 @@ class TestAniListClientState:
         assert service._get_cached_result("graphql", "k") is None
         resolve(service._acquire_rate_limit())
         resolve(service.close())
+
+
+class TestRequestsWhileAUserWaits:
+    """Interactive calls must not hold a web worker waiting for a rate-limit slot."""
+
+    @pytest.fixture
+    def limited(self):
+        service = AniListService(enable_caching=False, enable_rate_limiting=True)
+        yield service
+        service.close()
+
+    @staticmethod
+    def no_sleeping(monkeypatch):
+        def fail(seconds):
+            raise AssertionError(f"slept {seconds}s")
+
+        monkeypatch.setattr("apps.animes.services.rate_limiting.time.sleep", fail)
+
+    def test_full_window_fails_fast_without_a_request(self, monkeypatch, limited):
+        http = install(monkeypatch, {"GetThing": MEDIA})
+        monkeypatch.setattr(limited.rate_limiter, "_take_shared_slot", lambda **_: False)
+        self.no_sleeping(monkeypatch)
+
+        assert query(limited, max_rate_limit_wait=0.0) == {}
+        assert limited.last_error_code == "rate_limited"
+        assert http.requests == []
+
+    def test_interactive_service_caps_every_query(self, monkeypatch):
+        http = install(monkeypatch, {"GetThing": httpx.Response(503)})
+        service = AniListService(
+            enable_caching=False, enable_rate_limiting=True, request_budget="interactive"
+        )
+        monkeypatch.setattr(service.rate_limiter, "_take_shared_slot", lambda **_: False)
+        self.no_sleeping(monkeypatch)
+
+        assert query(service) == {}
+        assert service.last_error_code == "rate_limited"
+        assert http.requests == []
+
+        monkeypatch.setattr(service.rate_limiter, "_take_shared_slot", lambda **_: True)
+        assert query(service) == {}
+        assert len(http.requests) == 1  # one try only
+        assert http.requests[0].extensions["timeout"]["read"] == 8.0
+        service.close()
+
+    def test_a_429_pauses_every_worker(self, monkeypatch, limited):
+        install(monkeypatch, {"GetThing": httpx.Response(429, headers={"Retry-After": "30"})})
+        assert query(limited, max_rate_limit_wait=0.0) == {}
+
+        other_worker = AniListService(enable_caching=False, enable_rate_limiting=True)
+        http = install(monkeypatch, {"GetThing": MEDIA})
+        self.no_sleeping(monkeypatch)
+        assert query(other_worker, max_rate_limit_wait=0.0) == {}
+        assert other_worker.last_error_code == "rate_limited"
+        assert http.requests == []
+        other_worker.close()
+
+    def test_background_calls_wait_out_the_pause(self, monkeypatch):
+        limiter = AniListRateLimiter()
+        limiter.pause(5)
+        slept = []
+
+        def sleep(seconds):
+            slept.append(seconds)
+            cache.delete(AniListRateLimiter.PAUSE_KEY)
+
+        monkeypatch.setattr("apps.animes.services.rate_limiting.time.sleep", sleep)
+
+        assert limiter.acquire() is True
+        assert 4 < slept[0] <= 5
+
+
+class TestPagination:
+    def test_last_page_keeps_the_page_size_so_no_row_repeats(self, monkeypatch, anilist):
+        def page(variables, _request):
+            first = (variables["page"] - 1) * variables["perPage"]
+            media = [{"id": first + n + 1} for n in range(variables["perPage"])]
+            return {"Page": {"pageInfo": {"hasNextPage": True}, "media": media}}
+
+        http = install(monkeypatch, {"GetAnime": page})
+
+        ids = [item["id"] for item in anilist.get_recent_updates(limit=40)]
+
+        assert ids == list(range(1, 41))
+        assert [variables["perPage"] for _, variables in http.operations()] == [25, 25]
+
+
+class TestRejectedQuery:
+    def test_a_rejected_operation_stops_alone(self, monkeypatch, anilist):
+        rejected = httpx.Response(400, json={"errors": [{"message": "Field x unknown"}]})
+        http = install(monkeypatch, {"GetThing": rejected, "GetOther": MEDIA})
+        other = "query GetOther($id: Int) { Media(id: $id) { id } }"
+
+        for _ in range(5):
+            assert query(anilist) == {}
+            # Another operation's success must not reset the broken one's count.
+            assert anilist._query(other, {"id": 1}) == MEDIA
+        sent = len(http.requests)
+
+        assert query(anilist) == {}
+        assert anilist.last_error_code == "query_rejected"
+        assert len(http.requests) == sent  # not sent again
+        assert anilist._query(other, {"id": 1}) == MEDIA  # the rest carry on
+        assert not cache.get("cb:anilist_api:failures")
+
+    def test_a_changed_query_starts_with_a_closed_breaker(self, monkeypatch, anilist):
+        # The release that fixes a rejected query must not inherit its breaker.
+        http = install(monkeypatch, {"GetThing": MEDIA})
+        broken = AniListService._query_breaker("GetThing", "query GetThing { old }")
+        for _ in range(5):
+            broken.record_failure()
+        assert broken.is_open()
+
+        assert query(anilist) == MEDIA
+        assert len(http.requests) == 1
+
+    def test_a_bad_variable_does_not(self, monkeypatch, anilist):
+        install(
+            monkeypatch,
+            {
+                "GetThing": httpx.Response(
+                    400, json={"errors": [{"message": 'Variable "$id" got invalid value'}]}
+                )
+            },
+        )
+        query(anilist)
+        assert anilist.last_error_code == "invalid_variable"
+        assert not cache.get("cb:anilist_api:failures")
+        assert not cache.get("cb:anilist_query:GetThing:failures")
+
+
+class FakeRedis:
+    """Just enough of a Redis client for the limiter's per-minute counter."""
+
+    def __init__(self):
+        self.counts: dict[str, int] = {}
+
+    def pipeline(self):
+        redis = self
+
+        class Pipeline:
+            def __init__(self):
+                self.result = []
+
+            def incr(self, key):
+                redis.counts[key] = redis.counts.get(key, 0) + 1
+                self.result.append(redis.counts[key])
+
+            def expire(self, key, seconds):
+                self.result.append(True)
+
+            def execute(self):
+                return self.result
+
+        return Pipeline()
+
+    def decr(self, key):
+        self.counts[key] -= 1
+
+
+class TestSharedBudget:
+    @pytest.fixture
+    def redis(self, monkeypatch):
+        fake = FakeRedis()
+        client = type("Client", (), {"get_client": staticmethod(lambda: fake)})()
+        monkeypatch.setattr(
+            "apps.animes.services.rate_limiting.cache.client", client, raising=False
+        )
+        return fake
+
+    # rate_limit=30: a budget of 27 after the safety margin; web may use 13 of
+    # it, and background work leaves 2 free.
+
+    def test_web_requests_use_at_most_half_of_each_minute(self, redis):
+        limiter = AniListRateLimiter(rate_limit=30)
+
+        granted = sum(limiter._take_shared_slot(interactive=True) for _ in range(20))
+
+        assert granted == 13
+        # Refused tries gave their counts back: background work keeps the rest
+        # of the budget, short of the web reserve.
+        background = sum(limiter._take_shared_slot() for _ in range(20))
+        assert background == 25 - 13
+
+    def test_a_running_sync_still_leaves_slots_for_users(self, redis):
+        limiter = AniListRateLimiter(rate_limit=30)
+
+        background = sum(limiter._take_shared_slot() for _ in range(40))
+        web = sum(limiter._take_shared_slot(interactive=True) for _ in range(5))
+
+        assert (background, web) == (25, 2)
+        minute = limiter._get_current_window_key()
+        assert redis.counts == {minute: 27, f"{minute}:web": 2}
+
+    def test_web_gets_the_rest_of_the_budget_after_a_partial_sync(self, redis):
+        limiter = AniListRateLimiter(rate_limit=30)
+
+        assert sum(limiter._take_shared_slot() for _ in range(20)) == 20
+        assert sum(limiter._take_shared_slot(interactive=True) for _ in range(20)) == 7
+
+    def test_interactive_acquire_fails_fast_once_its_share_is_used(self, redis, monkeypatch):
+        limiter = AniListRateLimiter(rate_limit=30)
+        monkeypatch.setattr(
+            "apps.animes.services.rate_limiting.time.sleep",
+            lambda seconds: pytest.fail(f"slept {seconds}s"),
+        )
+        results = [limiter.acquire(max_wait=0.0) for _ in range(14)]
+        assert results.count(True) == 13
+        assert results[-1] is False
+
+
+class TestInteractiveEpisodeDeadline:
+    def test_all_pages_share_one_deadline(self, monkeypatch, anilist):
+        endless = {
+            "Media": {"id": 1, "airingSchedule": {"pageInfo": {"hasNextPage": True}, "nodes": []}}
+        }
+        http = install(monkeypatch, {"GetAnimeEpisodes": endless})
+        # The client's own clock: start, page 1, page 2, then past the 10 s deadline.
+        readings = [0.0, 0.0, 7.0, 11.0]
+        fake_time = SimpleNamespace(
+            monotonic=lambda: readings.pop(0) if len(readings) > 1 else readings[0],
+            time=time.time,
+            sleep=time.sleep,
+        )
+        monkeypatch.setattr("apps.animes.services.providers.anilist.client.time", fake_time)
+
+        result = anilist.get_episode_schedule(anilist_id=1, request_budget="interactive")
+
+        assert len(http.requests) == 2
+        timeouts = [request.extensions["timeout"]["read"] for request in http.requests]
+        assert timeouts == [8.0, 3.0]  # the second page only gets what is left
+        assert result["partial"] is True
+
+    def test_a_failed_later_page_marks_the_result_partial(self, monkeypatch, anilist):
+        first = {
+            "Media": {
+                "id": 1,
+                "airingSchedule": {"pageInfo": {"hasNextPage": True}, "nodes": [{"episode": 1}]},
+            }
+        }
+        install(monkeypatch, {"GetAnimeEpisodes": sequence(ok(first), httpx.Response(503))})
+
+        result = anilist.get_episode_schedule(anilist_id=1)
+
+        assert result["partial"] is True
+        assert result["airingSchedule"] == [{"episode": 1}]
+
+    def test_the_page_cap_is_not_partial(self, monkeypatch, anilist):
+        endless = {
+            "Media": {"id": 1, "airingSchedule": {"pageInfo": {"hasNextPage": True}, "nodes": []}}
+        }
+        install(monkeypatch, {"GetAnimeEpisodes": endless})
+        monkeypatch.setattr(AniListService, "EPISODE_SCHEDULE_MAX_PAGES", 2)
+
+        assert anilist.get_episode_schedule(anilist_id=1)["partial"] is False

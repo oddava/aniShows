@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * Desktop navbar auto-hide: hides after 1.5 s idle or when scrolling down,
- * shows on scroll up, near the top of the page or when the pointer is in the
+ * Desktop navbar auto-hide: hides when scrolling down, shows on scroll up,
+ * near the top of the page, on keyboard focus or when the pointer is in the
  * top 90 px. Never hides while the user is interacting (hovering, search
  * expanded, profile menu open, suggestions shown, search in flight).
  */
@@ -24,20 +24,10 @@ export default function useNavbarAutoHide({ isSearchExpanded, isProfileOpen, sho
     useEffect(() => { showSuggestionsRef.current = showSuggestions; }, [showSuggestions]);
     useEffect(() => { isSearchingRef.current = isSearching; }, [isSearching]);
 
+    // No idle timer: the bar only hides on a downward scroll (see below) and
+    // comes back on scroll-up, so it never disappears while someone reads.
     const startHideTimer = useCallback(() => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => {
-            const isInteracting = 
-                isHoveredRef.current || 
-                isSearchExpandedRef.current || 
-                isProfileOpenRef.current || 
-                showSuggestionsRef.current || 
-                isSearchingRef.current;
-                
-            if (!isInteracting) {
-                setIsVisible(false);
-            }
-        }, 1500); // Hide after 1.5 seconds of idle time
     }, []);
 
     // Watch for interactions closing to resume hide timer
@@ -83,15 +73,34 @@ export default function useNavbarAutoHide({ isSearchExpanded, isProfileOpen, sho
             }
         };
 
+        // Keyboard focus inside the bar keeps it visible (it is still
+        // focusable while hidden, so focus must reveal it).
+        const handleFocusIn = (e) => {
+            if (e.target?.closest?.('[data-autohide-nav]')) {
+                isHoveredRef.current = true;
+                setIsVisible(true);
+                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            }
+        };
+        const handleFocusOut = (e) => {
+            if (e.target?.closest?.('[data-autohide-nav]') && !e.relatedTarget?.closest?.('[data-autohide-nav]')) {
+                isHoveredRef.current = false;
+                startHideTimer();
+            }
+        };
+
         // Initialize state listener
         startHideTimer();
 
         window.addEventListener('scroll', handleScroll, { passive: true });
         window.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('focusin', handleFocusIn);
+        document.addEventListener('focusout', handleFocusOut);
         return () => {
             window.removeEventListener('scroll', handleScroll);
             window.removeEventListener('mousemove', handleMouseMove);
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            document.removeEventListener('focusin', handleFocusIn);
+            document.removeEventListener('focusout', handleFocusOut);
         };
     }, [lastScrollY, startHideTimer]);
 

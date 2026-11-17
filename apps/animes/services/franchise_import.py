@@ -6,15 +6,28 @@ from django.db import DatabaseError
 from ...shared.logger import logger
 from ...shared.public_cache import invalidate_public_cache_keys
 from ..models import Anime
-from .jikan import JikanService
+from .anilist import TRANSIENT_ERROR_CODES, AniListService
 from .relation_links import link_relations_to
 
 
 class FranchiseImportError(Exception):
-    def __init__(self, message: str, status_code: int):
+    def __init__(
+        self,
+        message: str,
+        status_code: int,
+        *,
+        code: str = "franchise_import_failed",
+        retry_after: int | None = None,
+    ):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+        self.code = code
+        self.retry_after = retry_after
+
+
+# Seconds a client should wait when AniList was busy or down.
+PROVIDER_RETRY_AFTER_SECONDS = 30
 
 
 @dataclass(slots=True)
@@ -60,15 +73,26 @@ class FranchiseImportService:
                 imported=False,
             )
 
-        if not mal_id:
-            # Jikan can only fetch by MAL ID; an unknown AniList-only relation can't be imported.
-            raise FranchiseImportError("Not found", 404)
+        limit_key = rate_limit_key or client_ip
+        self._enforce_rate_limit(limit_key)
 
-        self._enforce_rate_limit(rate_limit_key or client_ip)
-
-        service = JikanService(enable_caching=False, enable_rate_limiting=True)
+        service = AniListService(
+            enable_caching=False, enable_rate_limiting=True, request_budget="interactive"
+        )
         try:
-            item = service.search_by_mal_id(mal_id, anilist_id=anilist_id)
+            item = service.get_anime_by_id(anilist_id) if anilist_id else None
+            if not item and mal_id and service.last_error_code not in TRANSIENT_ERROR_CODES:
+                item = service.search_by_mal_id(mal_id)
+            if not item and service.last_error_code in TRANSIENT_ERROR_CODES:
+                # AniList was busy or down, which says nothing about the anime:
+                # not a 404, and not held against the user's import allowance.
+                self._refund_rate_limit(limit_key)
+                raise FranchiseImportError(
+                    "AniList is unavailable right now. Try again shortly.",
+                    503,
+                    code="provider_unavailable",
+                    retry_after=PROVIDER_RETRY_AFTER_SECONDS,
+                )
             if not item:
                 raise FranchiseImportError("Not found", 404)
 
@@ -81,11 +105,6 @@ class FranchiseImportService:
                 f"anime_detail_base:v2:{anime.slug}",
                 f"anime_detail_base:{anime.slug}",
             )
-
-            if anime.mal_id:
-                from ..tasks.themes import sync_theme_songs
-
-                sync_theme_songs.delay(anime_id=anime.id)
 
             if source_slug:
                 self.update_relation_slug(source_slug, anime)
@@ -117,7 +136,9 @@ class FranchiseImportService:
 
     def _refresh_existing_anime(self, anime: Anime) -> None:
         """Fetch fresh sync data for an existing anime with missing media metadata."""
-        service = JikanService(enable_caching=False, enable_rate_limiting=True)
+        service = AniListService(
+            enable_caching=False, enable_rate_limiting=True, request_budget="interactive"
+        )
         try:
             item = service.resolve_media_for_anime(anime)
             if item:
@@ -125,7 +146,7 @@ class FranchiseImportService:
                 self._ensure_external_image_refs(refreshed, item)
             else:
                 logger.warning(
-                    "No Jikan payload returned while refreshing existing anime %s", anime.slug
+                    "No AniList payload returned while refreshing existing anime %s", anime.slug
                 )
         except Exception:
             # Best-effort refresh through the provider layer, which can fail in
@@ -150,10 +171,10 @@ class FranchiseImportService:
         if not isinstance(cover_image, dict):
             cover_image = {}
 
-        cover_url = JikanService.normalize_external_image_url(
+        cover_url = AniListService.normalize_external_image_url(
             cover_image.get("extraLarge") or cover_image.get("large")
         )
-        banner_url = JikanService.normalize_external_image_url(item.get("bannerImage"))
+        banner_url = AniListService.normalize_external_image_url(item.get("bannerImage"))
 
         update_fields: list[str] = []
         if not anime.cover_image and not anime.cover_image_external_url and cover_url:
@@ -169,12 +190,22 @@ class FranchiseImportService:
         if update_fields:
             anime.save(update_fields=update_fields)
 
+    @staticmethod
+    def _rate_key(rate_limit_key: str) -> str:
+        return f"franchise_fetch:{rate_limit_key or 'unknown'}"
+
     def _enforce_rate_limit(self, rate_limit_key: str) -> None:
-        rate_key = f"franchise_fetch:{rate_limit_key or 'unknown'}"
+        rate_key = self._rate_key(rate_limit_key)
         current_count = cache.get(rate_key, 0)
         if current_count >= self.rate_limit:
             raise FranchiseImportError("Rate limit exceeded", 429)
         cache.set(rate_key, current_count + 1, timeout=self.rate_window_seconds)
+
+    def _refund_rate_limit(self, rate_limit_key: str) -> None:
+        rate_key = self._rate_key(rate_limit_key)
+        current_count = cache.get(rate_key, 0)
+        if current_count > 0:
+            cache.set(rate_key, current_count - 1, timeout=self.rate_window_seconds)
 
     @staticmethod
     def update_relation_slug(source_slug: str, target: Anime) -> None:

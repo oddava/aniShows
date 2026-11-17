@@ -17,12 +17,14 @@ import AnimeMediaImage from '../common/AnimeMediaImage';
 import { formatDateInUserTimezone } from '../../utils/dateUtils';
 import { activityKeys } from '../../api/queries/user';
 
+// `value` is the list status the server filters on (`?status=`): the entry's new
+// status, or the old one for removals.
 const STATUS_FILTERS = [
-    { value: 'watching', label: 'Watching', color: '#16a34a' },
-    { value: 'completed', label: 'Completed', color: '#3b82f6' },
-    { value: 'on_hold', label: 'On Hold', color: '#f59e0b' },
-    { value: 'dropped', label: 'Dropped', color: '#ef4444' },
-    { value: 'plan_to_watch', label: 'Plan to Watch', color: '#6b7280' },
+    { value: 'Watching', label: 'Watching', color: '#16a34a' },
+    { value: 'Completed', label: 'Completed', color: '#3b82f6' },
+    { value: 'On Hold', label: 'On Hold', color: '#f59e0b' },
+    { value: 'Dropped', label: 'Dropped', color: '#ef4444' },
+    { value: 'Plan to Watch', label: 'Plan to Watch', color: '#6b7280' },
 ];
 
 const FILTER_OPTIONS = [
@@ -33,7 +35,7 @@ const FILTER_OPTIONS = [
 const ACTIVITY_CONFIG = {
     completed: { icon: CheckCircle2, marker: 'bg-emerald-400', chip: 'bg-emerald-500/10 text-emerald-300' },
     added: { icon: ListPlus, marker: 'bg-blue-400', chip: 'bg-blue-500/10 text-blue-300' },
-    progress: { icon: PlayCircle, marker: 'bg-accent', chip: 'bg-accent/10 text-accent-light' },
+    progress: { icon: PlayCircle, marker: 'bg-accent-dark', chip: 'bg-accent/10 text-accent-light' },
     status_change: { icon: Workflow, marker: 'bg-yellow-400', chip: 'bg-yellow-500/10 text-yellow-300' },
     score: { icon: Star, marker: 'bg-amber-400', chip: 'bg-amber-500/10 text-amber-300' },
     removed: { icon: Trash2, marker: 'bg-rose-400', chip: 'bg-rose-500/10 text-rose-300' },
@@ -293,7 +295,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                 username,
                 page: pageParam,
                 page_size: pageSize,
-                ...(filterType !== 'all' ? { type: filterType } : {}),
+                ...(filterType !== 'all' ? { status: filterType } : {}),
             }).then(res => res.data),
         initialPageParam: 1,
         getNextPageParam: parseNextPage,
@@ -307,25 +309,9 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
         [data]
     );
 
-    const filteredActivities = useMemo(() => {
-        if (filterType === 'all') return activities;
-
-        return activities.filter((activity) => {
-            const status = (activity.new_status || activity.status || activity.status_label || '').toLowerCase();
-            const value = filterType.toLowerCase();
-            if (!status) return false;
-            if (value === 'watching') return status === 'watching';
-            if (value === 'completed') return status === 'completed';
-            if (value === 'on_hold') return status === 'on hold' || status === 'on_hold';
-            if (value === 'dropped') return status === 'dropped';
-            if (value === 'plan_to_watch') return status === 'plan to watch' || status === 'plan_to_watch';
-            return false;
-        });
-    }, [activities, filterType]);
-
     const dateGroups = useMemo(
-        () => groupActivitiesByDate(filteredActivities),
-        [filteredActivities]
+        () => groupActivitiesByDate(activities),
+        [activities]
     );
     const isFilterUpdating = isFetching && !isFetchingNextPage;
     const [stableDateGroups, setStableDateGroups] = useState([]);
@@ -362,6 +348,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                             key={filter.value}
                             type="button"
                             onClick={() => setFilterType(filter.value)}
+                            aria-pressed={isActive}
                             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${isActive
                                 ? 'bg-accent/15 text-accent-light'
                                 : 'bg-dark-100/70 text-gray-400 hover:bg-dark-100 hover:text-gray-200'

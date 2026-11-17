@@ -2,22 +2,15 @@ from dataclasses import dataclass
 
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db.models import Count, Prefetch, Q
 
 from ...shared.logger import logger
 from ...shared.media_urls import normalize_media_url
+from ...shared.public_cache import best_effort_get, best_effort_set
 from ...shared.text import normalize_bio, normalize_primary_color
 from ..models import UserBadge, UserStats
 from .avatar_service import get_user_avatar_url
-
-try:
-    from .cache import get_user_profile_cache_key
-except ImportError:
-    # Backward-compatible fallback for environments with older cache service exports.
-    def get_user_profile_cache_key(user_id, full=False):
-        return f"user_profile:{user_id}:{'full' if full else 'light'}"
-
+from .cache import get_user_profile_cache_key
 
 User = get_user_model()
 
@@ -63,13 +56,15 @@ def build_profile_user_queryset(*, include_badges: bool = True):
     return queryset
 
 
-def get_current_user_profile(user_id: int, is_full: bool) -> ProfileResult:
-    cache_key = get_user_profile_cache_key(user_id, full=is_full)
-    cached_data = cache.get(cache_key)
+def get_current_user_profile(user_id: int) -> ProfileResult:
+    # One payload and one cache entry: the old ``?full=true`` variant built the
+    # same data under a second key (A22). The query parameter is still accepted.
+    cache_key = get_user_profile_cache_key(user_id)
+    cached_data = best_effort_get(cache_key, source="own profile")
     if cached_data:
         normalized = _normalize_profile_payload(cached_data)
         if normalized != cached_data:
-            cache.set(cache_key, normalized, timeout=300)
+            best_effort_set(cache_key, normalized, 300, source="own profile")
         return ProfileResult(data=normalized, cache_hit=True)
 
     user = build_profile_user_queryset().get(pk=user_id)
@@ -80,7 +75,7 @@ def get_current_user_profile(user_id: int, is_full: bool) -> ProfileResult:
     data["badges"] = badges
     data["total_badges_count"] = total_badges_count
 
-    cache.set(cache_key, data, timeout=300)
+    best_effort_set(cache_key, data, 300, source="own profile")
     return ProfileResult(data=data, cache_hit=False)
 
 
@@ -134,9 +129,9 @@ def _get_stats_snapshot(user):
         stats_data["followers_count"] = 0
         stats_data["following_count"] = 0
 
-        from ..tasks import schedule_user_stats_refresh
+        from ..tasks import request_user_stats_refresh
 
-        schedule_user_stats_refresh(user_id=user.id)
+        request_user_stats_refresh(user.id)
         return stats_data
 
 
@@ -162,6 +157,7 @@ def _build_profile_data(user, stats_data):
         else "auto",
         "points": profile.points if profile else 0,
         "has_password": user.has_usable_password(),
+        "pending_email": (profile.pending_email or None) if profile else None,
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
     }

@@ -1,24 +1,120 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import PropTypes from 'prop-types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
+import { Save } from 'lucide-react';
+
 import api from '../../api/client';
-import logger from '../../utils/logger';
 import { adminKeys, adminQueries } from '../../api/queries/admin';
+import ErrorState from '../../components/common/ErrorState';
+import PageLoader from '../../components/common/PageLoader';
+import logger from '../../utils/logger';
+import ConfirmDialog from './components/ConfirmDialog';
 import { getAdminErrorMessage, useAdminQuery } from './hooks/useAdminQuery';
-import CustomSelect from '../../components/common/CustomSelect';
+import useAdminRole from './hooks/useAdminRole';
+
+const settingLabel = (path) => {
+  const [section, key] = path.split('.');
+  const group = SETTINGS_SCHEMA.find((item) => item.section === section);
+  return group?.fields.find((field) => field.key === key)?.label || group?.title || path;
+};
+
+/** "Minimum username length: Must be <= 50." for each field the API refused. */
+export const describeSettingsErrors = (errors) => Object.entries(errors || {})
+  .map(([path, message]) => `${settingLabel(path)}: ${message}`)
+  .join(' ');
+
+/** The settings the backend actually enforces; nothing else is shown or sent. */
+export const SETTINGS_SCHEMA = [
+  {
+    section: 'general',
+    title: 'Site',
+    fields: [
+      { key: 'maintenanceMode', label: 'Maintenance mode', type: 'bool', help: 'Visitors see a maintenance screen. Staff keep access.' },
+      { key: 'allowRegistration', label: 'Allow new registrations', type: 'bool' },
+    ],
+  },
+  {
+    section: 'users',
+    title: 'Accounts',
+    fields: [
+      { key: 'emailVerification', label: 'Require email verification', type: 'bool' },
+      { key: 'allowUsernameChange', label: 'Allow username changes', type: 'bool' },
+      { key: 'minUsernameLength', label: 'Minimum username length', type: 'int', min: 1, max: 50 },
+      { key: 'maxUsernameLength', label: 'Maximum username length', type: 'int', min: 1, max: 100 },
+    ],
+  },
+  {
+    section: 'content',
+    title: 'Content',
+    fields: [{ key: 'enableReviews', label: 'Allow new reviews', type: 'bool' }],
+  },
+];
+
+const pickEnforced = (settings) => Object.fromEntries(SETTINGS_SCHEMA.map(({ section, fields }) => [
+  section,
+  Object.fromEntries(fields.map(({ key }) => [key, settings?.[section]?.[key]])),
+]));
+
+function SettingField({ field, value, onChange, disabled }) {
+  const id = useId();
+  const helpId = useId();
+  if (field.type === 'bool') {
+    return (
+      <div className="flex items-start gap-3 min-h-[44px]">
+        <input
+          id={id}
+          type="checkbox"
+          checked={Boolean(value)}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-describedby={field.help ? helpId : undefined}
+          className="mt-0.5 w-5 h-5 rounded border-white/20 bg-white/10 text-violet-600 focus:ring-violet-500 disabled:opacity-50"
+        />
+        <div>
+          <label htmlFor={id} className="text-white/85">{field.label}</label>
+          {field.help && <p id={helpId} className="text-xs text-white/50 mt-0.5">{field.help}</p>}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium text-white/70 mb-2">{field.label}</label>
+      <input
+        id={id}
+        type="number"
+        min={field.min}
+        max={field.max}
+        value={value ?? ''}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+        className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 disabled:opacity-50"
+      />
+    </div>
+  );
+}
+
+SettingField.propTypes = {
+  field: PropTypes.object.isRequired,
+  value: PropTypes.oneOfType([PropTypes.bool, PropTypes.number, PropTypes.string]),
+  onChange: PropTypes.func.isRequired,
+  disabled: PropTypes.bool,
+};
 
 const AdminSettings = () => {
-  const [activeTab, setActiveTab] = useState('general');
+  const { isSuperuser } = useAdminRole();
   const queryClient = useQueryClient();
   // Unsaved edits. Until the first edit the form shows the loaded settings.
   const [draft, setDraft] = useState(null);
+  const [confirmMaintenance, setConfirmMaintenance] = useState(false);
 
-  const { data, isPending: loading } = useAdminQuery({
+  const query = useAdminQuery({
     ...adminQueries.settings(),
     errorLog: 'Failed to load admin settings:',
     errorToast: (err) => getAdminErrorMessage(err, 'Failed to load settings'),
   });
-  const settings = draft ?? data ?? null;
+  const settings = draft ?? query.data ?? null;
 
   const saveMutation = useMutation({
     mutationFn: (nextSettings) => api.put('/admin/settings/', nextSettings),
@@ -27,290 +123,98 @@ const AdminSettings = () => {
       setDraft(null);
     },
   });
-  const isSaving = saveMutation.isPending;
 
-  const handleChange = (section, field, value) => {
+  const setValue = (section, key, value) => {
     setDraft((prev) => {
-      const base = prev ?? data;
-      return {
-        ...base,
-        [section]: {
-          ...base[section],
-          [field]: value,
-        },
-      };
+      const base = prev ?? query.data;
+      return { ...base, [section]: { ...base[section], [key]: value } };
     });
+  };
+
+  const handleChange = (section, key, value) => {
+    if (section === 'general' && key === 'maintenanceMode' && value) {
+      setConfirmMaintenance(true);
+      return;
+    }
+    setValue(section, key, value);
   };
 
   const handleSave = async () => {
     if (!settings) return;
     try {
-      await saveMutation.mutateAsync(settings);
+      await saveMutation.mutateAsync(pickEnforced(settings));
       toast.success('Settings saved successfully');
     } catch (err) {
       logger.error('Failed to save admin settings:', err);
-      toast.error(err.response?.data?.detail || 'Failed to save settings');
+      toast.error(describeSettingsErrors(err.response?.data?.errors)
+        || getAdminErrorMessage(err, 'Failed to save settings'));
     }
   };
 
-  if (loading || !settings) {
+  if (query.isPending) return <PageLoader />;
+  if (!settings) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-white/60">
-        <div className="w-10 h-10 border-4 border-violet-500/30 border-t-violet-500 rounded-full animate-spin mb-3" />
-        Loading settings...
-      </div>
+      <ErrorState
+        title="Couldn’t load settings"
+        message={getAdminErrorMessage(query.error, 'Failed to load settings')}
+        onRetry={() => query.refetch()}
+      />
     );
   }
 
-  const tabs = [
-    { id: 'general', label: 'General', icon: '⚙️' },
-    { id: 'users', label: 'Users', icon: '👥' },
-    { id: 'content', label: 'Content', icon: '📝' },
-    { id: 'security', label: 'Security', icon: '🔒' },
-  ];
-
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">System Settings</h1>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSaving ? (
-            <>
-              <span className="animate-spin">⏳</span>
-              Saving...
-            </>
-          ) : (
-            <>
-              <span>💾</span>
-              Save Settings
-            </>
-          )}
-        </button>
-      </div>
-
-      <div className="flex gap-1 mb-6 bg-white/5 border border-white/10 rounded-xl p-1">
-        {tabs.map((tab) => (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Settings</h1>
+          {!isSuperuser && <p className="text-sm text-white/50 mt-1">Only superusers can change settings.</p>}
+        </div>
+        {isSuperuser && (
           <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-              activeTab === tab.id
-                ? 'bg-violet-600 text-white'
-                : 'text-white/70 hover:text-white hover:bg-white/10'
-            }`}
+            type="button"
+            onClick={handleSave}
+            disabled={saveMutation.isPending || draft === null}
+            className="px-4 py-2 min-h-[44px] sm:min-h-0 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span>{tab.icon}</span>
-            {tab.label}
+            <Save size={16} aria-hidden="true" />
+            {saveMutation.isPending ? 'Saving...' : 'Save settings'}
           </button>
-        ))}
-      </div>
-
-      <div className="bg-white/5 border border-white/10 rounded-xl p-6">
-        {activeTab === 'general' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-white mb-4">General Settings</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-2">Site Name</label>
-                <input
-                  type="text"
-                  value={settings.general.siteName}
-                  onChange={(e) => handleChange('general', 'siteName', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-2">Timezone</label>
-                <CustomSelect
-                  value={settings.general.timezone}
-                  onChange={(nextValue) => handleChange('general', 'timezone', nextValue)}
-                  options={[
-                    { value: 'UTC', label: 'UTC' },
-                    { value: 'America/New_York', label: 'Eastern Time' },
-                    { value: 'America/Los_Angeles', label: 'Pacific Time' },
-                    { value: 'Europe/London', label: 'London' },
-                    { value: 'Asia/Tokyo', label: 'Tokyo' },
-                  ]}
-                  triggerClassName="w-full bg-white/10 px-4 py-2.5 rounded-lg focus-visible:ring-violet-500/50"
-                  ariaLabel="Timezone"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-white/70 mb-2">Site Description</label>
-                <textarea
-                  value={settings.general.siteDescription}
-                  onChange={(e) => handleChange('general', 'siteDescription', e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500 resize-none"
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-6 pt-4 border-t border-white/10">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.general.maintenanceMode}
-                  onChange={(e) => handleChange('general', 'maintenanceMode', e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-violet-600 focus:ring-violet-500"
-                />
-                <span className="text-white/80">Maintenance Mode</span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.general.allowRegistration}
-                  onChange={(e) => handleChange('general', 'allowRegistration', e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-violet-600 focus:ring-violet-500"
-                />
-                <span className="text-white/80">Allow Registrations</span>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'users' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-white mb-4">User Settings</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-2">Min Username Length</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={settings.users.minUsernameLength}
-                  onChange={(e) => handleChange('users', 'minUsernameLength', Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-2">Max Username Length</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={settings.users.maxUsernameLength}
-                  onChange={(e) => handleChange('users', 'maxUsernameLength', Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-6 pt-4 border-t border-white/10">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.users.emailVerification}
-                  onChange={(e) => handleChange('users', 'emailVerification', e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-violet-600 focus:ring-violet-500"
-                />
-                <span className="text-white/80">Require Email Verification</span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.users.allowUsernameChange}
-                  onChange={(e) => handleChange('users', 'allowUsernameChange', e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-violet-600 focus:ring-violet-500"
-                />
-                <span className="text-white/80">Allow Username Changes</span>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'content' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Content Settings</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-2">Max Upload Size (MB)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={settings.content.maxUploadSize}
-                  onChange={(e) => handleChange('content', 'maxUploadSize', Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-2">Allowed Image Types</label>
-                <input
-                  type="text"
-                  value={settings.content.allowedImageTypes}
-                  onChange={(e) => handleChange('content', 'allowedImageTypes', e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-6 pt-4 border-t border-white/10">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.content.enableReviews}
-                  onChange={(e) => handleChange('content', 'enableReviews', e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-violet-600 focus:ring-violet-500"
-                />
-                <span className="text-white/80">Enable Reviews</span>
-              </label>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'security' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Security Settings</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-2">Session Timeout (hours)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="168"
-                  value={settings.security.sessionTimeout}
-                  onChange={(e) => handleChange('security', 'sessionTimeout', Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-white/70 mb-2">API Rate Limit (requests/hour)</label>
-                <input
-                  type="number"
-                  min="100"
-                  max="10000"
-                  value={settings.security.apiRateLimit}
-                  onChange={(e) => handleChange('security', 'apiRateLimit', Number(e.target.value))}
-                  className="w-full px-4 py-2.5 bg-white/10 border border-white/10 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-6 pt-4 border-t border-white/10">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.security.requireStrongPassword}
-                  onChange={(e) => handleChange('security', 'requireStrongPassword', e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-violet-600 focus:ring-violet-500"
-                />
-                <span className="text-white/80">Require Strong Passwords</span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.security.twoFactorAuth}
-                  onChange={(e) => handleChange('security', 'twoFactorAuth', e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-white/10 text-violet-600 focus:ring-violet-500"
-                />
-                <span className="text-white/80">Enable 2FA for Admin</span>
-              </label>
-            </div>
-          </div>
         )}
       </div>
+
+      {SETTINGS_SCHEMA.map(({ section, title, fields }) => (
+        <section key={section} aria-label={title} className="bg-white/5 border border-white/10 rounded-xl p-4 sm:p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">{title}</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {fields.map((field) => (
+              <SettingField
+                key={field.key}
+                field={field}
+                value={settings[section]?.[field.key]}
+                disabled={!isSuperuser}
+                onChange={(value) => handleChange(section, field.key, value)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+
+      <ConfirmDialog
+        isOpen={confirmMaintenance}
+        title="Turn on maintenance mode?"
+        message={(
+          <>
+            <p>After you save, visitors and regular users see the maintenance screen and the public API answers 503.</p>
+            <p>Staff keep access to the site and the admin area.</p>
+          </>
+        )}
+        confirmLabel="Turn on"
+        onCancel={() => setConfirmMaintenance(false)}
+        onConfirm={() => {
+          setValue('general', 'maintenanceMode', true);
+          setConfirmMaintenance(false);
+        }}
+      />
     </div>
   );
 };

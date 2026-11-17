@@ -1,4 +1,3 @@
-import json
 import re
 from html import escape, unescape
 from urllib.parse import quote
@@ -11,6 +10,7 @@ from django.views import View
 from ..shared.media_urls import field_media_url
 from .models import UserProfile, UserStats
 from .services.avatar_service import get_user_avatar_url
+from .services.user_queryset import filter_username_ci
 
 User = get_user_model()
 
@@ -31,11 +31,9 @@ class ProfileSharePreviewView(View):
 
     def get(self, request, username: str, section: str | None = None) -> HttpResponse:
         should_redirect = not self._is_share_crawler(request)
-        user = (
-            User.objects.select_related("userprofile", "stats")
-            .filter(username__iexact=username)
-            .first()
-        )
+        user = filter_username_ci(
+            User.objects.select_related("userprofile", "stats"), username
+        ).first()
 
         if not user:
             return self._not_found_response(request, username, section, should_redirect)
@@ -197,14 +195,16 @@ class ProfileSharePreviewView(View):
         canonical_esc = escape(canonical_url, quote=True)
         image_esc = escape(image_url, quote=True)
         redirect_block = ""
+        body_link = ""
 
         if redirect_url:
+            # Meta refresh only: an inline <script> is blocked by this page's own
+            # CSP (script-src 'self') and only logged a violation per visit (A17).
             redirect_esc = escape(redirect_url, quote=True)
-            redirect_js = json.dumps(redirect_url)
             redirect_block = f"""
   <meta http-equiv=\"refresh\" content=\"0;url={redirect_esc}\" />
-  <script>window.location.replace({redirect_js});</script>
 """
+            body_link = f'\n  <p><a href="{redirect_esc}">Open the profile</a></p>'
 
         return f"""<!doctype html>
 <html lang=\"en\">
@@ -229,7 +229,7 @@ class ProfileSharePreviewView(View):
 {redirect_block}
 </head>
 <body>
-  <p>AniShows profile preview</p>
+  <p>AniShows profile preview</p>{body_link}
 </body>
 </html>
 """

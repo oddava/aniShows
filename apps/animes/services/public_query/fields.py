@@ -19,6 +19,7 @@ class QueryFieldsMixin:
         "id",
         "slug",
         "title",
+        "is_adult",
         "episode_count",
         "updated_at",
         "mal_id",

@@ -2,17 +2,27 @@ import { useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { forumsApi } from '../../api/client';
-import { forumKeys } from '../../api/queries/forums';
+import { getApiErrorMessage } from '../../api/errors';
+import { forumKeys, invalidateForumLists } from '../../api/queries/forums';
+import { patchCachedPosts, restorePosts, snapshotPosts } from './postsCache';
+
+export const TOO_FAST_MESSAGE = 'You are doing that too fast. Please wait a moment.';
+
+/** Toast text for a failed forum write: the throttle copy for 429, else the envelope `detail`. */
+export const forumErrorMessage = (error, fallback) => (
+    error?.response?.status === 429 ? TOO_FAST_MESSAGE : getApiErrorMessage(error, fallback)
+);
+
+const toastError = (fallback) => (error) => toast.error(forumErrorMessage(error, fallback));
 
 /**
- * Every write on the thread page: replies, thread edit/delete/pin, and the
- * optimistic like/unlike for the thread and its posts (on `forumKeys.thread`
- * and `forumKeys.posts(id, page)`). The setters reset the page's form state
- * after a successful write.
+ * Every write on the thread page: replies, thread edit/delete/pin, likes,
+ * follow (subscription) and staff moderation. Post writes patch every cached
+ * posts payload of the thread (pages and "Continue this thread" subtrees).
+ * The setters reset the page's form state after a successful write.
  */
 export default function useThreadMutations({
     id,
-    page,
     queryClient,
     setReplyContent,
     setShowReplyForm,
@@ -20,28 +30,52 @@ export default function useThreadMutations({
     setEditingThread,
     setEditingPostId,
 }) {
+    const threadKey = forumKeys.thread(id);
+
+    const patchThread = (patch) => {
+        queryClient.setQueryData(threadKey, (old) => (old ? { ...old, ...patch } : old));
+    };
+
+    const optimisticThread = async (patch) => {
+        await queryClient.cancelQueries({ queryKey: threadKey });
+        const previous = queryClient.getQueryData(threadKey);
+        queryClient.setQueryData(threadKey, (old) => (
+            old ? { ...old, ...(typeof patch === 'function' ? patch(old) : patch) } : old
+        ));
+        return { previous };
+    };
+
+    const rollbackThread = (context) => {
+        if (context?.previous !== undefined) {
+            queryClient.setQueryData(threadKey, context.previous);
+        }
+    };
+
+    const invalidatePosts = () => {
+        queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
+        queryClient.invalidateQueries({ queryKey: threadKey });
+    };
+
     const createPostMutation = useMutation({
         mutationFn: (data) => forumsApi.createPost(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
-            queryClient.invalidateQueries({ queryKey: forumKeys.thread(id) });
+            invalidatePosts();
             setReplyContent('');
             setShowReplyForm(false);
             setReplyTo(null);
             toast.success('Reply posted!');
         },
-        onError: (error) => {
-            toast.error(error.response?.data?.message || 'Failed to post reply');
-        }
+        onError: toastError('Failed to post reply'),
     });
 
     const updateThreadMutation = useMutation({
         mutationFn: (data) => forumsApi.updateThread(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: forumKeys.thread(id) });
+            queryClient.invalidateQueries({ queryKey: threadKey });
             setEditingThread(false);
             toast.success('Thread updated!');
-        }
+        },
+        onError: toastError('Failed to update thread'),
     });
 
     const deleteThreadMutation = useMutation({
@@ -50,274 +84,187 @@ export default function useThreadMutations({
             toast.success('Thread deleted');
             window.location.href = '/forums';
         },
-        onError: (error) => {
-            toast.error(error.response?.data?.message || 'Failed to delete thread');
-        }
+        onError: toastError('Failed to delete thread'),
     });
 
     const togglePinMutation = useMutation({
         mutationFn: () => forumsApi.togglePin(id),
-        onMutate: async () => {
-            await queryClient.cancelQueries({ queryKey: forumKeys.thread(id) });
-            const previous = queryClient.getQueryData(forumKeys.thread(id));
-            queryClient.setQueryData(forumKeys.thread(id), old => {
-                if (!old) return old;
-                return { ...old, is_pinned: !old.is_pinned };
-            });
-            return { previous };
-        },
+        onMutate: () => optimisticThread((old) => ({ is_pinned: !old.is_pinned })),
         onSuccess: (data) => {
-            queryClient.setQueryData(forumKeys.thread(id), old => {
-                if (!old) return old;
-                return { ...old, is_pinned: data.is_pinned };
-            });
-            queryClient.invalidateQueries({ queryKey: forumKeys.threadsAll });
+            patchThread({ is_pinned: data.is_pinned });
+            invalidateForumLists(queryClient);
             toast.success(data.is_pinned ? 'Thread pinned' : 'Thread unpinned');
         },
-        onError: (err, _vars, context) => {
-            if (context?.previous !== undefined) {
-                queryClient.setQueryData(forumKeys.thread(id), context.previous);
-            }
-            toast.error('Failed to update pin status');
+        onError: (error, _vars, context) => {
+            rollbackThread(context);
+            toast.error(forumErrorMessage(error, 'Failed to update pin status'));
         },
     });
 
-    // Cooldown refs to prevent rapid-fire like clicks
+    // Cooldown ref to prevent rapid-fire like clicks
     const threadLikeCooldownRef = useRef(false);
 
-    // Idempotent like mutation - only creates likes, never removes
+    // Idempotent like - only creates likes, never removes
     const likeThreadMutation = useMutation({
         mutationFn: () => forumsApi.likeThread(id),
-        onMutate: async () => {
-            await queryClient.cancelQueries({ queryKey: forumKeys.thread(id) });
-            const previous = queryClient.getQueryData(forumKeys.thread(id));
-
-            queryClient.setQueryData(forumKeys.thread(id), old => {
-                if (!old) {
-                    return old;
-                }
-                // Only optimistic update if not already liked
-                if (old.is_liked_by_user) {
-                    return old;
-                }
-                const newCount = (old.like_count || 0) + 1;
-                return {
-                    ...old,
-                    is_liked_by_user: true,
-                    like_count: newCount,
-                };
-            });
-
-            return { previous };
-        },
-        onSuccess: (data) => {
-            queryClient.setQueryData(forumKeys.thread(id), old => {
-                if (!old) return old;
-                return {
-                    ...old,
-                    like_count: data.like_count,
-                    is_liked_by_user: data.is_liked,
-                };
-            });
-        },
-        onError: (err, _vars, context) => {
-            if (context?.previous !== undefined) {
-                queryClient.setQueryData(forumKeys.thread(id), context.previous);
-            }
-            if (err.response?.status === 429) {
-                toast.error('You are doing that too fast. Please wait a moment.');
-            } else {
-                toast.error('Failed to like thread');
-            }
+        onMutate: () => optimisticThread((old) => (old.is_liked_by_user ? {} : {
+            is_liked_by_user: true,
+            like_count: (old.like_count || 0) + 1,
+        })),
+        onSuccess: (data) => patchThread({ like_count: data.like_count, is_liked_by_user: data.is_liked }),
+        onError: (error, _vars, context) => {
+            rollbackThread(context);
+            toast.error(forumErrorMessage(error, 'Failed to like thread'));
         },
     });
 
-    // Unlike mutation - only removes likes
     const unlikeThreadMutation = useMutation({
         mutationFn: () => forumsApi.unlikeThread(id),
-        onMutate: async () => {
-            await queryClient.cancelQueries({ queryKey: forumKeys.thread(id) });
-            const previous = queryClient.getQueryData(forumKeys.thread(id));
-            queryClient.setQueryData(forumKeys.thread(id), old => {
-                if (!old) return old;
-                // Only optimistic update if currently liked
-                if (!old.is_liked_by_user) return old;
-                return {
-                    ...old,
-                    is_liked_by_user: false,
-                    like_count: Math.max(0, (old.like_count || 0) - 1),
-                };
-            });
-            return { previous };
-        },
-        onSuccess: (data) => {
-            queryClient.setQueryData(forumKeys.thread(id), old => {
-                if (!old) return old;
-                return {
-                    ...old,
-                    like_count: data.like_count,
-                    is_liked_by_user: data.is_liked, // Always false for unlike action
-                };
-            });
-        },
-        onError: (err, _vars, context) => {
-            if (context?.previous !== undefined) {
-                queryClient.setQueryData(forumKeys.thread(id), context.previous);
-            }
-            if (err.response?.status === 429) {
-                toast.error('You are doing that too fast. Please wait a moment.');
-            } else {
-                toast.error('Failed to unlike thread');
-            }
+        onMutate: () => optimisticThread((old) => (!old.is_liked_by_user ? {} : {
+            is_liked_by_user: false,
+            like_count: Math.max(0, (old.like_count || 0) - 1),
+        })),
+        onSuccess: (data) => patchThread({ like_count: data.like_count, is_liked_by_user: data.is_liked }),
+        onError: (error, _vars, context) => {
+            rollbackThread(context);
+            toast.error(forumErrorMessage(error, 'Failed to unlike thread'));
         },
     });
 
-    // Idempotent like mutation for posts
+    const toggleSubscriptionMutation = useMutation({
+        mutationFn: (subscribe) => (subscribe ? forumsApi.subscribeThread(id) : forumsApi.unsubscribeThread(id)),
+        onMutate: (subscribe) => optimisticThread({ is_subscribed: subscribe }),
+        onSuccess: (data, subscribe) => {
+            const isSubscribed = typeof data?.is_subscribed === 'boolean' ? data.is_subscribed : subscribe;
+            patchThread({ is_subscribed: isSubscribed });
+            toast.success(isSubscribed ? 'Following this thread' : 'Unfollowed this thread');
+        },
+        onError: (error, _vars, context) => {
+            rollbackThread(context);
+            toast.error(forumErrorMessage(error, 'Failed to update follow status'));
+        },
+    });
+
     const likePostMutation = useMutation({
         mutationFn: (postId) => forumsApi.likePost(postId),
         onMutate: async (postId) => {
-            await queryClient.cancelQueries({ queryKey: forumKeys.posts(id, page) });
-            const previous = queryClient.getQueryData(forumKeys.posts(id, page));
-
-            queryClient.setQueryData(forumKeys.posts(id, page), old => {
-                if (!old?.results) {
-                    return old;
-                }
-                const updatedResults = old.results.map(post => {
-                    if (post.id !== postId) return post;
-
-                    // Only increment if not already liked
-                    if (post.is_liked_by_user) {
-                        return post;
-                    }
-
-                    const newCount = (post.like_count || 0) + 1;
-                    return {
-                        ...post,
-                        is_liked_by_user: true,
-                        like_count: newCount,
-                    };
-                });
-
-                return { ...old, results: updatedResults };
-            });
-
-            return { previous };
+            const snapshot = await snapshotPosts(queryClient, id);
+            patchCachedPosts(queryClient, id, postId, (post) => (post.is_liked_by_user ? {} : {
+                is_liked_by_user: true,
+                like_count: (post.like_count || 0) + 1,
+            }));
+            return { snapshot };
         },
-        onSuccess: (data, postId) => {
-            queryClient.setQueryData(forumKeys.posts(id, page), old => {
-                if (!old?.results) return old;
-                return {
-                    ...old,
-                    results: old.results.map(post =>
-                        post.id === postId
-                            ? {
-                                ...post,
-                                like_count: data.like_count,
-                                is_liked_by_user: data.is_liked,
-                            }
-                            : post
-                    ),
-                };
-            });
-        },
-        onError: (err, _postId, context) => {
-            if (context?.previous !== undefined) {
-                queryClient.setQueryData(forumKeys.posts(id, page), context.previous);
-            }
-            if (err.response?.status === 429) {
-                toast.error('You are doing that too fast. Please wait a moment.');
-            } else {
-                toast.error('Failed to like reply');
-            }
+        onSuccess: (data, postId) => patchCachedPosts(queryClient, id, postId, {
+            like_count: data.like_count,
+            is_liked_by_user: data.is_liked,
+        }),
+        onError: (error, _postId, context) => {
+            restorePosts(queryClient, context?.snapshot);
+            toast.error(forumErrorMessage(error, 'Failed to like reply'));
         },
     });
 
-    // Unlike mutation for posts
     const unlikePostMutation = useMutation({
         mutationFn: (postId) => forumsApi.unlikePost(postId),
         onMutate: async (postId) => {
-            await queryClient.cancelQueries({ queryKey: forumKeys.posts(id, page) });
-            const previous = queryClient.getQueryData(forumKeys.posts(id, page));
-            queryClient.setQueryData(forumKeys.posts(id, page), old => {
-                if (!old?.results) return old;
-                return {
-                    ...old,
-                    results: old.results.map(post =>
-                        post.id === postId
-                            ? {
-                                ...post,
-                                // Only decrement if currently liked
-                                ...(post.is_liked_by_user ? {
-                                    is_liked_by_user: false,
-                                    like_count: Math.max(0, (post.like_count || 0) - 1),
-                                } : {}),
-                            }
-                            : post
-                    ),
-                };
-            });
-            return { previous };
+            const snapshot = await snapshotPosts(queryClient, id);
+            patchCachedPosts(queryClient, id, postId, (post) => (!post.is_liked_by_user ? {} : {
+                is_liked_by_user: false,
+                like_count: Math.max(0, (post.like_count || 0) - 1),
+            }));
+            return { snapshot };
         },
-        onSuccess: (data, postId) => {
-            queryClient.setQueryData(forumKeys.posts(id, page), old => {
-                if (!old?.results) return old;
-                return {
-                    ...old,
-                    results: old.results.map(post =>
-                        post.id === postId
-                            ? {
-                                ...post,
-                                like_count: data.like_count,
-                                is_liked_by_user: data.is_liked,
-                            }
-                            : post
-                    ),
-                };
-            });
-        },
-        onError: (err, _postId, context) => {
-            if (context?.previous !== undefined) {
-                queryClient.setQueryData(forumKeys.posts(id, page), context.previous);
-            }
-            if (err.response?.status === 429) {
-                toast.error('You are doing that too fast. Please wait a moment.');
-            } else {
-                toast.error('Failed to unlike reply');
-            }
+        onSuccess: (data, postId) => patchCachedPosts(queryClient, id, postId, {
+            like_count: data.like_count,
+            is_liked_by_user: data.is_liked,
+        }),
+        onError: (error, _postId, context) => {
+            restorePosts(queryClient, context?.snapshot);
+            toast.error(forumErrorMessage(error, 'Failed to unlike reply'));
         },
     });
 
     const updatePostMutation = useMutation({
         mutationFn: ({ postId, data }) => forumsApi.updatePost(postId, data),
         onSuccess: (data, variables) => {
-            // Immediately update the cache with the new content
-            queryClient.setQueryData(forumKeys.posts(id, page), (old) => {
-                if (!old?.results) return old;
-                return {
-                    ...old,
-                    results: old.results.map(post =>
-                        post.id === variables.postId
-                            ? { ...post, content: variables.data.content, updated_at: new Date().toISOString() }
-                            : post
-                    )
-                };
+            patchCachedPosts(queryClient, id, variables.postId, {
+                content: data?.content ?? variables.data.content,
+                edited_at: data?.edited_at ?? new Date().toISOString(),
             });
             setEditingPostId(null);
             toast.success('Reply updated!');
-        }
+        },
+        onError: toastError('Failed to update reply'),
     });
 
+    // The author's delete: hard delete, or "[deleted]" placeholder when it has replies (server decides)
     const deletePostMutation = useMutation({
         mutationFn: (postId) => forumsApi.deletePost(postId),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: forumKeys.posts(id, page) });
-            queryClient.invalidateQueries({ queryKey: forumKeys.thread(id) });
+            invalidatePosts();
             toast.success('Reply deleted');
         },
-        onError: (error) => {
-            toast.error(error.response?.data?.message || 'Failed to delete reply');
-        }
+        onError: toastError('Failed to delete reply'),
+    });
+
+    // ---- Staff moderation ----
+    const toggleLockMutation = useMutation({
+        mutationFn: () => forumsApi.toggleThreadLock(id),
+        onSuccess: (data) => {
+            const isLocked = typeof data?.is_locked === 'boolean' ? data.is_locked : data?.status === 'locked';
+            patchThread({ is_locked: isLocked });
+            invalidateForumLists(queryClient);
+            queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
+            toast.success(isLocked ? 'Thread locked' : 'Thread unlocked');
+        },
+        onError: toastError('Failed to update lock status'),
+    });
+
+    const removeThreadMutation = useMutation({
+        mutationFn: (reason) => forumsApi.removeThread(id, reason),
+        onSuccess: (_data, reason) => {
+            patchThread({ is_removed: true, removal_reason: reason || '' });
+            queryClient.invalidateQueries({ queryKey: threadKey });
+            invalidateForumLists(queryClient);
+            toast.success('Thread removed');
+        },
+        onError: toastError('Failed to remove thread'),
+    });
+
+    const restoreThreadMutation = useMutation({
+        mutationFn: () => forumsApi.restoreThread(id),
+        onSuccess: () => {
+            patchThread({ is_removed: false, removal_reason: '' });
+            queryClient.invalidateQueries({ queryKey: threadKey });
+            invalidateForumLists(queryClient);
+            toast.success('Thread restored');
+        },
+        onError: toastError('Failed to restore thread'),
+    });
+
+    const removePostMutation = useMutation({
+        mutationFn: ({ postId, reason }) => forumsApi.removePost(postId, reason),
+        onSuccess: (_data, { postId, reason }) => {
+            patchCachedPosts(queryClient, id, postId, {
+                is_removed: true,
+                removal: 'moderator',
+                removal_reason: reason || '',
+            });
+            invalidatePosts();
+            toast.success('Reply removed');
+        },
+        onError: toastError('Failed to remove reply'),
+    });
+
+    const restorePostMutation = useMutation({
+        mutationFn: (postId) => forumsApi.restorePost(postId),
+        onSuccess: (_data, postId) => {
+            patchCachedPosts(queryClient, id, postId, { is_removed: false, removal: null, removal_reason: '' });
+            invalidatePosts();
+            toast.success('Reply restored');
+        },
+        onError: toastError('Failed to restore reply'),
     });
 
     return {
@@ -328,9 +275,15 @@ export default function useThreadMutations({
         threadLikeCooldownRef,
         likeThreadMutation,
         unlikeThreadMutation,
+        toggleSubscriptionMutation,
         likePostMutation,
         unlikePostMutation,
         updatePostMutation,
         deletePostMutation,
+        toggleLockMutation,
+        removeThreadMutation,
+        restoreThreadMutation,
+        removePostMutation,
+        restorePostMutation,
     };
 }

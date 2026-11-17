@@ -1,12 +1,10 @@
-"""Helpers for driving the catalog providers in tests.
-
-Phase 4 moves the providers from async to sync (decision D4). These helpers
-work against either style, so the golden tests in ``test_provider_golden.py``
-can run unchanged before and after that change:
+"""Helpers for driving the AniList provider in tests.
 
 - ``resolve`` returns a provider call's result, awaiting it if it is a coroutine.
 - ``ProviderHTTP`` routes every httpx client, sync or async and however it was
-  built, through one ``httpx.MockTransport`` that serves recorded payloads.
+  built, through one ``httpx.MockTransport`` that serves canned responses by URL.
+- ``AniListGraphQL`` does the same for AniList's single GraphQL endpoint,
+  routing each POST by its GraphQL operation name.
 - ``fake_method`` replaces a provider method with one returning canned data,
   matching the method's sync/async style.
 """
@@ -15,6 +13,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl
@@ -24,28 +23,9 @@ from asgiref.sync import async_to_sync
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "providers"
 
-# Recorded Jikan responses by path (and page), relative to the Jikan base URL.
-JIKAN_ROUTES = {
-    "/anime/52991/full": "jikan/anime_52991_full.json",
-    "/anime/52991": "jikan/anime_52991_full.json",
-    "/anime/52991/characters": "jikan/anime_52991_characters.json",
-    "/anime/52991/staff": "jikan/anime_52991_staff.json",
-    "/anime/52991/themes": "jikan/anime_52991_themes.json",
-    "/anime/52991/statistics": "jikan/anime_52991_statistics.json",
-    "/anime/52991/videos/episodes": "jikan/anime_52991_videos_episodes.json",
-    "/anime/52991/recommendations": "jikan/anime_52991_recommendations.json",
-    "/anime/21/full": "jikan/anime_21_full.json",
-    "/anime/21": "jikan/anime_21_full.json",
-    "/anime/21/characters": {"data": []},
-    "/anime/21/themes": {"data": {"openings": [], "endings": []}},
-    "/anime/21/statistics": "jikan/anime_21_statistics.json",
-    ("/anime/21/episodes", "1"): "jikan/anime_21_episodes_page1.json",
-    ("/anime/21/episodes", "2"): "jikan/anime_21_episodes_page2.json",
-    ("/seasons/now", "1"): "jikan/seasons_now_page1.json",
-    ("/seasons/now", "2"): "jikan/seasons_now_page2.json",
-    ("/top/anime", "1"): "jikan/top_airing_page1.json",
-    "/anime": "jikan/anime_search_frieren.json",
-}
+ANILIST_NOT_FOUND = {"errors": [{"message": "Not Found.", "status": 404}], "data": {"Media": None}}
+
+_OPERATION_NAME = re.compile(r"query\s+(\w+)")
 
 
 def load_fixture(name: str) -> Any:
@@ -92,12 +72,34 @@ def http_client_for(func, **kwargs):
     return httpx.Client(**kwargs)
 
 
+def sequence(*steps):
+    """A route answering with each step in turn (a Response, a body, or an exception).
+
+    The last step repeats once the others are used up.
+    """
+    remaining = list(steps)
+
+    def route(*_request):
+        step = remaining.pop(0) if len(remaining) > 1 else remaining[0]
+        if isinstance(step, Exception):
+            raise step
+        return step
+
+    return route
+
+
+def _copy(response: httpx.Response) -> httpx.Response:
+    # A fresh copy: a route may answer several requests.
+    return httpx.Response(response.status_code, headers=response.headers, content=response.content)
+
+
 class ProviderHTTP:
-    """A MockTransport serving fixtures by path (and ``page`` query param).
+    """A MockTransport serving canned responses by path (and ``page`` query param).
 
     ``routes`` maps ``path`` or ``(path, page)`` to a fixture file name, a
-    ``(status, body)`` tuple, a dict body, or a callable taking the request.
-    Paths are relative to ``base_url``. Unrouted requests get a Jikan-style 404.
+    ``(status, body)`` tuple, a dict body, an ``httpx.Response``, or a callable
+    taking the request. Paths are relative to ``base_url``. Unrouted requests
+    get a 404.
     """
 
     def __init__(self, routes: dict, *, base_url: str = ""):
@@ -145,13 +147,57 @@ class ProviderHTTP:
         if callable(route):
             route = route(request)
         if isinstance(route, httpx.Response):
-            # A fresh copy: a route may answer several requests.
-            return httpx.Response(route.status_code, headers=route.headers, content=route.content)
+            return _copy(route)
         if route is None:
-            return httpx.Response(404, json=load_fixture("jikan/not_found.json"))
+            return httpx.Response(404, json={"message": "Not Found"})
         status = 200
         if isinstance(route, tuple):
             status, route = route
         if isinstance(route, str):
             route = load_fixture(route)
         return httpx.Response(status, json=route)
+
+
+def graphql_body(request: httpx.Request) -> dict:
+    return json.loads(request.content or b"{}")
+
+
+def operation_name(query: str) -> str:
+    match = _OPERATION_NAME.search(query or "")
+    return match.group(1) if match else "anonymous"
+
+
+class AniListGraphQL(ProviderHTTP):
+    """A MockTransport for AniList: POSTs routed by GraphQL operation name.
+
+    ``routes`` maps an operation name (``GetAnimeById``...) to:
+
+    - a dict: the response's ``data`` object (served as ``{"data": ...}``),
+    - a fixture file name (its JSON is the ``data`` object),
+    - an ``httpx.Response``, served as is,
+    - a callable taking ``(variables, request)`` and returning any of these.
+
+    Unrouted operations get AniList's 404 ("Not Found.").
+    """
+
+    def operations(self) -> list[tuple[str, dict]]:
+        """(operation name, variables) of each request, in order."""
+        result = []
+        for request in self.requests:
+            body = graphql_body(request)
+            result.append((operation_name(body.get("query", "")), body.get("variables") or {}))
+        return result
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        body = graphql_body(request)
+        route = self.routes.get(operation_name(body.get("query", "")))
+        if callable(route):
+            route = route(body.get("variables") or {}, request)
+        if isinstance(route, httpx.Response):
+            return _copy(route)
+        if route is None:
+            return httpx.Response(404, json=ANILIST_NOT_FOUND)
+        if isinstance(route, str):
+            route = load_fixture(route)
+        return httpx.Response(200, json={"data": route})

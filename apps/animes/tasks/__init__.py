@@ -5,7 +5,7 @@ This module provides a consolidated task system with:
 - Unified sync workflows for AniList data
 - Airing workflow with chained sub-tasks
 - Metadata enrichment with batching
-- Theme song synchronization
+- Theme song YouTube-link upkeep
 - Recommendation generation
 - Franchise/relations synchronization
 
@@ -29,6 +29,7 @@ Usage:
 """
 
 # Import all task modules to ensure registration
+from .adult_content import replay_public_cache_invalidations, sync_adult_flags
 from .airing import sync_airing_workflow
 from .franchises import sync_franchises, update_relation_slugs
 
@@ -38,7 +39,7 @@ from .metadata import enrich_metadata
 from .offline_catalog import import_offline_catalog, reconcile_offline_catalog_sync
 from .recommendations import generate_recommendations
 from .sync import sync_anime_catalog
-from .themes import backfill_theme_youtube_urls, sync_theme_songs
+from .themes import backfill_theme_youtube_urls
 from .watch_episodes import sync_watch_episodes_batch, sync_watch_episodes_for_anime
 
 # Import legacy tasks to ensure they're registered
@@ -52,10 +53,11 @@ __all__ = [
     "heal_missing_anime_media",
     "import_offline_catalog",
     "reconcile_offline_catalog_sync",
+    "replay_public_cache_invalidations",
+    "sync_adult_flags",
     "sync_airing_workflow",
     "sync_anime_catalog",
     "sync_franchises",
-    "sync_theme_songs",
     "sync_watch_episodes_batch",
     "sync_watch_episodes_for_anime",
     "update_relation_slugs",

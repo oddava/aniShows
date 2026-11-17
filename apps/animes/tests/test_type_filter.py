@@ -1,5 +1,4 @@
 from datetime import date
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -7,7 +6,6 @@ from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
 from ...users.models import UserProfile
-from ..adult_content import ADULT_TAGS, adult_tags_q
 from ..models import Anime, Genre
 
 User = get_user_model()
@@ -299,18 +297,17 @@ class AnimeTypeFilterTests(APITestCase):
         self.assertIn(lower_rated.title, titles)
         self.assertLess(titles.index(higher_rated.title), titles.index(lower_rated.title))
 
-    def test_adult_themed_anime_is_hidden_from_browse_by_default(self):
-        hentai = Genre.objects.create(name="Hentai", slug="hentai")
+    def test_adult_anime_is_hidden_from_browse_by_default(self):
+        # AniList's isAdult (Anime.is_adult) decides; genres and tags do not.
         hidden = Anime.objects.create(
             title="Hidden Explicit Anime",
             slug="hidden-explicit-anime",
             synopsis="Should not appear by default",
             anime_type="OVA",
             status="Finished",
-            tags=["fellatio", "nakadashi"],
+            is_adult=True,
             release_date=date(2022, 1, 1),
         )
-        hidden.genres.add(hentai)
 
         visible = Anime.objects.create(
             title="Visible General Anime",
@@ -318,9 +315,10 @@ class AnimeTypeFilterTests(APITestCase):
             synopsis="Safe to browse",
             anime_type="TV",
             status="Finished",
-            tags=["heterosexual"],
+            tags=["prostitution", "heterosexual"],
             release_date=date(2022, 1, 2),
         )
+        visible.genres.add(Genre.objects.create(name="Hentai", slug="hentai"))
 
         response = self.client.get(self.list_url, self.base_params)
 
@@ -376,7 +374,7 @@ class AnimeTypeFilterTests(APITestCase):
             synopsis="Visible after opt in",
             anime_type="OVA",
             status="Finished",
-            tags=["ecchi"],
+            is_adult=True,
             release_date=date(2022, 1, 3),
         )
 
@@ -385,11 +383,3 @@ class AnimeTypeFilterTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         titles = {item["title"] for item in response.data.get("results", [])}
         self.assertIn(anime.title, titles)
-
-    def test_postgres_adult_tag_filter_uses_single_has_any_keys_lookup(self):
-        with patch("apps.animes.adult_content.connections") as mock_connections:
-            mock_connections.__getitem__.return_value.vendor = "postgresql"
-
-            condition = adult_tags_q("default")
-
-        self.assertEqual(condition.children, [("tags__has_any_keys", sorted(ADULT_TAGS))])

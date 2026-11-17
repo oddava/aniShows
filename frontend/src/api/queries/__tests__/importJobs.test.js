@@ -1,9 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
 
-import { importJobKeys, importJobQueries, normalizeJobsResponse } from '../importJobs';
+import {
+    FINISHED_IMPORT_STATUSES,
+    anilistLinkKeys,
+    anilistLinkQueries,
+    importJobKeys,
+    importJobQueries,
+    normalizeJobsResponse,
+} from '../importJobs';
 
-const api = vi.hoisted(() => ({ getImportJobs: vi.fn(), getImportJobStatus: vi.fn() }));
+const api = vi.hoisted(() => ({ getImportJobs: vi.fn(), getImportJobStatus: vi.fn(), getAniListLink: vi.fn() }));
 vi.mock('../../client', () => ({ importExportApi: api }));
 
 beforeEach(() => Object.values(api).forEach((mock) => mock.mockReset()));
@@ -48,7 +55,22 @@ describe('importJobQueries', () => {
         expect(interval('success', { status: 'pending' })).toBe(2000);
         expect(interval('success', { status: 'processing' })).toBe(2000);
         expect(interval('success', { status: 'completed' })).toBe(false);
+        expect(interval('success', { status: 'cancelled' })).toBe(false);
         expect(interval('error', { status: 'processing' })).toBe(false);
         expect(interval('pending', undefined)).toBe(false);
+    });
+});
+
+describe('anilistLinkQueries', () => {
+    it('reads the signed-in user link under a user-scoped key', async () => {
+        api.getAniListLink.mockResolvedValue({ data: { linked: false } });
+        const options = anilistLinkQueries.forUser(3);
+        expect(options.queryKey).toEqual(anilistLinkKeys.forUser(3));
+        expect(anilistLinkKeys.forUser(undefined)).toEqual(['anilistLink', 'anonymous']);
+        await expect(options.queryFn()).resolves.toEqual({ linked: false });
+    });
+
+    it('treats cancelled as a finished status', () => {
+        expect(FINISHED_IMPORT_STATUSES).toEqual(['completed', 'failed', 'cancelled']);
     });
 });

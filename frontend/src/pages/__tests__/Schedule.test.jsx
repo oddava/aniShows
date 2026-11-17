@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -6,12 +6,13 @@ import Schedule from '../Schedule';
 import { animeApi } from '../../api/client';
 
 vi.mock('../../components/AnimeCard', () => ({
-  default: ({ anime, showAiringCountdown }) => (
+  default: ({ anime, showAiringCountdown, metaText }) => (
     <div data-testid="anime-card">
       <span>{anime.title}</span>
       {showAiringCountdown && anime.next_airing_episode ? (
         <span>{`EP ${anime.next_airing_episode}`}</span>
       ) : null}
+      {metaText ? <span>{metaText}</span> : null}
     </div>
   ),
 }));
@@ -33,11 +34,12 @@ vi.mock('../../components/SEO', () => ({
   ),
 }));
 
-// Mock AuthContext
+// Mock AuthContext (the user is swappable per test, e.g. for a time zone)
+const mockAuth = vi.hoisted(() => ({ user: null, isAuthenticated: false }));
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => ({
-    isAuthenticated: false,
-    user: null,
+    isAuthenticated: mockAuth.isAuthenticated,
+    user: mockAuth.user,
     refreshProfile: vi.fn(),
   }),
 }));
@@ -49,7 +51,7 @@ vi.mock('../../components/skeletons', () => ({
   ScheduleListSkeleton: ({ count }) => <div data-testid="schedule-list-skeleton">List Skeleton ({count})</div>,
 }));
 
-const createWrapper = () => {
+const createWrapper = (initialEntry = '/schedule') => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -62,7 +64,7 @@ const createWrapper = () => {
 
   return ({ children }) => (
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/schedule']}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <Routes>
           <Route path="/schedule" element={children} />
         </Routes>
@@ -171,7 +173,7 @@ describe('Schedule Component', () => {
       expect(screen.getByText(/No episodes scheduled/i)).toBeInTheDocument();
     });
 
-    const emptyStateParagraph = screen.getByText(/Check other days or weeks/i);
+    const emptyStateParagraph = screen.getByText(/Try another day/i);
     expect(emptyStateParagraph).toBeInTheDocument();
   });
 
@@ -399,8 +401,11 @@ describe('Schedule Component', () => {
     const retryButton = screen.getByRole('button', { name: /retry/i });
     fireEvent.click(retryButton);
 
-    // Should trigger page reload
-    expect(window.location.reload).toHaveBeenCalled();
+    // Retries in place (refetch), without reloading the page
+    await waitFor(() => {
+      expect(animeApi.getSchedule).toHaveBeenCalledTimes(2);
+    });
+    expect(window.location.reload).not.toHaveBeenCalled();
   });
 });
 
@@ -448,5 +453,153 @@ describe('Schedule Component - Authenticated User', () => {
 
     // Re-render with authenticated mock
     rerender(<Schedule />);
+  });
+});
+
+describe('Schedule Component - preferred time zone far from the browser', () => {
+  afterEach(() => {
+    mockAuth.user = null;
+    vi.useRealTimers();
+  });
+
+  it('labels the strip and the day heading with the same calendar date (UTC+14)', async () => {
+    // 12:00 UTC on Mon Nov 16 is already 02:00 on Tue Nov 17 in Kiritimati.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(Date.UTC(2026, 10, 16, 12, 0)));
+    mockAuth.user = { preferred_timezone: 'Pacific/Kiritimati' };
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse());
+
+    render(<Schedule />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByText(/No episodes scheduled/i)).toBeInTheDocument();
+    });
+
+    const selected = screen.getByRole('button', { pressed: true });
+    expect(selected).toHaveAccessibleName(/^Tuesday 17,/);
+    const heading = screen.getByRole('heading', { level: 2, name: /Tuesday/ });
+    expect(heading).toHaveTextContent('Nov 17');
+  });
+});
+
+describe('Schedule Component - calendar dates and My list', () => {
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+  // Monday 2026-11-16 12:00 UTC.
+  const NOW = Date.UTC(2026, 10, 16, 12, 0);
+  const show = (id, title, nextAiringDate, extra = {}) => ({
+    id,
+    title,
+    slug: `show-${id}`,
+    next_airing_date: nextAiringDate == null ? null : new Date(nextAiringDate).toISOString(),
+    next_airing_episode: 3,
+    user_list_status: null,
+    ...extra,
+  });
+  const dayButton = (name) => screen.getByRole('button', { name: new RegExp(`^${name},`) });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(NOW));
+    mockAuth.user = { preferred_timezone: 'UTC' };
+  });
+
+  afterEach(() => {
+    mockAuth.user = null;
+    mockAuth.isAuthenticated = false;
+    vi.useRealTimers();
+  });
+
+  it('puts each show under its calendar date and counts the ones airing later', async () => {
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({
+      monday: [
+        show(1, 'Aired This Morning', NOW - 3 * HOUR),
+        show(2, 'Ten Days Out', NOW + 10 * DAY),
+        show(3, 'Stale Last Week', NOW - 7 * DAY),
+      ],
+      wednesday: [show(4, 'Two Days Out', NOW + 2 * DAY)],
+      thursday: [show(5, 'No Date Yet', null, { broadcast_day: 'Thursday' })],
+    }));
+
+    render(<Schedule />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByText('Aired This Morning')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Aired 09:00')).toBeInTheDocument();
+    expect(screen.queryByText('Stale Last Week')).not.toBeInTheDocument();
+    expect(screen.getByText('1 more airs later')).toBeInTheDocument();
+
+    // Label and count of each column come from the same date.
+    expect(dayButton('Monday 16')).toHaveAccessibleName('Monday 16, 1 episode');
+    expect(dayButton('Wednesday 18')).toHaveAccessibleName('Wednesday 18, 1 episode');
+    expect(dayButton('Thursday 19')).toHaveAccessibleName('Thursday 19, 1 episode');
+    expect(dayButton('Monday 16')).not.toHaveAccessibleName(/2 episodes/);
+
+    fireEvent.click(dayButton('Wednesday 18'));
+    expect(screen.getByText('Two Days Out')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /Wednesday/ })).toHaveTextContent('Nov 18');
+
+    fireEvent.click(dayButton('Thursday 19'));
+    expect(screen.getByText('No Date Yet')).toBeInTheDocument();
+    expect(screen.getByText('Time TBA')).toBeInTheDocument();
+    expect(screen.queryByText('Ten Days Out')).not.toBeInTheDocument();
+  });
+
+  it('keeps weekday names in ?day= links', async () => {
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({
+      wednesday: [show(4, 'Two Days Out', NOW + 2 * DAY)],
+    }));
+
+    render(<Schedule />, { wrapper: createWrapper('/schedule?day=wednesday') });
+
+    await waitFor(() => {
+      expect(screen.getByText('Two Days Out')).toBeInTheDocument();
+    });
+    expect(dayButton('Wednesday 18')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('hides the My list toggle from guests', async () => {
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse());
+
+    render(<Schedule />, { wrapper: createWrapper('/schedule?mine=1') });
+
+    await waitFor(() => {
+      expect(screen.getByText(/No episodes scheduled/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'My list' })).not.toBeInTheDocument();
+  });
+
+  it('filters to the member\'s list with ?mine=1 and the counts follow', async () => {
+    mockAuth.isAuthenticated = true;
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({
+      monday: [
+        show(1, 'Watching Show', NOW + HOUR, { user_list_status: { status: 'Watching' } }),
+        show(2, 'Planned Show', NOW + 2 * HOUR, { user_list_status: { status: 'Plan to Watch' } }),
+        show(3, 'Completed Show', NOW + 3 * HOUR, { user_list_status: { status: 'Completed' } }),
+        show(4, 'Dropped Show', NOW + 4 * HOUR, { user_list_status: { status: 'Dropped' } }),
+        show(5, 'Not Listed', NOW + 5 * HOUR),
+      ],
+    }));
+
+    render(<Schedule />, { wrapper: createWrapper('/schedule?mine=1') });
+
+    await waitFor(() => {
+      expect(screen.getByText('Watching Show')).toBeInTheDocument();
+    });
+    const toggle = screen.getByRole('button', { name: 'My list' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Planned Show')).toBeInTheDocument();
+    expect(screen.queryByText('Completed Show')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dropped Show')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not Listed')).not.toBeInTheDocument();
+    expect(dayButton('Monday 16')).toHaveAccessibleName('Monday 16, 2 episodes');
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getAllByTestId('anime-card')).toHaveLength(5);
+    expect(dayButton('Monday 16')).toHaveAccessibleName('Monday 16, 5 episodes');
   });
 });

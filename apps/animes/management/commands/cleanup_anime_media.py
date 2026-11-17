@@ -130,14 +130,13 @@ class Command(BaseCommand):
                 cover_url = anime.cover_image_external_url or ""
                 banner_url = anime.banner_image_external_url or ""
                 # Only queue if we have something to fetch.
-                if cover_url or banner_url or anime.mal_id:
+                if cover_url or banner_url:
                     queued += (
                         1
                         if _queue_image_fetch(
                             anime_id=anime.id,
                             cover_url=cover_url,
                             banner_url=banner_url,
-                            mal_id=anime.mal_id,
                             force=True,
                         )
                         else 0

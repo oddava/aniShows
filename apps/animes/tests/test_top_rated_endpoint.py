@@ -97,7 +97,8 @@ class TopRatedEndpointTests(APITestCase):
 
 class AnimeDetailExternalLinksTests(APITestCase):
     @patch("apps.animes.signals.enrich_metadata.delay")
-    def test_detail_hides_lone_mal_link_for_bannerless_entry(self, _mock_enrich_metadata):
+    def test_detail_keeps_a_lone_mal_link_without_a_banner(self, _mock_enrich_metadata):
+        """The Jikan-era rule that dropped a lone MyAnimeList link is gone (B29)."""
         anime = Anime.objects.create(
             title="Bannerless Duplicate",
             slug="bannerless-duplicate",
@@ -118,7 +119,9 @@ class AnimeDetailExternalLinksTests(APITestCase):
         response = self.client.get(reverse("anime-detail", args=[anime.slug]))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["external_links"], [])
+        self.assertEqual(
+            [link["site"] for link in response.data["external_links"]], ["MyAnimeList"]
+        )
 
     @patch("apps.animes.signals.enrich_metadata.delay")
     def test_detail_keeps_lone_mal_link_when_banner_exists(self, _mock_enrich_metadata):

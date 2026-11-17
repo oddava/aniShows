@@ -1,260 +1,661 @@
-from typing import Dict, Tuple
+"""The shared import pipeline: load → resolve in bulk → merge → batched writes (spec 3 P0-3/P0-4/P1-3).
 
+Each source only implements ``load_entries()``. The rest is common:
+
+- **Resolution.** Local catalog rows are looked up in bulk by AniList id, then MAL id;
+  a title is used only for an entry that has no stable id at all. Unknown ids are
+  fetched from AniList 25 per request through the shared background budget, at most
+  ``MAX_UNKNOWN_FETCHES`` per job; the rest are reported as ``not_in_catalog_yet``.
+- **Merge (non-destructive).** New entries are created. An existing entry takes the
+  remote values only when the remote changed after the local edit
+  (``remote_updated_at > updated_at``); without a remote timestamp (MAL XML) only empty
+  local fields are filled. A remote 0 never clears a local score. The same transition
+  normalizer as the API runs (``list_rules``, lenient mode, no invented dates).
+- **Writes.** ``bulk_create`` / ``bulk_update`` in batches, so no per-row signals; the
+  derived caches, stats and recommendations are refreshed once at the end.
+- **Lifecycle.** Progress and a heartbeat are flushed as it goes; a flush that finds the
+  job no longer ``processing`` (cancelled) stops the run, and the job never becomes
+  ``completed`` over ``cancelled``. ``SoftTimeLimitExceeded`` is never swallowed: the
+  job fails with a reason that says how far it got, and "Run it again" continues.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import time
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from celery.exceptions import SoftTimeLimitExceeded
 from django.core.cache import cache
-from django.db import IntegrityError, transaction
+from django.db import InterfaceError, OperationalError, transaction
+from django.utils import timezone
 
 from ....animes.models import Anime
-from ....animes.services.jikan import JikanService
-from ....shared.errors import ENQUEUE_ERRORS
+from ....shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ....shared.logger import logger
 from ...models import UserAnimeList, UserImportJob
+from ..list_rules import normalize_entry, user_today
+from .anilist_fetch import AniListFetcher, AniListFetchError, ListFetcher, save_media
+from .entries import (
+    REASON_INVALID,
+    REASON_NOT_FOUND,
+    REASON_NOT_IN_CATALOG_YET,
+    REASON_UNKNOWN_STATUS,
+    ImportedEntry,
+)
+
+# Only a reason that a later run can clear holds the sync cursor: the per-job catalog
+# cap and AniList being busy both report ``not_in_catalog_yet``. A payload the catalog
+# rejects or an entry that errors would fail the same way again, so they do not.
+RETRY_REASONS = frozenset({REASON_NOT_IN_CATALOG_YET})
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
-class MALStatusMapper:
-    """Map MAL status values to our status values"""
-
-    API_MAPPING = {
-        "watching": UserAnimeList.UserAnimeStatus.watching,
-        "completed": UserAnimeList.UserAnimeStatus.completed,
-        "on_hold": UserAnimeList.UserAnimeStatus.on_hold,
-        "dropped": UserAnimeList.UserAnimeStatus.dropped,
-        "plan_to_watch": UserAnimeList.UserAnimeStatus.plan_to_watch,
-    }
-
-    XML_MAPPING = {
-        "Watching": UserAnimeList.UserAnimeStatus.watching,
-        "Completed": UserAnimeList.UserAnimeStatus.completed,
-        "On-Hold": UserAnimeList.UserAnimeStatus.on_hold,
-        "Dropped": UserAnimeList.UserAnimeStatus.dropped,
-        "Plan to Watch": UserAnimeList.UserAnimeStatus.plan_to_watch,
-    }
+def _updated_sort_key(entry: ImportedEntry) -> datetime:
+    return entry.remote_updated_at or _EPOCH
 
 
-class AniListStatusMapper:
-    """Map AniList status values to our status values"""
+RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
 
-    MAPPING = {
-        "CURRENT": UserAnimeList.UserAnimeStatus.watching,
-        "COMPLETED": UserAnimeList.UserAnimeStatus.completed,
-        "PAUSED": UserAnimeList.UserAnimeStatus.on_hold,
-        "DROPPED": UserAnimeList.UserAnimeStatus.dropped,
-        "PLANNING": UserAnimeList.UserAnimeStatus.plan_to_watch,
-    }
+ACTIVE_STATUSES = (UserImportJob.ImportStatus.pending, UserImportJob.ImportStatus.processing)
+# Fields an import writes on an existing entry.
+ENTRY_FIELDS = (
+    "status",
+    "score",
+    "episodes_watched",
+    "notes",
+    "started_at",
+    "finished_at",
+    "total_rewatches",
+    "is_rewatching",
+)
+
+
+class ImportSourceError(Exception):
+    """The source cannot be read (unknown user, private list, bad file): fail with this message.
+
+    ``transient`` marks a failure of the source itself (busy, down), not of the user's
+    list, so a linked account is not penalised for it.
+    """
+
+    def __init__(self, message: str, *, transient: bool = False):
+        super().__init__(message)
+        self.transient = transient
+
+
+class ImportCancelledError(Exception):
+    """The job left ``processing`` while running (the user cancelled it)."""
 
 
 class BaseImporter:
-    """Base class for importers"""
+    """One import job. Subclasses implement ``load_entries``."""
 
-    # How often to flush progress to DB (every N entries)
+    # Flush progress at most every N entries, and only when a second has passed, so a
+    # fast merge of known titles costs a handful of queries; fetch pages always flush.
     PROGRESS_FLUSH_INTERVAL = 10
+    PROGRESS_FLUSH_MIN_SECONDS = 1.0
+    WRITE_BATCH_SIZE = 500
+    MAX_UNKNOWN_FETCHES = 500
+    MAX_UNMATCHED_STORED = 200
+    MAX_ERRORS_STORED = 10
     MISSING_ANIME_CACHE_TTL_SECONDS = 6 * 60 * 60
+    source_name = "import"
 
-    def __init__(self, job: UserImportJob):
+    def __init__(self, job: UserImportJob, *, fetcher: ListFetcher | None = None):
         self.job = job
         self.user = job.user
-        self.errors = []
+        self.errors: list[str] = []
+        self.unmatched: list[dict[str, Any]] = []
         self.imported_count = 0
         self.skipped_count = 0
         self.failed_count = 0
-        self.fetched_count = 0  # New: track fetched anime
-        self._progress_counter = 0
-        self._sync_service = None  # Lazy-loaded, shared across calls
+        self.fetched_count = 0
+        self.processed_count = 0
+        self.total_count = 0
+        self._fetcher: ListFetcher | None = fetcher
+        self._owns_fetcher = fetcher is None
+        self._persistence: Any = None
+        self._to_create: list[UserAnimeList] = []
+        self._to_update: list[UserAnimeList] = []
+        self._touched_anime_ids: set[int] = set()
+        # ``updated_at`` of each row to update as the import read it; a row the user
+        # changed since then is left alone at write time.
+        self._seen_updated_at: dict[int, Any] = {}
+        # Entries left out for a reason a later run can clear (the per-job catalog cap,
+        # AniList busy, the entry cap): an incremental sync must not move its cursor past them.
+        self.retry_entries: list[ImportedEntry] = []
+        self._last_flush = 0.0
+        self._today = user_today(self.user)
 
-    def _get_sync_service(self):
-        """Get or create a shared JikanService instance."""
-        if self._sync_service is None:
-            self._sync_service = JikanService(enable_caching=True, enable_rate_limiting=True)
-        return self._sync_service
+    # ------------------------------------------------------------------ hooks
 
-    def _cleanup(self):
-        """Close the shared Jikan service."""
-        if self._sync_service is not None:
-            try:
-                self._sync_service.close()
-            except Exception:
-                logger.debug("Failed to close shared sync service", exc_info=True)
-            finally:
-                self._sync_service = None
-
-    def get_or_fetch_anime_sync(
-        self,
-        mal_id: int | None = None,
-        anilist_id: int | None = None,
-        title: str | None = None,
-        allow_title_search: bool = False,
-    ) -> Anime | None:
-        """
-        Try to find anime by external ID, if not found fetch it synchronously.
-        Returns the anime object or None if cannot be found/fetched.
-        """
-        # Try to find by MAL ID
-        if mal_id:
-            try:
-                return Anime.objects.get(mal_id=mal_id)
-            except Anime.DoesNotExist:
-                pass
-
-        # Try to find by AniList ID
-        if anilist_id:
-            try:
-                return Anime.objects.get(anilist_id=anilist_id)
-            except Anime.DoesNotExist:
-                pass
-
-        # Try to find by title (case insensitive)
-        if title:
-            try:
-                return Anime.objects.get(title__iexact=title)
-            except Anime.DoesNotExist:
-                pass
-
-        if not anilist_id and not mal_id and not allow_title_search:
-            logger.debug(f"Skipping external fetch without stable IDs for title '{title}'")
-            return None
-
-        missing_cache_key = self._missing_anime_cache_key(mal_id=mal_id, anilist_id=anilist_id)
-        if missing_cache_key and cache.get(missing_cache_key):
-            logger.debug(
-                f"Skipping known-missing anime fetch: MAL={mal_id}, AniList={anilist_id}, Title={title}"
-            )
-            return None
-
-        # Anime not found - fetch it using the shared service
-        service = self._get_sync_service()
-
-        try:
-            if mal_id:
-                logger.info(f"Fetching anime by MAL ID: {mal_id}")
-                anime_data = service.search_by_mal_id(mal_id)
-                if anime_data:
-                    anime = service.save_anime_to_db(anime_data)
-                    logger.info(f"Fetched and saved: {anime.title}")
-                    self.fetched_count += 1
-                    return anime
-
-            if title and (allow_title_search or (anilist_id and not mal_id)):
-                logger.info(f"Searching anime by title: {title}")
-                results = service.search_anime(title)
-                if results:
-                    anime_data = results[0]
-                    anime = service.save_anime_to_db(anime_data)
-                    logger.info(f"Fetched and saved: {anime.title}")
-                    self.fetched_count += 1
-                    return anime
-
-            logger.warning(
-                f"Could not find anime: MAL={mal_id}, AniList={anilist_id}, Title={title}"
-            )
-            if missing_cache_key:
-                cache.set(missing_cache_key, True, timeout=self.MISSING_ANIME_CACHE_TTL_SECONDS)
-            return None
-
-        except Exception:
-            logger.error(
-                "Error fetching anime during import",
-                extra={"mal_id": mal_id, "anilist_id": anilist_id, "title": title},
-                exc_info=True,
-            )
-            return None
-
-    def _missing_anime_cache_key(
-        self, mal_id: int | None = None, anilist_id: int | None = None
-    ) -> str | None:
-        """Build a cache key for known-missing external IDs."""
-        if anilist_id:
-            return f"import:missing:anilist:{anilist_id}"
-        if mal_id:
-            return f"import:missing:mal:{mal_id}"
-        return None
-
-    def import_entry(self, entry_data: Dict) -> Tuple[bool, str]:
-        """
-        Import a single anime entry.
-        Returns (success, message)
-        """
+    def load_entries(self) -> list[ImportedEntry]:
         raise NotImplementedError
 
-    def save_entry(
-        self, anime: Anime, status: str, score: int, episodes_watched: int
-    ) -> Tuple[bool, str]:
-        """
-        Save an entry to the user's anime list.
-        Returns (success, message)
-        """
+    def on_success(self, entries: list[ImportedEntry]) -> None:
+        """Called after a completed run (AniList updates the linked account)."""
+
+    def on_source_error(self, error: ImportSourceError) -> None:
+        """Called when the source could not be read."""
+
+    # ------------------------------------------------------------------ helpers
+
+    @property
+    def fetcher(self) -> ListFetcher:
+        if self._fetcher is None:
+            self._fetcher = AniListFetcher()
+        return self._fetcher
+
+    def _get_persistence(self):
+        if self._persistence is None:
+            from ....animes.services.anilist import AniListService
+
+            self._persistence = AniListService(enable_caching=True, enable_rate_limiting=True)
+        return self._persistence
+
+    def _cleanup(self) -> None:
+        for resource, owned in ((self._fetcher, self._owns_fetcher), (self._persistence, True)):
+            if resource is None or not owned:
+                continue
+            try:
+                resource.close()
+            except Exception:
+                logger.debug("Failed to close an import resource", exc_info=True)
+        self._fetcher = None if self._owns_fetcher else self._fetcher
+        self._persistence = None
+
+    def _record_unmatched(self, entry: ImportedEntry, reason: str) -> None:
+        self.failed_count += 1
+        if reason in RETRY_REASONS:
+            self.retry_entries.append(entry)
+        if len(self.unmatched) < self.MAX_UNMATCHED_STORED:
+            self.unmatched.append(entry.unmatched(reason))
+
+    def _job_queryset(self):
+        return UserImportJob.objects.filter(pk=self.job.pk)
+
+    def _counters(self) -> dict[str, Any]:
+        return {
+            "total_entries": self.total_count,
+            "processed_entries": self.processed_count,
+            "imported_entries": self.imported_count,
+            "skipped_entries": self.skipped_count,
+            "failed_entries": self.failed_count,
+            "fetched_entries": self.fetched_count,
+            "errors": self.errors[-self.MAX_ERRORS_STORED :],
+            "unmatched": self.unmatched,
+        }
+
+    def flush(self, *, force: bool = False) -> None:
+        """Write progress + heartbeat; stop the run if the job is no longer processing."""
+        now = time.monotonic()
+        if not force and now - self._last_flush < self.PROGRESS_FLUSH_MIN_SECONDS:
+            return
+        self._last_flush = now
+        updated = self._job_queryset().filter(status=UserImportJob.ImportStatus.processing)
+        if not updated.update(heartbeat_at=timezone.now(), **self._counters()):
+            raise ImportCancelledError
+
+    def _tick(self) -> None:
+        self.processed_count += 1
+        if self.processed_count % self.PROGRESS_FLUSH_INTERVAL == 0:
+            self.flush()
+
+    # ------------------------------------------------------------------ resolution
+
+    @staticmethod
+    def _dedupe(entries: list[ImportedEntry]) -> list[ImportedEntry]:
+        seen: set[tuple] = set()
+        unique = []
+        for entry in entries:
+            key = entry.key()
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(entry)
+        return unique
+
+    def _missing_key(self, entry: ImportedEntry) -> str:
+        if entry.anilist_id:
+            return f"import:missing:anilist:{entry.anilist_id}"
+        return f"import:missing:mal:{entry.mal_id}"
+
+    def _known_missing(self, entries: list[ImportedEntry]) -> set[str]:
+        keys = [self._missing_key(entry) for entry in entries]
         try:
-            with transaction.atomic():
-                try:
-                    existing = UserAnimeList.objects.select_for_update().get(
-                        user=self.user,
-                        anime=anime,
-                    )
-                except UserAnimeList.DoesNotExist:
-                    try:
-                        created = UserAnimeList(
-                            user=self.user,
-                            anime=anime,
-                            status=status,
-                            score=score,
-                            episodes_watched=episodes_watched,
-                        )
-                        created._skip_activity = True
-                        created.save()
-                        return True, "Imported successfully"
-                    except IntegrityError:
-                        existing = UserAnimeList.objects.select_for_update().get(
-                            user=self.user,
-                            anime=anime,
-                        )
+            return set(cache.get_many(keys)) if keys else set()
+        except CACHE_ERRORS:
+            return set()
 
-                existing._skip_activity = True
-                existing.status = status
-                existing.score = score
-                existing.episodes_watched = episodes_watched
-                existing.save()
-                return True, "Updated existing entry"
-
-        except Exception as e:
-            logger.error("Error saving entry", exc_info=True)
-            return False, f"Error: {str(e)}"
-
-    def trigger_post_import_refresh(self):
-        """Trigger expensive derived-data refresh once per import job."""
+    def _remember_missing(self, entries: list[ImportedEntry]) -> None:
+        if not entries:
+            return
         try:
-            from ....animes.tasks.recommendations import generate_recommendations
-            from ...tasks import schedule_user_stats_refresh
-
-            schedule_user_stats_refresh(user_id=self.user.id)
-            generate_recommendations.apply_async(kwargs={"user_id": self.user.id}, countdown=30)
-        except ENQUEUE_ERRORS:
-            logger.warning(
-                "Failed to queue post-import refresh tasks for user %s",
-                self.user.id,
-                exc_info=True,
+            cache.set_many(
+                {self._missing_key(entry): True for entry in entries},
+                timeout=self.MISSING_ANIME_CACHE_TTL_SECONDS,
             )
+        except CACHE_ERRORS:
+            logger.debug("Could not cache missing import ids", exc_info=True)
 
-    def update_job_progress(self, force: bool = False):
-        """Update the job's progress in the database.
+    def resolve(self, entries: list[ImportedEntry]) -> tuple[dict[tuple, Anime], dict[tuple, str]]:
+        """Map each entry key to its ``Anime``, or to the reason it has none."""
+        by_anilist = {
+            anime.anilist_id: anime
+            for anime in Anime.objects.filter(
+                anilist_id__in={e.anilist_id for e in entries if e.anilist_id}
+            )
+        }
+        mal_lookup = {e.mal_id for e in entries if e.mal_id and e.anilist_id not in by_anilist}
+        by_mal = {anime.mal_id: anime for anime in Anime.objects.filter(mal_id__in=mal_lookup)}
 
-        Batches writes to reduce DB load - only flushes every PROGRESS_FLUSH_INTERVAL entries
-        or when force=True (e.g., at end of import).
-        """
-        self._progress_counter += 1
-        if not force and self._progress_counter % self.PROGRESS_FLUSH_INTERVAL != 0:
+        resolved: dict[tuple, Anime] = {}
+        unknown: list[ImportedEntry] = []
+        for entry in entries:
+            anime = by_anilist.get(entry.anilist_id) or by_mal.get(entry.mal_id)
+            if anime is None and not entry.anilist_id and not entry.mal_id and entry.title:
+                # No stable id at all: the only case a title may bind an entry.
+                anime = Anime.objects.filter(title__iexact=entry.title).order_by("id").first()
+                if anime is None:
+                    continue
+            if anime is not None:
+                resolved[entry.key()] = anime
+            elif entry.anilist_id or entry.mal_id:
+                unknown.append(entry)
+
+        reasons: dict[tuple, str] = {}
+        if unknown:
+            self._fetch_unknown(unknown, resolved, reasons)
+        return resolved, reasons
+
+    def _fetch_unknown(
+        self,
+        unknown: list[ImportedEntry],
+        resolved: dict[tuple, Anime],
+        reasons: dict[tuple, str],
+    ) -> None:
+        known_missing = self._known_missing(unknown)
+        candidates = []
+        for entry in unknown:
+            if self._missing_key(entry) in known_missing:
+                reasons[entry.key()] = REASON_NOT_FOUND
+            else:
+                candidates.append(entry)
+        for entry in candidates[self.MAX_UNKNOWN_FETCHES :]:
+            reasons[entry.key()] = REASON_NOT_IN_CATALOG_YET
+        candidates = candidates[: self.MAX_UNKNOWN_FETCHES]
+        if not candidates:
             return
 
-        self.job.processed_entries = self._progress_counter
-        self.job.imported_entries = self.imported_count
-        self.job.skipped_entries = self.skipped_count
-        self.job.failed_entries = self.failed_count
-        self.job.fetched_entries = self.fetched_count
-        self.job.errors = self.errors[-10:]  # Keep last 10 errors
-        self.job.save(
-            update_fields=[
-                "processed_entries",
-                "imported_entries",
-                "skipped_entries",
-                "failed_entries",
-                "fetched_entries",
-                "errors",
-            ]
+        by_anilist: dict[int, ImportedEntry] = {}
+        by_mal: dict[int, ImportedEntry] = {}
+        for candidate in candidates:
+            if candidate.anilist_id:
+                by_anilist[candidate.anilist_id] = candidate
+            elif candidate.mal_id:
+                by_mal[candidate.mal_id] = candidate
+        pages = self.fetcher.fetch_media_by_ids(anilist_ids=list(by_anilist), mal_ids=list(by_mal))
+        try:
+            for page in pages:
+                for item in page:
+                    match = by_anilist.get(item.get("id") or 0) or by_mal.get(
+                        item.get("idMal") or 0
+                    )
+                    if match is None or match.key() in resolved:
+                        continue
+                    entry = match
+                    try:
+                        with transaction.atomic():
+                            resolved[entry.key()] = save_media(self._get_persistence(), item)
+                        self.fetched_count += 1
+                    except (SoftTimeLimitExceeded, *RETRYABLE_DB_ERRORS):
+                        # The time limit, or the database dropping out (the task retries):
+                        # neither is the title's fault, so it must not be marked invalid.
+                        raise
+                    except Exception:
+                        logger.warning(
+                            "Could not store an imported title",
+                            extra={"anilist_id": item.get("id"), "job_id": self.job.pk},
+                            exc_info=True,
+                        )
+                        reasons[entry.key()] = REASON_INVALID
+                self.flush(force=True)
+        except AniListFetchError as exc:
+            # AniList is busy: keep what resolved, the rest waits for "Run it again".
+            logger.warning("Catalog fetch stopped during import: %s", exc.code)
+            self.errors.append(exc.message)
+            for entry in candidates:
+                if entry.key() not in resolved:
+                    reasons.setdefault(entry.key(), REASON_NOT_IN_CATALOG_YET)
+            return
+
+        missing = [e for e in candidates if e.key() not in resolved and e.key() not in reasons]
+        for entry in missing:
+            reasons[entry.key()] = REASON_NOT_FOUND
+        self._remember_missing(missing)
+
+    # ------------------------------------------------------------------ merge
+
+    @staticmethod
+    def _remote_fields(entry: ImportedEntry) -> dict[str, Any]:
+        return {
+            "status": entry.status,
+            "score": entry.score,
+            "episodes_watched": entry.progress,
+            "notes": entry.notes,
+            "started_at": entry.started,
+            "finished_at": entry.finished,
+            "total_rewatches": entry.repeat,
+            "is_rewatching": entry.is_rewatching,
+        }
+
+    @staticmethod
+    def _fill_empty(entry: ImportedEntry, local: UserAnimeList) -> dict[str, Any]:
+        """No remote timestamp: take a remote value only where the local one is empty."""
+        attrs: dict[str, Any] = {}
+        if not local.score and entry.score:
+            attrs["score"] = entry.score
+        if not local.episodes_watched and entry.progress:
+            attrs["episodes_watched"] = entry.progress
+        if local.started_at is None and entry.started:
+            attrs["started_at"] = entry.started
+        if local.finished_at is None and entry.finished:
+            attrs["finished_at"] = entry.finished
+        if not local.notes and entry.notes:
+            attrs["notes"] = entry.notes
+        if not local.total_rewatches and entry.repeat:
+            attrs["total_rewatches"] = entry.repeat
+        return attrs
+
+    def _newer_remote(self, entry: ImportedEntry) -> dict[str, Any]:
+        attrs = self._remote_fields(entry)
+        if not entry.score:
+            attrs.pop("score")  # a remote 0 means "not rated", never "clear my score"
+        if not entry.notes:
+            attrs.pop("notes")
+        for field in ("started_at", "finished_at"):
+            if attrs[field] is None:
+                attrs.pop(field)
+        return attrs
+
+    def merge(self, entry: ImportedEntry, anime: Anime, local: UserAnimeList | None) -> None:
+        if local is None:
+            attrs = normalize_entry(
+                None, self._remote_fields(entry), anime, self._today, strict=False
+            )
+            self._to_create.append(UserAnimeList(user=self.user, anime=anime, **attrs))
+            self._touched_anime_ids.add(anime.id)
+            self.imported_count += 1
+            return
+
+        if entry.remote_updated_at is not None:
+            if local.updated_at and entry.remote_updated_at <= local.updated_at:
+                self.skipped_count += 1  # edited here after the remote change: keep it
+                return
+            attrs = self._newer_remote(entry)
+        else:
+            attrs = self._fill_empty(entry, local)
+        if not attrs:
+            self.skipped_count += 1
+            return
+
+        attrs = normalize_entry(
+            local,
+            attrs,
+            anime,
+            self._today,
+            strict=False,
+            # A newer remote row is authoritative: its dates win over contradicting
+            # local ones. Without a remote timestamp the local dates are kept.
+            prefer_incoming_dates=entry.remote_updated_at is not None,
         )
+        changed = False
+        for field in ENTRY_FIELDS:
+            if field in attrs and getattr(local, field) != attrs[field]:
+                setattr(local, field, attrs[field])
+                changed = True
+        if not changed:
+            self.skipped_count += 1
+            return
+        self._seen_updated_at[local.pk] = local.updated_at
+        local.updated_at = timezone.now()
+        self._to_update.append(local)
+        self._touched_anime_ids.add(anime.id)
+        self.imported_count += 1
+
+    def _discard_pending(self) -> None:
+        """Drop writes that will not happen (the job was cancelled before them)."""
+        self.imported_count -= len(self._to_create) + len(self._to_update)
+        self._to_create, self._to_update = [], []
+
+    def write_pending(self, *, force: bool = False) -> None:
+        """Write the pending batch, if the job is still running and the rows unchanged.
+
+        The job row is locked first: a cancel that arrived while the batch was being
+        prepared stops the run here, so nothing after the cancel is written. Rows to
+        update are locked and compared with the ``updated_at`` the merge read; a row
+        the user edited (or removed) meanwhile keeps the user's version.
+        """
+        pending = len(self._to_create) + len(self._to_update)
+        if not pending or (not force and pending < self.WRITE_BATCH_SIZE):
+            return
+        with transaction.atomic():
+            running = (
+                self._job_queryset()
+                .select_for_update()
+                .filter(status=UserImportJob.ImportStatus.processing)
+                .exists()
+            )
+            if not running:
+                self._discard_pending()
+                raise ImportCancelledError
+            if self._to_create:
+                # A concurrent manual add wins; the import does not fail on it.
+                UserAnimeList.objects.bulk_create(
+                    self._to_create, batch_size=self.WRITE_BATCH_SIZE, ignore_conflicts=True
+                )
+            if self._to_update:
+                current = dict(
+                    UserAnimeList.objects.select_for_update()
+                    .filter(pk__in=[row.pk for row in self._to_update])
+                    .values_list("pk", "updated_at")
+                )
+                unchanged = [
+                    row
+                    for row in self._to_update
+                    if row.pk in current and current[row.pk] == self._seen_updated_at.get(row.pk)
+                ]
+                kept_local = len(self._to_update) - len(unchanged)
+                self.imported_count -= kept_local
+                self.skipped_count += kept_local
+                if unchanged:
+                    UserAnimeList.objects.bulk_update(
+                        unchanged,
+                        [*ENTRY_FIELDS, "updated_at"],
+                        batch_size=self.WRITE_BATCH_SIZE,
+                    )
+        self._to_create, self._to_update = [], []
+        self._seen_updated_at.clear()
+
+    # ------------------------------------------------------------------ lifecycle
+
+    def _prepare(self, entries: list[ImportedEntry]) -> list[ImportedEntry]:
+        from django.conf import settings
+
+        entries = self._dedupe(entries)
+        cap = int(settings.MAX_IMPORT_XML_ENTRIES)
+        if len(entries) > cap:
+            if any(entry.remote_updated_at for entry in entries):
+                # Oldest changes first, so the entries left over are the newest ones and
+                # a sync cursor held below them still moves forward on every run.
+                entries.sort(key=_updated_sort_key)
+            self.errors.append(
+                f"Your list has more than {cap} entries: {cap} were imported this time. "
+                "Run it again to import the rest."
+            )
+            self.retry_entries.extend(entries[cap:])
+            entries = entries[:cap]
+        self.total_count = len(entries)
+        self.flush(force=True)
+        return entries
+
+    def _process(self, entries: list[ImportedEntry]) -> None:
+        valid = []
+        for entry in entries:
+            if entry.status is None:
+                self._record_unmatched(entry, REASON_UNKNOWN_STATUS)
+                self._tick()
+            else:
+                valid.append(entry)
+
+        resolved, reasons = self.resolve(valid)
+        existing = {
+            row.anime_id: row
+            for row in UserAnimeList.objects.filter(
+                user=self.user, anime_id__in={anime.id for anime in resolved.values()}
+            )
+        }
+        for entry in valid:
+            anime = resolved.get(entry.key())
+            if anime is None:
+                self._record_unmatched(entry, reasons.get(entry.key(), REASON_NOT_FOUND))
+            else:
+                try:
+                    self.merge(entry, anime, existing.get(anime.id))
+                except SoftTimeLimitExceeded:
+                    raise
+                except Exception as exc:
+                    logger.warning("Import entry failed", exc_info=True)
+                    self.failed_count += 1
+                    self.errors.append(f"{entry.title or 'Unknown'}: {exc}")
+            self.write_pending()
+            self._tick()
+
+    def _set_terminal(self, status: str, **fields) -> int:
+        """Move the job out of an active status (never over ``cancelled``/``failed``).
+
+        A completed job drops its stored file entries; a failed one keeps them so a
+        requeue (admin retry, or the task's own retry) can run again without the file.
+        """
+        if status == UserImportJob.ImportStatus.completed:
+            fields["payload"] = None
+        return (
+            self._job_queryset()
+            .filter(status__in=ACTIVE_STATUSES)
+            .update(
+                status=status,
+                completed_at=timezone.now(),
+                heartbeat_at=timezone.now(),
+                **self._counters(),
+                **fields,
+            )
+        )
+
+    def _store_counters(self) -> None:
+        """Final counters on a cancelled job (its status is already set)."""
+        self._job_queryset().update(heartbeat_at=timezone.now(), payload=None, **self._counters())
+
+    def refresh_derived_data(self) -> None:
+        """One refresh after the batched writes: caches, stats, site counts, recommendations."""
+        if not self._touched_anime_ids:
+            return
+        from ....animes.services.user_list_side_effects import (
+            invalidate_heatmap_cache,
+            invalidate_site_status_counts,
+            schedule_recommendations_debounced,
+        )
+        from ..cache import invalidate_user_caches
+        from ..list_service import invalidate_lists_summary
+
+        try:
+            invalidate_user_caches(self.user.id, self.user.username)
+            invalidate_heatmap_cache(self.user.id)
+            invalidate_lists_summary(self.user.id)
+            invalidate_site_status_counts(self._touched_anime_ids)
+        except CACHE_ERRORS:
+            logger.warning("Post-import cache refresh failed", exc_info=True)
+        try:
+            from ....animes.tasks.recommendations import generate_recommendations
+
+            schedule_recommendations_debounced(
+                self.user.id, task=generate_recommendations, countdown=30
+            )
+        except (*ENQUEUE_ERRORS, *CACHE_ERRORS):
+            logger.warning("Could not queue post-import recommendations", exc_info=True)
+
+    def _fail(self, reason: str) -> None:
+        self.errors.append(reason)
+        self._set_terminal(UserImportJob.ImportStatus.failed, failure_reason=reason)
+
+    def run(self) -> dict[str, Any]:
+        self._job_queryset().filter(status__in=ACTIVE_STATUSES).update(
+            status=UserImportJob.ImportStatus.processing, heartbeat_at=timezone.now()
+        )
+        outcome = "completed"
+        try:
+            entries = self._prepare(self.load_entries())
+            self._process(entries)
+            self.write_pending(force=True)
+            if self._set_terminal(UserImportJob.ImportStatus.completed):
+                self.on_success(entries)
+            else:
+                outcome = "cancelled"
+                self._store_counters()
+        except ImportCancelledError:
+            outcome = "cancelled"
+            self._discard_pending()
+            self._store_counters()
+        except ImportSourceError as exc:
+            outcome = "failed"
+            self.on_source_error(exc)
+            self._fail(str(exc))
+        except SoftTimeLimitExceeded:
+            outcome = "failed"
+            # Cancelled meanwhile: nothing is written and _fail leaves the cancel in place.
+            with contextlib.suppress(ImportCancelledError):
+                self.write_pending(force=True)
+            self._fail(
+                f"Took too long; {self.processed_count} of {self.total_count} processed. "
+                "Run it again to continue."
+            )
+            raise
+        except RETRYABLE_DB_ERRORS:
+            # The database dropped out: leave the job processing so the task's retry
+            # resumes it (the merge skips what was already written); the task fails
+            # the job if the retries run out.
+            outcome = "retrying"
+            raise
+        except Exception:
+            outcome = "failed"
+            logger.exception("Import failed", extra={"job_id": self.job.pk})
+            self._fail("The import stopped because of an unexpected error. Please try again.")
+            raise
+        finally:
+            try:
+                self.refresh_derived_data()
+            finally:
+                self._cleanup()
+        logger.info(
+            "Import finished",
+            extra={
+                "job_id": self.job.pk,
+                "source": self.source_name,
+                "outcome": outcome,
+                "imported": self.imported_count,
+                "skipped": self.skipped_count,
+                "failed": self.failed_count,
+                "fetched": self.fetched_count,
+            },
+        )
+        return {
+            "outcome": outcome,
+            "imported": self.imported_count,
+            "skipped": self.skipped_count,
+            "failed": self.failed_count,
+            "fetched": self.fetched_count,
+        }
+
+
+def stale_processing_cutoff(hours: int = 2):
+    return timezone.now() - timedelta(hours=hours)

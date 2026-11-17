@@ -1,11 +1,13 @@
 import contextlib
+from collections.abc import Mapping
+from datetime import UTC, datetime
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.decorators import action
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
-from rest_framework.fields import CharField, EmailField
+from rest_framework.exceptions import AuthenticationFailed, Throttled, ValidationError
+from rest_framework.fields import CharField, EmailField, Field
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,15 +22,18 @@ from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshV
 
 from ...core.api_errors import error_response
 from ...core.services.admin_settings_service import is_registration_enabled
+from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
+from ...shared.throttling import refuse_on_cache_outage, warn_cache_outage
 from .. import throttling
 from ..auth_cookies import (
     clear_refresh_cookie,
-    cookie_csrf_failure,
+    cookie_auth_rejected,
+    end_django_session,
     get_refresh_cookie,
     move_refresh_to_cookie,
 )
-from ..serializers.users import RegisterSerializer
+from ..serializers.accounts import RegisterSerializer
 from ..services.auth_flow_service import (
     AuthFlowError,
     password_reset_confirm_flow,
@@ -37,39 +42,69 @@ from ..services.auth_flow_service import (
     resend_verification_flow,
     verify_email_flow,
 )
-from ..services.auth_service import AuthService
+from ..services.auth_service import (
+    AuthService,
+    add_session_claims,
+    live_refresh_tokens,
+    lock_user_sessions,
+    revoke_other_sessions,
+    token_auth_time,
+)
 from ..services.email_service import EmailService
 from ..services.ws_ticket_service import TICKET_TTL_SECONDS, issue_ws_ticket
 
 User = get_user_model()
 
 
+LOGIN_IDENTIFIER_REQUIRED = "Enter a username or email."
+
+
+class _StrictStringMixin(Field):
+    """Reject non-string input instead of coercing it (DRF turns ``5`` into ``"5"``)."""
+
+    def to_internal_value(self, data):
+        if not isinstance(data, str):
+            self.fail("invalid")
+        return super().to_internal_value(data)
+
+
+class _LoginCharField(_StrictStringMixin, CharField):
+    pass
+
+
+class _LoginEmailField(_StrictStringMixin, EmailField):
+    pass
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["username"] = CharField(required=False)
-        self.fields["email"] = EmailField(required=False)
+        # Blank is allowed so "neither given" gets one clear message in validate().
+        self.fields["username"] = _LoginCharField(required=False, allow_blank=True)
+        self.fields["email"] = _LoginEmailField(required=False, allow_blank=True)
+        self.fields["password"] = _LoginCharField(
+            write_only=True, trim_whitespace=False, style={"input_type": "password"}
+        )
 
     @classmethod
     def get_token(cls, user):
-        # Keep claims minimal: email and role flags come from /users/me/,
-        # never from a decoded token.
-        token = super().get_token(user)
-        token["user_id"] = user.id
-        token["username"] = user.username
-        return token
+        # Also used for Google sign-in (REST_AUTH JWT_TOKEN_CLAIMS_SERIALIZER),
+        # so both kinds of sign-in stamp auth_time.
+        return add_session_claims(super().get_token(user), user)
 
     def validate(self, attrs):
-        # Allow login with email or username
-        email = attrs.get("email")
-        username = attrs.get("username")
-        if username:
-            attrs["username"] = AuthService().normalize_login_identifier(username=username)
-        elif email:
-            normalized_username = AuthService().normalize_login_identifier(email=email)
-            if normalized_username:
-                attrs["username"] = normalized_username
+        # Log in with a username or an email. Whichever is given, an unknown
+        # identifier still reaches authenticate() (which hashes a dummy
+        # password), so it fails with the same 401 as a wrong password and
+        # does not reveal whether an account exists.
+        username = (attrs.get("username") or "").strip()
+        email = (attrs.get("email") or "").strip()
+        if not username and not email:
+            raise ValidationError({"username": [LOGIN_IDENTIFIER_REQUIRED]}, code="required")
 
+        attrs["username"] = AuthService().normalize_login_identifier(
+            username=username or None, email=None if username else email
+        )
         return super().validate(attrs)
 
 
@@ -84,7 +119,67 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [throttling.LoginRateThrottle]
 
     def post(self, request, *args, **kwargs):
-        return move_refresh_to_cookie(super().post(request, *args, **kwargs))
+        # Login CSRF (A08): the same header + Origin check as refresh/logout,
+        # so a cross-site form cannot sign the victim into another account.
+        rejected = cookie_auth_rejected(request)
+        if rejected is not None:
+            return rejected
+
+        # Keyed on the identifier as typed (lowercased), not the resolved
+        # account: an account-wide lock would show through any other spelling
+        # and confirm which email belongs to a known username. So a username and
+        # its email have separate counters (at most 2x10 guesses per window).
+        identifier = _login_identifier(request_body(request))
+        identifier_throttle = throttling.LoginIdentifierThrottle(identifier) if identifier else None
+        if identifier_throttle is not None:
+            try:
+                wait = identifier_throttle.begin_attempt()
+            except CACHE_ERRORS:
+                # Fail closed: without the counter guesses would be unlimited.
+                refuse_on_cache_outage("login identifier throttle")
+            if wait is not None:
+                raise Throttled(wait=wait)
+
+        try:
+            response = super().post(request, *args, **kwargs)
+        except AuthenticationFailed:
+            raise  # stays counted
+        except Exception:
+            # A 400 (bad input) never reached the password check.
+            _release_login_attempt(identifier_throttle)
+            raise
+        # Only this attempt's slot: earlier failures expire with the window.
+        _release_login_attempt(identifier_throttle)
+        return move_refresh_to_cookie(response)
+
+
+def _release_login_attempt(identifier_throttle) -> None:
+    """Give back a slot; the cache failing now leaves it counted until the window ends."""
+    if identifier_throttle is None:
+        return
+    try:
+        identifier_throttle.release_attempt()
+    except CACHE_ERRORS:
+        warn_cache_outage("login identifier release")
+
+
+def request_body(request) -> Mapping:
+    """``request.data`` when it is an object, else ``{}`` (a JSON array or string body).
+
+    Views read fields with ``.get()``; a non-object body must be a 400 from the
+    usual missing-field checks, not an AttributeError (500).
+    """
+    data = request.data
+    return data if isinstance(data, Mapping) else {}
+
+
+def _login_identifier(data: Mapping) -> str | None:
+    """The username or email a login attempt names, if it is a usable string."""
+    for field in ("username", "email"):
+        value = data.get(field)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
 
 
 class RegisterView(generics.CreateAPIView):
@@ -102,10 +197,16 @@ class RegisterView(generics.CreateAPIView):
 
     def _validate_registration_availability(self, validated_data):
         generic_message = "Unable to create account. The email or username may already be in use."
-        username = validated_data["username"]
-        email = validated_data["email"]
+        username = validated_data.get("username") or ""
+        email = validated_data.get("email") or ""
 
-        if self.auth_service.username_exists(username) or self.auth_service.email_exists(email):
+        # An address that equals an existing (legacy, email-shaped) username
+        # would take that username's sign-in over, so it counts as in use.
+        if (
+            self.auth_service.username_exists(username)
+            or self.auth_service.email_exists(email)
+            or self.auth_service.username_exists(email)
+        ):
             raise ValidationError(
                 {
                     "username": [generic_message],
@@ -147,7 +248,9 @@ class AuthViewSet(ViewSet):
         self.email_service = EmailService()
 
     def get_throttles(self):
-        if self.action in ["resend_verification", "password_reset"]:
+        if self.action == "resend_verification":
+            return [throttling.ResendVerificationRateThrottle()]
+        if self.action == "password_reset":
             return [throttling.PasswordResetRateThrottle()]
         if self.action in ["verify_email", "password_reset_confirm"]:
             return [throttling.StrictUserRateThrottle()]
@@ -160,8 +263,14 @@ class AuthViewSet(ViewSet):
         POST-only so mail scanners and link prefetchers that GET the URL
         can't consume the single-use token.
         """
-        uidb64 = kwargs.get("uid") or request.data.get("uid")
-        token = kwargs.get("token") or request.data.get("token")
+        # It sets the refresh cookie, so it needs the login-CSRF check (A08).
+        rejected = cookie_auth_rejected(request)
+        if rejected is not None:
+            return rejected
+
+        body = request_body(request)
+        uidb64 = kwargs.get("uid") or body.get("uid")
+        token = kwargs.get("token") or body.get("token")
 
         try:
             result = verify_email_flow(uidb64, token, request, self.auth_service)
@@ -178,7 +287,9 @@ class AuthViewSet(ViewSet):
     def resend_verification(self, request):
         """Resend verification email."""
         try:
-            result = resend_verification_flow(request.data.get("email"), self.email_service)
+            result = resend_verification_flow(
+                request_body(request).get("email"), self.email_service
+            )
         except AuthFlowError as exc:
             return error_response(
                 exc.message,
@@ -192,7 +303,7 @@ class AuthViewSet(ViewSet):
     def password_reset(self, request):
         """Request a password reset link."""
         try:
-            result = password_reset_flow(request.data.get("email"), self.email_service)
+            result = password_reset_flow(request_body(request).get("email"), self.email_service)
         except AuthFlowError as exc:
             return error_response(
                 exc.message,
@@ -205,11 +316,12 @@ class AuthViewSet(ViewSet):
     @action(detail=False, methods=["post"])
     def password_reset_confirm(self, request):
         """Confirm password reset with the new password."""
+        body = request_body(request)
         try:
             result = password_reset_confirm_flow(
-                request.data.get("uid"),
-                request.data.get("token"),
-                request.data.get("password"),
+                body.get("uid"),
+                body.get("token"),
+                body.get("password"),
             )
         except AuthFlowError as exc:
             return error_response(
@@ -244,8 +356,13 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
                 # retried request) would both pass the blacklist check before
                 # either blacklists it, and both get a new token. Lock the
                 # token's row so the second waits and then sees it blacklisted.
-                jti = self.token_class(attrs["refresh"])[jwt_settings.JTI_CLAIM]
-                OutstandingToken.objects.select_for_update().filter(jti=jti).first()
+                token = self.token_class(attrs["refresh"])
+                # User row first (as revocation does), so a concurrent "sign
+                # out everywhere" cannot miss the token this rotation creates.
+                lock_user_sessions(token.get(jwt_settings.USER_ID_CLAIM))
+                OutstandingToken.objects.select_for_update().filter(
+                    jti=token[jwt_settings.JTI_CLAIM]
+                ).first()
                 return super().validate(attrs)
         except User.DoesNotExist:
             logger.warning(
@@ -277,14 +394,6 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
             raise
 
 
-def _cookie_auth_rejected(request):
-    reason = cookie_csrf_failure(request)
-    if reason is None:
-        return None
-    logger.warning("Rejected cookie-authenticated auth request", extra={"reason": reason})
-    return error_response(reason, code="csrf_failed", status_code=status.HTTP_403_FORBIDDEN)
-
-
 class LoggingTokenRefreshView(BaseTokenRefreshView):
     """Rotate the refresh cookie and return a fresh access token.
 
@@ -295,7 +404,7 @@ class LoggingTokenRefreshView(BaseTokenRefreshView):
     authentication_classes = []
 
     def post(self, request, *args, **kwargs):
-        rejected = _cookie_auth_rejected(request)
+        rejected = cookie_auth_rejected(request)
         if rejected is not None:
             return rejected
 
@@ -311,6 +420,9 @@ class LoggingTokenRefreshView(BaseTokenRefreshView):
         try:
             serializer.is_valid(raise_exception=True)
         except (AuthenticationFailed, TokenError):
+            # The JWT session is over (revoked, expired or rotated away); a
+            # Django session must not outlive it.
+            end_django_session(request)
             response = error_response(
                 "Refresh token is invalid or expired.",
                 code="token_not_valid",
@@ -334,7 +446,7 @@ class LogoutView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        rejected = _cookie_auth_rejected(request)
+        rejected = cookie_auth_rejected(request)
         if rejected is not None:
             return rejected
 
@@ -344,7 +456,88 @@ class LogoutView(APIView):
             with contextlib.suppress(TokenError):
                 RefreshToken(refresh_token).blacklist()
 
+        end_django_session(request)
         return clear_refresh_cookie(Response(status=status.HTTP_204_NO_CONTENT))
+
+
+def _cookie_session(request) -> RefreshToken | None:
+    """The request's live refresh token (cookie), or None if missing, invalid or revoked."""
+    raw = get_refresh_cookie(request)
+    if not raw:
+        return None
+    try:
+        token = RefreshToken(raw)  # type: ignore[arg-type]
+        token.check_blacklist()
+    except TokenError:
+        return None
+    return token
+
+
+class _CookieSessionView(APIView):
+    """Base for the device-session endpoints under the refresh cookie's path."""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list = []
+
+    def _session_or_error(self, request):
+        rejected = cookie_auth_rejected(request)
+        if rejected is not None:
+            return None, None, rejected
+        token = _cookie_session(request)
+        user = (
+            User.objects.filter(pk=token.get(jwt_settings.USER_ID_CLAIM), is_active=True).first()
+            if token is not None
+            else None
+        )
+        if token is None or user is None:
+            return (
+                None,
+                None,
+                error_response(
+                    "Refresh token is invalid or expired.",
+                    code="token_not_valid",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                ),
+            )
+        return token, user, None
+
+
+class SessionsView(_CookieSessionView):
+    """``{active, current_since}``: devices signed in to this account (A20, P1-11)."""
+
+    def get(self, request):
+        token, user, error = self._session_or_error(request)
+        if error is not None:
+            return error
+        auth_time = token_auth_time(token)
+        return Response(
+            {
+                "active": live_refresh_tokens(user).count(),
+                "current_since": (
+                    datetime.fromtimestamp(auth_time, tz=UTC).isoformat() if auth_time else None
+                ),
+            }
+        )
+
+
+class RevokeOtherSessionsView(_CookieSessionView):
+    """Sign out every other device; this one (the cookie's token) stays signed in."""
+
+    def post(self, request):
+        token, user, error = self._session_or_error(request)
+        if error is not None:
+            return error
+        revoked = revoke_other_sessions(user, keep_jti=token[jwt_settings.JTI_CLAIM])
+        if revoked is None:
+            # This device's token rotated (another tab) between the check and
+            # the lock; keeping it would sign this device out instead.
+            return error_response(
+                "This session just changed. Please try again.",
+                code="session_changed",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+        logger.info("Signed out other devices", extra={"user_id": user.pk, "revoked": revoked})
+        return Response({"revoked": revoked, "active": live_refresh_tokens(user).count()})
 
 
 class WebSocketTicketView(APIView):

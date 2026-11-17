@@ -45,7 +45,7 @@ class ImageTaskSelfHealTests(TestCase):
 
     @patch("apps.animes.tasks.images.cache.add", return_value=True)
     @patch("apps.animes.tasks.images.fetch_anime_images.apply_async")
-    @patch("apps.animes.tasks.images.JikanService", autospec=True)
+    @patch("apps.animes.tasks.images.AniListService", autospec=True)
     def test_fetch_task_defers_when_storage_is_unreachable(
         self,
         mock_service_cls,
@@ -87,7 +87,7 @@ class ImageTaskSelfHealTests(TestCase):
         service.close.assert_called_once()
 
     @patch("apps.animes.models.Anime.objects.get")
-    @patch("apps.animes.tasks.images.JikanService", autospec=True)
+    @patch("apps.animes.tasks.images.AniListService", autospec=True)
     def test_fetch_task_force_replace_redownloads_existing_images(
         self, mock_service_cls, mock_anime_get
     ):
@@ -164,20 +164,21 @@ class ImageTaskSelfHealTests(TestCase):
         self.assertEqual(
             kwargs["banner_url"], "https://cdn.myanimelist.net/images/anime/1/banner2.jpg"
         )
-        self.assertEqual(kwargs["mal_id"], 1234)
+        self.assertNotIn("mal_id", kwargs)
 
     @patch("apps.animes.tasks.images.cache.add", return_value=True)
     @patch("apps.animes.tasks.images.fetch_anime_images.delay")
     @patch("apps.animes.tasks.images._is_storage_available", return_value=True)
-    def test_periodic_self_heal_queues_mal_banner_fallback_when_external_missing(
+    def test_periodic_self_heal_skips_rows_with_nothing_to_fetch(
         self,
         _mock_storage_available,
         mock_fetch_delay,
         _mock_cache_add,
     ):
-        anime = self._create_anime(
-            title="MAL Banner Fallback Anime",
-            slug="mal-banner-fallback-anime",
+        # The Jikan banner fallback is gone: a MAL ID alone gives nothing to download.
+        self._create_anime(
+            title="Nothing To Fetch",
+            slug="nothing-to-fetch",
             cover_image_external_url="",
             banner_image_external_url="",
             mal_id=9876,
@@ -186,12 +187,8 @@ class ImageTaskSelfHealTests(TestCase):
         result = heal_missing_anime_media.run(batch_size=10)
 
         self.assertEqual(result["status"], "success")
-        self.assertEqual(result["queued"], 1)
-        kwargs = mock_fetch_delay.call_args.kwargs
-        self.assertEqual(kwargs["anime_id"], anime.id)
-        self.assertEqual(kwargs["cover_url"], "")
-        self.assertEqual(kwargs["banner_url"], "")
-        self.assertEqual(kwargs["mal_id"], 9876)
+        self.assertEqual(result["queued"], 0)
+        mock_fetch_delay.assert_not_called()
 
     @patch("apps.animes.tasks.images.fetch_anime_images.delay")
     @patch("apps.animes.tasks.images._is_storage_available", return_value=False)
@@ -235,7 +232,6 @@ class ImageTaskQueueNormalizationTests(TestCase):
             anime_id=77,
             cover_url="https://myanimelist.net/images/anime/1/77777.jpg",
             banner_url="https://www.myanimelist.net/images/anime/2/88888.webp",
-            mal_id=None,
         )
 
         self.assertTrue(queued)
@@ -243,7 +239,6 @@ class ImageTaskQueueNormalizationTests(TestCase):
             anime_id=77,
             cover_url="https://cdn.myanimelist.net/images/anime/1/77777.jpg",
             banner_url="https://cdn.myanimelist.net/images/anime/2/88888.webp",
-            mal_id=None,
             storage_retry=0,
         )
 
@@ -258,8 +253,25 @@ class ImageTaskQueueNormalizationTests(TestCase):
             anime_id=88,
             cover_url="https://cdn.example.com/cover.jpg",
             banner_url="https://cdn.example.com/banner.jpg",
-            mal_id=None,
         )
 
         self.assertFalse(queued)
         mock_fetch_delay.assert_not_called()
+
+
+class LegacyImageMessageTests(TestCase):
+    @patch("apps.animes.tasks.images.AniListService", autospec=True)
+    def test_messages_queued_with_a_mal_id_still_run_without_a_banner_fallback(
+        self, mock_service_cls
+    ):
+        anime = Anime.objects.create(
+            title="Legacy", slug="legacy", synopsis="x", anime_type="TV", status="Airing"
+        )
+        mock_service_cls.resolve_fetchable_image_url.side_effect = lambda url: url
+        service = mock_service_cls.return_value
+
+        result = fetch_anime_images.run(anime_id=anime.id, cover_url="", banner_url="", mal_id=5)
+
+        self.assertEqual(result["status"], "success")
+        service.download_image.assert_not_called()
+        service._save_external_url.assert_not_called()

@@ -9,5 +9,6 @@ class CoreConfig(AppConfig):
     label = "core"
 
     def ready(self):
+        import_module("apps.core.checks")
         import_module("apps.core.celery_signals")
         import_module("apps.core.tasks.logging_tasks")

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { animeApi } from '../../api/client';
 import { getNextPageNumber } from '../../api/pagination';
@@ -7,8 +7,8 @@ import { usePrefetchAnime } from '../../hooks/usePrefetchAnime';
 
 /**
  * The Browse result list for the current URL filters: an infinite query (only
- * in grid mode, i.e. when a filter or sort is set), the next-page sentinel
- * (`loadMoreRef`) with its prefetch, and the tab-switch loading guard.
+ * in grid mode, i.e. when a filter or sort is set) and the next-page sentinel
+ * (`loadMoreRef`) with its prefetch.
  * `filters` is the object from useBrowseUrlFilters.
  */
 export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
@@ -35,8 +35,6 @@ export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
     currentMaxYear,
     isGridMode,
   } = filters;
-  const [isTabSwitching, setIsTabSwitching] = useState(false);
-  const [minLoadingTime, setMinLoadingTime] = useState(false);
   const { prefetchNextPage } = usePrefetchAnime();
 
   // Fetch anime
@@ -107,42 +105,6 @@ export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
     enabled: isGridMode,
   });
 
-  // Reset tab switching state
-  useEffect(() => {
-    if (!isLoading && data && minLoadingTime) {
-      setIsTabSwitching(false);
-      setMinLoadingTime(false);
-    }
-    if (isError) {
-      setIsTabSwitching(false);
-      setMinLoadingTime(false);
-    }
-  }, [isLoading, data, minLoadingTime, isError]);
-
-  useEffect(() => {
-    let isMounted = true;
-    if (isTabSwitching) {
-      setMinLoadingTime(false);
-      const timer = setTimeout(() => {
-        if (isMounted) setMinLoadingTime(true);
-      }, 500);
-
-      // Safety valve: never keep loading UI locked forever.
-      const maxTimer = setTimeout(() => {
-        if (isMounted) {
-          setIsTabSwitching(false);
-          setMinLoadingTime(false);
-        }
-      }, 6000);
-
-      return () => {
-        isMounted = false;
-        clearTimeout(timer);
-        clearTimeout(maxTimer);
-      };
-    }
-  }, [isTabSwitching]);
-
   // Flatten anime data
   const allAnime = useMemo(() =>
     data?.pages?.flatMap(page => page.results) || [],
@@ -168,7 +130,7 @@ export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
       observer.current = null;
     }
 
-    if (isTabSwitching || isFetchingNextPage || !node) return;
+    if (isFetchingNextPage || !node) return;
 
     observer.current = new IntersectionObserver(
       (entries) => {
@@ -217,7 +179,6 @@ export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    isTabSwitching,
     data?.pages?.length,
     prefetchNextPage,
     currentGenres,
@@ -251,6 +212,5 @@ export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
     isFetching,
     isError,
     refetch,
-    isTabSwitching,
   };
 }

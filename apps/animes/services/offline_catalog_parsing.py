@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from django.utils.text import slugify
 
 from ..models import Anime, Studio
-from .jikan import JikanService
+from .providers.anilist.mapper import normalize_external_image_url
 
 ANIME_TITLE_MAX_LENGTH = Anime._meta.get_field("title").max_length
 ANIME_TITLE_JP_MAX_LENGTH = Anime._meta.get_field("title_jp").max_length
@@ -269,11 +269,11 @@ def prepare_entry(payload: dict[str, Any]) -> OfflineCatalogEntry | None:
     if season_year is not None and not 1900 <= season_year <= 2100:
         season_year = None
     picture = truncate_text(
-        JikanService.normalize_external_image_url(payload.get("picture")),
+        normalize_external_image_url(payload.get("picture")),
         ANIME_URL_MAX_LENGTH,
     )
     thumbnail = truncate_text(
-        JikanService.normalize_external_image_url(payload.get("thumbnail")),
+        normalize_external_image_url(payload.get("thumbnail")),
         ANIME_URL_MAX_LENGTH,
     )
     studio = truncate_text(

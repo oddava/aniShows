@@ -1,3 +1,4 @@
+import json
 import os
 from contextlib import suppress
 from pathlib import Path
@@ -11,10 +12,12 @@ from celery.signals import (
     task_success,
     worker_ready,
 )
+from django.core.cache import cache
 from django.db import DatabaseError
 from django.utils import timezone
 
 from ..shared.celery import redact_task_kwargs
+from ..shared.errors import CACHE_ERRORS
 from ..shared.logger import logger
 from .db_safety import (
     is_missing_relation_error,
@@ -28,6 +31,68 @@ from .db_safety import (
 # whose signal dispatcher logs receiver errors with a traceback and carries on,
 # so tracking can never fail a task.
 TRACKING_ERRORS = (DatabaseError, TypeError, ValueError)
+
+# High-frequency tasks that never get a CeleryTaskResult row: per-request log
+# writers and the every-minute jobs. Each run only stamps ``celery:lastrun:<task>``
+# (kept two days) for the admin System page. Import-safe; groups adding a
+# high-frequency task may ask G6 to list it here.
+UNTRACKED_TASKS: frozenset[str] = frozenset(
+    {
+        "apps.core.tasks.logging_tasks.log_request_async",
+        "apps.core.tasks.logging_tasks.log_exception_async",
+        "apps.core.tasks.cleanup_tasks.collect_queue_metrics",
+        "apps.core.tasks.cleanup_tasks.flush_forum_view_counts",
+    }
+)
+LAST_RUN_CACHE_PREFIX = "celery:lastrun:"
+LAST_RUN_CACHE_TTL_SECONDS = 2 * 24 * 60 * 60
+# Stored task args/kwargs are capped; a bigger payload keeps a short preview.
+MAX_STORED_ARGS_BYTES = 2048
+
+
+def last_run_cache_key(task_name: str) -> str:
+    return f"{LAST_RUN_CACHE_PREFIX}{task_name}"
+
+
+def _record_last_run(task_name: str) -> None:
+    with suppress(*CACHE_ERRORS):
+        cache.set(
+            last_run_cache_key(task_name),
+            timezone.now().isoformat(),
+            timeout=LAST_RUN_CACHE_TTL_SECONDS,
+        )
+
+
+def _signal_task_name(sender=None, request=None) -> str:
+    """The task name from a signal's sender (a Task) or request (a Context)."""
+    name = getattr(sender, "name", None) or getattr(request, "task", None)
+    return name if isinstance(name, str) else ""
+
+
+def is_untracked(task_name: str) -> bool:
+    return task_name in UNTRACKED_TASKS
+
+
+def _capped(value, empty):
+    """``value`` if its JSON form fits ``MAX_STORED_ARGS_BYTES``, else a short preview."""
+    try:
+        encoded = json.dumps(value, default=str)
+    except (TypeError, ValueError):
+        return empty
+    if len(encoded.encode("utf-8")) <= MAX_STORED_ARGS_BYTES:
+        return value
+    preview = encoded[: MAX_STORED_ARGS_BYTES // 2]
+    if isinstance(empty, dict):
+        return {"_truncated": True, "_preview": preview}
+    return ["[truncated]", preview]
+
+
+def stored_task_args(args) -> list:
+    return _capped(list(args) if args else [], [])
+
+
+def stored_task_kwargs(kwargs) -> dict:
+    return _capped(redact_task_kwargs(kwargs), {})
 
 
 @celeryd_init.connect
@@ -48,6 +113,11 @@ def clean_multiproc_dir(sender, instance, **kwargs):
 def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
     from .models import CeleryTaskResult
 
+    task_name = getattr(task, "name", "unknown")
+    if is_untracked(task_name):
+        _record_last_run(task_name)
+        return
+
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(
             CeleryTaskResult._meta.db_table,
@@ -56,7 +126,6 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
         return
 
     try:
-        task_name = getattr(task, "name", "unknown")
         # Handle cases where the view already created a PENDING result
         job, created = CeleryTaskResult.objects.using("default").get_or_create(
             task_id=task_id,
@@ -64,8 +133,8 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
                 "task_name": task_name,
                 "status": CeleryTaskResult.TaskStatus.STARTED,
                 "date_started": timezone.now(),
-                "task_args": list(args) if args else [],
-                "task_kwargs": redact_task_kwargs(kwargs),
+                "task_args": stored_task_args(args),
+                "task_kwargs": stored_task_kwargs(kwargs),
             },
         )
         if not created:
@@ -76,9 +145,9 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
                 job.task_name = task_name
             # Also populate args/kwargs if not already set (for celery beat tasks)
             if not job.task_args and args:
-                job.task_args = list(args)
+                job.task_args = stored_task_args(args)
             if not job.task_kwargs and kwargs:
-                job.task_kwargs = redact_task_kwargs(kwargs)
+                job.task_kwargs = stored_task_kwargs(kwargs)
             job.save(
                 update_fields=["status", "date_started", "task_name", "task_args", "task_kwargs"]
             )
@@ -95,6 +164,9 @@ def on_task_prerun(task_id, task, args, kwargs, **extra_kwargs):
 @task_success.connect
 def on_task_success(sender=None, result=None, **kwargs):
     from .models import CeleryTaskResult
+
+    if is_untracked(_signal_task_name(sender=sender)):
+        return
 
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(
@@ -137,6 +209,9 @@ def on_task_success(sender=None, result=None, **kwargs):
 def on_task_failure(task_id, exception, traceback, **kwargs):
     from .models import CeleryTaskResult
 
+    if is_untracked(_signal_task_name(sender=kwargs.get("sender"))):
+        return
+
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(
             CeleryTaskResult._meta.db_table,
@@ -177,6 +252,9 @@ def on_task_failure(task_id, exception, traceback, **kwargs):
 def on_task_retry(request, reason, einfo, **kwargs):
     from .models import CeleryTaskResult
 
+    if is_untracked(_signal_task_name(sender=kwargs.get("sender"), request=request)):
+        return
+
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(
             CeleryTaskResult._meta.db_table,
@@ -209,6 +287,9 @@ def on_task_retry(request, reason, einfo, **kwargs):
 @task_revoked.connect
 def on_task_revoked(request, terminated, signum, expired, **kwargs):
     from .models import CeleryTaskResult
+
+    if is_untracked(_signal_task_name(sender=kwargs.get("sender"), request=request)):
+        return
 
     if not model_table_exists(CeleryTaskResult):
         warn_missing_table_once(

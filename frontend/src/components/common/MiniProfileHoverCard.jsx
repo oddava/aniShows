@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { favoriteApi, listApi } from '../../api/client';
 import FollowButton from '../FollowButton';
 import AnimeMediaImage from './AnimeMediaImage';
-import { miniProfileKeys, profileQueries } from '../../api/queries/user';
+import { miniProfileKeys, profileQueries, profileQueryRetry } from '../../api/queries/profile';
 
 const WATCHING_LIMIT = 3;
 const FAVORITES_LIMIT = 3;
@@ -116,8 +116,11 @@ export default function MiniProfileHoverCard({ user, username, children }) {
         enabled: shouldFetch,
         staleTime: 60 * 1000,
         gcTime: 5 * 60 * 1000,
-        retry: 1,
     });
+
+    // Lists and favourites of a private (or missing) profile are not visible,
+    // so wait for the profile and skip them when it is private.
+    const shouldFetchExtras = shouldFetch && Boolean(profileData) && !profileData.is_private;
 
     const {
         data: watchingItems = [],
@@ -133,10 +136,10 @@ export default function MiniProfileHoverCard({ user, username, children }) {
             });
             return normalizeArrayResponse(response.data).slice(0, WATCHING_LIMIT);
         },
-        enabled: shouldFetch,
+        enabled: shouldFetchExtras,
         staleTime: 60 * 1000,
         gcTime: 5 * 60 * 1000,
-        retry: 1,
+        retry: profileQueryRetry,
     });
 
     const {
@@ -153,15 +156,16 @@ export default function MiniProfileHoverCard({ user, username, children }) {
             });
             return normalizeArrayResponse(response.data).slice(0, FAVORITES_LIMIT);
         },
-        enabled: shouldFetch,
+        enabled: shouldFetchExtras,
         staleTime: 60 * 1000,
         gcTime: 5 * 60 * 1000,
-        retry: 1,
+        retry: profileQueryRetry,
     });
 
     const initials = useMemo(() => (targetUsername || 'U').slice(0, 2).toUpperCase(), [targetUsername]);
     const loading = profileLoading || watchingLoading || favoritesLoading;
-    const allFailed = profileError && watchingError && favoritesError;
+    // Without the profile, the other two never run.
+    const allFailed = profileError || (watchingError && favoritesError);
     const statsUser = profileData || user || {};
 
     const stats = [
@@ -245,6 +249,10 @@ export default function MiniProfileHoverCard({ user, username, children }) {
                                 </div>
                             </section>
 
+                            {profileData?.is_private ? (
+                                <p className="text-xs text-gray-500">This profile is private.</p>
+                            ) : (
+                            <>
                             <section>
                                 <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.1em] text-gray-500">Watching</p>
                                 {watchingItems.length > 0 ? (
@@ -276,6 +284,8 @@ export default function MiniProfileHoverCard({ user, username, children }) {
                                     <p className="text-xs text-gray-500">No favorites yet.</p>
                                 )}
                             </section>
+                            </>
+                            )}
                         </div>
                     )}
                 </div>

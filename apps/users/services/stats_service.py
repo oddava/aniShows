@@ -1,14 +1,40 @@
-"""
-User Stats Service
-Provides functions for calculating user statistics on-the-fly
-when UserStats materialized view is not available.
+"""User stats: one implementation for the Celery task, the inline fallback and the command (P1-5).
+
+``compute_user_stats(user_ids)`` runs a fixed number of grouped aggregates for any
+number of users. Every caller (``UserTaskService.update_user_stats``,
+``calculate_user_stats``, ``create_or_update_user_stats``, ``populate_user_stats``) goes
+through it, so the numbers agree whichever path refreshed them. An episode with no
+known duration counts as 24 minutes everywhere. ``UserStats`` also carries G5's
+follow/review counters; this module stays their only writer.
 """
 
-from django.db.models import Avg, Count, F, Q, Sum, Value
-from django.db.models.functions import Coalesce
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from django.db.models import Avg, Count, ExpressionWrapper, F, IntegerField, Q, Sum, Value
+from django.db.models.functions import Coalesce, NullIf
+from django.utils import timezone
 
 from ...animes.models import Review, ReviewVote, UserFavorite
 from ..models import UserAnimeList, UserFollow, UserStats
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+DEFAULT_EPISODE_MINUTES = 24
+STATS_FIELDS = (
+    "followers_count",
+    "following_count",
+    "anime_count",
+    "episodes_watched",
+    "total_minutes",
+    "days_watched",
+    "mean_score",
+    "favorites_count",
+    "reviews_count",
+    "resonance_count",
+)
 
 
 def serialize_user_stats(
@@ -41,19 +67,8 @@ def get_materialized_user_stats_payload(
     include_follow_counts: bool = False,
     include_last_updated: bool = False,
 ):
-    stats_data = {
-        "anime_count": stats.anime_count,
-        "episodes_watched": stats.episodes_watched,
-        "total_minutes": stats.total_minutes,
-        "days_watched": stats.days_watched,
-        "mean_score": stats.mean_score,
-        "favorites_count": stats.favorites_count,
-        "reviews_count": stats.reviews_count,
-        "resonance_count": stats.resonance_count,
-        "followers_count": stats.followers_count,
-        "following_count": stats.following_count,
-        "last_updated": stats.last_updated,
-    }
+    stats_data = {field: getattr(stats, field) for field in STATS_FIELDS}
+    stats_data["last_updated"] = stats.last_updated
     return serialize_user_stats(
         stats_data,
         include_follow_counts=include_follow_counts,
@@ -61,102 +76,100 @@ def get_materialized_user_stats_payload(
     )
 
 
-def calculate_user_stats(user):
-    """
-    Calculate user stats on-the-fly from UserAnimeList and related models.
+def _counts_by(queryset, field: str) -> dict[int, int]:
+    return {row[field]: row["total"] for row in queryset.values(field).annotate(total=Count("id"))}
 
-    This is used as a fallback when the UserStats materialized view
-    doesn't exist or is stale.
 
-    Args:
-        user: User instance
+def compute_user_stats(user_ids: Iterable[int]) -> dict[int, dict]:
+    """Stats for each user id, in seven grouped queries whatever the number of users."""
+    ids = list(dict.fromkeys(user_ids))
+    if not ids:
+        return {}
 
-    Returns:
-        dict: Dictionary containing all user statistics
-    """
-    # Get all user's anime lists
-    lists = UserAnimeList.objects.filter(user=user)
-
-    # Basic counts
-    anime_count = lists.count()
-
-    # Episodes watched
-    episodes_watched = lists.aggregate(total=Sum("episodes_watched"))["total"] or 0
-
-    # Calculate total minutes watched using DB aggregation (no Python loop)
-    total_minutes = (
-        lists.select_related("anime")
-        .annotate(
-            duration=Coalesce(F("anime__duration_minutes"), Value(24)),
-        )
-        .aggregate(total=Sum(F("episodes_watched") * F("duration")))["total"]
-        or 0
+    followers = _counts_by(UserFollow.objects.filter(following_id__in=ids), "following_id")
+    following = _counts_by(UserFollow.objects.filter(follower_id__in=ids), "follower_id")
+    favorites = _counts_by(UserFavorite.objects.filter(user_id__in=ids), "user_id")
+    reviews = _counts_by(Review.objects.filter(user_id__in=ids), "user_id")
+    resonance = _counts_by(
+        ReviewVote.objects.filter(review__user_id__in=ids, vote_type=ReviewVote.VoteType.HELPFUL),
+        "review__user_id",
     )
-
-    days_watched = round(total_minutes / 1440, 1)  # 1440 minutes in a day
-
-    # Mean score from rated anime
-    rated_items = lists.filter(score__gt=0)
-    mean_score = rated_items.aggregate(avg=Avg("score"))["avg"]
-
-    # Favorites count
-    favorites_count = UserFavorite.objects.filter(user=user).count()
-
-    # Reviews count
-    reviews_count = Review.objects.filter(user=user).count()
-
-    # Helpful votes received across all of the user's reviews.
-    resonance_count = ReviewVote.objects.filter(
-        review__user=user,
-        vote_type=ReviewVote.VoteType.HELPFUL,
-    ).count()
-
-    return {
-        "anime_count": anime_count,
-        "episodes_watched": episodes_watched,
-        "total_minutes": total_minutes,
-        "days_watched": days_watched,
-        "mean_score": round(mean_score, 1) if mean_score else None,
-        "favorites_count": favorites_count,
-        "reviews_count": reviews_count,
-        "resonance_count": resonance_count,
+    episode_minutes = Coalesce(
+        NullIf(F("anime__duration_minutes"), 0), Value(DEFAULT_EPISODE_MINUTES)
+    )
+    lists = {
+        row["user_id"]: row
+        for row in UserAnimeList.objects.filter(user_id__in=ids)
+        .values("user_id")
+        .annotate(
+            anime_count=Count("id"),
+            episodes=Coalesce(Sum("episodes_watched"), 0),
+            mean=Avg("score", filter=Q(score__gt=0)),
+            minutes=Coalesce(
+                Sum(
+                    ExpressionWrapper(
+                        F("episodes_watched") * episode_minutes, output_field=IntegerField()
+                    )
+                ),
+                0,
+            ),
+        )
     }
 
+    result: dict[int, dict] = {}
+    for uid in ids:
+        row = lists.get(uid, {})
+        minutes = int(row.get("minutes") or 0)
+        mean = row.get("mean")
+        result[uid] = {
+            "followers_count": int(followers.get(uid, 0)),
+            "following_count": int(following.get(uid, 0)),
+            "anime_count": int(row.get("anime_count") or 0),
+            "episodes_watched": int(row.get("episodes") or 0),
+            "total_minutes": minutes,
+            "days_watched": round(minutes / 1440.0, 1),
+            "mean_score": round(mean, 1) if mean is not None else None,
+            "favorites_count": int(favorites.get(uid, 0)),
+            "reviews_count": int(reviews.get(uid, 0)),
+            "resonance_count": int(resonance.get(uid, 0)),
+        }
+    return result
 
-def calculate_user_stats_with_follows(user):
-    stats_data = calculate_user_stats(user)
-    follow_counts = UserFollow.objects.aggregate(
-        followers_count=Count("id", filter=Q(following=user)),
-        following_count=Count("id", filter=Q(follower=user)),
-    )
-    stats_data.update(follow_counts)
-    return stats_data
+
+def calculate_user_stats(user) -> dict:
+    """One user's stats computed now (the fallback when no ``UserStats`` row exists)."""
+    return compute_user_stats([user.id])[user.id]
 
 
-def create_or_update_user_stats(user):
-    """
-    Create or update the UserStats materialized view for a user.
+def calculate_user_stats_with_follows(user) -> dict:
+    return calculate_user_stats(user)
 
-    Args:
-        user: User instance
 
-    Returns:
-        UserStats: The created or updated UserStats instance
-    """
-    stats_data = calculate_user_stats(user)
+def save_user_stats(user_ids: Iterable[int]) -> int:
+    """Compute and store ``UserStats`` for ``user_ids`` in bulk; returns how many were written."""
+    computed = compute_user_stats(user_ids)
+    if not computed:
+        return 0
+    now = timezone.now()
+    existing = {stats.user_id: stats for stats in UserStats.objects.filter(user_id__in=computed)}
+    to_create, to_update = [], []
+    for uid, data in computed.items():
+        stats = existing.get(uid)
+        if stats is None:
+            to_create.append(UserStats(user_id=uid, is_active=True, last_updated=now, **data))
+            continue
+        for field, value in data.items():
+            setattr(stats, field, value)
+        stats.last_updated = now
+        to_update.append(stats)
+    if to_create:
+        UserStats.objects.bulk_create(to_create, batch_size=500, ignore_conflicts=True)
+    if to_update:
+        UserStats.objects.bulk_update(to_update, [*STATS_FIELDS, "last_updated"], batch_size=500)
+    return len(computed)
 
-    stats, _created = UserStats.objects.update_or_create(
-        user=user,
-        defaults={
-            "anime_count": stats_data["anime_count"],
-            "episodes_watched": stats_data["episodes_watched"],
-            "total_minutes": stats_data["total_minutes"],
-            "days_watched": stats_data["days_watched"],
-            "mean_score": stats_data["mean_score"],
-            "favorites_count": stats_data["favorites_count"],
-            "reviews_count": stats_data["reviews_count"],
-            "resonance_count": stats_data["resonance_count"],
-        },
-    )
 
-    return stats
+def create_or_update_user_stats(user) -> UserStats:
+    """Refresh and return one user's ``UserStats`` row."""
+    save_user_stats([user.id])
+    return UserStats.objects.get(user_id=user.id)

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Plus, Check, Eye, Clock, X, Loader2 } from 'lucide-react';
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef, useId } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { listApi } from '../api/client';
@@ -9,12 +9,13 @@ import {
     applyImageFallback,
     getImageFallbackUrl,
     getImageSrcSet,
+    getImageUrl,
     getOptimizedImageUrl,
     isSameOriginImageUrl,
 } from '../utils/imageUtils';
 import logger from '../utils/logger';
-import { animeKeys, seasonalKeys } from '../api/queries/anime';
-import { listKeys, profileKeys } from '../api/queries/user';
+import { patchAnimeListStatus } from '../api/queries/anime';
+import { listKeys, profileKeys, userKeys } from '../api/queries/user';
 
 const STATUS_OPTIONS = [
     { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-emerald-400', dotColor: 'bg-emerald-400' },
@@ -41,6 +42,17 @@ function getTimeRemainingLabel(dateString) {
     return `${days}d ${hours % 24}h`;
 }
 
+// The `user_list_status` fields a saved list entry (the list API's response) carries.
+const LIST_STATUS_FIELDS = [
+    'id', 'status', 'score', 'episodes_watched', 'notes', 'started_at',
+    'finished_at', 'total_rewatches', 'is_rewatching',
+];
+
+const savedListFields = (saved) => {
+    if (!saved || typeof saved !== 'object') return {};
+    return Object.fromEntries(LIST_STATUS_FIELDS.filter((key) => key in saved).map((key) => [key, saved[key]]));
+};
+
 function AnimeCard({
     anime,
     userListEntry,
@@ -49,7 +61,12 @@ function AnimeCard({
     priority = false,
     index = 0,
     useBannerAccentTitleHover = true,
-    showAiringCountdown = false
+    showAiringCountdown = false,
+    showMeta = false,
+    metaText = null,
+    // Touch screens have no hover, so the quick "+1 episode" pill would sit on
+    // every poster; only shelves built around progress opt in.
+    showProgress = false,
 }) {
     const { isAuthenticated } = useAuth();
     const queryClient = useQueryClient();
@@ -66,11 +83,19 @@ function AnimeCard({
     const [imageLoaded, setImageLoaded] = useState(false);
     const imageRef = useRef(null);
     const statusMenuRef = useRef(null);
+    const statusButtonRef = useRef(null);
+    const statusMenuId = useId();
 
     // Memoized computed values - use optimized images with srcset
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
     const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
     const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
+    // Blur-up: the small thumbnail (cheap, often already cached) sits blurred
+    // under the real poster until it arrives.
+    const placeholderUrl = useMemo(() => {
+        const small = anime.cover_image_small;
+        return small && small !== anime.cover_image_medium ? getImageUrl(small) : null;
+    }, [anime.cover_image_small, anime.cover_image_medium]);
     const bannerAccentImageUrl = useMemo(() => {
         if (!useBannerAccentTitleHover) return null;
 
@@ -110,10 +135,30 @@ function AnimeCard({
             : `${episodeLabel} in ${timeRemaining}`;
     }, [showAiringCountdown, anime.next_airing_date, anime.next_airing_episode]);
 
-    const invalidateAnimeViews = useCallback(() => {
-        queryClient.invalidateQueries({ queryKey: animeKeys.all });
-        queryClient.invalidateQueries({ queryKey: seasonalKeys.all });
-    }, [queryClient]);
+    const metaLine = useMemo(() => {
+        if (metaText) return metaText;
+        if (!showMeta) return null;
+        const year = anime.release_date ? new Date(anime.release_date).getFullYear() : null;
+        return [anime.anime_type, Number.isFinite(year) ? year : null].filter(Boolean).join(' · ') || null;
+    }, [metaText, showMeta, anime.anime_type, anime.release_date]);
+
+    // Everything that shows this entry. Anime grids, shelves, the detail page
+    // and Schedule get the new state patched in place (no refetch, B20); the
+    // user's lists and profile stats, and Home's "Currently Watching" shelf (its
+    // key is not under listKeys.all) are refetched.
+    // `userListStatus`: the changed fields, or null when the entry was removed.
+    // The server's saved entry wins over what was sent: its normaliser may move
+    // progress or stamp dates (e.g. Completed fills episodes_watched).
+    const syncAfterListChange = useCallback((userListStatus, saved) => {
+        patchAnimeListStatus(
+            queryClient,
+            anime.id,
+            userListStatus && { ...userListStatus, ...savedListFields(saved) },
+        );
+        queryClient.invalidateQueries({ queryKey: listKeys.all });
+        queryClient.invalidateQueries({ queryKey: userKeys.watching });
+        queryClient.invalidateQueries({ queryKey: profileKeys.own });
+    }, [queryClient, anime.id]);
 
     useEffect(() => {
         setImageLoaded(false);
@@ -152,11 +197,19 @@ function AnimeCard({
                 setShowStatusMenu(false);
             }
         }
+        function handleKeyDown(event) {
+            if (event.key === 'Escape') {
+                setShowStatusMenu(false);
+                statusButtonRef.current?.focus();
+            }
+        }
         if (showStatusMenu) {
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('keydown', handleKeyDown);
         }
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
         };
     }, [showStatusMenu]);
     const currentStatusOption = useMemo(() =>
@@ -184,18 +237,22 @@ function AnimeCard({
 
         setListStatus(newStatus);
         setShowStatusMenu(false);
+        statusButtonRef.current?.focus();
 
         setIsLoading(true);
         try {
             if (listId) {
-                await listApi.update(listId, { status: newStatus });
+                const response = await listApi.update(listId, { status: newStatus });
+                syncAfterListChange({ id: listId, status: newStatus }, response?.data);
             } else {
                 const response = await listApi.add({ anime_id: anime.id, status: newStatus });
                 setListId(response.data.id);
+                syncAfterListChange({
+                    id: response.data.id,
+                    status: newStatus,
+                    episodes_watched: 0,
+                }, response.data);
             }
-            invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: listKeys.all });
-            queryClient.invalidateQueries({ queryKey: profileKeys.own });
         } catch (error) {
             logger.error('Error updating list:', error);
             setListStatus(previousStatus);
@@ -203,7 +260,7 @@ function AnimeCard({
         } finally {
             setIsLoading(false);
         }
-    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, queryClient, invalidateAnimeViews]);
+    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, syncAfterListChange]);
 
     const handleRemoveFromList = useCallback(async (e) => {
         e.preventDefault();
@@ -216,13 +273,12 @@ function AnimeCard({
         setListStatus(null);
         setListId(null);
         setShowStatusMenu(false);
+        statusButtonRef.current?.focus();
 
         setIsLoading(true);
         try {
             await listApi.remove(previousId);
-            invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: listKeys.all });
-            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            syncAfterListChange(null);
         } catch (error) {
             logger.error('Error removing from list:', error);
             setListStatus(previousStatus);
@@ -230,7 +286,7 @@ function AnimeCard({
         } finally {
             setIsLoading(false);
         }
-    }, [listId, listStatus, isLoading, queryClient, invalidateAnimeViews]);
+    }, [listId, listStatus, isLoading, syncAfterListChange]);
 
     const handleQuickProgress = useCallback(async (e) => {
         e.preventDefault();
@@ -244,17 +300,15 @@ function AnimeCard({
 
         try {
             const entryId = userListEntry?.id || listId;
-            await listApi.update(entryId, { episodes_watched: newEpisodes });
-            invalidateAnimeViews();
-            queryClient.invalidateQueries({ queryKey: listKeys.all });
-            queryClient.invalidateQueries({ queryKey: profileKeys.own });
+            const response = await listApi.update(entryId, { episodes_watched: newEpisodes });
+            syncAfterListChange({ id: entryId, episodes_watched: newEpisodes }, response?.data);
         } catch (error) {
             logger.error("Failed to update progress", error);
             setLocalEpisodesWatched(previousEpisodes);
         } finally {
             setIsLoading(false);
         }
-    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, queryClient, invalidateAnimeViews]);
+    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, syncAfterListChange]);
 
     const toggleStatusMenu = useCallback((e) => {
         e.preventDefault();
@@ -306,11 +360,24 @@ function AnimeCard({
         >
             <div className="flex flex-col h-full">
                 {/* Image Container */}
-                <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-dark-50 flex-shrink-0">
-                    <Link to={`/anime/${anime.slug}`} className="block w-full h-full">
-                        {!imageLoaded && (
-                            <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
-                        )}
+                <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-dark-100 flex-shrink-0 has-[a:focus-visible]:shadow-[0_0_0_2px_var(--color-focus-ring-strong)]">
+                    <Link
+                        to={`/anime/${anime.slug}`}
+                        className="block w-full h-full focus-visible:!outline-none focus-visible:!shadow-none"
+                        aria-label={displayTitle}
+                    >
+                        {!imageLoaded && (placeholderUrl ? (
+                            <img
+                                src={placeholderUrl}
+                                alt=""
+                                aria-hidden="true"
+                                draggable={false}
+                                decoding="async"
+                                className="absolute inset-0 w-full h-full object-cover scale-110 blur-md pointer-events-none"
+                            />
+                        ) : (
+                            <div className="absolute inset-0 skeleton-shimmer z-10 pointer-events-none" />
+                        ))}
                         <img
                             ref={imageRef}
                             src={imageUrl}
@@ -322,7 +389,7 @@ function AnimeCard({
                             decoding={loadingStrategy.decoding}
                             onLoad={() => setImageLoaded(true)}
                             onError={handleImageError}
-                            className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                            className={`relative w-full h-full object-cover transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.03] ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                         />
                     </Link>
 
@@ -330,8 +397,17 @@ function AnimeCard({
 
                     {/* Status Button */}
                     {isAuthenticated && (
-                        <div className={`absolute bottom-2 right-2 z-[200] transition-opacity duration-200 ${showStatusMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                            <div className="relative" ref={statusMenuRef}>
+                        <div className={`absolute bottom-2 right-2 z-[200] transition-opacity duration-200 ${showStatusMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100'}`}>
+                            <div
+                                className="relative"
+                                ref={statusMenuRef}
+                                onBlur={(event) => {
+                                    // Close when keyboard focus leaves the button and its options.
+                                    if (showStatusMenu && !statusMenuRef.current?.contains(event.relatedTarget)) {
+                                        setShowStatusMenu(false);
+                                    }
+                                }}
+                            >
                                 <button
                                     onClick={toggleStatusMenu}
                                     disabled={isLoading}
@@ -339,20 +415,26 @@ function AnimeCard({
                                         bg-black/50 border-white/20 hover:bg-black/70 hover:border-white/30
                                         ${listStatus && currentStatusOption ? currentStatusOption.color : 'text-white'}`}
                                     title={listStatus && currentStatusOption ? currentStatusOption.label : 'Add to List'}
+                                    aria-label={listStatus && currentStatusOption ? `List status: ${currentStatusOption.label}. Change` : `Add ${displayTitle} to list`}
+                                    aria-expanded={showStatusMenu}
+                                    aria-controls={showStatusMenu ? statusMenuId : undefined}
+                                    ref={statusButtonRef}
                                 >
                                     {isLoading ? <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" /> :
                                         listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />}
                                 </button>
 
                                 {showStatusMenu && (
-                                    <div className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-none z-[210] animate-fade-in overflow-hidden">
+                                    <div id={statusMenuId} role="group" aria-label="List status" className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-lg shadow-black/40 z-[210] animate-fade-in overflow-hidden">
                                         <div className="p-1">
                                             {STATUS_OPTIONS.map((option) => (
                                                 <button
                                                     key={option.value}
+                                                    type="button"
+                                                    aria-pressed={listStatus === option.value}
                                                     onClick={(e) => handleStatusChange(e, option.value)}
-                                                    className={`w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-semibold rounded-md transition-colors touch-manipulation
-                                                        ${listStatus === option.value ? 'bg-accent text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
+                                                    className={`w-full px-2.5 py-2 flex items-center gap-2 text-xs font-semibold rounded-md transition-colors touch-manipulation
+                                                        ${listStatus === option.value ? 'bg-accent-dark text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
                                                 >
                                                     <option.icon className="w-3 h-3" />
                                                     {option.label}
@@ -361,7 +443,7 @@ function AnimeCard({
                                         </div>
                                         {listStatus && (
                                             <div className="p-1 border-t border-gray-800 bg-black/20">
-                                                <button onClick={handleRemoveFromList} className="w-full px-2.5 py-1.5 flex items-center gap-2 text-[11px] font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
+                                                <button type="button" onClick={handleRemoveFromList} className="w-full px-2.5 py-2 flex items-center gap-2 text-xs font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
                                                     <X className="w-3 h-3" /> Remove
                                                 </button>
                                             </div>
@@ -374,7 +456,7 @@ function AnimeCard({
 
 
                     {airingCountdown && (
-                        <div className={`absolute bottom-2 left-2 right-2 z-30 pointer-events-none transition-opacity duration-200 ${listStatus === 'Watching' ? 'group-hover:opacity-0' : ''}`}>
+                        <div className={`absolute bottom-2 left-2 z-30 pointer-events-none transition-opacity duration-200 ${isAuthenticated ? 'right-11 sm:right-12' : 'right-2'} ${listStatus === 'Watching' && isAuthenticated ? 'group-hover:opacity-0 group-focus-within:opacity-0 [@media(hover:none)]:opacity-100' : ''}`}>
                             <div className="h-7 px-2.5 rounded-md backdrop-blur-md flex items-center bg-black/65 text-gray-100">
                                 <span className="text-[11px] font-medium tracking-wide text-gray-100">
                                     {airingCountdown}
@@ -384,7 +466,7 @@ function AnimeCard({
                     )}
                     {/* Watching Progress Overlay */}
                     {isAuthenticated && listStatus === 'Watching' && (
-                        <div className="absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex">
+                        <div className={`absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 flex ${showProgress ? '[@media(hover:none)]:opacity-100' : ''} ${showProgress && airingCountdown ? '[@media(hover:none)]:bottom-11' : ''}`}>
                             <div className="h-6 sm:h-7 px-2.5 rounded-md flex items-center justify-between gap-2.5 bg-black/50 text-white border border-white/20 shadow-none pointer-events-auto">
                                 <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide">
                                     {anime.episode_count 
@@ -395,8 +477,10 @@ function AnimeCard({
                                     <button
                                         onClick={handleQuickProgress}
                                         disabled={isLoading}
-                                        className="w-4 h-4 flex items-center justify-center rounded-sm hover:bg-white/20 transition-colors cursor-pointer touch-manipulation"
+                                        type="button"
+                                        className="relative w-5 h-5 -mr-1 flex items-center justify-center rounded hover:bg-white/20 transition-colors cursor-pointer touch-manipulation after:absolute after:-inset-1.5 after:content-['']"
                                         title={`Mark episode ${episodesWatched + 1} as watched`}
+                                        aria-label={`Mark episode ${episodesWatched + 1} of ${displayTitle} as watched`}
                                     >
                                         {isLoading ? (
                                             <Loader2 className="w-2.5 h-2.5 animate-spin" />
@@ -412,7 +496,9 @@ function AnimeCard({
                 </div>
 
                 {/* Title/Info Footer */}
-                <Link to={`/anime/${anime.slug}`} className="mt-3 block"
+                {/* Same target as the poster link, so it stays out of the tab order, but
+                    it is not hidden: screen readers still get the title and meta. */}
+                <Link to={`/anime/${anime.slug}`} className="mt-3 block" tabIndex={-1}
                 >
                     <div className="flex items-start gap-1.5">
                         {listStatus && currentStatusOption && (
@@ -426,6 +512,9 @@ function AnimeCard({
                             {displayTitle}
                         </h3>
                     </div>
+                    {metaLine && (
+                        <p className={`mt-1 text-[11.5px] text-gray-500 tabular truncate ${showProgress && listStatus === 'Watching' ? '[@media(hover:none)]:hidden' : ''}`}>{metaLine}</p>
+                    )}
                 </Link>
             </div>
         </div>
@@ -441,6 +530,9 @@ const arePropsEqual = (prevProps, nextProps) => {
     if (prevProps.index !== nextProps.index) return false;
     if (prevProps.useBannerAccentTitleHover !== nextProps.useBannerAccentTitleHover) return false;
     if (prevProps.showAiringCountdown !== nextProps.showAiringCountdown) return false;
+    if (prevProps.showMeta !== nextProps.showMeta) return false;
+    if (prevProps.metaText !== nextProps.metaText) return false;
+    if (prevProps.showProgress !== nextProps.showProgress) return false;
 
     const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;
     const nextEntry = nextProps.userListEntry || nextProps.anime.user_list_status;
@@ -457,7 +549,7 @@ export function AnimeCardSkeleton() {
     return (
         <div className="relative h-full flex flex-col">
             {/* Card image placeholder */}
-            <div className="aspect-[2/3] bg-dark-200 relative overflow-hidden rounded-lg">
+            <div className="aspect-[2/3] bg-dark-100 relative overflow-hidden rounded-lg">
                 <div className="absolute inset-0 skeleton-shimmer" />
             </div>
 

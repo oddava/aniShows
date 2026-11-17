@@ -14,7 +14,7 @@
       "options": {
         "queue": "default"
       },
-      "schedule": "<crontab: 0 */6 * * * (m/h/dM/MY/d)>",
+      "schedule": "<crontab: 50 * * * * (m/h/dM/MY/d)>",
       "task": "apps.core.tasks.notifications.check_new_episodes"
     },
     "cleanup-old-notifications": {
@@ -37,13 +37,6 @@
       },
       "schedule": "<crontab: 0 1 * * * (m/h/dM/MY/d)>",
       "task": "apps.core.tasks.cleanup_tasks.cleanup_old_task_results"
-    },
-    "collect-queue-metrics-minute": {
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: * * * * * (m/h/dM/MY/d)>",
-      "task": "apps.core.tasks.cleanup_tasks.collect_queue_metrics"
     },
     "derive-airing-hourly": {
       "kwargs": {
@@ -107,7 +100,6 @@
         "batch_size": 25,
         "chunk_size": 100,
         "max_rounds": 4,
-        "require_themes": true,
         "round_interval_minutes": 15,
         "strict": false
       },
@@ -117,12 +109,26 @@
       "schedule": "<crontab: 45 * * * * (m/h/dM/MY/d)>",
       "task": "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync"
     },
+    "replay-public-cache-invalidations": {
+      "options": {
+        "queue": "default"
+      },
+      "schedule": "<crontab: */5 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.adult_content.replay_public_cache_invalidations"
+    },
     "send-pending-notifications": {
       "options": {
         "queue": "default"
       },
       "schedule": "<crontab: */10 * * * * (m/h/dM/MY/d)>",
       "task": "apps.core.tasks.notifications.send_pending_notifications"
+    },
+    "sync-adult-flags-weekly": {
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: 40 3 * * 3 (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.adult_content.sync_adult_flags"
     },
     "sync-airing-schedule-daily": {
       "kwargs": {
@@ -159,27 +165,6 @@
       },
       "schedule": "<crontab: 0 2 * * * (m/h/dM/MY/d)>",
       "task": "apps.animes.tasks.sync.sync_anime_catalog"
-    },
-    "sync-themes-daily": {
-      "kwargs": {
-        "limit": 500
-      },
-      "options": {
-        "queue": "high_priority"
-      },
-      "schedule": "<crontab: 0 6 * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.themes.sync_theme_songs"
-    },
-    "sync-themes-retry": {
-      "kwargs": {
-        "limit": 200,
-        "retry_failed": true
-      },
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: 0 18 * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.themes.sync_theme_songs"
     },
     "sync-trending-hourly": {
       "kwargs": {
@@ -246,13 +231,6 @@
       },
       "schedule": "<crontab: 0 7 * * * (m/h/dM/MY/d)>",
       "task": "apps.users.tasks.run_user_maintenance_workflow"
-    },
-    "warm-profile-cache-hourly": {
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: 0 * * * * (m/h/dM/MY/d)>",
-      "task": "apps.users.tasks.warm_profile_cache"
     }
   },
   "JAZZMIN_SETTINGS": {
@@ -270,7 +248,7 @@
       "core": [
         {
           "icon": "fas fa-tasks",
-          "name": "Celery Dashboard",
+          "name": "Celery task results",
           "permissions": [
             "core.view_celerytaskresult"
           ],
@@ -283,37 +261,30 @@
     "hide_apps": [],
     "hide_models": [],
     "icons": {
-      "animes": "fas fa-film",
-      "animes.Anime": "fas fa-tv",
-      "animes.AnimeCharacter": "fas fa-people-arrows",
-      "animes.AnimeStaff": "fas fa-user-cog",
-      "animes.Character": "fas fa-user-ninja",
-      "animes.Genre": "fas fa-tags",
-      "animes.Review": "fas fa-star",
-      "animes.ReviewReaction": "fas fa-face-smile",
-      "animes.ReviewVote": "fas fa-thumbs-up",
-      "animes.Staff": "fas fa-user-tie",
-      "animes.Studio": "fas fa-building",
-      "animes.UserFavorite": "fas fa-heart",
-      "animes.UserHistory": "fas fa-history",
-      "animes.UserRecommendation": "fas fa-magic",
+      "anime": "fas fa-film",
+      "anime.Anime": "fas fa-tv",
+      "anime.AnimeCharacter": "fas fa-people-arrows",
+      "anime.AnimeStaff": "fas fa-user-cog",
+      "anime.Character": "fas fa-user-ninja",
+      "anime.Genre": "fas fa-tags",
+      "anime.Review": "fas fa-star",
+      "anime.ReviewReaction": "fas fa-face-smile",
+      "anime.ReviewVote": "fas fa-thumbs-up",
+      "anime.Staff": "fas fa-user-tie",
+      "anime.Studio": "fas fa-building",
+      "anime.UserFavorite": "fas fa-heart",
+      "anime.UserHistory": "fas fa-history",
+      "anime.UserRecommendation": "fas fa-magic",
       "auth": "fas fa-users-cog",
       "auth.Group": "fas fa-users",
       "auth.user": "fas fa-user",
       "core": "fas fa-cog",
       "core.AuditLog": "fas fa-history",
       "core.CeleryTaskResult": "fas fa-tasks",
-      "core.CeleryTaskSchedule": "fas fa-calendar-alt",
       "core.CeleryWorkerStatus": "fas fa-server",
       "core.Notification": "fas fa-bell",
       "core.PushSubscription": "fas fa-satellite-dish",
       "core.SystemLog": "fas fa-clipboard-list",
-      "django_celery_beat": "fas fa-clock",
-      "django_celery_beat.ClockedSchedule": "fas fa-stopwatch",
-      "django_celery_beat.CrontabSchedule": "fas fa-calendar",
-      "django_celery_beat.IntervalSchedule": "fas fa-hourglass-half",
-      "django_celery_beat.PeriodicTask": "fas fa-clock",
-      "django_celery_beat.SolarSchedule": "fas fa-sun",
       "forums": "fas fa-comments",
       "forums.Category": "fas fa-folder",
       "forums.Post": "fas fa-reply",
@@ -339,8 +310,7 @@
       "auth",
       "users",
       "anime",
-      "core",
-      "django_celery_beat"
+      "core"
     ],
     "related_modal_active": false,
     "search_model": [
@@ -348,7 +318,7 @@
       "anime.Anime"
     ],
     "show_sidebar": true,
-    "show_ui_builder": true,
+    "show_ui_builder": false,
     "site_brand": "aniShows",
     "site_header": "aniShows",
     "site_icon": null,
@@ -364,9 +334,9 @@
         "url": "admin:index"
       },
       {
-        "name": "API Admin",
+        "name": "Admin panel",
         "new_window": true,
-        "url": "/api/v1/admin/dashboard/"
+        "url": "/admin"
       },
       {
         "app": "users"
@@ -397,9 +367,9 @@
     "user_avatar": null,
     "usermenu_links": [
       {
-        "name": "API Admin",
+        "name": "Admin panel",
         "new_window": true,
-        "url": "/api/v1/admin/dashboard/"
+        "url": "/admin"
       },
       {
         "model": "users.CustomUser"

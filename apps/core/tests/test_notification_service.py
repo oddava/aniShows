@@ -31,6 +31,20 @@ class TestNotificationUnreadCountCache(TestCase):
         cache_key = NotificationService._unread_count_cache_key(self.user.id)
         self.assertEqual(int(cache.get(cache_key)), 0)
 
+    def test_increment_after_a_cache_miss_returns_the_database_count(self):
+        for _ in range(3):
+            Notification.objects.create(
+                user=self.user,
+                notification_type=Notification.NotificationType.SYSTEM,
+                title="t",
+                message="m",
+            )
+        cache.clear()  # eviction / TTL expiry
+        self.assertEqual(NotificationService._increment_unread_count(self.user.id), 3)
+        self.assertEqual(NotificationService._increment_unread_count(self.user.id), 4)
+        cache.clear()
+        self.assertEqual(NotificationService._decrement_unread_count(self.user.id), 3)
+
     def test_mark_as_read_updates_cached_counter(self):
         notification = Notification.objects.create(
             user=self.user,

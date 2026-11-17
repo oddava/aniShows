@@ -1,19 +1,33 @@
-from ..shared.logger import logger
+"""WebSocket consumers for the forums app.
 
-"""
-WebSocket consumers for the forums app.
-
-Provides real-time updates for forum threads — new posts, likes, etc.
+Provides real-time updates for forum threads — new posts, edits, removals, likes.
 """
 
+from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+
+from ..shared.logger import logger
+from .models import Thread
+
+# Close code for an unknown or removed thread (4000-4999 are application codes).
+CLOSE_THREAD_NOT_FOUND = 4404
+
+
+@database_sync_to_async
+def _thread_is_visible(thread_id: int, *, is_staff: bool) -> bool:
+    threads = Thread.objects.filter(pk=thread_id)
+    if not is_staff:
+        threads = threads.filter(is_removed=False)
+    return threads.exists()
 
 
 class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
     """WebSocket consumer for live forum thread updates.
 
-    Any user (authenticated or anonymous) can subscribe to a thread to
-    receive real-time updates when new posts are created or posts are liked.
+    Any user (authenticated or anonymous) can subscribe to a visible thread to
+    receive real-time updates. An unknown thread, or a removed one for non-staff, is
+    closed with 4404; removing a thread closes its non-staff connections the same way,
+    and removed threads broadcast no new content.
 
     URL pattern: ``/ws/forums/threads/<thread_id>/``
 
@@ -21,6 +35,9 @@ class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
 
     Message types sent to client:
         - ``new_post``: A new post/reply was created in the thread
+        - ``post_updated``: A post's text changed (edit or restore)
+        - ``post_removed``: A post was removed (by its author or a moderator)
+        - ``post_restored``: A removed post was restored by a moderator
         - ``post_liked``: A post in the thread was liked/unliked
         - ``thread_liked``: The thread itself was liked/unliked
     """
@@ -28,9 +45,19 @@ class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         """Join the forum thread group."""
         self.thread_id = self.scope["url_route"]["kwargs"]["thread_id"]
+        self.is_staff = bool(getattr(self.scope.get("user"), "is_staff", False))
         self.group_name = f"forum_thread_{self.thread_id}"
-
+        # Join before checking: a removal committing in between then reaches this socket
+        # as ``thread_removed`` instead of slipping past both the check and the event.
         await self.channel_layer.group_add(self.group_name, self.channel_name)
+        if not await _thread_is_visible(self.thread_id, is_staff=self.is_staff):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            del self.group_name
+            # Accept first: a close before the handshake can't carry a code.
+            await self.accept()
+            await self.close(code=CLOSE_THREAD_NOT_FOUND)
+            return
+
         await self.accept()
 
         logger.info(
@@ -73,6 +100,25 @@ class ForumThreadConsumer(AsyncJsonWebsocketConsumer):
                 "type": "new_post",
                 "post": event["post"],
             }
+        )
+
+    async def forum_post_updated(self, event):
+        """A post's text changed: ``{"type": "forum.post_updated", "post": {id, content, edited_at}}``."""
+        await self.send_json({"type": "post_updated", "post": event["post"]})
+
+    async def forum_thread_removed(self, event):
+        """The thread was removed: non-staff connections are closed like an unknown thread."""
+        if not self.is_staff:
+            await self.close(code=CLOSE_THREAD_NOT_FOUND)
+
+    async def forum_post_restored(self, event):
+        """A removed post was restored: ``{"type": "forum.post_restored", "post_id": 1}``."""
+        await self.send_json({"type": "post_restored", "post_id": event["post_id"]})
+
+    async def forum_post_removed(self, event):
+        """A post was removed: ``{"type": "forum.post_removed", "post_id": 1, "removal": "author"}``."""
+        await self.send_json(
+            {"type": "post_removed", "post_id": event["post_id"], "removal": event["removal"]}
         )
 
     async def forum_post_liked(self, event):

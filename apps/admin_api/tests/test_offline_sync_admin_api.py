@@ -46,7 +46,6 @@ class OfflineSyncAdminAPITests(TestCase):
             "anime": anime,
             "metadata_status": OfflineAnimeSyncState.StageStatus.QUARANTINED,
             "franchise_status": OfflineAnimeSyncState.StageStatus.PENDING,
-            "themes_status": OfflineAnimeSyncState.StageStatus.PENDING,
             "quarantined": True,
             "quarantine_reason": "identity_conflict",
             "next_attempt_at": timezone.now() + timedelta(days=1),
@@ -94,6 +93,19 @@ class OfflineSyncAdminAPITests(TestCase):
         state.refresh_from_db()
         self.assertTrue(state.quarantined)
         self.assertEqual(state.quarantine_reason, "operator_skipped")
+
+    def test_mark_skipped_rejects_a_non_string_reason(self):
+        client = APIClient()
+        client.force_authenticate(self.superuser)
+        state = self._state(self._anime("Bad Reason"))
+
+        response = client.post(
+            f"/api/v1/admin/offline-sync-states/{state.id}/mark_skipped/",
+            {"reason": 42},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_set_ids_and_retry_updates_identity_then_resets(self):
         self.client.force_authenticate(self.superuser)

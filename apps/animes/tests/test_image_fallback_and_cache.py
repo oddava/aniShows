@@ -10,6 +10,7 @@ from rest_framework.test import APIRequestFactory, APITestCase
 from ..models import Anime
 from ..serializers_mixins import ImageUrlMixin
 from ..services.anilist import AniListService
+from ..services.public_anime_service import AnimePublicPayloadService
 
 
 class AniListPrepareAnimeDataTests(SimpleTestCase):
@@ -102,12 +103,13 @@ class AnimeDetailCacheInvalidationSignalTests(TestCase):
             release_date=date(2024, 1, 1),
         )
 
-        cache_key = f"anime_detail_base:{anime.slug}"
+        cache_key = AnimePublicPayloadService.detail_cache_key(anime.slug)
         cache.set(cache_key, {"id": anime.id}, timeout=3600)
         self.assertIsNotNone(cache.get(cache_key))
 
         anime.member_count = 100
-        anime.save(update_fields=["member_count"])
+        with self.captureOnCommitCallbacks(execute=True):  # invalidated on commit (B2)
+            anime.save(update_fields=["member_count"])
 
         self.assertIsNone(cache.get(cache_key))
 
@@ -121,11 +123,12 @@ class AnimeDetailCacheInvalidationSignalTests(TestCase):
             status="Airing",
         )
 
-        cache_key = f"anime_detail_base:{anime.slug}"
+        cache_key = AnimePublicPayloadService.detail_cache_key(anime.slug)
         cache.set(cache_key, {"id": anime.id}, timeout=3600)
         self.assertIsNotNone(cache.get(cache_key))
 
-        anime.delete()
+        with self.captureOnCommitCallbacks(execute=True):  # invalidated on commit (B2)
+            anime.delete()
 
         self.assertIsNone(cache.get(cache_key))
 
@@ -143,7 +146,7 @@ class AnimeDetailCacheSelfHealTests(APITestCase):
             banner_image_external_url="https://img.anilist.co/banner-stale-fix.jpg",
         )
 
-        cache_key = f"anime_detail_base:{anime.slug}"
+        cache_key = AnimePublicPayloadService.detail_cache_key(anime.slug)
         cache.set(
             cache_key,
             {
@@ -192,7 +195,7 @@ class AnimeDetailCacheSelfHealTests(APITestCase):
             banner_image_external_url="https://img.anilist.co/banner-internal-host-fix.jpg",
         )
 
-        cache_key = f"anime_detail_base:{anime.slug}"
+        cache_key = AnimePublicPayloadService.detail_cache_key(anime.slug)
         cache.set(
             cache_key,
             {
@@ -248,7 +251,7 @@ class AnimeDetailCacheSelfHealTests(APITestCase):
             banner_image_external_url="https://img.anilist.co/banner-legacy-prefix-fix.jpg",
         )
 
-        cache_key = f"anime_detail_base:{anime.slug}"
+        cache_key = AnimePublicPayloadService.detail_cache_key(anime.slug)
         cache.set(
             cache_key,
             {

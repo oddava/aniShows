@@ -212,10 +212,8 @@ class OfflineCatalogImportService(OfflineCatalogPersistence):
             "last_update": None,
             "metadata_queued": 0,
             "franchises_queued": 0,
-            "themes_queued": 0,
             "metadata_task_ids": [],
             "franchises_task_ids": [],
-            "themes_task_ids": [],
             "sync_states_created": 0,
             "sync_states_updated": 0,
             "sync_states_total": 0,
@@ -394,10 +392,8 @@ class OfflineCatalogImportService(OfflineCatalogPersistence):
             "last_update": summary["last_update"],
             "metadata_queued": summary["metadata_queued"],
             "franchises_queued": summary["franchises_queued"],
-            "themes_queued": summary["themes_queued"],
             "metadata_task_ids": summary["metadata_task_ids"],
             "franchises_task_ids": summary["franchises_task_ids"],
-            "themes_task_ids": summary["themes_task_ids"],
             "sync_states_created": summary["sync_states_created"],
             "sync_states_updated": summary["sync_states_updated"],
             "sync_states_total": summary["sync_states_total"],
@@ -546,20 +542,16 @@ class OfflineCatalogImportService(OfflineCatalogPersistence):
             return {
                 "metadata_queued": 0,
                 "franchises_queued": 0,
-                "themes_queued": 0,
                 "metadata_task_ids": [],
                 "franchises_task_ids": [],
-                "themes_task_ids": [],
             }
 
         # Reconciliation is state-driven now. The import task only prepares state.
         return {
             "metadata_queued": 0,
             "franchises_queued": 0,
-            "themes_queued": 0,
             "metadata_task_ids": [],
             "franchises_task_ids": [],
-            "themes_task_ids": [],
         }
 
     def _initialize_sync_states(

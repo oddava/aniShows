@@ -1,0 +1,18 @@
+# Proxy mode with the existing reverse proxy running as a container: Caddy
+# joins that container's Docker network as "anishows-caddy", and the proxy
+# forwards to http://anishows-caddy:80. Add it with COMPOSE_EXTRA_FILES and
+# set CADDY_PROXY_PUBLISH=0 (no loopback port). CADDY_TRUSTED_PROXIES is that
+# proxy's fixed address on the network (an ipv4_address in its own compose
+# file) plus 127.0.0.1/8 ::1/128; deploy-prod.sh refuses proxy mode without it.
+services:
+  caddy:
+    networks:
+      default: {}
+      proxy:
+        aliases:
+          - anishows-caddy
+
+networks:
+  proxy:
+    name: ${PROXY_NETWORK:-proxy}
+    external: true

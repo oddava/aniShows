@@ -165,7 +165,7 @@ const EngagementTab = ({ data, loading }) => {
       {/* Review Votes */}
       {data.review_votes && (data.review_votes.helpful > 0 || data.review_votes.unhelpful > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
             <div className="flex items-center gap-3 mb-4">
               <div className="text-gray-400">
                 <ThumbsUp size={24} strokeWidth={1.5} />
@@ -179,7 +179,7 @@ const EngagementTab = ({ data, loading }) => {
               <div className="h-1.5 rounded-full bg-white/40" style={{ width: `${data.review_votes.helpful + data.review_votes.unhelpful > 0 ? (data.review_votes.helpful / (data.review_votes.helpful + data.review_votes.unhelpful)) * 100 : 0}%` }} />
             </div>
           </div>
-          <div className="bg-dark/80 backdrop-blur-xl border border-white/5 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 transition-all duration-300 hover:border-white/20">
             <div className="flex items-center gap-3 mb-4">
               <div className="text-gray-400">
                 <ThumbsDown size={24} strokeWidth={1.5} />

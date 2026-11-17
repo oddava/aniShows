@@ -1,44 +1,160 @@
-name: CI/CD Pipeline
+name: Deploy (Hetzner VPS)
 
-# PRs and develop are covered by ci.yml; this workflow only builds and deploys
-# main, and only after the same CI checks pass.
+# Manual only: Actions → "Deploy (Hetzner VPS)" → Run workflow, on the branch
+# or tag to ship (usually main). Nothing deploys on push.
+#
+#   1. CI (ci.yml) on that commit
+#   2. backend and frontend images built and pushed to GHCR as sha-<7 chars>
+#   3. over SSH on the VPS (scripts/deploy/remote_deploy.sh): check out that
+#      commit in VPS_APP_DIR and run ./deploy-prod.sh, which pulls the images,
+#      backs the database up before any migration, migrates, rolls web, copies
+#      the frontend, reloads Caddy and runs its smoke tests
+#   4. the public health endpoint, checked from outside
+#
+# Rollback / redeploy: set "rollback_to" to an earlier deployed commit; CI and
+# the build are skipped and that commit's images (already in GHCR) go live.
+# deploy-prod.sh also prints a local rollback recipe when a deploy fails.
+#
+# Secrets (Settings → Secrets and variables → Actions, environment "production"):
+#   VPS_HOST             server hostname or IP
+#   VPS_USER             SSH user (in the docker group; owns VPS_APP_DIR)
+#   VPS_SSH_KEY          private key for that user (a dedicated deploy key)
+#   VPS_SSH_KNOWN_HOSTS  the server's host key line(s): ssh-keyscan -p <port> <host>
+#   VPS_APP_DIR          the checkout on the server, e.g. /srv/anishows
+#   VPS_SSH_PORT         optional, default 22
+#   VITE_GOOGLE_CLIENT_ID, VITE_SENTRY_DSN, VITE_UMAMI_SCRIPT_URL,
+#   VITE_UMAMI_WEBSITE_ID  optional, baked into the frontend build (the build
+#                        job also runs in "production" so it can read them)
+# docs/deploy/DEPLOY.md ("Deploying from GitHub Actions") has the setup.
+
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: "Redeploy an earlier commit instead (its SHA; skips CI and the build)"
+        required: false
+        default: ""
+      health_url:
+        description: "Public liveness URL checked after the deploy"
+        required: true
+        default: "https://anishows.com/api/v1/health/"
 
+# One deploy at a time, never cancelled halfway (deploy-prod.sh also holds a
+# lock on the server).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: deploy-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 env:
-  REGISTRY: ghcr.io
-  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/anishows-backend
-  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/anishows-frontend
+  # Must match docker-compose.prod.yml and deploy-prod.sh.
+  BACKEND_IMAGE: ghcr.io/oddava/anishows-backend
+  FRONTEND_IMAGE: ghcr.io/oddava/anishows-frontend
 
 jobs:
-  # =============================================================================
-  # LINT & TEST (must pass before anything is built or deployed)
-  # =============================================================================
+  # ===========================================================================
+  # Which commit goes out
+  # ===========================================================================
+  resolve:
+    name: Resolve the release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.pick.outputs.commit }}
+      build: ${{ steps.pick.outputs.build }}
+    steps:
+      - name: Pick the commit
+        id: pick
+        env:
+          ROLLBACK_TO: ${{ inputs.rollback_to }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "$ROLLBACK_TO" ]; then
+            if ! [[ "$ROLLBACK_TO" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+              echo "::error::rollback_to must be a commit SHA (7-40 hex characters)"
+              exit 1
+            fi
+            echo "commit=$ROLLBACK_TO" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Rollback/redeploy of $ROLLBACK_TO (CI and build skipped)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "commit=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "Deploying ${GITHUB_REF_NAME} at $HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ===========================================================================
+  # Lint and test (must pass before anything is built or deployed)
+  # ===========================================================================
   ci:
+    needs: [resolve]
+    if: needs.resolve.outputs.build == 'true'
     uses: ./.github/workflows/ci.yml
 
-  # =============================================================================
-  # BUILD & PUSH DOCKER IMAGES TO GHCR
-  # =============================================================================
+  # ===========================================================================
+  # Build and push the images (sha-<7 chars>, the tags deploy-prod.sh pulls)
+  # ===========================================================================
   build:
-    needs: [ci]
+    name: Build and push images
+    needs: [resolve, ci]
+    if: needs.resolve.outputs.build == 'true'
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    # We need explicit permissions for pushing to GHCR
+    timeout-minutes: 45
+    # The VITE_* build values are environment secrets: only a job that names
+    # the environment can read them (without it the frontend builds with empty
+    # values, silently: no Google sign-in). A required-reviewer rule on
+    # "production" therefore asks twice per run (build, then deploy).
+    environment: production
     permissions:
       contents: read
       packages: write
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # The production stack must parse in every mode before anything ships
+      # (env_file .env is required by the services, so a stub stands in).
+      # TRUSTED_PROXY_CIDRS has no default (compose refuses the file without
+      # it), so the stub sets the template's value; the refusal itself is
+      # checked last.
+      - name: Lint production compose files and deploy scripts
+        run: |
+          set -euo pipefail
+          {
+            echo "TRUSTED_PROXY_CIDRS=10.250.250.0/25"
+            echo "PROXY_NETWORK=proxy"
+            echo "TUNNEL_NETWORK=cloudflared"
+          } > .env
+          for profiles in "" bundled-db analytics tunnel "bundled-db,analytics,tunnel"; do
+            COMPOSE_PROFILES="$profiles" docker compose -f docker-compose.prod.yml config -q
+            COMPOSE_PROFILES="$profiles" docker compose -f docker-compose.prod.yml -f infra/compose/proxy-port.yml config -q
+            COMPOSE_PROFILES="$profiles" docker compose -f docker-compose.prod.yml -f infra/compose/public-ports.yml config -q
+          done
+          docker compose -f docker-compose.prod.yml -f infra/compose/shared-proxy-network.yml config -q
+          docker compose -f docker-compose.prod.yml -f infra/compose/loopback-port.yml config -q
+          docker compose -f docker-compose.prod.yml -f infra/compose/shared-tunnel-network.yml config -q
+          : > .env
+          if docker compose -f docker-compose.prod.yml config -q 2>/dev/null; then
+            echo "docker-compose.prod.yml must refuse an unset TRUSTED_PROXY_CIDRS" >&2
+            exit 1
+          fi
+          # bash -n checks one file per call (further names are its arguments).
+          for script in deploy-prod.sh backups/entrypoint.sh backups/shell/*.sh scripts/deploy/*.sh; do
+            bash -n "$script"
+          done
+          # The docs and the rollback recipe run the scripts directly (./deploy-prod.sh,
+          # scripts/deploy/compose.sh): every tracked script keeps its exec bit.
+          not_executable="$(git ls-files -s -- '*.sh' | awk '$1 != "100755" {print $4}')"
+          if [ -n "$not_executable" ]; then
+            echo "::error::scripts committed without the exec bit (git update-index --chmod=+x):" >&2
+            echo "$not_executable" >&2
+            exit 1
+          fi
+          rm .env
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -46,7 +162,7 @@ jobs:
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -75,6 +191,9 @@ jobs:
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
+          # Sentry release, readiness cache key and image revision label.
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
@@ -92,168 +211,110 @@ jobs:
             VITE_UMAMI_WEBSITE_ID=${{ secrets.VITE_UMAMI_WEBSITE_ID }}
             VITE_SENTRY_DSN=${{ secrets.VITE_SENTRY_DSN }}
             VITE_ENVIRONMENT=production
-            ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
             BUILD_DATE=${{ github.sha }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-      - name: Verify frontend image contents
+      - name: Verify the frontend image holds the build
         run: |
-          echo "🔍 Verifying frontend image contents..."
-          echo "📋 Listing /app/dist/ in the pushed image:"
-          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest ls -la /app/dist/
-          echo ""
-          echo "📋 Listing /app/dist/assets/:"
-          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest ls -la /app/dist/assets/ | head -30
-          echo ""
-          echo "📋 index.html hash:"
-          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest md5sum /app/dist/index.html
-          echo ""
-          echo "📋 index.html content (first 20 lines):"
-          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest head -20 /app/dist/index.html
-          
-          echo ""
-          echo "✅ Verifying critical files exist..."
-          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest test -f /app/dist/index.html || (echo "❌ index.html missing!" && exit 1)
-          docker run --rm ${{ env.FRONTEND_IMAGE }}:latest test -d /app/dist/assets || (echo "❌ assets directory missing!" && exit 1)
-          echo "✅ All critical files verified!"
+          set -euo pipefail
+          image="${FRONTEND_IMAGE}:sha-${GITHUB_SHA::7}"
+          docker run --rm "$image" test -f /app/dist/index.html
+          docker run --rm "$image" test -d /app/dist/assets
+          echo "Frontend image $image has index.html and assets/"
 
-  # =============================================================================
-  # DEPLOY TO PRODUCTION
-  # =============================================================================
+  # ===========================================================================
+  # Deploy to the VPS over SSH
+  # ===========================================================================
   deploy:
-    needs: [build]
+    name: Deploy to the VPS
+    needs: [resolve, build]
+    # A rollback skips ci/build; a normal run needs the build to have passed.
+    if: >-
+      always() && needs.resolve.result == 'success' &&
+      (needs.build.result == 'success' ||
+       (needs.resolve.outputs.build == 'false' && needs.build.result == 'skipped'))
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 45
     environment: production
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup SSH
-        env:
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_SSH_PASSPHRASE: ${{ secrets.EC2_SSH_PASSPHRASE }}
-        run: |
-          set -euo pipefail
-          eval "$(ssh-agent -s)"
-          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
-          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
-
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          key_file=~/.ssh/ec2_deploy_key
-          printf '%s\n' "$EC2_SSH_KEY" > "$key_file"
-          chmod 600 "$key_file"
-
-          # GitHub runners are non-interactive; use askpass when passphrase is provided.
-          if [ -n "${EC2_SSH_PASSPHRASE:-}" ]; then
-            askpass=~/.ssh/ssh-askpass.sh
-            printf '%s\n' '#!/usr/bin/env bash' 'echo "$EC2_SSH_PASSPHRASE"' > "$askpass"
-            chmod 700 "$askpass"
-            export SSH_ASKPASS="$askpass"
-            export SSH_ASKPASS_REQUIRE=force
-            export DISPLAY=:0
-            setsid -w ssh-add "$key_file" < /dev/null
-            rm -f "$askpass"
-          else
-            if ! ssh-add "$key_file" < /dev/null; then
-              echo "Failed to add EC2_SSH_KEY. If the key is passphrase protected, set EC2_SSH_PASSPHRASE."
-              exit 1
-            fi
-          fi
+        with:
+          # The remote script that goes over SSH comes from the commit that
+          # triggered the run (it is the same for a rollback).
+          sparse-checkout: scripts/deploy/remote_deploy.sh
+          sparse-checkout-cone-mode: false
 
       - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          # Add the host key to known_hosts for secure verification
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
-          chmod 644 ~/.ssh/known_hosts
-          echo "SSH configured with host key verification"
-
-      - name: Deploy to EC2
         env:
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          SHORT_SHA: ${{ github.sha }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
         run: |
-          echo "🚀 Starting deployment to EC2..."
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          
-          ssh ${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }} "
-            set -e
-            
-            echo '📂 Navigating to project directory...'
-            APP_DIR=''
-            for dir in /root/aniShows /home/root/aniShows /home/ubuntu/aniShows; do
-              if [ -d \"\$dir\" ]; then
-                APP_DIR=\"\$dir\"
-                break
-              fi
-            done
-            if [ -z \"\$APP_DIR\" ]; then
-              echo 'Could not find aniShows directory on server.'
-              exit 1
-            fi
-            echo \"Using app directory: \$APP_DIR\"
-            cd \"\$APP_DIR\"
-            
-            echo '🔄 Pulling latest compose files from GitHub...'
-            git stash push --include-untracked -m \"pre-deploy-${SHORT_SHA}\" || true
-            git fetch origin main
-            if [ -e .codex ] && ! git ls-files --error-unmatch .codex >/dev/null 2>&1; then
-              echo '🧹 Removing local untracked .codex placeholder before updating...'
-              rm -rf .codex
-            fi
-            git pull --ff-only origin main
-            
-            echo '🔑 Logging into GitHub Container Registry...'
-            echo '${GHCR_PAT}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            echo '====================================='
-            echo '🎯 DEPLOYING FRONTEND (commit: ${SHORT_SHA})'
-            echo '====================================='
-            
-            echo '📦 Pulling frontend image by SHA tag...'
-            docker pull ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA}
-            
-            echo '🏷️  Tagging as latest so docker compose uses the correct image...'
-            docker tag ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA} ghcr.io/oddava/anishows-frontend:latest
-            
-            # Backend first: deploy-prod.sh refuses placeholder secrets and runs
-            # migrations, and the new SPA must not go live if it stops.
-            echo '🐳 Running deployment script for remaining services...'
-            bash ./deploy-prod.sh
+          set -euo pipefail
+          missing=()
+          for name in VPS_HOST VPS_USER VPS_SSH_KEY VPS_SSH_KNOWN_HOSTS VPS_APP_DIR; do
+            [ -n "${!name:-}" ] || missing+=("$name")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing secrets: ${missing[*]} (docs/deploy/DEPLOY.md, Deploying from GitHub Actions)"
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key, never trust-on-first-use.
+          printf '%s\n' "$VPS_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          {
+            echo "Host vps"
+            echo "  HostName $VPS_HOST"
+            echo "  User $VPS_USER"
+            echo "  Port ${VPS_SSH_PORT:-22}"
+            echo "  IdentityFile ~/.ssh/deploy_key"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+            echo "  BatchMode yes"
+            echo "  ServerAliveInterval 30"
+            echo "  ServerAliveCountMax 6"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+          ssh vps true
+          echo "SSH to the VPS works"
 
-            # Copy over the old build instead of wiping it: open tabs still load
-            # their old hashed chunks, and index.html (copied last) never points
-            # at assets that are not there yet. Chunks unused for a week go.
-            echo '📋 Copying new frontend files from image...'
-            docker run --rm -v anishows_frontend_dist:/srv/frontend ghcr.io/oddava/anishows-frontend:sha-${SHORT_SHA} sh -c 'mkdir -p /srv/frontend/assets && cp -r /app/dist/assets/. /srv/frontend/assets/ && cp -r /app/dist/. /srv/frontend/ && find /srv/frontend/assets -type f -mtime +7 -delete && echo DONE'
-
-            echo '🔍 Verifying deployed files...'
-            docker run --rm -v anishows_frontend_dist:/srv/frontend alpine:latest sh -c 'ls -la /srv/frontend/ && echo --- && ls /srv/frontend/assets/ | head -10 && echo --- && md5sum /srv/frontend/index.html'
-
-            echo 'Verifying deployment health...'
-            sleep 5
-            
-            echo 'Testing website accessibility...'
-            curl -sf --retry 3 --retry-delay 5 http://localhost:80/api/v1/health/ || { echo 'Health check FAILED'; exit 1; }
-            
-            echo '📊 Checking container status...'
-            docker compose -f docker-compose.prod.yml ps
-            
-            echo '✅ Deployment completed successfully!'
-          "
-
-      - name: Notify on failure
-        if: failure()
+      - name: Deploy
+        env:
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          COMMIT: ${{ needs.resolve.outputs.commit }}
         run: |
-          echo "❌ Deployment failed! Check the logs above for details."
+          set -euo pipefail
+          # printf %q: the directory reaches the remote shell as one word.
+          ssh vps "bash -s -- $(printf '%q' "$VPS_APP_DIR") $(printf '%q' "$COMMIT")" \
+            < scripts/deploy/remote_deploy.sh
+
+      - name: Public health check
+        env:
+          HEALTH_URL: ${{ inputs.health_url }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            code="$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 10 "$HEALTH_URL" || true)"
+            if [ "$code" = 200 ] && grep -q '"status"' /tmp/health.json; then
+              echo "Healthy: $HEALTH_URL"
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "Attempt $attempt: HTTP ${code:-none}"
+            sleep $((attempt * 5))
+          done
+          echo "::error::$HEALTH_URL is not healthy after the deploy"
           exit 1
 
-      - name: Deployment notification
-        if: success()
-        run: |
-          echo "✅ Successfully deployed commit ${{ github.sha }} to production"
+      - name: Remove the SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/config

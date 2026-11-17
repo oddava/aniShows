@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-import httpx
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
@@ -10,11 +9,7 @@ from django.utils import timezone
 
 from ...shared.logger import logger
 from ..models import Anime, OfflineAnimeSyncState
-from .jikan import (
-    JikanRateLimiter,
-    JikanService,
-    fetch_themes_from_jikan_with_reason,
-)
+from .anilist import AniListService
 from .metadata_health import build_stalled_offline_metadata_query
 from .metrics import (
     OFFLINE_SYNC_QUARANTINE_TOTAL,
@@ -25,7 +20,6 @@ from .metrics import (
 from .offline_sync_policy import (
     ATTEMPT_FIELD_BY_STAGE,
     IN_PROGRESS_LEASE_SECONDS,
-    STAGE_FRANCHISE,
     STAGE_METADATA,
     STAGES,
     STATE_BULK_CREATE_BATCH_SIZE,
@@ -84,17 +78,17 @@ class OfflineSyncService(OfflineSyncPolicy):
 
         updated = 0
         if reset_pipeline:
-            # An admin's skip or merge decision outlives any reset.
+            # An admin's skip or merge decision outlives any reset. Containment,
+            # not a key lookup: ``NOT (ctx -> 'manual' = true)`` is NULL for rows
+            # without the key, so those would never be reset.
             queryset = OfflineAnimeSyncState.objects.filter(anime_id__in=ids).exclude(
-                quarantine_context__manual=True
+                quarantine_context__contains={"manual": True}
             )
             updated = queryset.update(
                 metadata_status=OfflineAnimeSyncState.StageStatus.PENDING,
                 franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
-                themes_status=OfflineAnimeSyncState.StageStatus.PENDING,
                 metadata_attempt_count=0,
                 franchise_attempt_count=0,
-                themes_attempt_count=0,
                 attempt_count=0,
                 last_attempt_at=None,
                 next_attempt_at=now,
@@ -130,27 +124,18 @@ class OfflineSyncService(OfflineSyncPolicy):
         reason_counts: dict[str, int] = {}
         processed = 0
 
-        jikan_service = None
-        jikan_http_client = None
-        jikan_rate_limiter = None
+        service = None
 
         try:
             if claims:
-                jikan_service = JikanService(enable_caching=True, enable_rate_limiting=True)
-                jikan_http_client = httpx.Client(timeout=15.0)
-                jikan_rate_limiter = JikanRateLimiter(base_delay=0.8)
+                service = AniListService(enable_caching=True, enable_rate_limiting=True)
 
             for claim in claims:
                 if claim.retry_age_seconds is not None:
                     OFFLINE_SYNC_RETRY_AGE_SECONDS.labels(stage=claim.stage).observe(
                         max(claim.retry_age_seconds, 0.0)
                     )
-                outcome = self._execute_claim(
-                    claim,
-                    jikan_service=jikan_service,
-                    jikan_http_client=jikan_http_client,
-                    jikan_rate_limiter=jikan_rate_limiter,
-                )
+                outcome = self._execute_claim(claim, service=service)
                 if not outcome:
                     continue
                 processed += 1
@@ -161,10 +146,8 @@ class OfflineSyncService(OfflineSyncPolicy):
                 if reason:
                     reason_counts[reason] = reason_counts.get(reason, 0) + 1
         finally:
-            if jikan_service is not None:
-                jikan_service.close()
-            if jikan_http_client is not None:
-                jikan_http_client.close()
+            if service is not None:
+                service.close()
 
         summary = self._state_summary(anime_ids=anime_ids)
         return {
@@ -250,9 +233,7 @@ class OfflineSyncService(OfflineSyncPolicy):
         self,
         claim: StageClaim,
         *,
-        jikan_service: JikanService | None = None,
-        jikan_http_client: httpx.Client | None = None,
-        jikan_rate_limiter: JikanRateLimiter | None = None,
+        service: AniListService | None = None,
     ) -> dict | None:
         try:
             state = OfflineAnimeSyncState.objects.select_related("anime").get(id=claim.state_id)
@@ -260,21 +241,9 @@ class OfflineSyncService(OfflineSyncPolicy):
             return None
 
         if claim.stage == STAGE_METADATA:
-            result = self.sync_metadata_stage(
-                state.anime,
-                service=jikan_service,
-            )
-        elif claim.stage == STAGE_FRANCHISE:
-            result = self.sync_franchise_stage(
-                state.anime,
-                service=jikan_service,
-            )
+            result = self.sync_metadata_stage(state.anime, service=service)
         else:
-            result = self.sync_themes_stage(
-                state.anime,
-                http_client=jikan_http_client,
-                rate_limiter=jikan_rate_limiter,
-            )
+            result = self.sync_franchise_stage(state.anime, service=service)
 
         return self._apply_stage_result(state_id=state.id, stage=claim.stage, result=result)
 
@@ -282,7 +251,7 @@ class OfflineSyncService(OfflineSyncPolicy):
         self,
         anime: Anime,
         *,
-        service: JikanService | None = None,
+        service: AniListService | None = None,
     ) -> StageResult:
         if (
             anime.anilist_id in (None, 0)
@@ -300,10 +269,10 @@ class OfflineSyncService(OfflineSyncPolicy):
         self,
         anime: Anime,
         *,
-        service: JikanService | None = None,
+        service: AniListService | None = None,
     ) -> StageResult:
         owned_service = service is None
-        service = service or JikanService(enable_caching=True, enable_rate_limiting=True)
+        service = service or AniListService(enable_caching=True, enable_rate_limiting=True)
         try:
             media = service.resolve_media_for_anime(anime)
             if media and anime.anilist_id and media.get("id") != anime.anilist_id:
@@ -326,7 +295,7 @@ class OfflineSyncService(OfflineSyncPolicy):
             if not media:
                 return self._stage_result_from_external_error(
                     code=service.last_error_code or "not_found",
-                    message=service.last_error_message or "Jikan media not found.",
+                    message=service.last_error_message or "AniList media not found.",
                 )
 
             updated = service.refresh_anime_metadata(anime, media)
@@ -334,7 +303,7 @@ class OfflineSyncService(OfflineSyncPolicy):
                 return StageResult(
                     status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
                     reason_code="identity_conflict",
-                    reason_message="Jikan update rejected due to identity conflict.",
+                    reason_message="AniList update rejected due to identity conflict.",
                 )
 
             return StageResult(status=OfflineAnimeSyncState.StageStatus.SYNCED)
@@ -376,13 +345,13 @@ class OfflineSyncService(OfflineSyncPolicy):
         self,
         anime: Anime,
         *,
-        service: JikanService | None = None,
+        service: AniListService | None = None,
     ) -> StageResult:
-        if not anime.mal_id:
+        if not (anime.anilist_id or anime.mal_id):
             return StageResult(
                 status=OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS,
                 reason_code="missing_ids",
-                reason_message="MAL ID is required for franchise stage.",
+                reason_message="An AniList or MAL ID is required for the franchise stage.",
             )
         return self._run_franchise_stage(anime, service=service)
 
@@ -390,18 +359,23 @@ class OfflineSyncService(OfflineSyncPolicy):
         self,
         anime: Anime,
         *,
-        service: JikanService | None = None,
+        service: AniListService | None = None,
     ) -> StageResult:
         owned_service = service is None
-        service = service or JikanService(enable_caching=True, enable_rate_limiting=True)
+        service = service or AniListService(enable_caching=True, enable_rate_limiting=True)
         try:
-            media = service.search_by_mal_id(anime.mal_id, anilist_id=anime.anilist_id)
+            # The metadata stage just fetched the same payload, so this is
+            # usually a response-cache hit.
+            if anime.anilist_id:
+                media = service.get_anime_by_id(anime.anilist_id)
+            else:
+                media = service.search_by_mal_id(anime.mal_id)
             if not media:
                 return self._stage_result_from_external_error(
                     code=service.last_error_code or "not_found",
-                    message=service.last_error_message or "Jikan media not found.",
+                    message=service.last_error_message or "AniList media not found.",
                 )
-            if media.get("idMal") != anime.mal_id:
+            if anime.mal_id and media.get("idMal") and media.get("idMal") != anime.mal_id:
                 return StageResult(
                     status=OfflineAnimeSyncState.StageStatus.BLOCKED_IDENTITY,
                     reason_code="identity_conflict",
@@ -423,67 +397,6 @@ class OfflineSyncService(OfflineSyncPolicy):
         finally:
             if owned_service:
                 service.close()
-
-    def sync_themes_stage(
-        self,
-        anime: Anime,
-        *,
-        http_client: httpx.Client | None = None,
-        rate_limiter: JikanRateLimiter | None = None,
-    ) -> StageResult:
-        if not anime.mal_id or not isinstance(anime.mal_id, int) or anime.mal_id <= 0:
-            return StageResult(
-                status=OfflineAnimeSyncState.StageStatus.BLOCKED_NO_IDS,
-                reason_code="invalid_ids",
-                reason_message=f"Invalid MAL ID: {anime.mal_id}",
-            )
-        return self._run_themes_stage(anime, http_client=http_client, rate_limiter=rate_limiter)
-
-    def _run_themes_stage(
-        self,
-        anime: Anime,
-        *,
-        http_client: httpx.Client | None = None,
-        rate_limiter: JikanRateLimiter | None = None,
-    ) -> StageResult:
-        owned_http_client = http_client is None
-        http_client = http_client or httpx.Client(timeout=15.0)
-        rate_limiter = rate_limiter or JikanRateLimiter(base_delay=0.8)
-        try:
-            result = fetch_themes_from_jikan_with_reason(
-                http_client=http_client,
-                mal_id=anime.mal_id,
-                rate_limiter=rate_limiter,
-                max_retries=3,
-            )
-            if not result.success:
-                return self._stage_result_from_external_error(
-                    code=result.reason_code or "transport_error",
-                    message=result.message or "Jikan request failed.",
-                )
-
-            themes = result.themes or {"openings": [], "endings": []}
-            openings = themes.get("openings", [])
-            endings = themes.get("endings", [])
-            if openings or endings:
-                from ..tasks.themes import ThemeSongSyncTask
-
-                task = ThemeSongSyncTask()
-                task._save_theme_songs(anime, themes)
-
-            return StageResult(status=OfflineAnimeSyncState.StageStatus.SYNCED)
-        except Exception as exc:
-            # As the other stages do: an escaped error would abort the batch
-            # and leave this state unrecorded, so it would never back off.
-            return StageResult(
-                status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR,
-                reason_code="transport_error",
-                reason_message=str(exc),
-                transient=True,
-            )
-        finally:
-            if owned_http_client:
-                http_client.close()
 
     def _apply_stage_result(self, *, state_id: int, stage: str, result: StageResult) -> dict:
         status_field = STATUS_FIELD_BY_STAGE[stage]
@@ -649,7 +562,6 @@ class OfflineSyncService(OfflineSyncPolicy):
         complete = queryset.filter(
             metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-            themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             quarantined=False,
         ).count()
         pending = (
@@ -657,7 +569,6 @@ class OfflineSyncService(OfflineSyncPolicy):
             .exclude(
                 metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
                 franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-                themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             )
             .count()
         )
@@ -666,7 +577,6 @@ class OfflineSyncService(OfflineSyncPolicy):
             .filter(
                 Q(metadata_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
                 | Q(franchise_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
-                | Q(themes_status=OfflineAnimeSyncState.StageStatus.TRANSIENT_ERROR)
             )
             .count()
         )
@@ -701,11 +611,6 @@ class OfflineSyncService(OfflineSyncPolicy):
                 if state.franchise_status != OfflineAnimeSyncState.StageStatus.SYNCED
                 else OfflineAnimeSyncState.StageStatus.SYNCED
             ),
-            themes_status=(
-                OfflineAnimeSyncState.StageStatus.PENDING
-                if state.themes_status != OfflineAnimeSyncState.StageStatus.SYNCED
-                else OfflineAnimeSyncState.StageStatus.SYNCED
-            ),
             # Fresh attempts too: quarantine triggers on the attempt count, so
             # without this one more failure would quarantine it again.
             metadata_attempt_count=(
@@ -716,11 +621,6 @@ class OfflineSyncService(OfflineSyncPolicy):
             franchise_attempt_count=(
                 state.franchise_attempt_count
                 if state.franchise_status == OfflineAnimeSyncState.StageStatus.SYNCED
-                else 0
-            ),
-            themes_attempt_count=(
-                state.themes_attempt_count
-                if state.themes_status == OfflineAnimeSyncState.StageStatus.SYNCED
                 else 0
             ),
             attempt_count=0,
@@ -744,11 +644,6 @@ class OfflineSyncService(OfflineSyncPolicy):
             franchise_status=(
                 state.franchise_status
                 if state.franchise_status == OfflineAnimeSyncState.StageStatus.SYNCED
-                else OfflineAnimeSyncState.StageStatus.QUARANTINED
-            ),
-            themes_status=(
-                state.themes_status
-                if state.themes_status == OfflineAnimeSyncState.StageStatus.SYNCED
                 else OfflineAnimeSyncState.StageStatus.QUARANTINED
             ),
             quarantined=True,

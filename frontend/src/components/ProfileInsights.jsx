@@ -7,7 +7,7 @@ import {
     getProfileAccentTheme,
     normalizeProfilePrimaryColor,
 } from '../utils/profileAccent';
-import { activityQueries, insightsQueries } from '../api/queries/user';
+import { activityQueries, insightsQueries, listQueries } from '../api/queries/lists';
 
 function hexToRgb(hex) {
     const normalized = normalizeProfilePrimaryColor(hex).replace('#', '');
@@ -111,27 +111,28 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
     const { baseColor: profileAccentColor, lightColor: profileAccentLight, darkColor: profileAccentDark } =
         getProfileAccentTheme(accentColor);
 
-    // Fetch all anime lists
+    // Counts, totals, genres and the score histogram: one summary request.
     const {
-        data: listsData,
-        isLoading: listsLoading,
-        isError: listsError,
-        refetch: refetchLists
+        data: summary,
+        isLoading: summaryLoading,
+        isError: summaryError,
+        refetch: refetchSummary,
     } = useQuery({
-        ...insightsQueries.lists(username),
+        ...listQueries.summary(username),
         enabled: !isPrivate && !!username,
         staleTime: 5 * 60 * 1000,
     });
 
-    // Fetch reviews
-    const { 
-        data: reviewsData, 
-        isLoading: reviewsLoading,
-        isError: reviewsError,
-        refetch: refetchReviews
+    // The "Progress" card: the ten most recently updated Watching entries.
+    const {
+        data: watchingItems,
+        isLoading: watchingLoading,
+        isError: watchingError,
+        refetch: refetchWatching,
     } = useQuery({
-        ...insightsQueries.reviews(username),
+        ...insightsQueries.watching(username),
         enabled: !isPrivate && !!username,
+        staleTime: 5 * 60 * 1000,
     });
 
     if (isPrivate) {
@@ -142,7 +143,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
         );
     }
 
-    if (listsLoading || reviewsLoading) {
+    if (summaryLoading || watchingLoading) {
         return (
             <div className="flex flex-col gap-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
@@ -159,14 +160,14 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
     }
 
     // Handle errors gracefully
-    if (listsError || reviewsError) {
+    if (summaryError || watchingError) {
         return (
             <div className="flex flex-col items-center justify-center py-20 bg-dark-100/50 rounded-xl border border-gray-800">
                 <p className="text-gray-400 font-bold mb-4">Failed to load insights.</p>
                 <button
                     onClick={() => {
-                        if (listsError) refetchLists();
-                        if (reviewsError) refetchReviews();
+                        if (summaryError) refetchSummary();
+                        if (watchingError) refetchWatching();
                     }}
                     className="btn-primary px-6 py-2.5 text-sm"
                 >
@@ -176,70 +177,40 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
         );
     }
 
-    // Safely process list data with defensive checks
-    const allItems = Array.isArray(listsData) 
-        ? listsData.flatMap(g => Array.isArray(g?.items) ? g.items : []) 
-        : [];
-    const totalAnime = allItems.length;
-    const totalEpisodes = allItems.reduce((sum, item) => sum + (item?.episodes_watched || 0), 0);
-    const completedCount = Array.isArray(listsData) 
-        ? (listsData.find(g => g?.status === 'Completed')?.items?.length || 0)
-        : 0;
-    const watchingCount = Array.isArray(listsData) 
-        ? (listsData.find(g => g?.status === 'Watching')?.items?.length || 0)
-        : 0;
+    const totalAnime = summary?.total || 0;
+    const totalEpisodes = summary?.episodes_watched || 0;
+    const completedCount = summary?.counts?.Completed || 0;
+    const watching = Array.isArray(watchingItems) ? watchingItems : [];
 
-    // Genre distribution - with safe access
-    const genreCounts = {};
-    allItems.forEach(item => {
-        if (item?.anime?.genres && Array.isArray(item.anime.genres)) {
-            item.anime.genres.forEach(genre => {
-                if (genre?.name) {
-                    genreCounts[genre.name] = (genreCounts[genre.name] || 0) + 1;
-                }
-            });
-        }
-    });
-
-    const genreData = Object.entries(genreCounts)
-        .sort((a, b) => b[1] - a[1])
+    const genreData = (summary?.top_genres || [])
         .slice(0, 8)
-        .map(([name, value], index) => ({
-            name,
-            value,
+        .map((genre, index) => ({
+            name: genre.name,
+            value: genre.count,
             color: GENRE_COLORS[index % GENRE_COLORS.length]
         }));
 
-    // Score distribution
-    const reviews = Array.isArray(reviewsData) ? reviewsData : [];
-    const scoreCounts = {};
-    for (let i = 1; i <= 10; i++) scoreCounts[i] = 0;
-
-    reviews.forEach(review => {
-        const score = review.rating;
-        if (score >= 1 && score <= 10) scoreCounts[score]++;
-    });
-
-    const scoreData = Object.entries(scoreCounts)
-        .map(([score, count]) => ({
-            score: parseInt(score),
-            count,
+    // Score distribution of the list's scored entries (1-10).
+    const histogram = summary?.score_histogram || {};
+    const scoreData = Array.from({ length: 10 }, (_, index) => {
+        const score = index + 1;
+        return {
+            score,
+            count: Number(histogram[score] ?? histogram[String(score)] ?? 0),
             fill:
-                parseInt(score) >= 9
+                score >= 9
                     ? profileAccentColor
-                    : parseInt(score) >= 7
+                    : score >= 7
                         ? profileAccentLight
-                        : parseInt(score) >= 5
+                        : score >= 5
                             ? toRgba(profileAccentColor, 0.7)
-                            : parseInt(score) >= 3
+                            : score >= 3
                                 ? toRgba(profileAccentDark, 0.8)
                                 : profileAccentDark
-        }))
-        .sort((a, b) => a.score - b.score);
-
-    const avgScore = reviews.length > 0
-        ? (reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length).toFixed(1)
-        : '-';
+        };
+    });
+    const ratedCount = scoreData.reduce((sum, entry) => sum + entry.count, 0);
+    const avgScore = summary?.mean_score != null ? Number(summary.mean_score).toFixed(1) : '-';
 
     return (
         <div className="w-full space-y-6 overflow-x-hidden lg:space-y-8">
@@ -248,7 +219,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                 <StatCard icon={Tv} label="Total Anime" value={totalAnime} color="blue" />
                 <StatCard icon={Clock} label="Total Episodes" value={totalEpisodes.toLocaleString()} color="accent" />
                 <StatCard icon={TrendingUp} label="Completed" value={completedCount} color="green" />
-                <StatCard icon={Star} label="Avg Score" value={avgScore} subtext={`from ${reviews.length} reviews`} color="yellow" />
+                <StatCard icon={Star} label="Avg Score" value={avgScore} subtext={`from ${ratedCount} rated`} color="yellow" />
             </div>
 
             {/* Charts Row */}
@@ -314,7 +285,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                             </h3>
                             <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.16em] opacity-60 uppercase">How you evaluate anime quality</p>
                         </div>
-                        {reviews.length > 0 && (
+                        {ratedCount > 0 && (
                             <div className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-accent">
                                     {avgScore} Average
@@ -322,7 +293,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                             </div>
                         )}
                     </div>
-                    {reviews.length > 0 ? (
+                    {ratedCount > 0 ? (
                         <div className="flex-1 h-[320px]">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={scoreData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -360,7 +331,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                         </div>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-40">
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Write reviews to see distribution</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Score anime in your list to see distribution</p>
                         </div>
                     )}
                 </div>
@@ -383,8 +354,8 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                         Progress
                     </h3>
                     <div className="flex-1 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                        {watchingCount > 0 ? (
-                            listsData?.find(g => g?.status === 'Watching')?.items?.slice(0, 10).map((item) => {
+                        {watching.length > 0 ? (
+                            watching.map((item) => {
                                 if (!item || !item.anime) return null;
                                 const eps = item.episodes_watched || 0;
                                 const total = item.anime?.episode_count || 0;
@@ -413,7 +384,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                                                     </div>
                                                     <div className="relative h-1.5 bg-dark-400 rounded-full overflow-hidden p-[1px] shadow-inner">
                                                         <div
-                                                            className="h-full bg-accent transition-[width] duration-1000"
+                                                            className="h-full bg-accent-dark transition-[width] duration-1000"
                                                             style={{ width: `${progress}%` }}
                                                         />
                                                     </div>

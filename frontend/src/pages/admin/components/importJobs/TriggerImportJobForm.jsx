@@ -1,5 +1,9 @@
 import CustomSelect from '../../../../components/common/CustomSelect';
 
+/** Server-side caps for admin-triggered imports (the API answers 400 above them). */
+export const SLICE_LIMIT = 500;
+export const BATCH_SIZE_MAX = 500;
+
 /** The form in the "Trigger New Job" modal; its state lives in AdminImportJobs. */
 export default function TriggerImportJobForm({
   FULL_CATALOG_LIMIT,
@@ -34,18 +38,13 @@ export default function TriggerImportJobForm({
           options={[
             { value: 'offline_catalog', label: 'Anime Offline Database' },
             { value: 'anime_catalog', label: 'Anime Model Fields' },
-            { value: 'jikan_enrichment', label: 'Jikan (self-hosted) Metadata' },
+            { value: 'metadata_enrichment', label: 'AniList Metadata' },
           ]}
           triggerClassName="w-full bg-dark-100 px-4 py-2 rounded-lg focus-visible:ring-violet-500/50"
           ariaLabel="Import source"
         />
       </div>
-      {triggerSource === 'jikan_trending' ? (
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-          Trending refresh pulls the recent-updates feed from the self-hosted
-          Jikan service and maps returned MAL IDs onto local anime rows.
-        </div>
-      ) : triggerSource === 'anime_catalog' ? (
+      {triggerSource === 'anime_catalog' ? (
         <>
           <div>
             <label className="block text-sm font-medium text-white/70 mb-1">
@@ -77,7 +76,7 @@ export default function TriggerImportJobForm({
             <input
               type="number"
               min="1"
-              max={FULL_CATALOG_LIMIT}
+              max={triggerSyncType === 'full_catalog' ? FULL_CATALOG_LIMIT : SLICE_LIMIT}
               value={triggerLimit}
               onChange={(e) => setTriggerLimit(e.target.value)}
               disabled={isTriggering}
@@ -85,11 +84,11 @@ export default function TriggerImportJobForm({
             />
           </div>
         </>
-      ) : triggerSource === 'jikan_enrichment' ? (
+      ) : triggerSource === 'metadata_enrichment' ? (
         <>
           <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-white/70">
-            Metadata enrichment pulls characters, staff, themes, and relations
-            from the self-hosted Jikan service for existing MAL-linked anime rows.
+            Metadata enrichment pulls details, characters, staff and relations
+            from AniList for existing anime rows.
           </div>
           <div>
             <label className="block text-sm font-medium text-white/70 mb-1">
@@ -98,6 +97,7 @@ export default function TriggerImportJobForm({
             <input
               type="number"
               min="1"
+              max={BATCH_SIZE_MAX}
               value={triggerBatchSize}
               onChange={(e) => setTriggerBatchSize(e.target.value)}
               disabled={isTriggering}
@@ -142,7 +142,7 @@ export default function TriggerImportJobForm({
               disabled={isTriggering}
               className="rounded border-white/20 bg-dark-100"
             />
-            Queue Jikan (self-hosted) enrichment after import (metadata, themes, relations)
+            Queue AniList enrichment after import (metadata and relations)
           </label>
         </>
       )}

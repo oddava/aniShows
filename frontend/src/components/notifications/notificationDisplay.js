@@ -25,40 +25,58 @@ export const formatRelativeTime = (value) => {
 };
 
 
-export const getAnimeSlug = (notification) => notification?.data?.anime_slug || null;
+const coverFrom = (data) => (
+    data.anime_cover_image_small
+    || data.anime_cover_image_medium
+    || data.anime_cover_image
+    || data.anime_cover
+    || data.cover_image
+    || null
+);
 
-export const getNotificationThumbnail = (notification, coverBySlug, followerAvatarByUsername) => {
+const avatarFrom = (notification) => {
     const data = notification?.data || {};
-    const animeSlug = getAnimeSlug(notification);
-    const followerUsername = data.follower_username;
-    const fetchedFollowerAvatar = followerUsername ? followerAvatarByUsername[followerUsername] : null;
-    const rawUrl =
-        data.anime_cover_image_small ||
-        data.anime_cover_image_medium ||
-        data.anime_cover_image ||
-        data.anime_cover ||
-        data.cover_image ||
-        (animeSlug ? coverBySlug[animeSlug] : null) ||
-        data.follower_avatar_url ||
-        data.follower_avatar ||
-        data.avatar ||
-        data.user_avatar ||
-        fetchedFollowerAvatar ||
-        null;
-
-    return rawUrl ? getImageUrl(rawUrl, data.anime_title || data.follower_username || 'Notification') : null;
+    return notification?.actor?.avatar
+        || data.follower_avatar_url
+        || data.follower_avatar
+        || data.avatar
+        || data.user_avatar
+        || null;
 };
 
-export const hasEmbeddedImage = (notification) => {
+/** The person behind a notification (follower, replier, liker), if any. */
+export const getActorName = (notification) => {
     const data = notification?.data || {};
-    return Boolean(
-        data.anime_cover_image_small ||
-        data.anime_cover_image_medium ||
-        data.anime_cover_image ||
-        data.anime_cover ||
-        data.cover_image ||
-        data.follower_avatar
-    );
+    return notification?.actor?.username
+        || data.follower_username
+        || data.replier_username
+        || data.mentioner_username
+        || data.liker_username
+        || data.actor_username
+        || null;
+};
+
+/**
+ * What to show beside a row, all from the API payload (the page makes no
+ * lookups of its own): the anime cover when the notification carries one,
+ * else the actor's avatar (`kind: 'avatar'`, initials when it has none).
+ * Returns `{kind: 'cover' | 'avatar' | null, url, name}`.
+ */
+export const getNotificationVisual = (notification) => {
+    const data = notification?.data || {};
+    const cover = coverFrom(data);
+    if (cover) {
+        return { kind: 'cover', url: getImageUrl(cover, data.anime_title || 'Notification'), name: data.anime_title || null };
+    }
+
+    const actorName = getActorName(notification);
+    const avatar = avatarFrom(notification);
+    if (actorName || avatar || isFollowerNotification(notification)) {
+        const name = actorName || 'User';
+        return { kind: 'avatar', url: avatar ? getImageUrl(avatar, name) : null, name };
+    }
+
+    return { kind: null, url: null, name: null };
 };
 
 export const isFollowerNotification = (notification) => notification?.notification_type === 'new_follower';

@@ -1,6 +1,8 @@
+from django.db import transaction
+from django.utils.decorators import method_decorator
 from django_filters import CharFilter, FilterSet
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status
+from rest_framework import filters
 from rest_framework.decorators import action
 from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.response import Response
@@ -17,7 +19,8 @@ from ...animes.admin_serializers import (
 )
 from ...animes.models import Anime
 from ...animes.services.offline_sync import OfflineSyncService
-from ...core.permissions import IsAdminUser, SuperUserRequiredForActionsMixin
+from ...core.models import AuditLog
+from ..permissions import AdminPolicyMixin
 from ..services.anime_admin_service import (
     apply_default_genre_slug,
     delete_genre,
@@ -31,6 +34,8 @@ from ..services.anime_admin_service import (
     mark_merge_target,
     set_ids_and_retry,
 )
+from ..services.audit import record_admin_action
+from .audit_mixins import AuditedModelViewSetMixin
 
 
 class AnimeFilter(FilterSet):
@@ -47,7 +52,8 @@ class ForceQuerySerializer(Serializer):
 
 
 class AdminAnimeViewSet(
-    SuperUserRequiredForActionsMixin,
+    AdminPolicyMixin,
+    AuditedModelViewSetMixin,
     ListModelMixin,
     RetrieveModelMixin,
     DestroyModelMixin,
@@ -55,8 +61,6 @@ class AdminAnimeViewSet(
 ):
     """Anime management for admins utilizing DRF GenericViewSet."""
 
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset({"destroy"})
     serializer_class = AdminAnimeSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AnimeFilter
@@ -69,23 +73,15 @@ class AdminAnimeViewSet(
 
     def destroy(self, request, *args, **kwargs):
         """Delete an anime."""
-        if not request.user.is_superuser:
-            return Response(
-                {"detail": "Only superusers can delete anime."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         anime = self.get_object()
         title = anime.title
         self.perform_destroy(anime)
         return Response({"message": f"Anime '{title}' deleted successfully."})
 
 
-class AdminGenreViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
+class AdminGenreViewSet(AdminPolicyMixin, AuditedModelViewSetMixin, ModelViewSet):
     """Genre management for admins."""
 
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminGenreSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ["name"]
@@ -95,7 +91,7 @@ class AdminGenreViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
 
     def perform_create(self, serializer):
         apply_default_genre_slug(serializer)
-        serializer.save()
+        super().perform_create(serializer)
 
     def destroy(self, request, *args, **kwargs):
         """Delete a genre. Checks for existing anime references."""
@@ -103,15 +99,17 @@ class AdminGenreViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
         query_serializer = ForceQuerySerializer(data=request.query_params)
         query_serializer.is_valid(raise_exception=True)
 
-        result = delete_genre(genre, query_serializer.validated_data["force"])
+        force = query_serializer.validated_data["force"]
+        with transaction.atomic():
+            if genre.anime_count == 0 or force:
+                self.audit_destroy(genre, {"anime_count": genre.anime_count, "force": force})
+            result = delete_genre(genre, force)
         return Response(result.payload, status=result.status_code)
 
 
-class AdminStudioViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
+class AdminStudioViewSet(AdminPolicyMixin, AuditedModelViewSetMixin, ModelViewSet):
     """Studio management for admins."""
 
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminStudioSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ["name"]
@@ -125,15 +123,17 @@ class AdminStudioViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
         query_serializer = ForceQuerySerializer(data=request.query_params)
         query_serializer.is_valid(raise_exception=True)
 
-        result = delete_studio(studio, query_serializer.validated_data["force"])
+        force = query_serializer.validated_data["force"]
+        with transaction.atomic():
+            if studio.anime_count == 0 or force:
+                self.audit_destroy(studio, {"anime_count": studio.anime_count, "force": force})
+            result = delete_studio(studio, force)
         return Response(result.payload, status=result.status_code)
 
 
-class AdminCharacterViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
+class AdminCharacterViewSet(AdminPolicyMixin, AuditedModelViewSetMixin, ModelViewSet):
     """Character management for admins."""
 
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminCharacterSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "name_native", "description"]
@@ -144,11 +144,9 @@ class AdminCharacterViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
         return get_admin_character_queryset()
 
 
-class AdminStaffViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
+class AdminStaffViewSet(AdminPolicyMixin, AuditedModelViewSetMixin, ModelViewSet):
     """Staff management for admins."""
 
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset({"create", "update", "partial_update", "destroy"})
     serializer_class = AdminStaffSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "name_native", "description"]
@@ -160,13 +158,11 @@ class AdminStaffViewSet(SuperUserRequiredForActionsMixin, ModelViewSet):
 
 
 class AdminOfflineAnimeSyncStateViewSet(
-    SuperUserRequiredForActionsMixin,
+    AdminPolicyMixin,
     ListModelMixin,
     RetrieveModelMixin,
     GenericViewSet,
 ):
-    permission_classes = [IsAdminUser]
-    superuser_actions = frozenset({"retry", "mark_skipped", "set_ids_and_retry", "merge_target"})
     serializer_class = AdminOfflineAnimeSyncStateSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["anime__title", "anime__slug", "quarantine_reason", "last_error_code"]
@@ -190,22 +186,39 @@ class AdminOfflineAnimeSyncStateViewSet(
     def get_queryset(self):
         return get_admin_offline_sync_state_queryset(self.request.query_params, self.ordering)
 
+    def _audited(self, state, operation: str, **metadata):
+        record_admin_action(
+            self.request,
+            action=AuditLog.ActionType.UPDATE,
+            entity_type="OfflineAnimeSyncState",
+            entity_id=state.pk,
+            entity_repr=f"{operation}: anime #{state.anime_id}",
+            metadata={"operation": operation, "anime_id": state.anime_id, **metadata},
+        )
+        return Response(self.get_serializer(state).data)
+
     @action(detail=True, methods=["post"])
+    @method_decorator(transaction.atomic)
     def retry(self, request, pk=None):
         state = self.get_object()
         OfflineSyncService().reset_for_retry(state)
         state.refresh_from_db()
-        return Response(self.get_serializer(state).data)
+        return self._audited(state, "retry")
 
     @action(detail=True, methods=["post"])
+    @method_decorator(transaction.atomic)
     def mark_skipped(self, request, pk=None):
         state = self.get_object()
-        reason = (request.data.get("reason") or "marked_skipped").strip()[:120]
+        raw_reason = request.data.get("reason") or "marked_skipped"
+        if not isinstance(raw_reason, str):
+            return Response({"detail": "reason must be a string."}, status=400)
+        reason = raw_reason.strip()[:120] or "marked_skipped"
         OfflineSyncService().mark_skipped(state, reason=reason)
         state.refresh_from_db()
-        return Response(self.get_serializer(state).data)
+        return self._audited(state, "mark_skipped", reason=reason)
 
     @action(detail=True, methods=["post"])
+    @method_decorator(transaction.atomic)
     def set_ids_and_retry(self, request, pk=None):
         state = self.get_object()
         anilist_id = self._parse_int_or_none(request.data.get("anilist_id"))
@@ -213,13 +226,18 @@ class AdminOfflineAnimeSyncStateViewSet(
         result = set_ids_and_retry(state, anilist_id, mal_id)
         if result.status_code != 200:
             return Response(result.payload, status=result.status_code)
-        return Response(self.get_serializer(result.payload["state"]).data)
+        return self._audited(
+            result.payload["state"], "set_ids_and_retry", anilist_id=anilist_id, mal_id=mal_id
+        )
 
     @action(detail=True, methods=["post"])
+    @method_decorator(transaction.atomic)
     def merge_target(self, request, pk=None):
         state = self.get_object()
         target_anime_id = self._parse_int_or_none(request.data.get("target_anime_id"))
         result = mark_merge_target(state, target_anime_id)
         if result.status_code != 200:
             return Response(result.payload, status=result.status_code)
-        return Response(self.get_serializer(result.payload["state"]).data)
+        return self._audited(
+            result.payload["state"], "merge_target", target_anime_id=target_anime_id
+        )

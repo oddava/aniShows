@@ -387,7 +387,7 @@ def api_timer(service: str, endpoint: str = "unknown"):
     """Context manager to time external API calls.
 
     Args:
-        service: Service name (e.g., 'anilist', 'jikan')
+        service: Service name (e.g., 'anilist')
         endpoint: API endpoint name
 
     Usage:

@@ -1,17 +1,17 @@
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db.models import Exists, OuterRef
 
 from ...shared.logger import logger
 from ...shared.media_urls import normalize_media_url
+from ...shared.public_cache import best_effort_get, best_effort_set
 from ...shared.text import normalize_bio, normalize_primary_color
-from ..serializers.users import PublicUserSerializer
+from ..serializers.accounts import PublicUserSerializer
 from .avatar_service import get_user_avatar_url
 from .cache import get_public_profile_cache_key
 from .profile_service import build_profile_user_queryset, get_featured_badges
-from .user_queryset import get_annotated_user_queryset
+from .user_queryset import filter_username_ci, get_annotated_user_queryset
 
 User = get_user_model()
 
@@ -36,11 +36,11 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     viewer_id = viewer.id if is_authenticated else "anonymous"
 
     cache_key = get_public_profile_cache_key(username, viewer_id)
-    cached_data = cache.get(cache_key)
+    cached_data = best_effort_get(cache_key, source="public profile")
     if cached_data:
         normalized = _normalize_public_profile_payload(cached_data)
         if normalized != cached_data:
-            cache.set(cache_key, normalized, timeout=300)
+            best_effort_set(cache_key, normalized, 300, source="public profile")
         cached_data = normalized
         if cached_data.get("is_private") and not is_own_profile:
             raise PublicProfileError("Profile not found", 404)
@@ -56,7 +56,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                     UserFollow.objects.filter(follower=viewer, following=OuterRef("pk"))
                 )
             )
-        user = stats_queryset.get(username=username)
+        user = filter_username_ci(stats_queryset, username).get()
         is_private = user.userprofile.is_private if user.userprofile else False
         if is_private and not is_own_profile:
             raise PublicProfileError("Profile not found", 404)
@@ -73,9 +73,9 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
                         "falling through to live query",
                         username,
                     )
-                    from ..tasks import schedule_user_stats_refresh
+                    from ..tasks import request_user_stats_refresh
 
-                    schedule_user_stats_refresh(user_id=user.id)
+                    request_user_stats_refresh(user.id)
                     raise ValueError("Stale UserStats detected")
 
             data = {
@@ -111,7 +111,7 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
             data["total_badges_count"] = total_badges_count
 
             data = _normalize_public_profile_payload(data)
-            cache.set(cache_key, data, timeout=300)
+            best_effort_set(cache_key, data, 300, source="public profile")
             return PublicProfileResult(data=data, cache_hit=False, source="stats")
 
     except User.DoesNotExist as exc:
@@ -121,8 +121,8 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
     except Exception as exc:
         logger.warning("Stats table lookup failed for %s: %s", username, exc, exc_info=True)
 
-    queryset = get_annotated_user_queryset(viewer if is_authenticated else None).filter(
-        username=username
+    queryset = filter_username_ci(
+        get_annotated_user_queryset(viewer if is_authenticated else None), username
     )
     user = queryset.first()
     if user is None:
@@ -133,11 +133,11 @@ def get_public_profile(username: str, viewer=None, request=None) -> PublicProfil
 
     serializer = PublicUserSerializer(user, context={"request": request} if request else None)
     data = _normalize_public_profile_payload(serializer.data)
-    cache.set(cache_key, data, timeout=300)
+    best_effort_set(cache_key, data, 300, source="public profile")
 
-    from ..tasks import schedule_user_stats_refresh
+    from ..tasks import request_user_stats_refresh
 
-    schedule_user_stats_refresh(user_id=user.id)
+    request_user_stats_refresh(user.id)
 
     return PublicProfileResult(data=data, cache_hit=False, source="fallback")
 

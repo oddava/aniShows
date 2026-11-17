@@ -1,18 +1,88 @@
+"""Bulk admin operations with safety rails (G6 P1-4).
+
+At most ``MAX_BULK_IDS`` positive integer ids; everything runs in one transaction
+and writes one ``BULK_ACTION`` audit row. ``dry_run`` reports what a delete would
+remove (cascades included) without deleting. A real delete needs ``confirm`` equal
+to the number of matched rows, so a stale selection cannot delete more than the
+admin saw. Reviews are deleted and edited one by one (``Review.delete()``/``save()``)
+so G5's signals run; user ban/unban goes through the suspension service.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
 from dataclasses import dataclass
 
 from django.contrib.auth import get_user_model
-from django.db.models import BooleanField, Case, Count, Value, When
+from django.db import DEFAULT_DB_ALIAS, transaction
+from django.db.models import Count, Model
+from django.db.models.deletion import Collector
 
 from ...animes.models import Anime, Character, Genre, Review, Staff, Studio, UserFavorite
+from ...core.models import AuditLog
+from .audit import mark_nothing_to_audit, record_admin_action
+from .user_admin_service import AdminUserActionError, clean_reason, set_user_active
 
 User = get_user_model()
 
+MAX_BULK_IDS = 100
+
+ENTITY_ALIASES = {
+    "anime": "anime",
+    "animes": "anime",
+    "review": "review",
+    "reviews": "review",
+    "user": "user",
+    "users": "user",
+    "genre": "genre",
+    "genres": "genre",
+    "studio": "studio",
+    "studios": "studio",
+    "favorite": "favorite",
+    "favorites": "favorite",
+    "character": "character",
+    "characters": "character",
+    "staff": "staff",
+    "staff_members": "staff",
+}
+ENTITY_MODELS: dict[str, type[Model]] = {
+    "anime": Anime,
+    "review": Review,
+    "user": User,
+    "genre": Genre,
+    "studio": Studio,
+    "favorite": UserFavorite,
+    "character": Character,
+    "staff": Staff,
+}
+ENTITY_OPERATIONS = {
+    "anime": {"delete"},
+    "review": {"delete", "toggle_spoiler"},
+    "user": {"ban", "unban"},
+    "genre": {"delete"},
+    "studio": {"delete"},
+    "favorite": {"delete"},
+    "character": {"delete"},
+    "staff": {"delete"},
+}
+NOUNS = {
+    "anime": "anime",
+    "review": "reviews",
+    "user": "users",
+    "genre": "genres",
+    "studio": "studios",
+    "favorite": "favorites",
+    "character": "characters",
+    "staff": "staff members",
+}
+
 
 class BulkOperationError(Exception):
-    def __init__(self, message: str, status_code: int):
+    def __init__(self, message: str, status_code: int, extra: dict | None = None):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+        self.extra = extra or {}
 
 
 @dataclass(slots=True)
@@ -21,203 +91,174 @@ class BulkOperationResult:
     status_code: int
 
 
-def perform_bulk_operation(operation: str, entity_type: str, entity_ids, request_user, data):
-    if not operation or not entity_type or not entity_ids:
+def _truthy(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes"}
+
+
+def clean_ids(raw) -> list[int]:
+    if not isinstance(raw, list) or not raw:
+        raise BulkOperationError("entity_ids must be a non-empty list.", 400)
+    if len(raw) > MAX_BULK_IDS:
+        raise BulkOperationError(f"At most {MAX_BULK_IDS} ids per operation.", 400)
+    ids = []
+    for value in raw:
+        if isinstance(value, bool):
+            raise BulkOperationError("entity_ids must be positive integers.", 400)
+        try:
+            coerced = int(value)
+        except (TypeError, ValueError) as exc:
+            raise BulkOperationError("entity_ids must be positive integers.", 400) from exc
+        if coerced < 1 or str(value).strip() != str(coerced):
+            raise BulkOperationError("entity_ids must be positive integers.", 400)
+        ids.append(coerced)
+    return sorted(set(ids))
+
+
+def _target_queryset(entity: str, ids: list[int], actor):
+    queryset = ENTITY_MODELS[entity]._default_manager.filter(id__in=ids)
+    if entity == "user":
+        # Bulk never touches staff: suspend a staff account one at a time, on purpose.
+        queryset = queryset.exclude(id=actor.pk).exclude(is_superuser=True).exclude(is_staff=True)
+    return queryset
+
+
+def would_delete_by_model(queryset) -> dict[str, int]:
+    """What ``queryset.delete()`` would remove, per model label, without deleting."""
+    collector = Collector(using=queryset.db or DEFAULT_DB_ALIAS)
+    collector.collect(list(queryset))
+    counts: Counter[str] = Counter()
+    for model, instances in collector.data.items():
+        counts[model._meta.label] += len(instances)
+    for fast_queryset in collector.fast_deletes:
+        counts[fast_queryset.model._meta.label] += fast_queryset.count()
+    return {label: total for label, total in sorted(counts.items()) if total}
+
+
+def _check_catalog_links(entity: str, queryset, force: bool) -> None:
+    if entity not in {"genre", "studio"} or force:
+        return
+    blocked = list(
+        queryset.annotate(anime_count=Count("anime"))
+        .filter(anime_count__gt=0)
+        .values_list("name", "anime_count")
+    )
+    if blocked:
+        sample = ", ".join(f"{name} ({count})" for name, count in blocked[:5])
+        raise BulkOperationError(
+            f"Cannot delete {NOUNS[entity]} with associated anime: {sample}. "
+            "Pass force=true to override.",
+            400,
+        )
+
+
+def _delete(entity: str, queryset) -> dict[str, int]:
+    if entity == "review":
+        counts: Counter[str] = Counter()
+        for review in queryset:
+            _total, by_model = review.delete()
+            counts.update(by_model)
+        return dict(counts)
+    _total, by_model = queryset.delete()
+    return dict(by_model)
+
+
+def _toggle_spoilers(queryset) -> int:
+    updated = 0
+    for review in queryset:
+        review.has_spoilers = not review.has_spoilers
+        review.save(update_fields=["has_spoilers", "updated_at"])
+        updated += 1
+    return updated
+
+
+def perform_bulk_operation(request, data) -> BulkOperationResult:
+    data = data if isinstance(data, dict) else {}
+    operation = data.get("operation")
+    raw_entity = data.get("entity_type") or data.get("entity")
+    raw_ids = data.get("entity_ids") if data.get("entity_ids") is not None else data.get("ids")
+    if not operation or not raw_entity or raw_ids is None:
         raise BulkOperationError("operation, entity_type, and entity_ids are required.", 400)
 
-    if not isinstance(entity_ids, list):
-        raise BulkOperationError("entity_ids must be a list.", 400)
-    data = data or {}
+    entity = ENTITY_ALIASES.get(str(raw_entity))
+    if entity is None:
+        raise BulkOperationError(f"Unsupported entity_type: {raw_entity}", 400)
+    if operation not in ENTITY_OPERATIONS[entity]:
+        allowed = ", ".join(sorted(ENTITY_OPERATIONS[entity]))
+        raise BulkOperationError(f"Unsupported {entity} operation. Allowed: {allowed}.", 400)
+    ids = clean_ids(raw_ids)
+    dry_run = _truthy(data.get("dry_run"))
+    force = _truthy(data.get("force"))
+    reason = ""
+    if operation in {"ban", "unban"}:
+        try:
+            reason = clean_reason(data.get("reason"))
+        except AdminUserActionError as exc:
+            raise BulkOperationError(exc.message, exc.status_code) from exc
 
-    normalized_entity = {
-        "anime": "anime",
-        "animes": "anime",
-        "review": "review",
-        "reviews": "review",
-        "user": "user",
-        "users": "user",
-        "genre": "genre",
-        "genres": "genre",
-        "studio": "studio",
-        "studios": "studio",
-        "favorite": "favorite",
-        "favorites": "favorite",
-        "character": "character",
-        "characters": "character",
-        "staff": "staff",
-        "staff_members": "staff",
-    }.get(entity_type)
+    with transaction.atomic():
+        queryset = _target_queryset(entity, ids, request.user)
+        locked_users: list = []
+        if entity == "user" and not dry_run:
+            # Lock first, so the exclusions and the count reflect the rows really changed.
+            locked_users = list(queryset.select_for_update().order_by("pk"))
+            matched = len(locked_users)
+        else:
+            matched = queryset.count()
+        base = {"operation": operation, "entity_type": entity, "matched": matched}
 
-    if normalized_entity == "anime":
-        return _handle_anime_bulk(operation, entity_ids, data, request_user)
-    if normalized_entity == "review":
-        return _handle_review_bulk(operation, entity_ids)
-    if normalized_entity == "user":
-        return _handle_user_bulk(operation, entity_ids, request_user)
-    if normalized_entity == "genre":
-        return _handle_genre_bulk(operation, entity_ids, data)
-    if normalized_entity == "studio":
-        return _handle_studio_bulk(operation, entity_ids, data)
-    if normalized_entity == "favorite":
-        return _handle_favorite_bulk(operation, entity_ids)
-    if normalized_entity == "character":
-        return _handle_character_bulk(operation, entity_ids)
-    if normalized_entity == "staff":
-        return _handle_staff_bulk(operation, entity_ids)
+        if dry_run:
+            mark_nothing_to_audit(request)
+            payload = {"dry_run": True, **base}
+            if operation == "delete":
+                payload["would_delete_by_model"] = would_delete_by_model(queryset)
+            return BulkOperationResult(payload=payload, status_code=200)
 
-    raise BulkOperationError(f"Unsupported entity_type: {entity_type}", 400)
-
-
-def _handle_anime_bulk(operation: str, ids, data, request_user):
-    if operation == "update_status":
-        new_status = data.get("status")
-        if not new_status:
-            raise BulkOperationError("status field required for update_status operation.", 400)
-        allowed_statuses = {choice for choice, _ in Anime.AnimeStatus.choices}
-        if new_status not in allowed_statuses:
-            raise BulkOperationError(
-                f"Invalid status. Allowed values: {', '.join(sorted(allowed_statuses))}.", 400
+        if matched == 0:
+            mark_nothing_to_audit(request)
+            return BulkOperationResult(
+                payload={**base, "message": f"No matching {NOUNS[entity]} selected."},
+                status_code=200,
             )
-        queryset = Anime.objects.filter(id__in=ids)
-        updated_count = queryset.update(status=new_status)
-        return BulkOperationResult(
-            payload={"message": f"Updated status to {new_status} for {updated_count} anime."},
-            status_code=200,
+
+        label = ENTITY_MODELS[entity]._meta.label
+        metadata: dict = {"operation": operation, "ids": ids, "matched": matched}
+        if operation == "delete":
+            if str(data.get("confirm", "")).strip() != str(matched):
+                raise BulkOperationError(
+                    f"Confirm the delete by sending confirm={matched}.", 400, {"matched": matched}
+                )
+            _check_catalog_links(entity, queryset, force)
+            deleted_by_model = _delete(entity, queryset)
+            metadata["deleted_by_model"] = deleted_by_model
+            payload = {
+                **base,
+                "deleted_by_model": deleted_by_model,
+                "message": f"Deleted {deleted_by_model.get(label, 0)} {NOUNS[entity]}.",
+            }
+        elif operation == "toggle_spoiler":
+            updated = _toggle_spoilers(queryset)
+            metadata["updated"] = updated
+            payload = {
+                **base,
+                "updated": updated,
+                "message": f"Toggled spoiler status for {updated} reviews.",
+            }
+        else:  # ban / unban
+            active = operation == "unban"
+            changed = [user.pk for user in locked_users if set_user_active(user, active=active)]
+            metadata["changed_ids"] = changed
+            verb = "Unbanned" if active else "Banned"
+            payload = {**base, "updated": len(changed), "message": f"{verb} {len(changed)} users."}
+
+        record_admin_action(
+            request,
+            action=AuditLog.ActionType.BULK_ACTION,
+            entity_type=ENTITY_MODELS[entity].__name__ if entity != "user" else "User",
+            entity_repr=f"{operation} {matched} {NOUNS[entity]}",
+            metadata=metadata,
+            reason=reason,
         )
 
-    if operation == "delete":
-        if not request_user.is_superuser:
-            raise BulkOperationError("Only superusers can delete anime in bulk.", 403)
-        queryset = Anime.objects.filter(id__in=ids)
-        deleted_count, _ = queryset.delete()
-        return BulkOperationResult(
-            payload={"message": f"Deleted {deleted_count} anime."},
-            status_code=200,
-        )
-
-    raise BulkOperationError(f"Unsupported anime operation: {operation}", 400)
-
-
-def _handle_review_bulk(operation: str, ids):
-    if operation == "delete":
-        queryset = Review.objects.filter(id__in=ids)
-        deleted_count, _ = queryset.delete()
-        return BulkOperationResult(
-            payload={"message": f"Deleted {deleted_count} reviews."},
-            status_code=200,
-        )
-
-    if operation == "toggle_spoiler":
-        queryset = Review.objects.filter(id__in=ids)
-        updated = queryset.update(
-            has_spoilers=Case(
-                When(has_spoilers=True, then=Value(False)),
-                default=Value(True),
-                output_field=BooleanField(),
-            )
-        )
-        return BulkOperationResult(
-            payload={"message": f"Toggled spoiler status for {updated} reviews."},
-            status_code=200,
-        )
-
-    raise BulkOperationError(f"Unsupported review operation: {operation}", 400)
-
-
-def _handle_user_bulk(operation: str, ids, request_user):
-    users = User.objects.filter(id__in=ids).exclude(id=request_user.id).exclude(is_superuser=True)
-    count = users.count()
-
-    if count == 0:
-        return BulkOperationResult(
-            payload={"message": "No valid users selected for operation."},
-            status_code=200,
-        )
-
-    if operation == "ban":
-        users.update(is_active=False)
-        return BulkOperationResult(payload={"message": f"Banned {count} users."}, status_code=200)
-
-    if operation == "unban":
-        users.update(is_active=True)
-        return BulkOperationResult(payload={"message": f"Unbanned {count} users."}, status_code=200)
-
-    raise BulkOperationError(f"Unsupported user operation: {operation}", 400)
-
-
-def _handle_genre_bulk(operation: str, ids, data):
-    if operation != "delete":
-        raise BulkOperationError(f"Unsupported genre operation: {operation}", 400)
-
-    force_delete = str(data.get("force", "")).lower() in {"1", "true", "yes"}
-    queryset = Genre.objects.filter(id__in=ids).annotate(anime_count=Count("anime"))
-    blocked = list(queryset.filter(anime_count__gt=0).values_list("name", "anime_count"))
-    if blocked and not force_delete:
-        sample = ", ".join(f"{name} ({count})" for name, count in blocked[:5])
-        raise BulkOperationError(
-            f"Cannot delete genres with associated anime: {sample}. Pass force=true to override.",
-            400,
-        )
-
-    deleted_count, _ = queryset.delete()
-    return BulkOperationResult(
-        payload={"message": f"Deleted {deleted_count} genres."},
-        status_code=200,
-    )
-
-
-def _handle_studio_bulk(operation: str, ids, data):
-    if operation != "delete":
-        raise BulkOperationError(f"Unsupported studio operation: {operation}", 400)
-
-    force_delete = str(data.get("force", "")).lower() in {"1", "true", "yes"}
-    queryset = Studio.objects.filter(id__in=ids).annotate(anime_count=Count("anime"))
-    blocked = list(queryset.filter(anime_count__gt=0).values_list("name", "anime_count"))
-    if blocked and not force_delete:
-        sample = ", ".join(f"{name} ({count})" for name, count in blocked[:5])
-        raise BulkOperationError(
-            f"Cannot delete studios with associated anime: {sample}. Pass force=true to override.",
-            400,
-        )
-
-    deleted_count, _ = queryset.delete()
-    return BulkOperationResult(
-        payload={"message": f"Deleted {deleted_count} studios."},
-        status_code=200,
-    )
-
-
-def _handle_favorite_bulk(operation: str, ids):
-    if operation != "delete":
-        raise BulkOperationError(f"Unsupported favorite operation: {operation}", 400)
-
-    queryset = UserFavorite.objects.filter(id__in=ids)
-    deleted_count, _ = queryset.delete()
-    return BulkOperationResult(
-        payload={"message": f"Deleted {deleted_count} favorites."},
-        status_code=200,
-    )
-
-
-def _handle_character_bulk(operation: str, ids):
-    if operation != "delete":
-        raise BulkOperationError(f"Unsupported character operation: {operation}", 400)
-
-    queryset = Character.objects.filter(id__in=ids)
-    deleted_count, _ = queryset.delete()
-    return BulkOperationResult(
-        payload={"message": f"Deleted {deleted_count} characters."},
-        status_code=200,
-    )
-
-
-def _handle_staff_bulk(operation: str, ids):
-    if operation != "delete":
-        raise BulkOperationError(f"Unsupported staff operation: {operation}", 400)
-
-    queryset = Staff.objects.filter(id__in=ids)
-    deleted_count, _ = queryset.delete()
-    return BulkOperationResult(
-        payload={"message": f"Deleted {deleted_count} staff members."},
-        status_code=200,
-    )
+    return BulkOperationResult(payload=payload, status_code=200)

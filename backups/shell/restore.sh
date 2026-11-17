@@ -10,6 +10,8 @@ DB_PORT="${POSTGRES_PORT:-5432}"
 DB_NAME="${POSTGRES_DB:?POSTGRES_DB is required}"
 DB_USER="${POSTGRES_USER:?POSTGRES_USER is required}"
 DB_PASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+# libpq treats an empty PGSSLROOTCERT as a path; unset means its default.
+[ -n "${PGSSLROOTCERT:-}" ] || unset PGSSLROOTCERT
 DB_ADMIN_DB="${POSTGRES_ADMIN_DB:-postgres}"
 RUN_TS="$(date +%Y%m%d_%H%M%S)"
 
@@ -20,8 +22,6 @@ SKIP_SNAPSHOT="${RESTORE_SKIP_SNAPSHOT:-0}"
 SKIP_DB="${RESTORE_SKIP_DB:-0}"
 SKIP_MEDIA="${RESTORE_SKIP_MEDIA:-0}"
 
-LOCK_DIR="$BACKUP_DIR/.backup.lock"
-LOCK_ACQUIRED=0
 
 TARGET_DIR=""
 DB_FILE=""
@@ -93,9 +93,6 @@ cleanup() {
             -d "$DB_ADMIN_DB" \
             -c "DROP DATABASE IF EXISTS \"$APPLY_DB_NAME\" WITH (FORCE);" >/dev/null 2>&1 || true
     fi
-    if [ "$LOCK_ACQUIRED" = "1" ] && [ -d "$LOCK_DIR" ]; then
-        rm -rf "$LOCK_DIR"
-    fi
 }
 trap cleanup EXIT
 
@@ -144,26 +141,13 @@ parse_args() {
     fi
 }
 
-acquire_lock() {
-    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-        if ! reclaim_stale_lock; then
-            die "Another backup/restore operation is currently running (lock: $LOCK_DIR)."
-        fi
-    fi
-    LOCK_ACQUIRED=1
-    printf '%s %s\n' "$$" "$(hostname 2>/dev/null || echo unknown)" >"$LOCK_DIR/owner"
-}
+# The same flock as backup.sh (lock.sh): held until this script exits, and
+# inherited by the pre-restore snapshot it runs with BACKUP_SKIP_LOCK=1.
+# shellcheck source=backups/shell/lock.sh
+source "$(dirname "$0")/lock.sh"
 
-# Same rule as backup.sh: take over a lock whose owner is gone.
-reclaim_stale_lock() {
-    local owner_pid owner_host
-    read -r owner_pid owner_host <"$LOCK_DIR/owner" 2>/dev/null || return 1
-    if [ "$owner_host" = "$(hostname 2>/dev/null || echo unknown)" ] && kill -0 "$owner_pid" 2>/dev/null; then
-        return 1
-    fi
-    echo "Warning: removing stale lock left by PID $owner_pid on $owner_host." >&2
-    rm -rf "$LOCK_DIR"
-    mkdir "$LOCK_DIR" 2>/dev/null
+acquire_lock() {
+    acquire_backup_lock "${BACKUP_LOCK_WAIT_SECONDS:-0}"
 }
 
 resolve_backup_dir() {
@@ -305,6 +289,10 @@ take_pre_restore_snapshot() {
     fi
 
     log "Creating automatic pre-restore snapshot for rollback safety..."
+    # Local only (BACKUP_REMOTE=): an unreachable remote must not block a
+    # restore, and the snapshot of the data being replaced must never become
+    # the newest off-site backup.
+    BACKUP_REMOTE= \
     BACKUP_SKIP_LOCK=1 \
     BACKUP_INCLUDE_DB="$include_db" \
     BACKUP_INCLUDE_MEDIA="$include_media" \

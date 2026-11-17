@@ -65,7 +65,10 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 # django-cors-headers' own default; development.py and production.py set the real list.
 CORS_ALLOWED_ORIGINS: list[str] = []
-JIKAN_BASE_URL = os.getenv("JIKAN_BASE_URL", "https://api.jikan.moe/v4").strip().rstrip("/")
+# AniList GraphQL is the only catalog data source. AniList documents 90
+# requests/minute per IP but has run degraded at 30, so default to that.
+ANILIST_API_URL = os.getenv("ANILIST_API_URL", "https://graphql.anilist.co").strip()
+ANILIST_RATE_LIMIT_PER_MINUTE = max(_env_int("ANILIST_RATE_LIMIT_PER_MINUTE", 30), 1)
 
 # Application tuning defaults
 # Non-secret runtime tuning values are defined here in settings.py with Python
@@ -86,12 +89,19 @@ ADMIN_SETTINGS_LOCAL_CACHE_TTL_SECONDS = max(
     0.0,
 )
 NOTIFICATION_UNREAD_CACHE_TTL = _env_int("NOTIFICATION_UNREAD_CACHE_TTL", 86400)
+GOOGLE_SAFE_BROWSING_API_KEY = os.getenv("GOOGLE_SAFE_BROWSING_API_KEY", "").strip()
 GOOGLE_SAFE_BROWSING_FAIL_OPEN = _env_bool("GOOGLE_SAFE_BROWSING_FAIL_OPEN", False)
 PUBLIC_API_CACHE_LOCK_TTL_SECONDS = _env_int("PUBLIC_API_CACHE_LOCK_TTL_SECONDS", 120)
 PUBLIC_API_CACHE_STALE_TTL_SECONDS = _env_int("PUBLIC_API_CACHE_STALE_TTL_SECONDS", 900)
 PUBLIC_API_CACHE_WAIT_TIMEOUT_MS = _env_int("PUBLIC_API_CACHE_WAIT_TIMEOUT_MS", 30000)
 PUBLIC_API_CACHE_WAIT_POLL_INTERVAL_MS = _env_int("PUBLIC_API_CACHE_WAIT_POLL_INTERVAL_MS", 25)
 PUBLIC_API_CACHE_TTL_JITTER_SECONDS = _env_int("PUBLIC_API_CACHE_TTL_JITTER_SECONDS", 30)
+# How often a web process looks for cache invalidations a Redis outage left
+# pending (apps/animes/adult_content.py public_caches_are_current); a process
+# that saw the outage looks on its first read after it anyway.
+PUBLIC_CACHE_PENDING_CHECK_SECONDS: float | None = _env_float(
+    "PUBLIC_CACHE_PENDING_CHECK_SECONDS", 10.0
+)
 IMAGEKIT_GENERATE_DURING_REQUESTS = _env_bool("IMAGEKIT_GENERATE_DURING_REQUESTS", False)
 FORUM_VIEW_BUFFER_TTL_SECONDS = _env_int("FORUM_VIEW_BUFFER_TTL_SECONDS", 7200)
 FORUM_VIEW_FLUSH_BATCH_SIZE = _env_int("FORUM_VIEW_FLUSH_BATCH_SIZE", 500)
@@ -135,6 +145,8 @@ DJANGO_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sites",
+    # Registers the trigram lookups (trigram_word_similar) used by search.
+    "django.contrib.postgres",
 ]
 
 THIRD_PARTY_APPS = [
@@ -144,7 +156,8 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "django_filters",
-    "django_celery_beat",
+    # django_celery_beat is gone (D-8): beat runs the default file scheduler, and
+    # core 0014 drops its unused tables.
     "corsheaders",
     "allauth",
     "allauth.account",
@@ -286,6 +299,14 @@ DB_HOST = os.getenv("DB_HOST", "db")
 # Postgres' max_connections.
 DB_POOL_MAX_SIZE = _env_int("DB_POOL_MAX_SIZE", 0)
 
+# Fuzzy title search matches when pg_trgm's word similarity reaches this (the
+# extension's default, 0.6, misses short typos like "narto" for "Naruto"). Set
+# per connection at startup, so it costs no query.
+SEARCH_WORD_SIMILARITY_THRESHOLD = min(
+    max(_env_float("SEARCH_WORD_SIMILARITY_THRESHOLD", 0.5), 0.1), 1.0
+)
+DB_CONNECTION_OPTIONS = f"-c pg_trgm.word_similarity_threshold={SEARCH_WORD_SIMILARITY_THRESHOLD}"
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -295,14 +316,17 @@ DATABASES = {
         "HOST": DB_HOST,
         "PORT": DB_PORT,
         "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "600")),
+        "OPTIONS": {"options": DB_CONNECTION_OPTIONS},
     }
 }
 
 if DB_POOL_MAX_SIZE:
     # Django refuses persistent connections together with a pool.
     DATABASES["default"]["CONN_MAX_AGE"] = 0
-    DATABASES["default"]["OPTIONS"] = {
-        "pool": {"min_size": 1, "max_size": DB_POOL_MAX_SIZE, "timeout": 10},
+    DATABASES["default"]["OPTIONS"]["pool"] = {
+        "min_size": 1,
+        "max_size": DB_POOL_MAX_SIZE,
+        "timeout": 10,
     }
 
 # =============================================================================
@@ -501,9 +525,10 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
     ],
+    # The site-wide limits fail open if Redis is down (apps/shared/throttling.py).
     "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
+        "apps.shared.throttling.ResilientAnonRateThrottle",
+        "apps.shared.throttling.ResilientUserRateThrottle",
     ],
     "EXCEPTION_HANDLER": "apps.core.api_errors.api_exception_handler",
     "DEFAULT_THROTTLE_RATES": {
@@ -651,3 +676,17 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 # Generate VAPID keys if not set (for development)
 # Run: openssl ecparam -genkey -name prime256v1 -out vapid_private.pem
 # Then: openssl ec -in vapid_private.pem -pubout -out vapid_public.pem
+
+# =============================================================================
+# FEATURE SETTINGS (feature-revamp seams)
+# =============================================================================
+# One module per owning group, applied last so a group can add settings or
+# documented overrides without editing this file (see root/settings/features/).
+
+from .features.accounts import *
+from .features.admin import *
+from .features.browse import *
+from .features.community import *
+from .features.lists import *
+from .features.notifications import *
+from .features.ops import *

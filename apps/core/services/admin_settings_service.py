@@ -7,6 +7,8 @@ from django.core.cache import cache
 from django.db import DatabaseError
 from django.db.utils import OperationalError, ProgrammingError
 
+from ...shared.errors import CACHE_ERRORS
+from ...shared.throttling import warn_cache_outage
 from ..models import AdminPanelSettings
 
 ADMIN_SETTINGS_CACHE_KEY = "admin:panel_settings:v1"
@@ -16,37 +18,21 @@ _LOCAL_SETTINGS_CACHE: dict | None = None
 _LOCAL_SETTINGS_CACHE_EXPIRES_AT = 0.0
 _LOCAL_SETTINGS_LOCK = threading.Lock()
 
+# Only settings the code enforces (G6 P1-6). Stored keys outside this shape are
+# dropped by ``merge_admin_settings``, so old rows stay harmless.
 DEFAULT_ADMIN_SETTINGS = {
     "general": {
-        "siteName": "aniShows",
-        "siteDescription": "Your Ultimate Anime Discovery Platform",
         "maintenanceMode": False,
         "allowRegistration": True,
-        "defaultLanguage": "en",
-        "timezone": "UTC",
     },
     "users": {
         "emailVerification": True,
         "allowUsernameChange": True,
         "minUsernameLength": 3,
         "maxUsernameLength": 30,
-        "defaultUserRole": "user",
-        "profileVisibility": "public",
     },
     "content": {
         "enableReviews": True,
-        "requireApproval": False,
-        "autoFetchMetadata": True,
-        "maxUploadSize": 10,
-        "allowedImageTypes": "jpg,jpeg,png,webp",
-    },
-    "security": {
-        "sessionTimeout": 24,
-        "maxLoginAttempts": 5,
-        "requireStrongPassword": True,
-        "twoFactorAuth": False,
-        "ipBlocking": False,
-        "apiRateLimit": 1000,
     },
 }
 
@@ -97,7 +83,10 @@ def _clear_local_cached_settings() -> None:
 def cache_admin_settings(payload: dict) -> None:
     """Write merged admin settings to shared cache and local micro-cache."""
     if _admin_settings_cache_enabled():
-        cache.set(ADMIN_SETTINGS_CACHE_KEY, payload, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
+        try:
+            cache.set(ADMIN_SETTINGS_CACHE_KEY, payload, timeout=ADMIN_SETTINGS_CACHE_TTL_SECONDS)
+        except CACHE_ERRORS:
+            warn_cache_outage("admin settings write")
         _set_local_cached_settings(payload)
     else:
         _clear_local_cached_settings()
@@ -126,7 +115,12 @@ def get_admin_settings(*, force_refresh: bool = False) -> dict:
             return local_cached
 
     if use_cache and not force_refresh:
-        cached = cache.get(ADMIN_SETTINGS_CACHE_KEY)
+        try:
+            cached = cache.get(ADMIN_SETTINGS_CACHE_KEY)
+        except CACHE_ERRORS:
+            # Redis is down: read the database (every request asks for these).
+            warn_cache_outage("admin settings; reading the database")
+            cached = None
         if isinstance(cached, dict):
             _set_local_cached_settings(cached)
             return deepcopy(cached)

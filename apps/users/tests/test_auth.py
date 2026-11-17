@@ -112,6 +112,8 @@ class EmailVerificationTests(APITestCase):
     """Tests for email verification functionality."""
 
     def setUp(self):
+        # The SPA's header; login-style endpoints require it (login CSRF).
+        self.client.credentials(HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         from django.utils.encoding import force_bytes
         from django.utils.http import urlsafe_base64_encode
 
@@ -229,6 +231,8 @@ class LoginTests(APITestCase):
     """Tests for login endpoint."""
 
     def setUp(self):
+        # The SPA's header; login-style endpoints require it (login CSRF).
+        self.client.credentials(HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.login_url = reverse("token_obtain_pair")
         self.user = User.objects.create_user(
             username="testuser", email="test@example.com", password="securepass123"
@@ -625,6 +629,17 @@ class ProfilePatchPrivacyTests(APITestCase):
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 self.user.userprofile.refresh_from_db()
                 self.assertTrue(self.user.userprofile.is_private)
+
+    def test_multipart_patch_without_booleans_keeps_them(self):
+        """Settings saves with FormData; DRF reads an omitted HTML boolean as False."""
+        UserProfile.objects.filter(user=self.user).update(show_adult_content=True)
+        for data in ({"bio": "from a form"}, {"bio": "x", "social_links": "[]"}):
+            with self.subTest(data=data):
+                response = self.client.patch(reverse("user_profile"), data, format="multipart")
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                profile = UserProfile.objects.get(user=self.user)
+                self.assertTrue(profile.is_private)
+                self.assertTrue(profile.show_adult_content)
 
     def test_non_string_social_link_fields_are_rejected_not_500(self):
         response = self.client.patch(

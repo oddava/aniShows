@@ -3,7 +3,7 @@ from ...shared.logger import logger
 """
 Unified catalog synchronization task.
 
-Trending is refreshed from the self-hosted Jikan instance, while the remaining
+Trending is refreshed from AniList (TRENDING_DESC), while the remaining
 catalog slices are derived from the existing Anime table.
 """
 
@@ -12,8 +12,8 @@ from datetime import datetime
 from django.db import DatabaseError
 
 from ...shared.celery import observed_shared_task
+from ..services.anilist import AniListService
 from ..services.catalog_sync import CatalogSyncService
-from ..services.jikan import JikanService
 from ..services.public_anime_service import AnimeQueryService
 from .base import BaseTask
 
@@ -53,7 +53,7 @@ SYNC_CONFIGS = {
 
 
 class SyncAnimeCatalogTask(BaseTask):
-    """Refresh trending from Jikan and other catalog slices from local data."""
+    """Refresh trending from AniList and other catalog slices from local data."""
 
     service_class = CatalogSyncService
     service_kwargs = {}
@@ -77,7 +77,7 @@ class SyncAnimeCatalogTask(BaseTask):
     def _run_sync(self, sync_type: str, limit: int, config: dict, **kwargs):
         if sync_type == "trending":
             task_id = getattr(self.request, "id", None)
-            service = JikanService(enable_caching=True, enable_rate_limiting=True)
+            service = AniListService(enable_caching=True, enable_rate_limiting=True)
             try:
                 data = service.get_recent_updates(limit=limit)
 
@@ -109,7 +109,7 @@ class SyncAnimeCatalogTask(BaseTask):
                 minimum_expected_results = self._minimum_trending_results(limit)
                 if total_items < minimum_expected_results:
                     logger.error(
-                        "Rejecting %s sync because Jikan returned only %s rows (minimum required: %s)",
+                        "Rejecting %s sync because AniList returned only %s rows (minimum required: %s)",
                         sync_type,
                         total_items,
                         minimum_expected_results,
@@ -122,7 +122,7 @@ class SyncAnimeCatalogTask(BaseTask):
                         "updated": 0,
                         "matched": 0,
                         "fetched": total_items,
-                        "reason": "jikan_result_set_too_small",
+                        "reason": "provider_result_set_too_small",
                         "minimum_expected": minimum_expected_results,
                     }
 
@@ -131,7 +131,7 @@ class SyncAnimeCatalogTask(BaseTask):
 
                 update_job_progress(total_items, total_items)
                 self.metrics.record_records(ranked_count)
-                self.metrics.record_api_call("jikan", total_items)
+                self.metrics.record_api_call("anilist", total_items)
 
                 return {
                     "sync_type": sync_type,
@@ -241,7 +241,7 @@ class SyncAnimeCatalogTask(BaseTask):
 
     def _sync_trending_anime_rows(
         self,
-        service: JikanService,
+        service: AniListService,
         items: list[dict],
     ) -> list[int]:
         ranked_ids: list[int] = []
@@ -250,8 +250,7 @@ class SyncAnimeCatalogTask(BaseTask):
         for item in items:
             if not isinstance(item, dict):
                 continue
-            mal_id = item.get("idMal")
-            if not mal_id:
+            if not item.get("id"):
                 continue
 
             anime = service.save_anime_to_db(item)

@@ -1,14 +1,12 @@
 """The daily backfills must move through the catalog, not re-pick the same rows."""
 
-from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import TestCase
-from django.utils import timezone
 
 from ..models import Anime
 from ..tasks.metadata import MetadataEnrichmentTask
-from ..tasks.themes import ThemeSongSyncTask
+from ..tasks.themes import backfill_theme_youtube_urls
 
 
 def _anime(slug, **fields):
@@ -50,53 +48,39 @@ class MetadataBackfillRotationTests(TestCase):
         self.assertTrue(all(Anime.objects.values_list("metadata_checked_at", flat=True)))
 
 
-class ThemeBackfillRotationTests(TestCase):
+class ThemeYoutubeBackfillTests(TestCase):
+    """Theme songs are no longer synced (AniList has none); stored ones keep their links."""
+
     def setUp(self):
         patcher = patch("apps.animes.signals.enrich_metadata.delay")
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_checked_anime_without_themes_are_not_refetched_daily(self):
-        checked = _anime("checked", mal_id=1, themes_checked_at=timezone.now())
-        fresh = _anime("fresh", mal_id=2)
-        stale = _anime("stale", mal_id=3, themes_checked_at=timezone.now() - timedelta(days=8))
-        fetch = MagicMock(return_value={"openings": [], "endings": []})
-
-        with patch("apps.animes.tasks.themes.fetch_themes_from_jikan", fetch):
-            ThemeSongSyncTask()._sync_batch(10, False, False, 0, None)
-            daily = [call.args[1] for call in fetch.call_args_list]
-            fetch.reset_mock()
-            ThemeSongSyncTask()._sync_batch(10, False, True, 0, None)
-            retry = [call.args[1] for call in fetch.call_args_list]
-
-        self.assertEqual(daily, [fresh.mal_id])
-        self.assertEqual(retry, [stale.mal_id])
-        fresh.refresh_from_db()
-        self.assertIsNotNone(fresh.themes_checked_at)
-        checked.refresh_from_db()
-        self.assertIsNotNone(checked.themes_checked_at)
-
-
-class ThemeSongSaveTests(TestCase):
-    def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay")
-        patcher.start()
-        self.addCleanup(patcher.stop)
-
-    def test_replaces_existing_themes_and_skips_malformed_entries(self):
-        anime = _anime("frieren", mal_id=52991)
-        anime.theme_songs.create(song_type="opening", track_number=1, title="Old")
-
-        count = ThemeSongSyncTask()._save_theme_songs(
-            anime,
-            {
-                "openings": ['1: "Yuusha" by YOASOBI (eps 1-14)', None, 42],
-                "endings": ['"Anytime Anywhere" by milet'],
-            },
+    def test_fills_missing_youtube_links_only(self):
+        anime = _anime("frieren")
+        missing = anime.theme_songs.create(
+            song_type="opening", track_number=1, title="Yuusha", artist="YOASOBI"
+        )
+        linked = anime.theme_songs.create(
+            song_type="ending", track_number=1, title="Anytime", youtube_url="https://y/1"
         )
 
-        self.assertEqual(count, 2)
+        result = backfill_theme_youtube_urls.apply().get()
+
+        missing.refresh_from_db()
+        linked.refresh_from_db()
+        self.assertEqual(result["updated"], 1)
         self.assertEqual(
-            sorted(anime.theme_songs.values_list("song_type", "title")),
-            [("ending", "Anytime Anywhere"), ("opening", "Yuusha")],
+            missing.youtube_url,
+            "https://www.youtube.com/results?search_query=Yuusha+YOASOBI+Frieren+opening",
         )
+        self.assertEqual(linked.youtube_url, "https://y/1")
+
+    def test_theme_sync_is_retired_but_queued_messages_still_run(self):
+        from celery import current_app
+
+        from ..tasks.themes import sync_theme_songs
+
+        self.assertIn("apps.animes.tasks.themes.sync_theme_songs", current_app.tasks)
+        result = sync_theme_songs.apply(kwargs={"limit": 500, "retry_failed": True}).get()
+        self.assertEqual(result, {"status": "skipped", "reason": "retired"})

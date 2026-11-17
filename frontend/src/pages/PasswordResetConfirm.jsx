@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { getApiErrorMessage } from '../api/errors';
 import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, getPasswordProblem } from '../utils/password';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import useTokenLinkParams from '../components/auth/useTokenLinkParams';
 import { authApi } from '../api/client';
 import { Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 export default function PasswordResetConfirm() {
-    const { uid, token } = useParams();
+    // The token moves out of the address bar before anything else runs (A14).
+    const { linkParams, isRedirecting } = useTokenLinkParams(['uid', 'token'], '/reset-password');
+    const uid = linkParams?.uid;
+    const token = linkParams?.token;
+    const isMissingLink = !isRedirecting && (!uid || !token);
     const navigate = useNavigate();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,6 +21,10 @@ export default function PasswordResetConfirm() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        if (isMissingLink) {
+            setError('This reset link is incomplete. Request a new one.');
+            return;
+        }
 
         if (password !== confirmPassword) {
             setError('Passwords do not match');
@@ -32,6 +41,7 @@ export default function PasswordResetConfirm() {
         try {
             await authApi.resetPassword(uid, token, password);
             navigate('/login', {
+                replace: true,
                 state: { message: 'Password reset successfully. Please login with your new password.' }
             });
         } catch (err) {

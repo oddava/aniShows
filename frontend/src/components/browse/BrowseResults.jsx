@@ -3,6 +3,7 @@ import AnimeCard from '../AnimeCard';
 import AnimeListRow from './AnimeListRow';
 import AnimeMinimalCard from './AnimeMinimalCard';
 import EmptyState from './EmptyState';
+import ErrorState from '../common/ErrorState';
 import { GridSkeleton, ListSkeleton, MinimalSkeleton } from '../skeletons';
 import VirtualizedAnimeList from '../VirtualizedAnimeList';
 
@@ -18,8 +19,8 @@ export default function BrowseResults({
   currentSearch,
   hasActiveFilters,
   clearAllFilters,
+  searchWithoutFilters,
   isLoading,
-  isTabSwitching,
   isError,
   isFetchingNextPage,
   refetch,
@@ -27,17 +28,13 @@ export default function BrowseResults({
   loadMoreRef,
 }) {
   const errorState = (
-    <div className="text-center py-16">
-      <p className="text-red-400 mb-4">Failed to load anime</p>
-      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-        <button onClick={() => refetch()} className="btn-primary">
-          Try Again
-        </button>
-        <button onClick={() => window.location.reload()} className="btn-secondary">
-          Reload Page
-        </button>
-      </div>
-    </div>
+    <ErrorState
+      className="my-4 col-span-full"
+      title="Failed to load anime"
+      message="The catalog didn’t respond. Your filters are kept; try again."
+      onRetry={() => refetch()}
+      retryLabel="Try Again"
+    />
   );
 
   // Grid View
@@ -46,7 +43,7 @@ export default function BrowseResults({
       <div>
         {isError ? (
           errorState
-        ) : isLoading || isTabSwitching ? (
+        ) : isLoading ? (
           <div className="skeleton-fade-in">
             <GridSkeleton count={skeletonCount} />
             <div ref={loadMoreRef} className="h-0 overflow-hidden" />
@@ -54,11 +51,17 @@ export default function BrowseResults({
         ) : allAnime.length === 0 ? (
           <EmptyState
             onClearFilters={clearAllFilters}
-            hasActiveFilters={hasActiveFilters || currentSearch !== ''}
+            onSearchWithoutFilters={searchWithoutFilters}
+            hasActiveFilters={hasActiveFilters}
             searchQuery={currentSearch}
           />
         ) : (
           <>
+            {currentSearch && (
+              <h2 role="status" className="section-title mb-5 normal-case tracking-normal font-semibold text-sm">
+                Results for &ldquo;<span className="text-gray-200">{currentSearch}</span>&rdquo;
+              </h2>
+            )}
             <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 anime-card-grid-gap">
               {allAnime.map((anime, index) => (
                   <AnimeCard
@@ -68,6 +71,7 @@ export default function BrowseResults({
                     rank={currentSort === 'rating' ? (index + 1) : null}
                     priority={index < 6}
                     index={index}
+                    showMeta
                   />
                 ))}
             </div>
@@ -88,7 +92,7 @@ export default function BrowseResults({
       <div className="space-y-3">
         {isError ? (
           errorState
-        ) : isLoading || isTabSwitching ? (
+        ) : isLoading ? (
           <div className="skeleton-fade-in">
             <ListSkeleton count={skeletonCount} />
             <div ref={loadMoreRef} className="h-0 overflow-hidden" />
@@ -96,7 +100,8 @@ export default function BrowseResults({
         ) : allAnime.length === 0 ? (
           <EmptyState
             onClearFilters={clearAllFilters}
-            hasActiveFilters={hasActiveFilters || currentSearch !== ''}
+            onSearchWithoutFilters={searchWithoutFilters}
+            hasActiveFilters={hasActiveFilters}
             searchQuery={currentSearch}
           />
         ) : allAnime.length > 20 ? (
@@ -136,7 +141,7 @@ export default function BrowseResults({
     <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 xl:grid-cols-10 gap-2">
       {isError ? (
         <div className="col-span-full">{errorState}</div>
-      ) : isLoading || isTabSwitching ? (
+      ) : isLoading ? (
         <div className="col-span-full grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-8 xl:grid-cols-10 gap-2 skeleton-fade-in">
           <MinimalSkeleton count={skeletonCount} />
           <div ref={loadMoreRef} className="col-span-full h-0 overflow-hidden" />
@@ -145,7 +150,8 @@ export default function BrowseResults({
         <div className="col-span-full">
           <EmptyState
             onClearFilters={clearAllFilters}
-            hasActiveFilters={hasActiveFilters || currentSearch !== ''}
+            onSearchWithoutFilters={searchWithoutFilters}
+            hasActiveFilters={hasActiveFilters}
             searchQuery={currentSearch}
           />
         </div>

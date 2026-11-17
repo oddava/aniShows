@@ -61,12 +61,27 @@ class CircuitBreakerCacheFailureTests(SimpleTestCase):
             call_cache.invalidate(1)
 
     def test_rate_limiter_falls_back_without_a_redis_cache(self):
-        # LocMemCache has no raw Redis client (AttributeError).
+        # LocMemCache has no raw Redis client (AttributeError): that is a
+        # supported setup (tests, local development), so it is not logged.
         limiter = AniListRateLimiter()
         with mock.patch("apps.animes.services.rate_limiting.logger") as logger:
-            limiter.acquire()
-        logger.exception.assert_called_once()
+            assert limiter.acquire() is True
+        logger.exception.assert_not_called()
+        logger.warning.assert_not_called()
         self.assertGreater(limiter._local_last_request, 0)
+
+    def test_rate_limiter_survives_a_redis_failure(self):
+        limiter = AniListRateLimiter()
+        client = mock.Mock()
+        client.pipeline.return_value.execute.side_effect = ConnectionError("redis down")
+        with (
+            mock.patch("apps.animes.services.rate_limiting.cache") as cache,
+            mock.patch("apps.animes.services.rate_limiting.logger") as logger,
+        ):
+            cache.get.return_value = None
+            cache.client.get_client.return_value = client
+            assert limiter.acquire() is True
+        logger.warning.assert_called_once()
 
 
 @override_settings(USE_S3=True)

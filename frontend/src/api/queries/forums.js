@@ -16,11 +16,27 @@ export const forumKeys = {
     activeThreads: (page) => ['forumActiveThreads', page],
     newThreads: (page) => ['forumNewThreads', page],
     search: (query, page) => ['forumSearch', query, page],
-    railFeed: ['forumRailFeed'],
     thread: (id) => ['forumThread', id],
     postsAll: (threadId) => ['forumPosts', threadId],
     posts: (threadId, page) => ['forumPosts', threadId, page],
+    // Under `postsAll(threadId)`, so every posts invalidation also covers it.
+    postSubtree: (threadId, rootId, page = 1) => ['forumPosts', threadId, 'root', rootId, page],
 };
+
+/**
+ * Refresh every cached thread list after a change that can hide, show or move a thread
+ * (moderation, pin): category pages, the index feeds, search and the category counts.
+ */
+export function invalidateForumLists(queryClient) {
+    [
+        forumKeys.threadsAll,
+        ['forumActiveThreads'],
+        ['forumNewThreads'],
+        ['forumSearch'],
+        forumKeys.categories,
+        ['forumCategory'],
+    ].forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
+}
 
 // forumsApi methods already unwrap `response.data`.
 export const forumQueries = {
@@ -56,10 +72,6 @@ export const forumQueries = {
         queryKey: forumKeys.search(query, page),
         queryFn: () => forumsApi.getThreads({ search: query, page }),
     }),
-    railFeed: () => queryOptions({
-        queryKey: forumKeys.railFeed,
-        queryFn: () => forumsApi.getGlobalFeed(1),
-    }),
     thread: (id) => queryOptions({
         queryKey: forumKeys.thread(id),
         queryFn: () => forumsApi.getThread(id),
@@ -67,5 +79,9 @@ export const forumQueries = {
     posts: (threadId, page) => queryOptions({
         queryKey: forumKeys.posts(threadId, page),
         queryFn: () => forumsApi.getPosts(threadId, page),
+    }),
+    postSubtree: (threadId, rootId, page = 1) => queryOptions({
+        queryKey: forumKeys.postSubtree(threadId, rootId, page),
+        queryFn: () => forumsApi.getPostSubtree(threadId, rootId, page),
     }),
 };

@@ -57,7 +57,7 @@ class PositiveIntTests(SimpleTestCase):
                 self.assertIsNone(positive_int(value))
 
     def test_bools_are_ints_unless_disallowed(self):
-        # Provider payload callers (relation links, Jikan) always accepted True as 1.
+        # Provider payload callers (relation links) always accepted True as 1.
         self.assertEqual(positive_int(True), 1)
         self.assertIsNone(positive_int(False))
         # The notification WebSocket consumer rejects JSON booleans as IDs.

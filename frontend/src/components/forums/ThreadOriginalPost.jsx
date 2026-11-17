@@ -6,10 +6,14 @@ import RichTextEditor from './RichTextEditor';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import Avatar from './Avatar';
 import MiniProfileHoverCard from '../common/MiniProfileHoverCard';
+import { DeletedAuthorAvatar, DeletedAuthorName } from './DeletedAuthor';
+import EditedMarker from './EditedMarker';
+import ModerateMenu, { promptRemovalReason } from './ModerateMenu';
 
 /**
- * The opening post of a thread (page 1 only): author, staff pin, owner
- * edit/delete, like, the inline edit form and the reply form.
+ * The opening post of a thread (page 1 only): author, staff pin and
+ * "Moderate" disclosure (lock, remove, restore), owner edit/delete, like, the
+ * inline edit form and the reply form. Staff may reply in a locked thread.
  * `mutations` is the object from useThreadMutations.
  */
 export default function ThreadOriginalPost({
@@ -35,32 +39,78 @@ export default function ThreadOriginalPost({
         threadLikeCooldownRef,
         likeThreadMutation,
         unlikeThreadMutation,
+        toggleLockMutation,
+        removeThreadMutation,
+        restoreThreadMutation,
     } = mutations;
+
+    const isStaff = Boolean(user?.is_staff || user?.is_superuser);
+    const canReply = Boolean(user) && !thread.is_removed && (!thread.is_locked || isStaff);
+    const likeCount = thread?.like_count ?? 0;
+
+    const moderateActions = isStaff ? [
+        {
+            label: thread.is_locked ? 'Unlock' : 'Lock',
+            disabled: toggleLockMutation?.isPending,
+            onSelect: () => {
+                const action = thread.is_locked ? 'unlock' : 'lock';
+                if (window.confirm(`Are you sure you want to ${action} this thread?`)) {
+                    toggleLockMutation.mutate();
+                }
+            },
+        },
+        thread.is_removed
+            ? {
+                label: 'Restore',
+                disabled: restoreThreadMutation?.isPending,
+                onSelect: () => {
+                    if (window.confirm('Restore this thread?')) restoreThreadMutation.mutate();
+                },
+            }
+            : {
+                label: 'Remove',
+                danger: true,
+                disabled: removeThreadMutation?.isPending,
+                onSelect: () => {
+                    const reason = promptRemovalReason('thread');
+                    if (reason !== null) removeThreadMutation.mutate(reason);
+                },
+            },
+    ] : [];
 
     return (
         <div className="mb-10 lg:w-[85%] mx-auto">
             <div className="bg-accent/[0.02] rounded-[20px] p-4 border border-accent/20 shadow-sm shadow-accent/5 relative">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3">
                     <div className="flex items-center gap-3.5">
-                        <MiniProfileHoverCard user={thread.author}>
-                            <Link to={`/u/${thread.author.username}`} className="shrink-0">
-                                <Avatar user={thread.author} />
-                            </Link>
-                        </MiniProfileHoverCard>
+                        {thread.author ? (
+                            <MiniProfileHoverCard user={thread.author}>
+                                <Link to={`/u/${thread.author.username}`} className="shrink-0">
+                                    <Avatar user={thread.author} />
+                                </Link>
+                            </MiniProfileHoverCard>
+                        ) : (
+                            <DeletedAuthorAvatar />
+                        )}
                         <div>
                             <div className="flex items-center gap-2">
-                                <Link to={`/u/${thread.author.username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">
-                                    {thread.author.username}
-                                </Link>
+                                {thread.author ? (
+                                    <Link to={`/u/${thread.author.username}`} className="text-[15px] font-bold text-gray-200 hover:text-white transition-colors">
+                                        {thread.author.username}
+                                    </Link>
+                                ) : (
+                                    <DeletedAuthorName />
+                                )}
                                 <span className="text-[9px] font-extrabold uppercase text-accent bg-accent/10 px-1.5 py-0.5 rounded tracking-wider">Author</span>
                             </div>
                             <span className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium mt-0.5">
                                 <Clock size={10} className="opacity-70" /> {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
+                                <EditedMarker editedAt={thread.edited_at} />
                             </span>
                         </div>
                     </div>
                     <div className="absolute top-4 right-4 sm:static flex items-center gap-2">
-                        {(user?.is_staff || user?.is_superuser) && (
+                        {isStaff && (
                             <button
                                 onClick={() => {
                                     const action = thread.is_pinned ? 'unpin' : 'pin';
@@ -74,16 +124,19 @@ export default function ThreadOriginalPost({
                                     : 'text-gray-500 hover:text-white'
                                     }`}
                                 title={thread.is_pinned ? 'Unpin Thread' : 'Pin Thread'}
+                                aria-label={thread.is_pinned ? 'Unpin thread' : 'Pin thread'}
                             >
                                 <Pin size={14} />
                             </button>
                         )}
-                        {isOwner(thread.author.username) && (
+                        {isStaff && <ModerateMenu actions={moderateActions} />}
+                        {thread.author && isOwner(thread.author.username) && (
                             <div className="flex items-center gap-1 mr-1">
                                 <button
                                     onClick={() => { setEditingThread(true); setEditThreadContent(thread.content); }}
                                     className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
                                     title="Edit Thread"
+                                    aria-label="Edit thread"
                                 >
                                     <Pencil size={14} />
                                 </button>
@@ -91,6 +144,7 @@ export default function ThreadOriginalPost({
                                     onClick={() => { if (window.confirm('Delete this thread? This cannot be undone.')) deleteThreadMutation.mutate(); }}
                                     className="p-1.5 text-gray-500 hover:text-red-400 rounded-lg hover:bg-white/5 transition-colors"
                                     title="Delete Thread"
+                                    aria-label="Delete thread"
                                 >
                                     <Trash2 size={14} />
                                 </button>
@@ -111,13 +165,16 @@ export default function ThreadOriginalPost({
                                 }
                             }}
                             disabled={!user || likeThreadMutation.isPending || unlikeThreadMutation.isPending}
+                            aria-label={user ? `Like thread, ${likeCount} ${likeCount === 1 ? 'like' : 'likes'}` : 'Sign in to like'}
+                            aria-pressed={user ? Boolean(thread?.is_liked_by_user) : undefined}
+                            title={user ? undefined : 'Sign in to like'}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${thread?.is_liked_by_user
                                 ? 'text-pink-500 hover:bg-pink-500/10'
                                 : 'text-gray-500 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             <Heart size={14} className={thread?.is_liked_by_user ? 'fill-current' : ''} />
-                            {(thread?.like_count ?? 0)}
+                            {likeCount}
                         </button>
                     </div>
                 </div>
@@ -139,12 +196,12 @@ export default function ThreadOriginalPost({
                             </div>
                         </div>
                     ) : (
-                        <MarkdownRenderer content={thread.content} className="text-[15px] md:text-base opacity-90 leading-relaxed" />
+                        <MarkdownRenderer mode="markdown" content={thread.content} className="text-[15px] md:text-base opacity-90 leading-relaxed" />
                     )}
                 </div>
 
                 {/* Integrated Reply Action */}
-                {user && !thread.is_locked && (
+                {canReply && (
                     <div className="mt-4 pt-4 border-t border-white/[0.04] flex justify-end">
                         <button
                             onClick={() => setShowReplyForm(!showReplyForm)}
@@ -158,7 +215,7 @@ export default function ThreadOriginalPost({
                     </div>
                 )}
 
-                {showReplyForm && user && !thread.is_locked && (
+                {showReplyForm && canReply && (
                     <div className="mt-4 pt-4 border-t border-white/[0.04] animate-slide-down-fade">
                         <form onSubmit={handleReplySubmit}>
                             <RichTextEditor

@@ -7,9 +7,40 @@ This module provides centralized cache invalidation to ensure that when
 user actions occur, all relevant caches are properly invalidated.
 """
 
+import time
+
 from django.core.cache import cache
 
 from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
+from ...shared.public_cache import cache_outage_version
+from ...shared.throttling import warn_cache_outage
+
+# Attempts at the profile version bump, and the pauses between them (seconds).
+PROFILE_VERSION_BUMP_PAUSES = (0.05, 0.2)
+
+
+def _bump_profile_cache_version(username: str) -> None:
+    """Start a new version of ``username``'s public profile keys. Strict: raises.
+
+    This is the invalidation of a profile made private, so a cache error is not
+    swallowed (an invalidation that is dropped would let the public copy be
+    served again once Redis answers). A brief flap is retried; a longer outage
+    raises to the caller, like the deletes before it.
+    """
+    version_key = f"profile_cache_version:{username}"
+    for pause in (*PROFILE_VERSION_BUMP_PAUSES, None):
+        try:
+            try:
+                cache.incr(version_key)
+            except ValueError:
+                # No version yet: start one (long-lived, it is only a counter).
+                cache.set(version_key, 1, timeout=86400)
+            return
+        except CACHE_ERRORS:
+            if pause is None:
+                logger.warning("Could not bump the profile cache version of %s", username)
+                raise
+            time.sleep(pause)
 
 
 def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
@@ -36,19 +67,11 @@ def invalidate_user_caches(user_id, username=None, trigger_stats_update=True):
 
     # Delete public profile caches if username provided
     if username:
+        username = username.lower()
         # Increment cache version to invalidate all public profile cache keys.
         # We no longer use cache.delete_pattern as it blocks the Redis event loop.
         # Instead, we rely on versioned keys which will naturally expire.
-        version_key = f"profile_cache_version:{username}"
-        try:
-            cache.incr(version_key)
-            logger.debug(f"Incremented cache version for {username}")
-        except ValueError:
-            # If the key doesn't exist, set it to 1
-            cache.set(version_key, 1, timeout=86400)  # Long timeout as it's a version counter
-            logger.debug(f"Initialized cache version for {username}")
-        except CACHE_ERRORS:
-            logger.warning("Failed to increment cache version for %s", username, exc_info=True)
+        _bump_profile_cache_version(username)
 
     # Trigger async stats update for immediate data consistency
     if trigger_stats_update:
@@ -102,15 +125,21 @@ def get_user_heatmap_cache_key(user_id):
 
 def get_public_profile_cache_key(username, viewer_id="anonymous"):
     """Get the cache key for a public profile, including the current version."""
+    username = username.lower()  # /users/Bob/ and /users/bob/ are one profile (A13)
     version = get_profile_cache_version(username)
     return f"public_profile:{username}:v{version}:viewer:{viewer_id}"
 
 
 def get_profile_cache_version(username):
     """Get the current cache version for a user's profile."""
-    version_key = f"profile_cache_version:{username}"
-    version = cache.get(version_key)
-    if version is None:
-        cache.set(version_key, 0, timeout=3600)
-        return 0
+    version_key = f"profile_cache_version:{username.lower()}"
+    try:
+        version = cache.get(version_key)
+        if version is None:
+            cache.set(version_key, 0, timeout=3600)
+            return 0
+    except CACHE_ERRORS:
+        # The cache is down: the payload read after this bypasses it too.
+        warn_cache_outage("profile cache version")
+        return cache_outage_version()
     return version

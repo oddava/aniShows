@@ -11,13 +11,43 @@ Consolidates:
 Into a chained workflow with smart deduplication and batching.
 """
 
+from django.db.models import F, Q
 from django.utils import timezone
 
 from ...shared.celery import observed_shared_task
 from ..models import Anime
-from ..services.jikan import JikanService
+from ..services.anilist import AniListService
 from ..services.rate_limiting import APICallCache
 from .base import BaseTask
+
+
+def record_aired_episode(anime: Anime, now=None) -> list[str]:
+    """Move an already-aired ``next_airing_*`` into ``last_aired_*`` before it is cleared.
+
+    C-INT-5: the cleanup used to clear the schedule without recording the episode
+    that had aired, so a row the sync phase had not advanced (rate-limited or
+    skipped) lost that episode's alert. Only moves forward; returns the fields set.
+    """
+    now = now or timezone.now()
+    episode, aired_at = anime.next_airing_episode, anime.next_airing_date
+    if episode is None or aired_at is None or aired_at > now:
+        return []
+    if anime.last_aired_episode is not None and anime.last_aired_episode >= episode:
+        return []
+    anime.last_aired_episode = episode
+    anime.last_aired_at = aired_at
+    return ["last_aired_episode", "last_aired_at"]
+
+
+def record_aired_episodes(queryset, now=None) -> int:
+    """``record_aired_episode`` for every row of ``queryset``, in one UPDATE."""
+    now = now or timezone.now()
+    return queryset.filter(
+        Q(last_aired_episode__isnull=True) | Q(last_aired_episode__lt=F("next_airing_episode")),
+        next_airing_episode__isnull=False,
+        next_airing_date__isnull=False,
+        next_airing_date__lte=now,
+    ).update(last_aired_episode=F("next_airing_episode"), last_aired_at=F("next_airing_date"))
 
 
 class AiringWorkflowTask(BaseTask):
@@ -39,7 +69,7 @@ class AiringWorkflowTask(BaseTask):
         sync_airing_workflow.delay(batch_size=200)
     """
 
-    service_class = JikanService
+    service_class = AniListService
     service_kwargs = {"enable_caching": True, "enable_rate_limiting": True}
 
     def execute(
@@ -105,7 +135,7 @@ class AiringWorkflowTask(BaseTask):
 
     def _sync_airing(
         self,
-        service: JikanService,
+        service: AniListService,
         call_cache: APICallCache,
         batch_size: int | None,
     ) -> dict:
@@ -133,6 +163,7 @@ class AiringWorkflowTask(BaseTask):
             }
 
         logger.info(f"Found {total} airing anime to sync")
+        service.prefetch_airing(airing_anime)
 
         updated_count = 0
         skipped_count = 0
@@ -152,7 +183,7 @@ class AiringWorkflowTask(BaseTask):
                 result = service.resolve_airing_media_for_anime(anime)
 
                 if result:
-                    service.update_anime_manual(anime, result)
+                    service.update_airing_fields(anime, result)
 
                     # Check if we got airing date
                     next_airing = result.get("nextAiringEpisode")
@@ -165,7 +196,7 @@ class AiringWorkflowTask(BaseTask):
                     if service.last_error_code == "rate_limited":
                         rate_limited_count += 1
                     logger.warning(
-                        "No Jikan results for %s (anime_id=%s, reason=%s)",
+                        "No AniList results for %s (anime_id=%s, reason=%s)",
                         anime.title,
                         anime.id,
                         service.last_error_code or "unknown",
@@ -182,7 +213,7 @@ class AiringWorkflowTask(BaseTask):
                 logger.exception("Error updating airing data for %s", anime.title)
                 error_count += 1
 
-        self.metrics.record_api_call("jikan", updated_count)
+        self.metrics.record_api_call("anilist", updated_count)
         self.metrics.record_records(updated_count)
 
         return {
@@ -196,7 +227,7 @@ class AiringWorkflowTask(BaseTask):
 
     def _cleanup_finished(
         self,
-        service: JikanService,
+        service: AniListService,
         batch_size: int | None,
     ) -> dict:
         """Clear next_airing_date for finished anime.
@@ -211,6 +242,7 @@ class AiringWorkflowTask(BaseTask):
         if batch_size:
             past_airing_queryset = past_airing_queryset[:batch_size]
         past_airing = list(past_airing_queryset)
+        service.prefetch_airing(past_airing)
 
         cleared_count = 0
         status_changed_count = 0
@@ -224,23 +256,31 @@ class AiringWorkflowTask(BaseTask):
                     anilist_status = result.get("status", "")
 
                     if anilist_status == "FINISHED":
-                        # Batch clear in single save
+                        recorded = record_aired_episode(anime)
                         anime.next_airing_date = None
                         anime.next_airing_episode = None
                         anime.status = Anime.AnimeStatus.finished
                         # Only these fields: the row was loaded before the slow
                         # provider calls, and other syncs may have written since.
                         anime.save(
-                            update_fields=["next_airing_date", "next_airing_episode", "status"]
+                            update_fields=[
+                                "next_airing_date",
+                                "next_airing_episode",
+                                "status",
+                                *recorded,
+                            ]
                         )
                         cleared_count += 1
                         status_changed_count += 1
                         logger.debug(f"Updated {anime.title} to Finished")
                     elif anilist_status == "RELEASING":
                         # Episode aired but still releasing
+                        recorded = record_aired_episode(anime)
                         anime.next_airing_date = None
                         anime.next_airing_episode = None
-                        anime.save(update_fields=["next_airing_date", "next_airing_episode"])
+                        anime.save(
+                            update_fields=["next_airing_date", "next_airing_episode", *recorded]
+                        )
                         cleared_count += 1
 
             except Exception:
@@ -256,6 +296,7 @@ class AiringWorkflowTask(BaseTask):
             next_airing_date__isnull=False,
         )
         finished_slugs = list(finished_with_dates_queryset.values_list("slug", flat=True))
+        record_aired_episodes(Anime.objects.filter(slug__in=finished_slugs))
         finished_with_dates = Anime.objects.filter(slug__in=finished_slugs).update(
             next_airing_date=None,
             next_airing_episode=None,
@@ -272,7 +313,7 @@ class AiringWorkflowTask(BaseTask):
 
     def _backfill_missing(
         self,
-        service: JikanService,
+        service: AniListService,
         call_cache: APICallCache,
         batch_size: int | None,
     ) -> dict:
@@ -294,6 +335,7 @@ class AiringWorkflowTask(BaseTask):
             return {"total": 0, "populated": 0, "still_missing": 0, "rate_limited": 0, "errors": 0}
 
         logger.info(f"Found {total} airing anime missing next_airing_date")
+        service.prefetch_airing(missing_dates)
 
         updated_count = 0
         still_missing_count = 0
@@ -305,7 +347,7 @@ class AiringWorkflowTask(BaseTask):
                 result = service.resolve_airing_media_for_anime(anime)
 
                 if result:
-                    service.update_anime_manual(anime, result)
+                    service.update_airing_fields(anime, result)
 
                     next_airing = result.get("nextAiringEpisode")
                     if next_airing and next_airing.get("airingAt"):
@@ -317,7 +359,7 @@ class AiringWorkflowTask(BaseTask):
                     if service.last_error_code == "rate_limited":
                         rate_limited_count += 1
                     logger.warning(
-                        "No Jikan data for %s (anime_id=%s, reason=%s)",
+                        "No AniList data for %s (anime_id=%s, reason=%s)",
                         anime.title,
                         anime.id,
                         service.last_error_code or "unknown",

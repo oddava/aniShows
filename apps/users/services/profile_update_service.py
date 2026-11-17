@@ -1,19 +1,51 @@
 import json
+from collections.abc import Iterable
 from datetime import timedelta
 
+from botocore.exceptions import BotoCoreError, ClientError
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from ...core.services.admin_settings_service import is_username_change_allowed
 from ...core.services.social_links_service import SocialLinksService
+from ...shared.logger import logger
 from ..models import UserProfile
 from .cache import invalidate_user_caches
+from .user_queryset import filter_username_ci
 from .username_sanitizer import validate_username
 
 User = get_user_model()
+
+# What deleting a stored file can raise: S3 (botocore) or the local filesystem.
+STORAGE_ERRORS: tuple[type[Exception], ...] = (BotoCoreError, ClientError, OSError)
+
+PROFILE_MEDIA_FIELDS = ("avatar", "banner")
+
+
+def delete_files_on_commit(files: Iterable) -> None:
+    """Delete stored files once the current transaction commits.
+
+    ``files`` are ``FieldFile``s (or anything with ``storage`` and ``name``);
+    empty ones are skipped. Failures are logged, never raised: a leftover
+    object in the bucket must not fail the request that orphaned it (A10).
+    """
+    pending = [(file.storage, file.name) for file in files if file and file.name]
+    if not pending:
+        return
+
+    def delete():
+        for storage, name in pending:
+            try:
+                storage.delete(name)
+            except STORAGE_ERRORS:
+                logger.warning(
+                    "Could not delete stored profile media", extra={"name": name}, exc_info=True
+                )
+
+    transaction.on_commit(delete)
 
 
 def update_user_profile(user, validated_data, ip_address: str | None = None) -> None:
@@ -21,6 +53,9 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
         user = User.objects.select_for_update().get(pk=user.pk)
         profile, _ = UserProfile.objects.select_for_update().get_or_create(user=user)
         previous_username = user.username
+        # FieldFile copies of the current images; deleted after commit if replaced.
+        previous_media = {field: getattr(profile, field) for field in PROFILE_MEDIA_FIELDS}
+        previous_names = {field: file.name for field, file in previous_media.items()}
 
         _handle_username_change(user, validated_data, profile=profile)
 
@@ -29,6 +64,10 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
         if "avatar" in validated_data:
             profile.avatar = validated_data["avatar"]
             update_fields.append("avatar")
+        if validated_data.get("remove_avatar"):
+            profile.avatar = None
+            if "avatar" not in update_fields:
+                update_fields.append("avatar")
         if "banner" in validated_data:
             profile.banner = validated_data["banner"]
             update_fields.append("banner")
@@ -57,6 +96,14 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
 
         if update_fields:
             profile.save(update_fields=update_fields)
+
+        delete_files_on_commit(
+            previous_media[field]
+            for field in PROFILE_MEDIA_FIELDS
+            if field in update_fields
+            and previous_names[field]
+            and getattr(profile, field).name != previous_names[field]
+        )
 
         def invalidate():
             invalidate_user_caches(user.id, user.username)
@@ -92,6 +139,20 @@ def normalize_social_links_input(raw_value):
     return cleaned_links
 
 
+def social_links_unchanged(stored_links, raw_value) -> bool:
+    """True when ``raw_value`` (the PATCH body's links) matches what is stored.
+
+    Compares ``(platform, url or value)`` pairs, so re-sending the saved links
+    costs no network validation and no social-links throttle. Input that
+    does not parse counts as a change, so the serializer reports the error.
+    """
+    try:
+        incoming = normalize_social_links_input(raw_value)
+    except ValidationError:
+        return False
+    return _hash_links(incoming) == _hash_links(stored_links or [])
+
+
 def validate_social_links_input(raw_value):
     cleaned_links = normalize_social_links_input(raw_value)
     return SocialLinksService().validate_and_process(cleaned_links)
@@ -102,13 +163,17 @@ def _handle_username_change(user, validated_data, *, profile=None) -> None:
     if not new_username or new_username == user.username:
         return
 
-    if not is_username_change_allowed():
-        raise ValidationError({"username": "Username changes are currently disabled."})
-
     try:
         normalized_username = validate_username(new_username)
     except DjangoValidationError as exc:
         raise ValidationError({"username": list(exc.messages)}) from exc
+    # " bob" or fullwidth "bob" normalise to the current name: not a rename,
+    # so no cooldown is spent.
+    if normalized_username == user.username:
+        return
+
+    if not is_username_change_allowed():
+        raise ValidationError({"username": "Username changes are currently disabled."})
 
     if profile is None:
         profile, _ = UserProfile.objects.select_for_update().get_or_create(user=user)
@@ -121,11 +186,17 @@ def _handle_username_change(user, validated_data, *, profile=None) -> None:
                 {"username": f"You can change your username again in {days_left} days."}
             )
 
-    if User.objects.filter(username__iexact=normalized_username).exclude(pk=user.pk).exists():
+    if filter_username_ci(User.objects.exclude(pk=user.pk), normalized_username).exists():
         raise ValidationError({"username": "This username is already taken."})
 
     user.username = normalized_username
-    user.save(update_fields=["username"])
+    try:
+        # Savepoint: a rename racing this one to the same name trips the 0038
+        # index; report it like the check above instead of a 500.
+        with transaction.atomic():
+            user.save(update_fields=["username"])
+    except IntegrityError as exc:
+        raise ValidationError({"username": "This username is already taken."}) from exc
     profile.last_username_change = timezone.now()
     profile.save(update_fields=["last_username_change"])
 
@@ -149,10 +220,11 @@ def _apply_social_links(profile, user, new_links, ip_address: str | None) -> boo
 
 
 def _hash_links(links) -> str:
+    """``platform:url`` pairs in order: a reordered list is a change worth saving."""
     if not links:
         return ""
     link_strs = []
-    for link in sorted(links, key=lambda x: x.get("url", "") + x.get("value", "")):
+    for link in links:
         url = link.get("url") or link.get("value", "")
         platform = link.get("platform", "")
         link_strs.append(f"{platform}:{url}")

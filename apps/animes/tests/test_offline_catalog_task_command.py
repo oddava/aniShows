@@ -169,7 +169,7 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
 
         self.assertEqual(result["metadata_queued"], 0)
         self.assertEqual(result["franchises_queued"], 0)
-        self.assertEqual(result["themes_queued"], 0)
+        self.assertNotIn("themes_queued", result)
         self.assertEqual(result["sync_states_total"], 2)
         self.assertEqual(OfflineAnimeSyncState.objects.count(), 2)
         mock_reconcile_delay.assert_called_once()
@@ -329,21 +329,18 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             anime=complete,
             metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-            themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             next_attempt_at=timezone.now(),
         )
         OfflineAnimeSyncState.objects.create(
             anime=stalled_complete,
             metadata_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             franchise_status=OfflineAnimeSyncState.StageStatus.SYNCED,
-            themes_status=OfflineAnimeSyncState.StageStatus.SYNCED,
             next_attempt_at=timezone.now(),
         )
         OfflineAnimeSyncState.objects.create(
             anime=quarantined,
             metadata_status=OfflineAnimeSyncState.StageStatus.QUARANTINED,
             franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
-            themes_status=OfflineAnimeSyncState.StageStatus.PENDING,
             quarantined=True,
             quarantine_reason="not_found",
             next_attempt_at=timezone.now(),
@@ -426,7 +423,6 @@ class OfflineCatalogTaskAndCommandTests(TestCase):
             anime_ids=[42],
             batch_size=settings.OFFLINE_RECONCILE_BATCH_SIZE,
             chunk_size=100,
-            require_themes=True,
             strict=False,
             reset_pipeline=True,
             max_rounds=settings.OFFLINE_RECONCILE_MAX_ROUNDS,

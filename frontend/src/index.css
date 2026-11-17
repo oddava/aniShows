@@ -4,6 +4,11 @@
 @import "./styles/components/animations.css";
 @import "./styles/pages/forums.css";
 
+/*
+ * Design tokens. The palette is the original aniShows one (near-black
+ * surfaces lightly tinted by the violet accent); what is added here is the
+ * structure around it: motion timings, focus, elevation and layout widths.
+ */
 :root {
   color-scheme: dark;
   --color-accent-base: #8b5cf6;
@@ -37,8 +42,19 @@
   --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-accent-base) 25%, var(--color-surface-4-base));
   --color-accent-text: #a78bfa;
   --color-accent-text-hover: #c4b5fd;
-  --color-focus-ring: color-mix(in srgb, var(--color-accent) 24%, transparent);
-  --color-focus-ring-strong: color-mix(in srgb, var(--color-accent) 44%, transparent);
+  /* Solid accent for filled controls: white text on it is 5.7:1. */
+  --color-accent-fill: #7c3aed;
+  --color-accent-fill-hover: #6d28d9;
+  --color-focus-ring: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  --color-focus-ring-strong: #a78bfa;
+
+  /* Motion: short and decelerating; nothing bounces. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+
+  /* Layout */
+  --page-max: 80rem;
 }
 
 @theme {
@@ -54,6 +70,9 @@
   --color-border: var(--color-border-base);
   --color-border-strong: var(--color-border-strong-base);
   --color-text-muted: #9ca3af;
+  /* Tailwind's gray-500 (#6b7280) is 3.8:1 on these surfaces; lifted to pass
+     AA (4.8:1+) since it is used for secondary text throughout. */
+  --color-gray-500: #878d9a;
   --color-gray-700: color-mix(in srgb, #3f3f46 90%, var(--color-accent-base) 10%);
   --color-gray-800: color-mix(in srgb, #27272a 92%, var(--color-accent-base) 8%);
   --color-gray-900: color-mix(in srgb, #18181b 94%, var(--color-accent-base) 6%);
@@ -62,12 +81,18 @@
   --color-accent-light: #a78bfa;
   --color-accent-dark: #7c3aed;
 
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --breakpoint-xs: 30rem;
 }
 
 @layer base {
   * {
     box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
   }
 
   html,
@@ -78,7 +103,11 @@
   }
 
   body {
-    @apply bg-dark text-gray-200 selection:bg-accent/30;
+    @apply bg-dark text-gray-200 antialiased selection:bg-accent/30;
+  }
+
+  h1, h2, h3 {
+    text-wrap: balance;
   }
 
   select option {
@@ -86,7 +115,8 @@
     color: #fff;
   }
 
-  /* Make all inputs borderless and flat per user request */
+  /* Inputs stay borderless and flat at rest, but keyboard focus is always
+     visible (a ring, not a border, so nothing shifts). */
   input[type="text"],
   input[type="password"],
   input[type="email"],
@@ -98,20 +128,95 @@
   .input {
     border-color: transparent !important;
     outline: none !important;
-    box-shadow: none !important;
     --tw-ring-color: transparent !important;
     --tw-ring-offset-shadow: 0 0 transparent !important;
     --tw-ring-shadow: 0 0 transparent !important;
   }
+
+  input[type="text"]:not(:focus-visible),
+  input[type="password"]:not(:focus-visible),
+  input[type="email"]:not(:focus-visible),
+  input[type="search"]:not(:focus-visible),
+  input[type="url"]:not(:focus-visible),
+  input[type="number"]:not(:focus-visible),
+  textarea:not(:focus-visible),
+  select:not(:focus-visible) {
+    box-shadow: none !important;
+  }
+
+  input[type="text"]:focus-visible,
+  input[type="password"]:focus-visible,
+  input[type="email"]:focus-visible,
+  input[type="search"]:focus-visible,
+  input[type="url"]:focus-visible,
+  input[type="number"]:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  .input:focus-visible {
+    box-shadow: 0 0 0 1px var(--color-focus-ring-strong), 0 0 0 4px var(--color-focus-ring) !important;
+  }
+
+  .richtext-editor-textarea:focus-visible,
+  .flat-control:focus-visible,
+  .focus-ring-none:focus-visible {
+    box-shadow: none !important;
+  }
 }
 
 @layer components {
+  /* Section heading: the site's small uppercase label, one definition. */
+  .section-title {
+    @apply text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em];
+  }
+
+  .page-title {
+    @apply text-2xl sm:text-3xl font-bold tracking-tight text-white/90;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Same geometry as Home/Browse sections: an 80rem content column with the
+     gutter outside it, so every page's left edge lines up. */
+  .page-container {
+    width: 100%;
+    max-width: calc(var(--page-max) + 2rem);
+    margin-inline: auto;
+    @apply px-4 md:px-6;
+  }
+
+  @media (width >= 48rem) {
+    .page-container {
+      max-width: calc(var(--page-max) + 3rem);
+    }
+  }
+
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-5 py-2.5 font-semibold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent px-5 py-2.5 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50;
+    background-color: var(--color-accent-fill);
+    transition: background-color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--color-accent-fill-hover);
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-gray-800 bg-dark-100 px-5 py-2.5 font-semibold text-gray-200 transition-colors hover:border-accent/35 hover:bg-dark-50 hover:text-white disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-gray-800 bg-dark-100 px-5 py-2.5 font-semibold text-gray-200 disabled:cursor-not-allowed disabled:opacity-50;
+    transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    @apply border-accent/35 bg-dark-50 text-white;
+  }
+
+  /* A small press response: confirms the click without decoration. */
+  .btn-primary:active:not(:disabled),
+  .btn-secondary:active:not(:disabled),
+  .ui-pill-button:active:not(:disabled),
+  .ui-icon-button:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   .badge {
@@ -119,7 +224,7 @@
   }
 
   .input {
-    @apply rounded-lg border border-transparent bg-dark-50 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-transparent focus:outline-none;
+    @apply rounded-lg border border-transparent bg-dark-50 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none;
   }
 
   .ui-surface {
@@ -159,11 +264,11 @@
   }
 
   .anime-card-grid-gap {
-    @apply gap-8 lg:gap-10;
+    @apply gap-x-4 gap-y-7 sm:gap-x-6 sm:gap-y-8 lg:gap-x-8 lg:gap-y-10;
   }
 
   .anime-card-row-gap {
-    @apply gap-6 sm:gap-8 md:gap-10;
+    @apply gap-4 sm:gap-5 md:gap-6;
   }
 
   .heatmap-cell {
@@ -171,6 +276,50 @@
     height: 10px;
     border-radius: 2px;
     flex-shrink: 0;
+  }
+
+  /* Skip link: off-screen until keyboard focus lands on it. */
+  .skip-link {
+    position: fixed;
+    left: 12px;
+    top: 12px;
+    z-index: 2000;
+    transform: translateY(-200%);
+    @apply rounded-lg px-4 py-2.5 text-sm font-semibold text-white;
+    background-color: var(--color-accent-fill);
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
+
+  /* Horizontal scrollers fade only at an edge that hides content
+     (data attributes set by hooks/useScrollFade). */
+  .scroll-fade[data-fade-end] {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+
+  .scroll-fade[data-fade-start] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28px);
+    mask-image: linear-gradient(to right, transparent, #000 28px);
+  }
+
+  .scroll-fade[data-fade-start][data-fade-end] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  }
+
+  /* Guest home: the hero has its own search field, so the navbar's stays
+     out of the way until that field scrolls off screen. */
+  .nav-search-slot {
+    transition: opacity var(--dur-base) ease, visibility var(--dur-base);
+  }
+
+  html[data-hero-search="visible"] .nav-search-slot {
+    opacity: 0;
+    visibility: hidden;
   }
 }
 
@@ -180,7 +329,7 @@
     --color-gray-200: #b7c0cf;
     --color-gray-300: #9ca7b8;
     --color-gray-400: #909caf;
-    --color-gray-500: #7f8b9e;
+    --color-gray-500: #848fa1;
   }
 
   :where(div, section, article, aside, main, header, footer, a, li):not([class*="border-t"]):not([class*="border-b"]):not([class*="border-l"]):not([class*="border-r"])[class*="rounded"][class*="bg-dark"][class*="border-gray-7"],

@@ -1,6 +1,9 @@
+from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404
+from django.utils.cache import patch_vary_headers
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import APIException
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
@@ -9,9 +12,9 @@ from ...core.api_errors import error_response
 from ...core.permissions import IsSuperUser
 from ...core.utils import get_client_ip
 from ...shared.pagination import LargePagination, NoCountPagination, StandardPagination
-from ...shared.public_cache import get_or_build_public_payload
+from ...shared.public_cache import Degraded, get_or_build_public_payload
 from ...users.permissions import VerifiedEmailForWrites
-from ..models import Anime, AnimeCharacter, AnimeStaff, Genre, Studio
+from ..models import Anime, AnimeCharacter, AnimeStaff, AnimeStudio, Genre, Studio
 from ..serializers import (
     AnimeCharacterSerializer,
     AnimeDetailSerializer,
@@ -36,6 +39,15 @@ from ..services.public_anime_service import (
 )
 from ..services.watch_episodes import AnimeWatchEpisodeService
 
+# D-2: what a viewer who has not opted in gets for an adult title's direct link.
+ADULT_GATE_CODE = "adult_content_opt_in_required"
+
+
+class AdultContentHidden(APIException):
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "This title is marked 18+ by AniList. Turn on adult content to view it."
+    default_code = ADULT_GATE_CODE
+
 
 class AnimeViewSet(ReadOnlyModelViewSet):
     serializer_class = AnimeListSerializer
@@ -45,16 +57,21 @@ class AnimeViewSet(ReadOnlyModelViewSet):
     payload_service = AnimePublicPayloadService()
     query_service = AnimeQueryService()
     PUBLIC_CACHE_CONTROL = "public, max-age=300, stale-while-revalidate=900"
+    # The same URL answers guests and members differently (user fields), so a
+    # browser must not reuse a guest response once the viewer signs in (B12).
+    VARY_HEADERS = ("Authorization", "Cookie")
 
     @classmethod
     def _with_public_cache_control(cls, response: Response, request) -> Response:
         if not request.user.is_authenticated:
             response["Cache-Control"] = cls.PUBLIC_CACHE_CONTROL
+        patch_vary_headers(response, cls.VARY_HEADERS)
         return response
 
-    @staticmethod
-    def _with_cache_status_header(response: Response, cache_status: str) -> Response:
+    @classmethod
+    def _with_cache_status_header(cls, response: Response, cache_status: str) -> Response:
         response["X-Cache-Status"] = cache_status
+        patch_vary_headers(response, cls.VARY_HEADERS)
         return response
 
     def _build_queryset(self, *, include_user_context: bool = True):
@@ -82,37 +99,49 @@ class AnimeViewSet(ReadOnlyModelViewSet):
                 code="anime_not_found",
                 status_code=status.HTTP_404_NOT_FOUND,
             )
+        if result.data.get("is_adult") and not self.query_service.can_view_adult_content(
+            request.user
+        ):
+            # D-2 (owner decision): an opt-in gate, not a 404, so shared links keep
+            # working. Nothing about the title is sent; the shared cached payload
+            # is untouched, so opted-in viewers still get it from the cache.
+            return self._adult_gate_response(slug)
         response = self._with_cache_status_header(Response(result.data), result.cache_status)
         return self._with_public_cache_control(response, request)
 
+    @staticmethod
+    def _adult_gate_response(slug: str | None) -> Response:
+        response = error_response(
+            "This title is marked 18+ by AniList. Turn on adult content to view it.",
+            code=ADULT_GATE_CODE,
+            status_code=status.HTTP_403_FORBIDDEN,
+            errors={"slug": [slug]},
+        )
+        # The answer depends on who asks: never stored by a shared cache.
+        response["Cache-Control"] = "private, no-store"
+        return response
+
     def _get_action_anime(self, slug: str) -> Anime:
-        return get_object_or_404(
+        anime = get_object_or_404(
             Anime.public_queryset().only(*self.query_service.ACTION_ANIME_ONLY_FIELDS),
             slug=slug,
         )
+        if anime.is_adult and not self.query_service.can_view_adult_content(self.request.user):
+            # The detail page's tabs and actions follow its gate (D-2).
+            raise AdultContentHidden
+        return anime
 
     def list(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            queryset = self.filter_queryset(self.get_queryset())
-            page = self.paginate_queryset(queryset)
-            if page is not None:
-                serializer = self.get_serializer(page, many=True)
-                data = self.payload_service.enrich_collection_payload_for_user(
-                    serializer.data,
-                    request.user,
-                )
-                return self.get_paginated_response(data)
-            serializer = self.get_serializer(queryset, many=True)
-            data = self.payload_service.enrich_collection_payload_for_user(
-                serializer.data,
-                request.user,
-            )
-            return Response(data)
+        # One cached page per parameters and adult-content setting, shared by
+        # guests and members; the viewer's own state is added afterwards (B10).
+        # The list queryset carries no user context, so the build is viewer-free.
         result = self.payload_service.cache_list_payload(
             request,
             lambda: super(AnimeViewSet, self).list(request, *args, **kwargs).data,
+            can_view_adult_content=self.query_service.can_view_adult_content(request.user),
         )
-        response = self._with_cache_status_header(Response(result.data), result.cache_status)
+        data = self.payload_service.enrich_list_payload_for_user(result.data, request.user)
+        response = self._with_cache_status_header(Response(data), result.cache_status)
         return self._with_public_cache_control(response, request)
 
     def _get_cached_shelf(self, request, cache_key: str, queryset_fn):
@@ -169,11 +198,16 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         # setting, built without the viewer, then enriched per user.
         can_view_adult_content = self.query_service.can_view_adult_content(request.user)
         day_key = requested_day.lower() if requested_day else "all"
-        cache_key = self.payload_service.schedule_cache_key(day_key, can_view_adult_content)
+        now = self.query_service.schedule_now()  # the key's day stamp and the airing window
+        cache_key = self.payload_service.schedule_cache_key(
+            day_key, can_view_adult_content, now=now
+        )
 
         def build_payload():
             anime_list = list(
-                self.query_service.schedule_queryset(request.user, include_user_context=False)
+                self.query_service.schedule_queryset(
+                    request.user, include_user_context=False, now=now
+                )
             )
             serializer = AnimeListSerializer(anime_list, many=True, context={"request": request})
             schedule_days = {day.lower(): [] for day in self.query_service.SCHEDULE_DAY_NAMES}
@@ -293,20 +327,21 @@ class AnimeViewSet(ReadOnlyModelViewSet):
             f"anime_recommendations:{self.payload_service.PUBLIC_CACHE_VERSION}:{anime.slug}"
             f":adult:{int(can_view_adult_content)}"
         )
-        result = self.payload_service.cache_shelf_payload(
-            cache_key,
-            lambda: (
-                AnimeListSerializer(
-                    self.query_service.recommendations_queryset(
-                        anime, can_view_adult_content=can_view_adult_content
-                    ),
-                    many=True,
-                    context={"request": request},
-                ).data
-            ),
-        )
+
+        def build():
+            queryset, degraded = self.query_service.recommendations(
+                anime, can_view_adult_content=can_view_adult_content
+            )
+            data = AnimeListSerializer(queryset, many=True, context={"request": request}).data
+            # AniList was busy or down: serve the genre fallback, keep it briefly.
+            return Degraded(data) if degraded else data
+
+        result = self.payload_service.cache_shelf_payload(cache_key, build)
         data = self.payload_service.enrich_collection_payload_for_user(result.data, request.user)
         response = self._with_cache_status_header(Response(data), result.cache_status)
+        if result.cache_status == "degraded":
+            response["Cache-Control"] = "no-store"
+            return response
         return self._with_public_cache_control(response, request)
 
     @action(detail=True, methods=["get"])
@@ -489,8 +524,9 @@ class AnimeViewSet(ReadOnlyModelViewSet):
         except FranchiseImportError as exc:
             return error_response(
                 exc.message,
-                code="franchise_import_failed",
+                code=exc.code,
                 status_code=exc.status_code,
+                headers={"Retry-After": str(exc.retry_after)} if exc.retry_after else None,
             )
 
 
@@ -513,13 +549,26 @@ class GenreViewSet(ReadOnlyModelViewSet):
 
 
 class StudioViewSet(ReadOnlyModelViewSet):
+    """Studios for Browse's filter: only those with a public, non-adult anime (P2-2)."""
+
+    CACHE_KEY = "anime_studios:v2"
     queryset = Studio.objects.only("id", "name", "website").order_by("name")
     serializer_class = StudioSerializer
     pagination_class = None
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.action != "list":
+            return queryset
+        listed_anime = AnimeStudio.objects.filter(
+            studio=OuterRef("pk"),
+            anime__in=Anime.public_queryset().filter(is_adult=False).values("pk"),
+        )
+        return queryset.filter(Exists(listed_anime))
+
     def list(self, request, *args, **kwargs):
         data, cache_status = get_or_build_public_payload(
-            "anime_studios:v1",
+            self.CACHE_KEY,
             # Use an explicit super() target because the cache builder runs in a nested callable.
             lambda: super(StudioViewSet, self).list(request, *args, **kwargs).data,
             ttl=3600,
