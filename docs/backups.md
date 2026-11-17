@@ -216,7 +216,8 @@ scripts/deploy/restore.sh <ts>-pre-migrate --db-only --yes   # undo a deploy's d
 A `*-pre-migrate` dump is the database of the release *before* a deploy: restore it only once
 that release's images are live again (runbook.md, Rollback, step 2 then step 4). It is restored
 without step 5 (`--migrate` forces it): migrating it under the bad release would re-apply the very
-migrations being undone. `--no-migrate` skips step 5 for any other backup.
+migrations being undone. `--no-migrate` skips step 5 for any other backup. A bare timestamp is first resolved to its directory
+(`<ts>-<kind>`), so a pre-migrate dump named by its timestamp alone is recognised too.
 
 What it does, in order:
 

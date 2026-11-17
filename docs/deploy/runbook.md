@@ -104,6 +104,8 @@ A failure after the migration step prints a recipe with the concrete names. In g
    deploy; `SKIP_PULL=1`: the `rollback` tags exist only on this host). From the registry instead:
    the Deploy workflow with `rollback_to` = the previous commit (it also checks that commit out),
    or by hand `git checkout --detach <previous> && BACKEND_TAG=sha-<previous> FRONTEND_TAG=sha-<previous> ./deploy-prod.sh`.
+   (The workflow takes the deploy lock before the checkout and hands it to `deploy-prod.sh`; a
+   target whose `deploy-prod.sh` predates that hand-over takes the lock itself instead.)
 3. **The old code cannot run on the new schema:** undo this deploy's migrations with the *new*
    image (it has the migration files; every fan-out migration is reversible by policy), then do step 2:
    `$PROD run --rm --no-deps web python manage.py migrate <app> <migration before the plan>`.

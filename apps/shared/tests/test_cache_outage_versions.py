@@ -89,3 +89,31 @@ class OutageVersionTests(TestCase):
             # Flap 2: no public copy to revive.
             with self.assertRaises(PublicProfileError):
                 get_public_profile("owner")
+
+    def test_the_profile_version_bump_retries_a_flap_and_never_swallows_an_outage(self):
+        """Council r2: the bump is the invalidation of a profile made private."""
+        cache.set("profile_cache_version:owner", 4)
+        real_incr = cache.incr
+        failures = [RedisConnectionError("flap")]
+
+        def flaky_incr(key, *args, **kwargs):
+            if failures:
+                raise failures.pop()
+            return real_incr(key, *args, **kwargs)
+
+        with (
+            mock.patch.object(user_cache, "PROFILE_VERSION_BUMP_PAUSES", (0, 0)),
+            mock.patch.object(user_cache.cache, "incr", flaky_incr),
+        ):
+            user_cache.invalidate_user_caches(1, "Owner", trigger_stats_update=False)
+        self.assertEqual(cache.get("profile_cache_version:owner"), 5)
+
+        with (
+            mock.patch.object(user_cache, "PROFILE_VERSION_BUMP_PAUSES", (0, 0)),
+            mock.patch.object(
+                user_cache.cache, "incr", side_effect=RedisConnectionError("down")
+            ) as incr,
+            self.assertRaises(RedisConnectionError),
+        ):
+            user_cache.invalidate_user_caches(1, "Owner", trigger_stats_update=False)
+        self.assertEqual(incr.call_count, 3)

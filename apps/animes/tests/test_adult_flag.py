@@ -505,3 +505,111 @@ def test_the_sync_resumes_after_a_row():
         totals = sync_adult_flags_from_anilist(after_pk=first.pk)
     assert totals["checked"] == 1 and totals["last_pk"] == second.pk
     assert fake.calls == [([7302], [])]
+
+
+@pytest.fixture
+def _pending_checks_on(settings, monkeypatch):
+    """public_caches_are_current as in production (the test settings turn it off)."""
+    settings.PUBLIC_CACHE_PENDING_CHECK_SECONDS = 10
+    monkeypatch.setattr(adult_content, "_pending_check", {"at": float("-inf"), "outage_events": 0})
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
+def _lose_the_invalidation(anime):
+    """What an adult flag set while Redis was down leaves: the row flagged, the
+    cached copies untouched (they persist across the outage), a pending row.
+    """
+    from apps.animes.models import PendingPublicCacheInvalidation
+
+    Anime.objects.filter(pk=anime.pk).update(is_adult=True)
+    PendingPublicCacheInvalidation.objects.create(slug=anime.slug)
+
+
+def test_a_reader_replays_a_pending_invalidation_before_the_task_does(_pending_checks_on):
+    """Council r2: Redis back, replay task not run yet: the cached not-adult copy
+    of a title flagged adult meanwhile must not be served.
+    """
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    from apps.animes.models import PendingPublicCacheInvalidation
+
+    anime = make_anime(anilist_id=5103)
+    client = APIClient()
+    detail = reverse("anime-detail", args=[anime.slug])
+    listing = f"{reverse('anime-list')}?page_size=24"
+    assert client.get(detail).status_code == 200
+    assert anime.slug in str(client.get(listing).content)
+
+    _lose_the_invalidation(anime)
+    # This process saw the outage: its next read looks for pending rows at once.
+    adult_content._pending_check["at"] = adult_content.time.monotonic()
+    from apps.shared.throttling import warn_cache_outage
+
+    warn_cache_outage("test outage")
+
+    gated = client.get(detail)
+    assert gated.status_code == 403
+    assert gated.json()["code"] == adult_content_gate_code()
+    assert anime.slug not in str(client.get(listing).content)
+    assert not PendingPublicCacheInvalidation.objects.exists()
+
+
+def test_a_reader_bypasses_the_cache_while_the_replay_still_fails(_pending_checks_on):
+    from unittest import mock
+
+    from django.urls import reverse
+    from redis.exceptions import ConnectionError as RedisConnectionError
+    from rest_framework.test import APIClient
+
+    from apps.animes.models import PendingPublicCacheInvalidation
+
+    anime = make_anime(anilist_id=5104)
+    client = APIClient()
+    detail = reverse("anime-detail", args=[anime.slug])
+    assert client.get(detail).status_code == 200
+    _lose_the_invalidation(anime)
+    from apps.shared.throttling import warn_cache_outage
+
+    warn_cache_outage("test outage")  # this process sees the outage
+
+    with mock.patch(
+        "apps.animes.services.public_anime_service."
+        "AnimePublicPayloadService.bump_collection_cache_namespace",
+        side_effect=RedisConnectionError("still down"),
+    ):
+        gated = client.get(detail)
+    assert gated.status_code == 403  # built from the database, not the cached copy
+    assert PendingPublicCacheInvalidation.objects.count() == 1
+
+
+def test_the_timed_look_runs_at_most_once_per_interval(_pending_checks_on, monkeypatch):
+    from apps.animes.models import PendingPublicCacheInvalidation
+
+    clock = [1000.0]
+    monkeypatch.setattr(adult_content.time, "monotonic", lambda: clock[0])
+    assert adult_content.public_caches_are_current()
+    PendingPublicCacheInvalidation.objects.create(slug="no-such-anime")
+    with mock_no_replay() as replay:
+        clock[0] += 5
+        assert adult_content.public_caches_are_current()  # within 10 s: no look
+        replay.assert_not_called()
+        clock[0] += 6
+        adult_content.public_caches_are_current()
+        replay.assert_called_once()
+
+
+def adult_content_gate_code() -> str:
+    from apps.animes.views.anime import ADULT_GATE_CODE
+
+    return ADULT_GATE_CODE
+
+
+def mock_no_replay():
+    from unittest import mock
+
+    return mock.patch.object(adult_content, "replay_public_cache_invalidations", return_value=1)

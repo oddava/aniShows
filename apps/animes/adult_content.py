@@ -26,9 +26,11 @@ rows that have no AniList data; deploy-prod.sh then queues the sync, which
 replaces the seed with AniList's own value.
 """
 
+import time
 from collections.abc import Iterable
 
 from django.apps import apps
+from django.conf import settings
 from django.db import transaction
 
 from ..shared.logger import logger
@@ -213,3 +215,54 @@ def replay_public_cache_invalidations(*, using: str = "default", batch_size: int
     pending.filter(pk__in=[pk for pk, _ in rows]).delete()
     logger.info("Replayed the cache invalidation of %s anime", len(rows))
     return len(rows)
+
+
+# When this process last looked for pending invalidations, and how many cache
+# failures it had seen then (``public_caches_are_current``).
+_pending_check = {"at": float("-inf"), "outage_events": 0}
+
+
+def public_caches_are_current() -> bool:
+    """False while a lost invalidation is pending and cannot be replayed yet.
+
+    Readers of the catalog namespace and of anime detail payloads call this
+    first: Redis can come back with the entries an outage kept (a title flagged
+    adult since, still cached as not adult) before the 5-minute replay task
+    runs. A pending row is replayed here, by the first reader that finds it;
+    while that fails (the cache is still down), the caller bypasses the cache.
+
+    The table is read (one indexed EXISTS) only when this process has seen a
+    cache failure since its last look, and otherwise at most every
+    ``PUBLIC_CACHE_PENDING_CHECK_SECONDS`` (10 s): a process that saw the
+    outage re-checks on its first read after it, any other within 10 s.
+    ``None`` turns the check off (the test settings: query budgets stay
+    exact; the tests of this function set a number).
+    """
+    from ..shared.errors import CACHE_ERRORS
+    from ..shared.throttling import cache_outage_events, warn_cache_outage
+
+    interval = settings.PUBLIC_CACHE_PENDING_CHECK_SECONDS
+    if interval is None:
+        return True
+    now = time.monotonic()
+    if (
+        cache_outage_events() == _pending_check["outage_events"]
+        and now - _pending_check["at"] < interval
+    ):
+        return True
+
+    pending = apps.get_model("anime", "PendingPublicCacheInvalidation").objects
+    current = True
+    if pending.exists():
+        try:
+            replay_public_cache_invalidations()
+            current = not pending.exists()
+        except CACHE_ERRORS:
+            warn_cache_outage("pending cache invalidation replay")
+            current = False
+    if current:
+        # Look again only after the interval or a new cache failure. Not
+        # current: look again on the next read.
+        _pending_check["at"] = now
+        _pending_check["outage_events"] = cache_outage_events()
+    return current

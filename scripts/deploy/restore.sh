@@ -91,6 +91,12 @@ if [ "$FROM_OFFSITE" = 1 ]; then
 elif [ "$REF" = latest ]; then
     REF="$(in_backup bash -c 'ls -1d /backups/[0-9]*_[0-9]*-daily /backups/[0-9]*_[0-9]*-weekly /backups/[0-9]*_[0-9]*-manual 2>/dev/null | sort | tail -n1 | xargs -r basename')"
     [ -n "$REF" ] || die "no daily, weekly or manual backup in backups-data/"
+else
+    # A bare timestamp names a directory <ts>-<kind>: resolve it the way
+    # backups/shell/restore.sh does, so the pre-migrate test below sees the
+    # real name and both steps use the same directory.
+    REF="$(in_backup bash -c 'if [ -d "/backups/$1" ]; then echo "$1"; else find /backups -maxdepth 1 -type d -name "$1-*" | sort | tail -n1 | xargs -r basename; fi' _ "$REF")"
+    [ -n "$REF" ] || die "no backup matches that reference in backups-data/ (--from-offsite fetches one)"
 fi
 log "backup: $REF"
 if [ "$MIGRATE" = auto ]; then

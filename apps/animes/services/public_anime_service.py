@@ -567,7 +567,13 @@ class AnimePublicPayloadService:
 
     @classmethod
     def get_detail_payload(cls, slug: str, request, query_service: AnimeQueryService):
+        from ..adult_content import public_caches_are_current
+
         primary_cache_key = cls.detail_cache_key(slug)
+        if not public_caches_are_current():
+            # A lost invalidation is pending (an adult flag the cached copy may
+            # predate): build this page without the cache.
+            primary_cache_key = f"{primary_cache_key}:{cache_outage_version()}"
         coverless_marker_key = f"{primary_cache_key}:coverless_checked"
         cache_status = "hit"
         cached_base = best_effort_get(primary_cache_key, source="anime detail")
@@ -754,6 +760,11 @@ class AnimePublicPayloadService:
 
     @classmethod
     def collection_cache_namespace(cls) -> str:
+        from ..adult_content import public_caches_are_current
+
+        if not public_caches_are_current():
+            # A lost invalidation is pending: no collection is read from the cache.
+            return cache_outage_version()
         try:
             namespace = cache.get(cls.COLLECTION_CACHE_NAMESPACE_KEY)
             if namespace is None:

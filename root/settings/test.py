@@ -71,6 +71,9 @@ CHANNEL_LAYERS = {
 }
 # Avoid cross-test pollution from cached runtime policy settings.
 ADMIN_SETTINGS_USE_CACHE = False
+# No look for pending cache invalidations (query budgets stay exact); the
+# tests of public_caches_are_current override this.
+PUBLIC_CACHE_PENDING_CHECK_SECONDS = None
 
 # Speed up password hashing in tests
 PASSWORD_HASHERS = [

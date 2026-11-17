@@ -392,8 +392,10 @@ print_rollback() {
     fi
     n=$((n + 1))
     if [ "$MIGRATE_STARTED" = 1 ]; then
-        echo "    ${n}. Last resort (data damage), restore the pre-migrate dump:"
-        echo "       scripts/deploy/compose.sh stop web celery beat && scripts/deploy/compose.sh exec backup /app/shell/restore.sh $(basename "${PRE_MIGRATE_BACKUP:-<name>}") --yes --skip-media"
+        echo "    ${n}. Last resort (data damage), AFTER the previous release is live again,"
+        echo "       restore the pre-migrate dump (it stops and restarts the app, holds the deploy"
+        echo "       lock, does not migrate a pre-migrate dump, and clears the cache):"
+        echo "       scripts/deploy/restore.sh $(basename "${PRE_MIGRATE_BACKUP:-<name>-pre-migrate}") --db-only --yes"
     fi
     echo "    Runbook: docs/deploy/runbook.md (Rollback). Log: ${LOG_FILE}"
 }

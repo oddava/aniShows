@@ -10,14 +10,14 @@ from .. import adult_content
 ROWS_PER_RUN = 500
 
 
-# No retry: a failed request skips its chunk (never clears a flag), and next
-# week's run, or any metadata refresh of the row, catches up.
 @observed_shared_task(retry_policy="none", time_limit_preset="standard")
 def replay_public_cache_invalidations(self):
     """Every 5 minutes: drop the cached payloads an outage kept (a cheap query when none)."""
     return adult_content.replay_public_cache_invalidations()
 
 
+# No retry: a failed request skips its chunk (never clears a flag), and next
+# week's run, or any metadata refresh of the row, catches up.
 @observed_shared_task(retry_policy="none", time_limit_preset="standard")
 def sync_adult_flags(self, after_pk: int = 0):
     totals = adult_content.sync_adult_flags_from_anilist(after_pk=after_pk, limit=ROWS_PER_RUN)

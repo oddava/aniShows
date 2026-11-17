@@ -24,6 +24,15 @@ from .logger import logger
 
 _OUTAGE_LOG_INTERVAL_SECONDS = 60.0
 _last_outage_log: dict[str, float] = {}
+# Cache failures this process has seen (every call, logged or not): readers
+# that must re-check something once Redis is back compare it with their last
+# look (``apps.animes.adult_content.public_caches_are_current``).
+_outage_events = 0
+
+
+def cache_outage_events() -> int:
+    """How many cache failures this process has reported so far."""
+    return _outage_events
 
 
 def warn_cache_outage(source: str, *, outcome: str = "degrading") -> None:
@@ -31,6 +40,8 @@ def warn_cache_outage(source: str, *, outcome: str = "degrading") -> None:
 
     During an outage every request hits it; one line a minute says the same.
     """
+    global _outage_events
+    _outage_events += 1
     now = time.monotonic()
     if now - _last_outage_log.get(source, float("-inf")) < _OUTAGE_LOG_INTERVAL_SECONDS:
         return

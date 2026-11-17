@@ -74,6 +74,14 @@ git checkout --quiet --detach "$target"
 # the child reads /dev/null.
 out="backups-data/deploy-logs/remote-$(date -u +%Y%m%dT%H%M%SZ)-${short}.out"
 status_file="${out%.out}.status"
+# The file exists before tail starts: GNU tail -f gives up on a missing file.
+: >"$out"
+# A target older than the lock hand-over (no DEPLOY_LOCK_HELD in its
+# deploy-prod.sh) takes the lock itself: release ours, or it would refuse.
+if ! grep -q DEPLOY_LOCK_HELD deploy-prod.sh; then
+    unset DEPLOY_LOCK_HELD
+    exec 8>&-
+fi
 detach=()
 command -v setsid >/dev/null 2>&1 && detach=(setsid)
 BACKEND_TAG="sha-${short}" FRONTEND_TAG="sha-${short}" STATUS_FILE="$status_file"     nohup "${detach[@]}" bash -c 'bash ./deploy-prod.sh; echo $? > "$STATUS_FILE"'     </dev/null >"$out" 2>&1 &
