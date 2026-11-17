@@ -14,7 +14,7 @@ Cloudflare Tunnel mode, and compares it with public mode:
 
 `scripts/deploy/env.sh` derives the `CADDY_*` values from `CADDY_MODE` (unless set explicitly) for
 both `deploy-prod.sh` and `scripts/deploy/compose.sh`. Use the wrapper for manual compose commands.
-Caddy stays in both modes. It holds the routing, the read-only MinIO media proxy, the SPA fallback,
+Caddy stays in both modes. It holds the routing, the read-only media proxy (to the host's RustFS bucket), the SPA fallback,
 the CSP, crawler share previews and the D-9 operator gate, and cloudflared can do none of those.
 
 ## The chain

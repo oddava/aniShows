@@ -122,7 +122,9 @@ jobs:
       # (env_file .env is required by the services, so a stub stands in).
       # TRUSTED_PROXY_CIDRS has no default (compose refuses the file without
       # it), so the stub sets the template's value; the refusal itself is
-      # checked last.
+      # checked last. Object storage is the host's RustFS over the external
+      # network S3_NETWORK (Compose does not need it to exist to parse), so
+      # the stack must not name a bundled MinIO or its bucket job again.
       - name: Lint production compose files and deploy scripts
         run: |
           set -euo pipefail
@@ -130,6 +132,7 @@ jobs:
             echo "TRUSTED_PROXY_CIDRS=10.250.250.0/25"
             echo "PROXY_NETWORK=proxy"
             echo "TUNNEL_NETWORK=cloudflared"
+            echo "S3_NETWORK=anishows-s3"
           } > .env
           for profiles in "" bundled-db analytics tunnel "bundled-db,analytics,tunnel"; do
             COMPOSE_PROFILES="$profiles" docker compose -f docker-compose.prod.yml config -q
@@ -139,6 +142,10 @@ jobs:
           docker compose -f docker-compose.prod.yml -f infra/compose/shared-proxy-network.yml config -q
           docker compose -f docker-compose.prod.yml -f infra/compose/loopback-port.yml config -q
           docker compose -f docker-compose.prod.yml -f infra/compose/shared-tunnel-network.yml config -q
+          if grep -n -i -e minio -e createbuckets docker-compose.prod.yml Caddyfile.prod deploy-prod.sh infra/compose/*.yml; then
+            echo "::error::the production stack must not reference minio or createbuckets (media is the host's RustFS)" >&2
+            exit 1
+          fi
           : > .env
           if docker compose -f docker-compose.prod.yml config -q 2>/dev/null; then
             echo "docker-compose.prod.yml must refuse an unset TRUSTED_PROXY_CIDRS" >&2

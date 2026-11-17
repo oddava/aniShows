@@ -199,7 +199,7 @@ offline-repair-run:             ## Reset and re-run offline enrichment pipeline 
 #thumbnails:                     ## Pre-generate all ImageKit thumbnails
 #	$(EXEC) generate_thumbnails
 #
-#thumbnails-s3:                  ## Copy local thumbnails to MinIO/S3
+#thumbnails-s3:                  ## Copy local thumbnails to the S3 bucket
 #	$(EXEC) copy_thumbnails_to_s3
 #
 
@@ -309,7 +309,7 @@ restore:                        ## Safe full restore (Usage: make restore TIMEST
 		echo "Tip: make verify-backup TIMESTAMP=$(TIMESTAMP)"; \
 		exit 1; \
 	fi
-	@services="web celery beat minio"; \
+	@services="web celery beat"; \
 	set -e; \
 	echo "Stopping app services for restore: $$services"; \
 	docker compose stop $$services; \
@@ -321,8 +321,6 @@ restore:                        ## Safe full restore (Usage: make restore TIMEST
 		echo "Restore failed. Services were started back up."; \
 		exit $$restore_status; \
 	fi
-	# Re-apply the bucket and its public-read policy (a fresh MinIO lacks them).
-	docker compose run --rm createbuckets
 	docker compose exec web python manage.py migrate --noinput
 
 restore-db-only:                ## Restore DB only (Usage: make restore-db-only TIMESTAMP=... FORCE=1)
@@ -352,14 +350,13 @@ restore-media-only:             ## Restore media only (Usage: make restore-media
 		echo "Error: Restore is destructive. Re-run with FORCE=1."; \
 		exit 1; \
 	fi
-	@services="minio"; \
+	@services="web celery beat"; \
 	set -e; \
 	docker compose stop $$services; \
 	restore_status=0; \
 	docker compose exec backup /app/shell/restore.sh $(TIMESTAMP) --yes --skip-db || restore_status=$$?; \
 	docker compose start $$services; \
 	if [ $$restore_status -ne 0 ]; then exit $$restore_status; fi
-	docker compose run --rm createbuckets
 
 # ============================================================================
 # Production stack (docker-compose.prod.yml; run on the server from the repo

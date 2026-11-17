@@ -5,12 +5,15 @@
 Each backup directory now includes:
 
 - `postgres.dump`: PostgreSQL custom-format dump (`pg_dump -Fc`)
-- `minio_data.tar.gz`: media/object storage snapshot from `/minio_data`
+- `media_data.tar.gz`: the media bucket's objects (a snapshot of the S3 bucket, see
+  [Media](#media-the-s3-bucket)). Backups made before the move to RustFS hold
+  `minio_data.tar.gz` (a MinIO data directory) and `MINIO_ARCHIVE_*` manifest keys instead
 - `backup_manifest.env`: metadata (type, timestamp, DB target, sizes, hashes)
 - `checksums.sha256`: integrity checks for artifacts
 
 Backups are created atomically in a temp directory and moved into place only after success.
-Media backups are staged through an internal `rsync` snapshot before archiving, so active uploads no longer abort the job with `tar: file changed as we read it`.
+Media backups copy the bucket into a staging directory (`rclone sync`) and tar that, so active
+uploads never abort the job with `tar: file changed as we read it`.
 Every dump is checked with `pg_restore --list` right after it is written, so a truncated archive
 fails the backup, not the restore.
 
@@ -63,7 +66,7 @@ Restore now performs these steps:
 3. Test-restore DB dump into a temporary database.
 4. Create an automatic `pre-restore` snapshot for rollback safety.
 5. Restore into a staging database, then swap DB names instead of dropping schema first.
-6. Restore media archive.
+6. Restore the media archive into the S3 bucket (see [Media](#media-the-s3-bucket)).
 
 The previous production DB is retained with a `rollback_*` database name after restore.
 
@@ -71,7 +74,8 @@ The previous production DB is retained with a `rollback_*` database name after r
 
 1. Copy backup folder(s) from `backups-data/`.
 2. Copy `.env` (or provide equivalent env vars) to the new server.
-3. Start containers and ensure DB/MinIO services are healthy.
+3. Start containers and ensure the DB is healthy and the object storage is reachable
+   (production: `manage.py s3_check`, run by the deploy; dev: the `rustfs` service).
 4. Verify backup first:
 
 ```bash
@@ -122,14 +126,36 @@ Each regular backup is a full DB dump plus a media archive: size the disk for `B
 Media backup performance is also configurable:
 
 - `BACKUP_MEDIA_COMPRESS_LEVEL` (default `1`) lowers CPU overhead for large image-heavy archives while keeping `tar.gz` compatibility
-- `BACKUP_MEDIA_RSYNC_PASSES` (default `2`) controls how many sync passes are used to settle the staged media snapshot before it is archived
 
 ## Production (docker-compose.prod.yml)
 
 The production `backup` service dumps whichever Postgres the app uses: `POSTGRES_HOST` follows
 `DB_HOST`, and `PGSSLMODE` follows `DB_SSLMODE`, so an external/shared server works the same way.
-The `/minio_data` volume is the bundled MinIO's; with external object storage set
-`BACKUP_INCLUDE_MEDIA=0` and back the bucket up at the provider.
+Media is the host's RustFS bucket (provisioned by infra: the `anishows-s3` network, the bucket
+`anishows-media` and its `anishows` user). The `backup` service joins that network and reads it
+with the app's own `AWS_*` values, so it needs nothing else; `BACKUP_INCLUDE_MEDIA=0` skips the
+media archive if the bucket is backed up elsewhere.
+
+### Media (the S3 bucket)
+
+- **Backup**: `rclone sync s3src:$AWS_STORAGE_BUCKET_NAME` into a staging directory, then `tar` it to
+  `media_data.tar.gz`; the staging copy is removed. The remote `s3src` is configured only through
+  environment, from the app's values: `RCLONE_CONFIG_S3SRC_TYPE=s3`, `PROVIDER=Other`,
+  `ENDPOINT=$AWS_S3_ENDPOINT_URL`, `ACCESS_KEY_ID`/`SECRET_ACCESS_KEY` from `AWS_*`,
+  `FORCE_PATH_STYLE=true`, `REGION=$AWS_S3_REGION_NAME`. Disk: the staged bucket plus the archive.
+- **Restore**: the archive is unpacked into a temporary directory and `rclone sync`ed into
+  `s3src:$AWS_STORAGE_BUCKET_NAME` only (never another bucket; a bucket name with a `/` is refused).
+  The bucket then matches the backup: objects the backup lacks are deleted. An archive with no
+  files is refused (it would empty the bucket) unless `RESTORE_ALLOW_EMPTY_MEDIA=1`.
+- **Pre-restore snapshot**: a full backup of the live data first, which includes an export of the
+  bucket; skip it with `--skip-snapshot`. Scope with `--db-only` / `--media-only`
+  (`scripts/deploy/restore.sh`) or `--skip-media` / `--skip-db`.
+- **Old backups** (`minio_data.tar.gz`, `MINIO_ARCHIVE_*`) are still found and checksummed. Their
+  media is a MinIO *data directory*; MinIO's own layout (`<bucket>/<object>/xl.meta`) cannot be
+  copied into S3 as it is, so restoring one is refused with that message. Restore its database with
+  `--skip-media` and re-upload the media from another source, or start MinIO on the unpacked
+  directory and copy the bucket out with rclone, then restore that.
+- Dev: `docker compose --profile backup` uses the `rustfs` dev service the same way.
 
 ```bash
 make prod-backup                     # backup now (DB + media, off-site too when configured)

@@ -3,6 +3,14 @@
 # Service and volume names match the previous layout so existing data volumes
 # and the compose network are reused.
 #
+# Object storage is NOT part of this stack: media lives in the RustFS already
+# running on the host (bucket anishows-media, a bucket-scoped user, anonymous
+# read on media/* only; provisioned by infra, not here). The stack reaches it
+# as http://rustfs:9000 over the external, internal-only Docker network
+# S3_NETWORK (default anishows-s3), which web, celery, beat, caddy and backup
+# join. `manage.py s3_check` (deploy-prod.sh "Object storage") proves the
+# credentials, the bucket and the network before anything is changed.
+#
 # Profiles (COMPOSE_PROFILES, set by deploy-prod.sh):
 #   bundled-db  the local Postgres `db` (when DB_HOST=db, the default)
 #   analytics   Umami + its database
@@ -56,8 +64,10 @@ x-backend: &backend
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword123}
-    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-minioadmin}
-    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
+    # The host's RustFS over the s3 network; .env can point elsewhere.
+    AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-http://rustfs:9000}
+    # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_STORAGE_BUCKET_NAME and
+    # AWS_S3_REGION_NAME come from .env (env_file above); no built-in defaults.
     PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
     # Lean profile: 2 gunicorn workers per web replica (gunicorn.conf.py would
     # otherwise use the CPU count, 2..4). Only web reads it.
@@ -78,8 +88,10 @@ x-backend: &backend
       required: false
     redis:
       condition: service_healthy
-    createbuckets:
-      condition: service_completed_successfully
+  # default: db and redis; s3: the host's RustFS.
+  networks:
+    default: {}
+    s3: {}
 
 services:
   web:
@@ -173,44 +185,6 @@ services:
           # maxmemory plus room for the AOF-rewrite fork and client buffers.
           memory: ${REDIS_MEMORY_LIMIT:-256M}
 
-  minio:
-    image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    restart: ${RESTART_POLICY:-unless-stopped}
-    logging: *logging
-    command: server /data --console-address ":9001"
-    expose:
-      - "9000"
-    environment:
-      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    volumes:
-      - minio_data:/data
-    deploy:
-      resources:
-        limits:
-          memory: ${MINIO_MEMORY_LIMIT:-256M}
-
-  createbuckets:
-    image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
-    logging: *logging
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_USER: ${AWS_ACCESS_KEY_ID:-minioadmin}
-      MINIO_PASSWORD: ${AWS_SECRET_ACCESS_KEY:-minioadmin}
-      BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-anishows-media}
-    entrypoint: >
-      /bin/sh -c "set -e;
-      mc alias set local http://minio:9000 $${MINIO_USER} $${MINIO_PASSWORD};
-      mc mb --ignore-existing local/$${BUCKET_NAME};
-      mc anonymous set download local/$${BUCKET_NAME}/media"
-
   caddy:
     image: caddy:alpine@sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d
     restart: ${RESTART_POLICY:-unless-stopped}
@@ -243,6 +217,10 @@ services:
       # Caddy's own loopback (deploy smoke tests) passes: closed to
       # every client. deploy-prod.sh refuses wide-open values.
       ADMIN_ALLOW_CIDRS: ${ADMIN_ALLOW_CIDRS:-100::/64}
+      # /media is proxied to the host's RustFS (s3 network): its address and
+      # the bucket whose media/ prefix is public.
+      S3_UPSTREAM: ${S3_UPSTREAM:-rustfs:9000}
+      S3_MEDIA_BUCKET: ${S3_MEDIA_BUCKET:-${AWS_STORAGE_BUCKET_NAME:-anishows-media}}
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
       - ./infra/caddy/sites-proxy.d:/etc/caddy/sites-proxy.d:ro
@@ -254,6 +232,7 @@ services:
     networks:
       default: {}
       edge: {}
+      s3: {}
     healthcheck:
       # The admin API answers once the config is loaded.
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
@@ -355,15 +334,18 @@ services:
       PGSSLMODE: ${DB_SSLMODE:-prefer}
       # verify-full: the CA path inside the container (infra/compose/db-ca.yml).
       PGSSLROOTCERT: ${DB_SSLROOTCERT:-}
+      # Media backups read the bucket over S3 (rclone); the credentials and
+      # AWS_STORAGE_BUCKET_NAME / AWS_S3_REGION_NAME come from .env.
+      AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-http://rustfs:9000}
     depends_on:
       db:
         condition: service_started
         required: false
-      minio:
-        condition: service_started
     volumes:
       - ./backups-data:/backups
-      - minio_data:/minio_data
+    networks:
+      default: {}
+      s3: {}
     healthcheck:
       # Unhealthy when no scheduled/manual backup succeeded in 26 h (after a
       # first day of grace), so a failing nightly shows in `compose ps`.
@@ -391,11 +373,15 @@ networks:
     ipam:
       config:
         - subnet: ${EDGE_SUBNET:-10.250.250.240/29}
+  # The host's RustFS (http://rustfs:9000). Created once by infra, internal
+  # only, so it is external: Compose neither creates nor removes it.
+  s3:
+    name: ${S3_NETWORK:-anishows-s3}
+    external: true
 
 volumes:
   db_data:
   redis_data:
-  minio_data:
   frontend_dist:
   prometheus_multiproc:
   caddy_data:

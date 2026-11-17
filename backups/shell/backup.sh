@@ -21,7 +21,6 @@ INCLUDE_MEDIA="${BACKUP_INCLUDE_MEDIA:-1}"
 SKIP_LOCK="${BACKUP_SKIP_LOCK:-0}"
 OUTPUT_PATH_FILE="${BACKUP_OUTPUT_PATH_FILE:-}"
 MEDIA_COMPRESS_LEVEL="${BACKUP_MEDIA_COMPRESS_LEVEL:-1}"
-MEDIA_RSYNC_PASSES="${BACKUP_MEDIA_RSYNC_PASSES:-2}"
 
 # Optional off-site copy (rclone remote path, e.g. "offsite:anishows-backups").
 # The remote is configured by RCLONE_CONFIG_<NAME>_* variables in .env (see
@@ -37,6 +36,7 @@ REMOTE_KEEP_DAYS="${BACKUP_REMOTE_KEEP_DAYS:-30}"
 
 CURRENT_BACKUP_DIR=""
 WORK_DIR=""
+STAGE_DIR=""
 
 log() {
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"
@@ -45,6 +45,9 @@ log() {
 cleanup() {
     if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
         rm -rf "$WORK_DIR"
+    fi
+    if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
+        rm -rf "$STAGE_DIR"
     fi
 }
 trap cleanup EXIT
@@ -59,6 +62,9 @@ require_command() {
 # The lock lives in lock.sh (an flock shared with restore.sh across containers).
 # shellcheck source=backups/shell/lock.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lock.sh"
+# s3_media_env: the rclone remote for the media bucket.
+# shellcheck source=backups/shell/s3.sh
+source "$(dirname "${BASH_SOURCE[0]}")/s3.sh"
 
 acquire_lock() {
     if [ "$SKIP_LOCK" = "1" ]; then
@@ -98,37 +104,24 @@ backup_db() {
 }
 
 backup_media() {
-    local out_file="$WORK_DIR/minio_data.tar.gz"
-    local snapshot_dir="$WORK_DIR/minio_snapshot"
-    local pass=1
-    if [ ! -d /minio_data ]; then
-        echo "Error: /minio_data directory not found in backup container." >&2
+    local out_file="$WORK_DIR/media_data.tar.gz"
+    require_command rclone
+    s3_media_env || exit 1
+    # Outside WORK_DIR: only the archive goes into the backup.
+    STAGE_DIR="$(mktemp -d "$BACKUP_DIR/.tmp-media-stage-${TIMESTAMP}.XXXXXX")"
+
+    log "Staging the media bucket s3src:$AWS_STORAGE_BUCKET_NAME ($AWS_S3_ENDPOINT_URL)..."
+    # Objects are immutable (the app never overwrites a key), so one pass is a
+    # consistent copy; anything uploaded during it is simply in the next backup.
+    if ! rclone sync "s3src:$AWS_STORAGE_BUCKET_NAME" "$STAGE_DIR"; then
+        echo "Error: could not read the media bucket (is the anishows-s3 network attached to this container? are the AWS_* values right?)." >&2
         exit 1
     fi
-    mkdir -p "$snapshot_dir"
 
-    log "Staging MinIO data snapshot (passes=$MEDIA_RSYNC_PASSES)..."
-    while [ "$pass" -le "$MEDIA_RSYNC_PASSES" ]; do
-        # "|| ..." keeps set -e from aborting on exit 24 (files vanished
-        # mid-copy), which is normal while MinIO is writing.
-        local rsync_status=0
-        rsync \
-            -a \
-            --delete \
-            --exclude=".minio.sys/" \
-            /minio_data/ "$snapshot_dir/" || rsync_status=$?
-        if [ "$rsync_status" -ne 0 ]; then
-            if [ "$rsync_status" -ne 24 ]; then
-                echo "Error: rsync failed while staging MinIO data (exit=$rsync_status)." >&2
-                exit "$rsync_status"
-            fi
-            log "MinIO snapshot pass $pass completed with transient file changes (rsync exit 24); retrying if passes remain."
-        fi
-        pass=$((pass + 1))
-    done
-
-    log "Creating MinIO archive from staged snapshot..."
-    GZIP="-${MEDIA_COMPRESS_LEVEL}" tar -czf "$out_file" -C "$snapshot_dir" .
+    log "Creating media archive from the staged bucket..."
+    GZIP="-${MEDIA_COMPRESS_LEVEL}" tar -czf "$out_file" -C "$STAGE_DIR" .
+    rm -rf "$STAGE_DIR"
+    STAGE_DIR=""
 }
 
 write_manifest() {
@@ -143,9 +136,9 @@ write_manifest() {
         db_sha="$(sha256sum "$WORK_DIR/postgres.dump" | awk '{print $1}')"
         db_size="$(wc -c <"$WORK_DIR/postgres.dump" | tr -d '[:space:]')"
     fi
-    if [ "$INCLUDE_MEDIA" = "1" ] && [ -f "$WORK_DIR/minio_data.tar.gz" ]; then
-        media_sha="$(sha256sum "$WORK_DIR/minio_data.tar.gz" | awk '{print $1}')"
-        media_size="$(wc -c <"$WORK_DIR/minio_data.tar.gz" | tr -d '[:space:]')"
+    if [ "$INCLUDE_MEDIA" = "1" ] && [ -f "$WORK_DIR/media_data.tar.gz" ]; then
+        media_sha="$(sha256sum "$WORK_DIR/media_data.tar.gz" | awk '{print $1}')"
+        media_size="$(wc -c <"$WORK_DIR/media_data.tar.gz" | tr -d '[:space:]')"
     fi
 
     cat >"$WORK_DIR/backup_manifest.env" <<EOF
@@ -157,9 +150,9 @@ HOSTNAME=$(hostname 2>/dev/null || echo unknown)
 DB_DUMP_FILE=postgres.dump
 DB_DUMP_SHA256=$db_sha
 DB_DUMP_SIZE_BYTES=$db_size
-MINIO_ARCHIVE_FILE=minio_data.tar.gz
-MINIO_ARCHIVE_SHA256=$media_sha
-MINIO_ARCHIVE_SIZE_BYTES=$media_size
+MEDIA_ARCHIVE_FILE=media_data.tar.gz
+MEDIA_ARCHIVE_SHA256=$media_sha
+MEDIA_ARCHIVE_SIZE_BYTES=$media_size
 POSTGRES_HOST=$DB_HOST
 POSTGRES_PORT=$DB_PORT
 POSTGRES_DB=$DB_NAME
@@ -170,8 +163,8 @@ EOF
     if [ "$INCLUDE_DB" = "1" ] && [ -f "$WORK_DIR/postgres.dump" ]; then
         (cd "$WORK_DIR" && sha256sum "postgres.dump" >>"checksums.sha256")
     fi
-    if [ "$INCLUDE_MEDIA" = "1" ] && [ -f "$WORK_DIR/minio_data.tar.gz" ]; then
-        (cd "$WORK_DIR" && sha256sum "minio_data.tar.gz" >>"checksums.sha256")
+    if [ "$INCLUDE_MEDIA" = "1" ] && [ -f "$WORK_DIR/media_data.tar.gz" ]; then
+        (cd "$WORK_DIR" && sha256sum "media_data.tar.gz" >>"checksums.sha256")
     fi
 }
 
@@ -255,7 +248,6 @@ upload_offsite() {
 main() {
     require_command pg_dump
     require_command tar
-    require_command rsync
     require_command sha256sum
     require_command mktemp
     require_command find
@@ -269,7 +261,6 @@ main() {
         echo "Error: BACKUP_MEDIA_COMPRESS_LEVEL must be 1..9. Got '$MEDIA_COMPRESS_LEVEL'." >&2
         exit 1
     fi
-    assert_numeric_positive "$MEDIA_RSYNC_PASSES" "BACKUP_MEDIA_RSYNC_PASSES"
     assert_numeric_positive "$KEEP" "BACKUP_KEEP"
     assert_numeric_positive "$KEEP_PRE_MIGRATE" "BACKUP_KEEP_PRE_MIGRATE"
     assert_numeric_positive "$REMOTE_KEEP_DAYS" "BACKUP_REMOTE_KEEP_DAYS"

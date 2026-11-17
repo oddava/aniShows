@@ -68,7 +68,7 @@ root/                    Django project settings and runtime entrypoints
 ```bash
 cp .env.example .env
 make build
-make up          # web, celery, beat, frontend, db, redis, minio (migrations run on start)
+make up          # web, celery, beat, frontend, db, redis, rustfs (migrations run on start)
 make superuser
 ```
 

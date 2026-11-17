@@ -4,7 +4,6 @@ RUN apk add --no-cache \
     bash \
     tar \
     gzip \
-    rsync \
     dcron \
     curl \
     rclone

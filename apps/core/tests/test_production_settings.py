@@ -26,6 +26,15 @@ _VARIED = (
     "SECURE_HSTS_SECONDS",
     "SECURE_HSTS_INCLUDE_SUBDOMAINS",
     "SECURE_HSTS_PRELOAD",
+    "USE_S3",
+    "AWS_STORAGE_BUCKET_NAME",
+    "AWS_S3_ENDPOINT_URL",
+    "S3_PUBLIC_DOMAIN",
+    "S3_PUBLIC_USE_SSL",
+    "MINIO_PUBLIC_DOMAIN",
+    "MINIO_USE_SSL",
+    "MEDIA_CDN_URL",
+    "CDN_BASE_URL",
 )
 
 
@@ -226,3 +235,56 @@ class SentryDefaultsTests(SimpleTestCase):
         self.assertEqual(kept["request"], {"url": "/verify-email/<redacted>", "headers": {}})
         self.assertIsNone(dropped)
         self.assertIsNone(tx)
+
+
+class ProductionObjectStorageTests(SimpleTestCase):
+    """Media URLs when the bucket lives on a self-hosted S3 (RustFS) behind Caddy."""
+
+    RUSTFS = {
+        "USE_S3": "True",
+        "AWS_STORAGE_BUCKET_NAME": "anishows-media",
+        "AWS_S3_ENDPOINT_URL": "http://rustfs:9000",
+        "S3_PUBLIC_DOMAIN": "anishows.com",
+        "S3_PUBLIC_USE_SSL": "True",
+    }
+
+    def test_a_rustfs_endpoint_serves_media_through_the_public_domain(self):
+        # The endpoint host is not "minio": any custom endpoint is a self-hosted S3.
+        self.assertEqual(
+            _production_setting("settings.MEDIA_URL", self.RUSTFS), "https://anishows.com/media/"
+        )
+
+    def test_the_url_settings_stay_unsigned_and_path_style(self):
+        values = _production_setting(
+            "[settings.AWS_S3_CUSTOM_DOMAIN, settings.AWS_S3_URL_PROTOCOL, "
+            "settings.AWS_S3_ADDRESSING_STYLE, settings.AWS_DEFAULT_ACL, "
+            "settings.AWS_S3_ENDPOINT_URL]",
+            self.RUSTFS,
+        )
+        self.assertEqual(values, ["anishows.com", "https:", "path", None, "http://rustfs:9000"])
+
+    def test_the_legacy_minio_variables_are_still_read(self):
+        env = {key: value for key, value in self.RUSTFS.items() if not key.startswith("S3_PUBLIC")}
+        env.update(MINIO_PUBLIC_DOMAIN="legacy.example", MINIO_USE_SSL="True")
+        self.assertEqual(
+            _production_setting("settings.MEDIA_URL", env), "https://legacy.example/media/"
+        )
+
+    def test_the_new_variables_win_over_the_legacy_ones(self):
+        env = {**self.RUSTFS, "MINIO_PUBLIC_DOMAIN": "legacy.example", "MINIO_USE_SSL": "False"}
+        self.assertEqual(
+            _production_setting("settings.MEDIA_URL", env), "https://anishows.com/media/"
+        )
+
+    def test_plain_http_in_development_defaults(self):
+        env = {"USE_S3": "True", "AWS_S3_ENDPOINT_URL": "http://rustfs:9000"}
+        self.assertEqual(
+            _production_setting("settings.MEDIA_URL", env), "http://localhost:9000/media/"
+        )
+
+    def test_without_an_endpoint_the_urls_are_aws_urls(self):
+        env = {"USE_S3": "True", "AWS_STORAGE_BUCKET_NAME": "anishows-media"}
+        self.assertEqual(
+            _production_setting("settings.MEDIA_URL", env),
+            "https://anishows-media.s3.amazonaws.com/media/",
+        )

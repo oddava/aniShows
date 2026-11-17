@@ -4,14 +4,15 @@ set -euo pipefail
 echo "Starting Backup Service..."
 
 # Cron jobs do not inherit the container environment reliably, so hand the
-# backup settings (database, retention, off-site rclone remote) to the job
-# through a private file.
+# backup settings (database, media bucket, retention, off-site rclone remote)
+# to the job through a private file.
 ENV_FILE=/app/cron.env
 umask 077
 : >"$ENV_FILE"
 while IFS= read -r name; do
     case "$name" in
-        POSTGRES_*|PGSSLMODE|PGSSLROOTCERT|PGHOST|PGPORT|BACKUP_*|RCLONE_*|TZ)
+        POSTGRES_*|PGSSLMODE|PGSSLROOTCERT|PGHOST|PGPORT|BACKUP_*|RCLONE_*|TZ|\
+AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_STORAGE_BUCKET_NAME|AWS_S3_ENDPOINT_URL|AWS_S3_REGION_NAME)
             # %q quotes anything (spaces, quotes, newlines) for bash to read back.
             printf 'export %s=%q\n' "$name" "${!name}" >>"$ENV_FILE" ;;
     esac

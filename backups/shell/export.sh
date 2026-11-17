@@ -74,10 +74,13 @@ DB_USER=${POSTGRES_USER:-postgres}
 DB_PASSWORD=${POSTGRES_PASSWORD:-change_me}
 PGBOUNCER_DB_HOST=${POSTGRES_HOST:-db}
 
-# Object storage / MinIO
+# Object storage (S3: the host's RustFS). The media archive in this bundle
+# is restored into this bucket with rclone (restore.sh).
 AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-anishows-media}
-AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
+AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL:-http://rustfs:9000}
+AWS_S3_REGION_NAME=${AWS_S3_REGION_NAME:-us-east-1}
+AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-change_me}
+AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-change_me}
 
 # App
 DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-change_me}
