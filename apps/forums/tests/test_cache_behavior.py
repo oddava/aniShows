@@ -54,3 +54,28 @@ class ForumCacheBehaviorTests(APITestCase):
 
         self.assertEqual(result["flushed"], 1)
         self.assertEqual(self.thread.view_count, 1)
+
+    def test_public_list_and_detail_answer_with_the_cache_down(self):
+        """A Redis outage serves the pages uncached and skips the view count."""
+        from unittest.mock import patch
+
+        from django.core.cache import cache
+        from redis.exceptions import ConnectionError as RedisConnectionError
+
+        down = RedisConnectionError("cache down")
+        with (
+            patch.object(cache, "get", side_effect=down),
+            patch.object(cache, "get_many", side_effect=down),
+            patch.object(cache, "set", side_effect=down),
+            patch.object(cache, "add", side_effect=down),
+            patch.object(cache, "delete", side_effect=down),
+            patch.object(cache, "incr", side_effect=down),
+            patch("apps.forums.views.buffer_thread_view_increment") as buffer_view,
+        ):
+            listed = self.client.get(reverse("forums:thread-list"))
+            detail = self.client.get(reverse("forums:thread-detail", args=[self.thread.id]))
+
+        self.assertEqual(listed.status_code, status.HTTP_200_OK, listed.content)
+        self.assertEqual(listed["X-Cache-Status"], "bypass")
+        self.assertEqual(detail.status_code, status.HTTP_200_OK, detail.content)
+        buffer_view.assert_not_called()

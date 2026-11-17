@@ -12,14 +12,17 @@ from django.db.models import Avg, Case, Count, Exists, IntegerField, OuterRef, Q
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
+from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
 from ...shared.pagination import NoCountPagination
 from ...shared.parsing import positive_int
 from ...shared.public_cache import (
+    CACHE_OUTAGE_VERSION,
     get_or_build_public_payload,
     invalidate_public_cache_keys,
     public_cache_stale_key,
 )
+from ...shared.throttling import warn_cache_outage
 from ...users.models import UserAnimeList
 from ..models import Anime, AnimeCharacter, AnimeStaff, UserFavorite
 from .anilist import TRANSIENT_ERROR_CODES, AniListService
@@ -739,10 +742,15 @@ class AnimePublicPayloadService:
 
     @classmethod
     def collection_cache_namespace(cls) -> str:
-        namespace = cache.get(cls.COLLECTION_CACHE_NAMESPACE_KEY)
-        if namespace is None:
-            namespace = "0"
-            cache.set(cls.COLLECTION_CACHE_NAMESPACE_KEY, namespace, None)
+        try:
+            namespace = cache.get(cls.COLLECTION_CACHE_NAMESPACE_KEY)
+            if namespace is None:
+                namespace = "0"
+                cache.set(cls.COLLECTION_CACHE_NAMESPACE_KEY, namespace, None)
+        except CACHE_ERRORS:
+            # The cache is down: the payload read after this bypasses it too.
+            warn_cache_outage("catalog cache namespace")
+            return CACHE_OUTAGE_VERSION
         return namespace
 
     @classmethod

@@ -15,11 +15,13 @@ from rest_framework.permissions import (
 )
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
-from rest_framework.throttling import BaseThrottle, UserRateThrottle
+from rest_framework.throttling import BaseThrottle
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 
 from ..core.utils import get_client_ip
+from ..shared.errors import CACHE_ERRORS
 from ..shared.public_cache import get_or_build_public_payload
+from ..shared.throttling import ResilientUserRateThrottle, warn_cache_outage
 from ..users.permissions import VerifiedEmailForWrites
 from ..users.throttling import ForumLikeRateThrottle, ForumWriteRateThrottle
 from .cache_utils import (
@@ -72,7 +74,7 @@ from .services import (
 from .services.interactions import hash_viewer_identifier
 
 
-class CommunityActionRateThrottle(UserRateThrottle):
+class CommunityActionRateThrottle(ResilientUserRateThrottle):
     """Thread subscriptions and staff moderation actions."""
 
     scope = "community_action"
@@ -264,9 +266,13 @@ class ThreadViewSet(ModelViewSet):
             viewer_id = f"ip_{hash_viewer_identifier(ip)}"
 
         view_cache_key = f"forum:view:{thread_id}:{viewer_id}"
-        if not cache.get(view_cache_key):
-            cache.set(view_cache_key, True, timeout=3600)
-            buffer_thread_view_increment(thread_id)
+        try:
+            if not cache.get(view_cache_key):
+                cache.set(view_cache_key, True, timeout=3600)
+                buffer_thread_view_increment(thread_id)
+        except CACHE_ERRORS:
+            # No dedupe without the cache: skip counting rather than fail the page.
+            warn_cache_outage("forum thread view count")
 
         if request.user.is_authenticated:
             serializer = self.get_serializer(instance)

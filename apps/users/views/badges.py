@@ -4,15 +4,15 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
 from rest_framework.viewsets import GenericViewSet
 
+from ...shared.throttling import ResilientUserRateThrottle
 from ..models import UserBadge
 from ..serializers.badges import UserBadgeSerializer
 from ..services.badge_service import set_featured_badges
 
 
-class CommunityActionRateThrottle(UserRateThrottle):
+class CommunityActionRateThrottle(ResilientUserRateThrottle):
     scope = "community_action"
 
 

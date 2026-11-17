@@ -9,7 +9,6 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 
@@ -20,6 +19,7 @@ from ...core.services import notification_preferences, notification_types
 from ...core.services.notification_email import read_unsubscribe_token
 from ...core.services.notification_service import NotificationService
 from ...core.services.push_service import PushService
+from ...shared.throttling import ResilientScopedRateThrottle
 from ..serializers.notifications import (
     EmailUnsubscribeSerializer,
     NotificationSerializer,
@@ -326,7 +326,7 @@ class EmailUnsubscribeView(APIView):
 
     authentication_classes: list = []
     permission_classes = [AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    throttle_classes = [ResilientScopedRateThrottle]
     throttle_scope = "notification_email_unsubscribe"
 
     def post(self, request):

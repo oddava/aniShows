@@ -1,10 +1,10 @@
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
 from rest_framework.viewsets import GenericViewSet
 
 from ...core.api_errors import api_response
+from ...shared.throttling import ResilientUserRateThrottle
 from ..permissions import VerifiedEmailForWrites
 from ..serializers.social import (
     FollowSerializer,
@@ -21,7 +21,7 @@ from ..services.follow_service import (
 )
 
 
-class FollowToggleRateThrottle(UserRateThrottle):
+class FollowToggleRateThrottle(ResilientUserRateThrottle):
     scope = "follow_toggle"
 
 

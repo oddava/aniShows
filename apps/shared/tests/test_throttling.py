@@ -50,3 +50,54 @@ class FailOpenThrottleTests(SimpleTestCase):
                 "apps.shared.throttling.ResilientUserRateThrottle",
             ],
         )
+
+
+class PublicPayloadCacheOutageTests(SimpleTestCase):
+    """Public pages are built per request, not 500, when the cache is down."""
+
+    def setUp(self):
+        from apps.shared import throttling
+
+        throttling._last_outage_log.clear()
+
+    def test_the_payload_is_built_and_reported_as_bypass(self):
+        from apps.shared.public_cache import get_or_build_public_payload
+
+        builds = []
+
+        def builder():
+            builds.append(1)
+            return {"items": [1, 2]}
+
+        down = RedisConnectionError("down")
+        with (
+            mock.patch.object(cache, "get", side_effect=down),
+            mock.patch.object(cache, "add", side_effect=down),
+            mock.patch.object(cache, "set", side_effect=down),
+        ):
+            payload, status = get_or_build_public_payload("k:outage", builder, ttl=60)
+        self.assertEqual((payload, status), ({"items": [1, 2]}, "bypass"))
+        self.assertEqual(len(builds), 1)
+
+    def test_a_failure_after_building_does_not_build_twice(self):
+        from apps.shared.public_cache import get_or_build_public_payload
+
+        builds = []
+
+        def builder():
+            builds.append(1)
+            return ["fresh"]
+
+        with mock.patch.object(cache, "set", side_effect=RedisConnectionError("down")):
+            payload, status = get_or_build_public_payload("k:late-outage", builder, ttl=60)
+        self.assertEqual((payload, status), (["fresh"], "bypass"))
+        self.assertEqual(len(builds), 1)
+
+    def test_a_degraded_build_stays_degraded(self):
+        from apps.shared.public_cache import Degraded, get_or_build_public_payload
+
+        with mock.patch.object(cache, "get", side_effect=RedisConnectionError("down")):
+            payload, status = get_or_build_public_payload(
+                "k:degraded", lambda: Degraded(["fallback"]), ttl=60
+            )
+        self.assertEqual((payload, status), (["fallback"], "degraded"))

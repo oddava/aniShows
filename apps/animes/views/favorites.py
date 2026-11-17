@@ -1,10 +1,10 @@
 from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
-from rest_framework.throttling import UserRateThrottle
 from rest_framework.viewsets import GenericViewSet
 
 from ...core.api_errors import api_response
+from ...shared.throttling import ResilientUserRateThrottle
 from ...users.permissions import VerifiedEmailForWrites
 from ...users.serializers.favorites import (
     AnimeFavoriteToggleSerializer,
@@ -29,7 +29,7 @@ from ..services.favorites import (
 )
 
 
-class FavoriteWriteThrottle(UserRateThrottle):
+class FavoriteWriteThrottle(ResilientUserRateThrottle):
     scope = "favorite_write"
 
 

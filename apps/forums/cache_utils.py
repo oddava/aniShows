@@ -7,7 +7,8 @@ from django.core.cache import cache
 from django.db.models import F
 
 from ..shared.errors import CACHE_ERRORS
-from ..shared.public_cache import invalidate_public_cache_keys
+from ..shared.public_cache import CACHE_OUTAGE_VERSION, invalidate_public_cache_keys
+from ..shared.throttling import warn_cache_outage
 
 # Cache key templates
 THREAD_LIST_CACHE_KEY = "forum:threads:{version}:{category_slug}:{tag_slug}:{page}:{ordering}"
@@ -34,10 +35,15 @@ TAG_LIST_CACHE_TTL = 3600  # 1 hour (tags rarely change)
 
 
 def _current_version(version_key: str) -> str:
-    version = cache.get(version_key)
-    if version is None:
-        cache.add(version_key, uuid.uuid4().hex, timeout=CACHE_VERSION_TTL)
+    try:
         version = cache.get(version_key)
+        if version is None:
+            cache.add(version_key, uuid.uuid4().hex, timeout=CACHE_VERSION_TTL)
+            version = cache.get(version_key)
+    except CACHE_ERRORS:
+        # The cache is down: the payload read after this bypasses it too.
+        warn_cache_outage("forum cache version")
+        return CACHE_OUTAGE_VERSION
     return version
 
 

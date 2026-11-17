@@ -281,7 +281,7 @@ def test_management_command_and_task_run_the_sync(monkeypatch):
     call_command("sync_adult_flags", "--limit", "3")
     sync_adult_flags.apply()
 
-    assert calls == [{"limit": 3}, {"after_pk": 0, "limit": 2000}]
+    assert calls == [{"limit": 3}, {"after_pk": 0, "limit": 500}]
 
     # --enqueue (what deploy-prod.sh runs) queues the task instead.
     from unittest import mock

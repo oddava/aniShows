@@ -3,10 +3,11 @@
 from ...shared.celery import observed_shared_task
 from .. import adult_content
 
-# Rows per task run: about 4 AniList requests (50 IDs each), well under a
-# minute at the default rate limit. Each run queues the next, so with one
-# worker process (the lean profile) other tasks, such as emails, run between.
-ROWS_PER_RUN = 2000
+# Rows per task run: 10 AniList requests (50 IDs each), about 20 seconds at
+# the default 30 requests a minute (ANILIST_RATE_LIMIT_PER_MINUTE). Each run
+# queues the next, so with one worker process (the lean profile) other tasks,
+# such as verification and password-reset emails, wait at most one run.
+ROWS_PER_RUN = 500
 
 
 # No retry: a failed request skips its chunk (never clears a flag), and next

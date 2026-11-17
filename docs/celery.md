@@ -209,7 +209,7 @@ Beat schedules are defined in [root/settings/base.py](/home/oddava/Projects/aniS
 `sync-adult-flags-weekly`
 - `apps.animes.tasks.adult_content.sync_adult_flags`
 - Wednesdays at `03:40`, `low_priority` queue
-- re-reads AniList's `isAdult` for the catalog, 2,000 rows per run; each run queues the next
+- re-reads AniList's `isAdult` for the catalog, 500 rows (10 AniList requests) per run; each run queues the next
 
 `generate-recommendations-daily`
 - `apps.animes.tasks.recommendations.generate_recommendations`

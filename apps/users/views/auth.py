@@ -22,7 +22,9 @@ from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshV
 
 from ...core.api_errors import error_response
 from ...core.services.admin_settings_service import is_registration_enabled
+from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
+from ...shared.throttling import refuse_on_cache_outage, warn_cache_outage
 from .. import throttling
 from ..auth_cookies import (
     clear_refresh_cookie,
@@ -130,7 +132,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         identifier = _login_identifier(request_body(request))
         identifier_throttle = throttling.LoginIdentifierThrottle(identifier) if identifier else None
         if identifier_throttle is not None:
-            wait = identifier_throttle.begin_attempt()
+            try:
+                wait = identifier_throttle.begin_attempt()
+            except CACHE_ERRORS:
+                # Fail closed: without the counter guesses would be unlimited.
+                refuse_on_cache_outage("login identifier throttle")
             if wait is not None:
                 raise Throttled(wait=wait)
 
@@ -140,13 +146,21 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             raise  # stays counted
         except Exception:
             # A 400 (bad input) never reached the password check.
-            if identifier_throttle is not None:
-                identifier_throttle.release_attempt()
+            _release_login_attempt(identifier_throttle)
             raise
-        if identifier_throttle is not None:
-            # Only this attempt's slot: earlier failures expire with the window.
-            identifier_throttle.release_attempt()
+        # Only this attempt's slot: earlier failures expire with the window.
+        _release_login_attempt(identifier_throttle)
         return move_refresh_to_cookie(response)
+
+
+def _release_login_attempt(identifier_throttle) -> None:
+    """Give back a slot; the cache failing now leaves it counted until the window ends."""
+    if identifier_throttle is None:
+        return
+    try:
+        identifier_throttle.release_attempt()
+    except CACHE_ERRORS:
+        warn_cache_outage("login identifier release")
 
 
 def request_body(request) -> Mapping:

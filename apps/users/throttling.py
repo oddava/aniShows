@@ -1,6 +1,11 @@
 """
 Custom throttle classes for API rate limiting.
 Provides different rate limits for different types of endpoints.
+
+When the cache (Redis) is down, the limits that guard credentials and mail
+(login, sign-up, password reset, verification, email change, the strict
+account actions) fail closed: a 503 with ``Retry-After``, never a 500 and never
+unlimited guessing. Every other limit fails open (``apps/shared/throttling.py``).
 """
 
 import contextlib
@@ -13,8 +18,10 @@ from django.conf import settings
 from django.core.cache import cache
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
+from ..shared.throttling import FailClosedOnCacheErrors, FailOpenOnCacheErrors
 
-class PublicUserProfileRateThrottle(AnonRateThrottle):
+
+class PublicUserProfileRateThrottle(FailOpenOnCacheErrors, AnonRateThrottle):
     """
     Strict rate limiting for public user profile lookups.
     Prevents user enumeration attacks.
@@ -23,7 +30,7 @@ class PublicUserProfileRateThrottle(AnonRateThrottle):
     scope = "user_profile_lookup"
 
 
-class PublicAnimeListRateThrottle(AnonRateThrottle):
+class PublicAnimeListRateThrottle(FailOpenOnCacheErrors, AnonRateThrottle):
     """
     Rate limiting for public anime browsing.
     Prevents scraping of anime catalog.
@@ -32,13 +39,13 @@ class PublicAnimeListRateThrottle(AnonRateThrottle):
     scope = "anime_list"
 
 
-class PublicReviewRateThrottle(AnonRateThrottle):
+class PublicReviewRateThrottle(FailOpenOnCacheErrors, AnonRateThrottle):
     """Rate limiting for public review access."""
 
     scope = "review_access"
 
 
-class LoginRateThrottle(AnonRateThrottle):
+class LoginRateThrottle(FailClosedOnCacheErrors, AnonRateThrottle):
     """
     Strict rate limiting for authentication endpoints.
     Prevents brute force attacks.
@@ -47,7 +54,7 @@ class LoginRateThrottle(AnonRateThrottle):
     scope = "login"
 
 
-class RegisterRateThrottle(AnonRateThrottle):
+class RegisterRateThrottle(FailClosedOnCacheErrors, AnonRateThrottle):
     """
     Rate limiting for registration.
     Prevents spam account creation.
@@ -56,7 +63,7 @@ class RegisterRateThrottle(AnonRateThrottle):
     scope = "register"
 
 
-class PasswordResetRateThrottle(AnonRateThrottle):
+class PasswordResetRateThrottle(FailClosedOnCacheErrors, AnonRateThrottle):
     """
     Rate limiting for password reset.
     Prevents email abuse.
@@ -65,7 +72,7 @@ class PasswordResetRateThrottle(AnonRateThrottle):
     scope = "password_reset"
 
 
-class UserActionRateThrottle(UserRateThrottle):
+class UserActionRateThrottle(FailOpenOnCacheErrors, UserRateThrottle):
     """
     Rate limiting for authenticated user actions.
     Prevents abuse of write operations.
@@ -74,7 +81,7 @@ class UserActionRateThrottle(UserRateThrottle):
     scope = "user_actions"
 
 
-class AdminActionRateThrottle(UserRateThrottle):
+class AdminActionRateThrottle(FailOpenOnCacheErrors, UserRateThrottle):
     """
     Rate limiting for admin endpoints.
     Prevents admin panel abuse.
@@ -83,7 +90,7 @@ class AdminActionRateThrottle(UserRateThrottle):
     scope = "admin_actions"
 
 
-class StrictUserRateThrottle(UserRateThrottle):
+class StrictUserRateThrottle(FailClosedOnCacheErrors, UserRateThrottle):
     """
     Extra strict rate limiting for sensitive operations.
     Used for account deletion, email changes, etc.
@@ -92,7 +99,7 @@ class StrictUserRateThrottle(UserRateThrottle):
     scope = "strict_user"
 
 
-class SocialLinksRateThrottle(UserRateThrottle):
+class SocialLinksRateThrottle(FailOpenOnCacheErrors, UserRateThrottle):
     """
     Rate limiting for social link edits.
     More restrictive for new accounts (< 30 days).
@@ -128,7 +135,7 @@ class SocialLinksRateThrottle(UserRateThrottle):
         return super().allow_request(request, view)
 
 
-class ForumLikeRateThrottle(UserRateThrottle):
+class ForumLikeRateThrottle(FailOpenOnCacheErrors, UserRateThrottle):
     """
     Rate limiting for forum like/unlike actions.
     Prevents like-button spam.
@@ -137,7 +144,7 @@ class ForumLikeRateThrottle(UserRateThrottle):
     scope = "forum_like"
 
 
-class ForumWriteRateThrottle(UserRateThrottle):
+class ForumWriteRateThrottle(FailOpenOnCacheErrors, UserRateThrottle):
     """
     Rate limiting for forum write operations (create/update threads and posts).
     Prevents spam posting.
@@ -146,13 +153,13 @@ class ForumWriteRateThrottle(UserRateThrottle):
     scope = "forum_write"
 
 
-class ResendVerificationRateThrottle(AnonRateThrottle):
+class ResendVerificationRateThrottle(FailClosedOnCacheErrors, AnonRateThrottle):
     """Resending a verification link has its own bucket (it used to share password reset's)."""
 
     scope = "resend_verification"
 
 
-class ChangeEmailRateThrottle(UserRateThrottle):
+class ChangeEmailRateThrottle(FailClosedOnCacheErrors, UserRateThrottle):
     """Email-change requests mail an arbitrary address: 5 per hour per user (A09)."""
 
     scope = "change_email"

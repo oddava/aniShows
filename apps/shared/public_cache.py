@@ -7,9 +7,16 @@ from dataclasses import dataclass
 from django.conf import settings
 from django.core.cache import cache
 
+from .errors import CACHE_ERRORS
+from .throttling import warn_cache_outage
+
 PayloadValidator = Callable[[object], bool]
 PayloadBuilder = Callable[[], object]
 
+
+# The version/namespace part of a cache key while the cache is down. Nothing
+# is stored under it (the cache is unreachable); it only lets a key be built.
+CACHE_OUTAGE_VERSION = "unavailable"
 
 # How long a payload built while a dependency failed is kept (``Degraded``).
 DEGRADED_TTL_SECONDS = 60
@@ -87,6 +94,35 @@ def get_or_build_public_payload(
     *,
     ttl: int,
     validator: PayloadValidator | None = None,
+) -> tuple[object, str]:
+    """The cached payload, or a freshly built one stored for ``ttl`` seconds.
+
+    Returns the payload and a cache status (hit, miss, stale, lock-wait,
+    rebuild, degraded). With the cache (Redis) down, the page is still served:
+    it is built for this request only and reported as "bypass".
+    """
+    built: list[object] = []
+
+    def build() -> object:
+        built.append(builder())
+        return built[-1]
+
+    try:
+        return _get_or_build(cache_key, build, ttl=ttl, validator=validator)
+    except CACHE_ERRORS:
+        warn_cache_outage("public payload cache")
+        result = built[-1] if built else builder()
+        if isinstance(result, Degraded):
+            return result.payload, "degraded"
+        return result, "bypass"
+
+
+def _get_or_build(
+    cache_key: str,
+    builder: PayloadBuilder,
+    *,
+    ttl: int,
+    validator: PayloadValidator | None,
 ) -> tuple[object, str]:
     fresh = cache.get(cache_key)
     if _is_valid(fresh, validator):

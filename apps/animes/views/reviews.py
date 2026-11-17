@@ -3,10 +3,11 @@ from http import HTTPStatus
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
-from rest_framework.throttling import BaseThrottle, UserRateThrottle
+from rest_framework.throttling import BaseThrottle
 from rest_framework.viewsets import ModelViewSet
 
 from ...core.api_errors import api_response, error_response
+from ...shared.throttling import ResilientUserRateThrottle
 from ...users.permissions import VerifiedEmailForWrites
 from ..serializers.reviews import (
     ReviewInteractionStateSerializer,
@@ -30,15 +31,15 @@ from ..services.reviews import (
 )
 
 
-class ReviewWriteThrottle(UserRateThrottle):
+class ReviewWriteThrottle(ResilientUserRateThrottle):
     scope = "review_write"
 
 
-class ReviewReportThrottle(UserRateThrottle):
+class ReviewReportThrottle(ResilientUserRateThrottle):
     scope = "review_report"
 
 
-class ReviewInteractionThrottle(UserRateThrottle):
+class ReviewInteractionThrottle(ResilientUserRateThrottle):
     scope = "review_interaction"
 
 
