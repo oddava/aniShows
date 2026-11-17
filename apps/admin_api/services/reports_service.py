@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db.models import Avg, Count, Q, Sum, Value
 from django.db.models.functions import Coalesce, TruncDate
 from django.utils import timezone
@@ -10,6 +9,7 @@ from django.utils import timezone
 from ...animes.models import Anime, Genre, Review, ReviewVote, Studio, UserFavorite
 from ...core.models import AuditLog
 from ...shared.logger import logger
+from ...shared.public_cache import best_effort_get, best_effort_set
 from ...users.models import UserAnimeList, UserProfile
 
 User = get_user_model()
@@ -60,7 +60,7 @@ def generate_report(report_type: str, days: int, force_refresh: bool = False) ->
 
     cache_key = f"{REPORT_CACHE_PREFIX}:{report_type}:{normalized_days}"
     if not force_refresh:
-        cached = cache.get(cache_key)
+        cached = best_effort_get(cache_key, source="admin report")
         if isinstance(cached, dict):
             return ReportResult(payload=cached, status_code=200)
 
@@ -80,7 +80,7 @@ def generate_report(report_type: str, days: int, force_refresh: bool = False) ->
         )
         raise ReportError("Failed to generate report data.", 500) from exc
 
-    cache.set(cache_key, payload, timeout=REPORT_CACHE_TIMEOUT_SECONDS)
+    best_effort_set(cache_key, payload, REPORT_CACHE_TIMEOUT_SECONDS, source="admin report")
     return ReportResult(payload=payload, status_code=200)
 
 

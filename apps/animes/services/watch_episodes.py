@@ -8,6 +8,7 @@ from django.core.cache import cache
 
 from ...shared.logger import logger
 from ...shared.parsing import positive_int
+from ...shared.public_cache import best_effort_get, best_effort_set
 from ..models import Anime
 from .anilist import TRANSIENT_ERROR_CODES, AniListService
 from .providers.base import BROADCAST_TIMEZONE
@@ -47,7 +48,7 @@ class AnimeWatchEpisodeService:
         request_budget: Literal["default", "interactive"] = REQUEST_BUDGET_DEFAULT,
     ) -> list[dict]:
         cache_key = self._cache_key(anime)
-        cached = cache.get(cache_key)
+        cached = best_effort_get(cache_key, source="watch episodes")
         if cached is not None:
             return cached
 
@@ -56,7 +57,7 @@ class AnimeWatchEpisodeService:
             timeout = self.DEGRADED_CACHE_TTL
         else:
             timeout = self.CACHE_TTL if episodes else self.EMPTY_CACHE_TTL
-        cache.set(cache_key, episodes, timeout=timeout)
+        best_effort_set(cache_key, episodes, timeout, source="watch episodes")
         return episodes
 
     def invalidate_for_anime(self, anime: Anime) -> None:

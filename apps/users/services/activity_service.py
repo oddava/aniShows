@@ -1,7 +1,6 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db.models import Case, F, IntegerField, Q, Sum, Value, When
 from django.db.models.functions import Greatest, TruncDate
 from django.shortcuts import get_object_or_404
@@ -9,6 +8,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from ...animes.models import Anime
+from ...shared.public_cache import best_effort_get, best_effort_set
 from ..models import UserActivity, UserAnimeList
 
 try:
@@ -85,7 +85,7 @@ def get_heatmap_data(request):
         return []
 
     cache_key = get_user_heatmap_cache_key(target_user.id)
-    cached = cache.get(cache_key)
+    cached = best_effort_get(cache_key, source="activity heatmap")
     if cached is not None:
         return cached
 
@@ -132,5 +132,5 @@ def get_heatmap_data(request):
         for entry in activities
     ]
 
-    cache.set(cache_key, result, timeout=HEATMAP_CACHE_TIMEOUT)
+    best_effort_set(cache_key, result, HEATMAP_CACHE_TIMEOUT, source="activity heatmap")
     return result

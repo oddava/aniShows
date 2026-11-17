@@ -37,6 +37,30 @@ class Degraded:
     payload: object
 
 
+def best_effort_get(key: str, *, source: str, default=None):
+    """``cache.get`` for a read path: the default (a miss) when the cache is down.
+
+    For caches of computed payloads only. Invalidations (deletes, version or
+    namespace bumps) must keep raising: a dropped invalidation would serve the
+    stale entry again once Redis is back.
+    """
+    try:
+        return cache.get(key, default)
+    except CACHE_ERRORS:
+        warn_cache_outage(source)
+        return default
+
+
+def best_effort_set(key: str, value, timeout, *, source: str) -> bool:
+    """``cache.set`` of a computed payload; False (nothing stored) when the cache is down."""
+    try:
+        cache.set(key, value, timeout=timeout)
+    except CACHE_ERRORS:
+        warn_cache_outage(source)
+        return False
+    return True
+
+
 def public_cache_stale_key(cache_key: str) -> str:
     return f"{cache_key}:stale"
 

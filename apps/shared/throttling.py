@@ -26,7 +26,7 @@ _OUTAGE_LOG_INTERVAL_SECONDS = 60.0
 _last_outage_log: dict[str, float] = {}
 
 
-def warn_cache_outage(source: str) -> None:
+def warn_cache_outage(source: str, *, outcome: str = "degrading") -> None:
     """Log a cache outage at most once a minute per ``source`` (with the traceback).
 
     During an outage every request hits it; one line a minute says the same.
@@ -35,7 +35,7 @@ def warn_cache_outage(source: str) -> None:
     if now - _last_outage_log.get(source, float("-inf")) < _OUTAGE_LOG_INTERVAL_SECONDS:
         return
     _last_outage_log[source] = now
-    logger.warning("Cache unavailable (%s); degrading", source, exc_info=True)
+    logger.warning("Cache unavailable (%s); %s", source, outcome, exc_info=True)
 
 
 # How long a client is told to wait when a fail-closed limit cannot be checked.
@@ -60,7 +60,7 @@ class RateLimitUnavailable(APIException):
 
 def refuse_on_cache_outage(source: str) -> NoReturn:
     """Log the outage (at most once a minute per source) and refuse with a 503."""
-    warn_cache_outage(f"{source}; refusing requests with 503")
+    warn_cache_outage(source, outcome="refusing the request with 503 (fails closed)")
     raise RateLimitUnavailable()
 
 

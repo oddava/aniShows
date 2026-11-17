@@ -9,8 +9,10 @@ from django.db import close_old_connections
 from django.db.utils import InterfaceError, OperationalError
 
 from ..shared.celery import observed_shared_task, retry_on_error
+from ..shared.errors import ENQUEUE_ERRORS
 from ..shared.logger import logger
 from ..shared.task_lock import cache_lock
+from ..shared.throttling import warn_cache_outage
 from .services.auth_service import flush_expired_tokens
 from .services.celery_tasks import UserTaskService
 
@@ -53,6 +55,19 @@ def schedule_user_stats_refresh(
     except Exception:
         cache.delete(cache_key)
         raise
+
+
+def request_user_stats_refresh(user_id: int | None):
+    """``schedule_user_stats_refresh`` for read paths (profile pages).
+
+    With Redis (cache and broker) down, the page is still served: the refresh
+    is left to the periodic stats backstop task instead of failing the request.
+    """
+    try:
+        return schedule_user_stats_refresh(user_id=user_id)
+    except ENQUEUE_ERRORS:
+        warn_cache_outage("user stats refresh enqueue")
+        return None
 
 
 def _can_retry(task, exc: Exception) -> bool:

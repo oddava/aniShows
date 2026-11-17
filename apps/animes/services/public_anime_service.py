@@ -18,6 +18,8 @@ from ...shared.pagination import NoCountPagination
 from ...shared.parsing import positive_int
 from ...shared.public_cache import (
     CACHE_OUTAGE_VERSION,
+    best_effort_get,
+    best_effort_set,
     get_or_build_public_payload,
     invalidate_public_cache_keys,
     public_cache_stale_key,
@@ -246,7 +248,7 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
         variants share it; the payload built from it is cached like a shelf.
         """
         cache_key = self.anilist_recommendations_cache_key(anime)
-        cached = cache.get(cache_key)
+        cached = best_effort_get(cache_key, source="AniList recommendations")
         if isinstance(cached, list):
             return cached, False
 
@@ -273,7 +275,12 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
                 for item in recommendations
                 if isinstance(item, dict)
             ]
-            cache.set(cache_key, compact, self.ANILIST_RECOMMENDATIONS_TTL)
+            best_effort_set(
+                cache_key,
+                compact,
+                self.ANILIST_RECOMMENDATIONS_TTL,
+                source="AniList recommendations",
+            )
         return recommendations, degraded
 
     def _provider_recommendations_queryset(
@@ -563,7 +570,7 @@ class AnimePublicPayloadService:
         primary_cache_key = cls.detail_cache_key(slug)
         coverless_marker_key = f"{primary_cache_key}:coverless_checked"
         cache_status = "hit"
-        cached_base = cache.get(primary_cache_key)
+        cached_base = best_effort_get(primary_cache_key, source="anime detail")
 
         needs_refresh = cached_base is None
         if cached_base:
@@ -572,8 +579,8 @@ class AnimePublicPayloadService:
             # Rebuild a coverless payload to pick up a cover saved since, but at
             # most once a minute: a show with no cover would otherwise rebuild
             # the full detail query on every request.
-            coverless_needs_check = not cls.has_cover_media(data) and not cache.get(
-                coverless_marker_key
+            coverless_needs_check = not cls.has_cover_media(data) and not best_effort_get(
+                coverless_marker_key, source="anime detail"
             )
             if (
                 coverless_needs_check
@@ -584,8 +591,13 @@ class AnimePublicPayloadService:
                 invalidate_public_cache_keys(primary_cache_key)
             elif cache_payload_changed:
                 ttl = 3600 if cls.has_cover_media(data) else 60
-                cache.set(primary_cache_key, data, ttl)
-                cache.set(public_cache_stale_key(primary_cache_key), data, ttl + 900)
+                best_effort_set(primary_cache_key, data, ttl, source="anime detail")
+                best_effort_set(
+                    public_cache_stale_key(primary_cache_key),
+                    data,
+                    ttl + 900,
+                    source="anime detail",
+                )
         else:
             data = None
 
@@ -612,7 +624,7 @@ class AnimePublicPayloadService:
                 ),
             )
             if cache_status == "miss" and not cls.has_cover_media(data):
-                cache.set(coverless_marker_key, True, 60)
+                best_effort_set(coverless_marker_key, True, 60, source="anime detail")
 
         data = cls.with_site_status_distribution(data)
         if request.user.is_authenticated:

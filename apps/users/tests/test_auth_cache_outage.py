@@ -99,7 +99,7 @@ class AuthEndpointsFailClosedTests(CacheOutageMixin, APITestCase):
         self._assert_refused(response)
         messages = [call.args[0] % call.args[1:] for call in logger.warning.call_args_list]
         self.assertTrue(
-            any("LoginRateThrottle" in message and "503" in message for message in messages),
+            any("LoginRateThrottle" in m and "fails closed" in m for m in messages),
             messages,
         )
 
