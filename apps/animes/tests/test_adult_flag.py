@@ -204,6 +204,55 @@ def test_changed_rows_drop_their_cached_public_payloads(django_capture_on_commit
     drop.assert_called_once_with(anime.slug, bump_namespace=False)
 
 
+def test_an_invalidation_lost_to_an_outage_is_replayed_once_redis_is_back(
+    django_capture_on_commit_callbacks,
+):
+    """Council r1: the cached copies persist across the outage, and re-running the
+    sync changes no row, so the failed drop is kept and replayed.
+    """
+    from unittest import mock
+
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    from apps.animes.models import PendingPublicCacheInvalidation
+    from apps.animes.tasks.adult_content import replay_public_cache_invalidations
+
+    anime = make_anime(anilist_id=5102)
+    bump_path = (
+        "apps.animes.services.public_anime_service."
+        "AnimePublicPayloadService.bump_collection_cache_namespace"
+    )
+    with (
+        mock.patch(bump_path, side_effect=RedisConnectionError("down")),
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        apply_anilist_adult_flags([{"id": 5102, "isAdult": True}])
+        apply_anilist_adult_flags([{"id": 5102, "isAdult": True}])  # no change: nothing new
+
+    assert list(PendingPublicCacheInvalidation.objects.values_list("slug", flat=True)) == [
+        anime.slug
+    ]
+
+    # Still down: the replay raises and keeps the row for the next run.
+    with (
+        mock.patch(bump_path, side_effect=RedisConnectionError("down")),
+        pytest.raises(RedisConnectionError),
+    ):
+        adult_content.replay_public_cache_invalidations()
+    assert PendingPublicCacheInvalidation.objects.count() == 1
+
+    with (
+        mock.patch(bump_path) as bump,
+        mock.patch("apps.animes.signals._invalidate_anime_public_caches") as drop,
+    ):
+        assert replay_public_cache_invalidations.apply().get() == 1
+        assert adult_content.replay_public_cache_invalidations() == 0
+
+    bump.assert_called_once()
+    drop.assert_called_once_with(anime.slug, bump_namespace=False)
+    assert not PendingPublicCacheInvalidation.objects.exists()
+
+
 class _FakeAniList:
     def __init__(self, payloads, fail_ids=()):
         self.payloads = payloads

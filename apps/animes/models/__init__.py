@@ -3,7 +3,7 @@ from .catalog import Character, Genre, Staff, Studio
 from .favorites import UserFavorite, UserFavoriteCharacter, UserFavoriteStaff
 from .recommendations import UserRecommendation
 from .reviews import Review, ReviewReaction, ReviewReport, ReviewVote
-from .sync import OfflineAnimeSyncState, OfflineCatalogImport
+from .sync import OfflineAnimeSyncState, OfflineCatalogImport, PendingPublicCacheInvalidation
 from .tracking import EpisodeRating, UserHistory
 
 __all__ = [
@@ -17,6 +17,7 @@ __all__ = [
     "Genre",
     "OfflineAnimeSyncState",
     "OfflineCatalogImport",
+    "PendingPublicCacheInvalidation",
     "Review",
     "ReviewReaction",
     "ReviewReport",

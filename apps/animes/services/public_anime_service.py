@@ -17,9 +17,9 @@ from ...shared.logger import logger
 from ...shared.pagination import NoCountPagination
 from ...shared.parsing import positive_int
 from ...shared.public_cache import (
-    CACHE_OUTAGE_VERSION,
     best_effort_get,
     best_effort_set,
+    cache_outage_version,
     get_or_build_public_payload,
     invalidate_public_cache_keys,
     public_cache_stale_key,
@@ -762,7 +762,7 @@ class AnimePublicPayloadService:
         except CACHE_ERRORS:
             # The cache is down: the payload read after this bypasses it too.
             warn_cache_outage("catalog cache namespace")
-            return CACHE_OUTAGE_VERSION
+            return cache_outage_version()
         return namespace
 
     @classmethod

@@ -29,7 +29,7 @@ Usage:
 """
 
 # Import all task modules to ensure registration
-from .adult_content import sync_adult_flags
+from .adult_content import replay_public_cache_invalidations, sync_adult_flags
 from .airing import sync_airing_workflow
 from .franchises import sync_franchises, update_relation_slugs
 
@@ -53,6 +53,7 @@ __all__ = [
     "heal_missing_anime_media",
     "import_offline_catalog",
     "reconcile_offline_catalog_sync",
+    "replay_public_cache_invalidations",
     "sync_adult_flags",
     "sync_airing_workflow",
     "sync_anime_catalog",

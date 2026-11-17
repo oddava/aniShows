@@ -10,7 +10,7 @@ user actions occur, all relevant caches are properly invalidated.
 from django.core.cache import cache
 
 from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
-from ...shared.public_cache import CACHE_OUTAGE_VERSION
+from ...shared.public_cache import cache_outage_version
 from ...shared.throttling import warn_cache_outage
 
 
@@ -121,5 +121,5 @@ def get_profile_cache_version(username):
     except CACHE_ERRORS:
         # The cache is down: the payload read after this bypasses it too.
         warn_cache_outage("profile cache version")
-        return CACHE_OUTAGE_VERSION
+        return cache_outage_version()
     return version

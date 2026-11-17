@@ -210,20 +210,27 @@ scripts/deploy/restore.sh latest                       # verify only (no --yes):
 scripts/deploy/restore.sh latest --yes                 # newest daily/weekly/manual backup
 scripts/deploy/restore.sh 20261116_030000 --yes        # a timestamp or a full directory name
 scripts/deploy/restore.sh latest --from-offsite --yes  # fetch from BACKUP_REMOTE first
-scripts/deploy/restore.sh <ts>-pre-migrate --db-only --yes   # undo a deploy's data changes
+scripts/deploy/restore.sh <ts>-pre-migrate --db-only --yes   # undo a deploy's data changes (roll the images back FIRST)
 ```
+
+A `*-pre-migrate` dump is the database of the release *before* a deploy: restore it only once
+that release's images are live again (runbook.md, Rollback, step 2 then step 4). It is restored
+without step 5 (`--migrate` forces it): migrating it under the bad release would re-apply the very
+migrations being undone. `--no-migrate` skips step 5 for any other backup.
 
 What it does, in order:
 
 1. With `--from-offsite`: downloads the backup into `backups-data/` through a temporary directory
-   and checks `checksums.sha256` (`backups/shell/fetch_offsite.sh`; `latest` = the newest there).
+   and checks `checksums.sha256` (`backups/shell/fetch_offsite.sh`; `latest` = the newest
+   daily/weekly/manual backup there, as locally: never a pre-restore or pre-migrate snapshot).
 2. Verifies it: checksums, and a test restore of the dump into a temporary database.
    Without `--yes` it stops here.
 3. Stops web, celery and beat (Caddy stays up and answers 502).
-4. `backups/shell/restore.sh`: a pre-restore snapshot of the live data, the dump restored into a
+4. `backups/shell/restore.sh`: a pre-restore snapshot of the live data (kept on this host only:
+   never uploaded, so an unreachable remote cannot block a restore), the dump restored into a
    staging database and swapped in by name (the old one is kept as `rollback_<timestamp>`), then
    the media archive.
-5. `migrate`, for a backup older than the running release.
+5. `migrate`, for a backup older than the running release (not for a `*-pre-migrate` dump, see above).
 6. Starts web, celery and beat again (also when a step failed), clears the cache, waits for
    readiness.
 

@@ -8,9 +8,9 @@ from django.db.models import F
 
 from ..shared.errors import CACHE_ERRORS
 from ..shared.public_cache import (
-    CACHE_OUTAGE_VERSION,
     best_effort_get,
     best_effort_set,
+    cache_outage_version,
     invalidate_public_cache_keys,
 )
 from ..shared.throttling import warn_cache_outage
@@ -48,7 +48,7 @@ def _current_version(version_key: str) -> str:
     except CACHE_ERRORS:
         # The cache is down: the payload read after this bypasses it too.
         warn_cache_outage("forum cache version")
-        return CACHE_OUTAGE_VERSION
+        return cache_outage_version()
     return version
 
 

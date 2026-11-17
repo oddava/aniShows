@@ -108,9 +108,11 @@ A failure after the migration step prints a recipe with the concrete names. In g
    image (it has the migration files; every fan-out migration is reversible by policy), then do step 2:
    `$PROD run --rm --no-deps web python manage.py migrate <app> <migration before the plan>`.
    The plan file lists exactly which migrations were applied.
-4. **Last resort, data damage:** restore the pre-migrate dump. Stop web/celery/beat first:
+4. **Last resort, data damage:** restore the pre-migrate dump, AFTER step 2 (the previous
+   release's images must be live: the dump has its schema). Then
    `scripts/deploy/restore.sh <ts>-pre-migrate --db-only --yes` (it stops and restarts web, celery
-   and beat itself). With the bundled db, restore swaps databases and keeps the old one as `rollback_*`. On an external
+   and beat itself, and does not migrate a pre-migrate dump: under the bad release that would
+   re-apply the migrations being undone). With the bundled db, restore swaps databases and keeps the old one as `rollback_*`. On an external
    server the role needs CREATEDB for that; otherwise restore with `pg_restore --clean` as the owner.
 
 ## Restore drill and verification

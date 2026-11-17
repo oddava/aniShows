@@ -23,6 +23,7 @@ from rest_framework.viewsets import ViewSet
 from ...core.api_errors import error_response
 from ...shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ...shared.logger import logger
+from ...shared.public_cache import is_cache_outage_key
 from ...shared.throttling import (
     ResilientScopedRateThrottle,
     ResilientUserRateThrottle,
@@ -76,6 +77,8 @@ def _is_recommendations_cache_fresh(cached_data, stale_after_hours: int = 24) ->
 
 def _cache_get(key):
     """The cached value, or None when the cache (Redis) is down: then rebuild from the DB."""
+    if is_cache_outage_key(key):
+        return None
     try:
         return cache.get(key)
     except CACHE_ERRORS:
@@ -85,6 +88,8 @@ def _cache_get(key):
 
 def _cache_call(method: str, *args) -> None:
     """``cache.set``/``cache.delete``, best effort: a cache outage never fails the request."""
+    if args and is_cache_outage_key(args[0]):
+        return
     try:
         getattr(cache, method)(*args)
     except CACHE_ERRORS:

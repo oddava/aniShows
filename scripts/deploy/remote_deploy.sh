@@ -3,10 +3,16 @@
 # Runs ON THE VPS, sent over SSH by .github/workflows/deploy.yml:
 #   ssh vps bash -s -- <app_dir> <commit> < scripts/deploy/remote_deploy.sh
 #
-# 1. checks the server's checkout has no local edits to tracked files
+# 1. checks the server's checkout has no local edits to tracked files, and
+#    takes the deploy lock (backups-data/.deploy.lock, shared with
+#    deploy-prod.sh and restore.sh) BEFORE touching the checkout
 # 2. fetches and checks out <commit> (detached), so the compose files,
 #    Caddyfile and deploy script match the images built from that commit
-# 3. runs ./deploy-prod.sh with BACKEND_TAG/FRONTEND_TAG=sha-<7 chars>, which
+# 3. runs deploy-prod.sh (via bash: no exec bit needed) detached from the SSH
+#    session (setsid + nohup, holding the lock it inherits), streaming its
+#    output; if the runner's connection drops, the deploy still finishes, and
+#    its log is in backups-data/deploy-logs/. With BACKEND_TAG/FRONTEND_TAG=
+#    sha-<7 chars>, deploy-prod.sh
 #    pulls the images, backs the database up before any migration, migrates,
 #    rolls web one replica at a time, copies the frontend, reloads Caddy and
 #    runs the smoke tests: liveness and readiness, the SPA, https through the
@@ -39,6 +45,16 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     die "tracked files are modified on the server; commit or discard them first"
 fi
 
+# The deploy lock, before the checkout moves: a manual deploy or restore in
+# progress keeps its scripts and compose files. deploy-prod.sh inherits the
+# lock (file descriptor 8, DEPLOY_LOCK_HELD=1) instead of taking it again.
+mkdir -p backups-data/deploy-logs
+if command -v flock >/dev/null 2>&1; then
+    exec 8>>backups-data/.deploy.lock
+    flock -n 8 || die "a deploy or restore is running on the server (backups-data/.deploy.lock); try again when it ends"
+    export DEPLOY_LOCK_HELD=1
+fi
+
 previous="$(git rev-parse HEAD)"
 log "fetching from origin"
 git fetch --quiet --tags origin
@@ -53,9 +69,20 @@ short="${target:0:7}"
 log "checking out ${target} (was ${previous})"
 git checkout --quiet --detach "$target"
 
-status=0
-# stdin is this script itself (ssh ... bash -s): never let a child read it.
-BACKEND_TAG="sha-${short}" FRONTEND_TAG="sha-${short}" ./deploy-prod.sh </dev/null || status=$?
+# Detached from this SSH session: a dropped connection (SIGHUP) must not kill
+# the deploy mid-migration. stdin is this script itself (ssh ... bash -s), so
+# the child reads /dev/null.
+out="backups-data/deploy-logs/remote-$(date -u +%Y%m%dT%H%M%SZ)-${short}.out"
+status_file="${out%.out}.status"
+detach=()
+command -v setsid >/dev/null 2>&1 && detach=(setsid)
+BACKEND_TAG="sha-${short}" FRONTEND_TAG="sha-${short}" STATUS_FILE="$status_file"     nohup "${detach[@]}" bash -c 'bash ./deploy-prod.sh; echo $? > "$STATUS_FILE"'     </dev/null >"$out" 2>&1 &
+pid=$!
+log "deploy-prod.sh is running detached (pid ${pid}); output: ${APP_DIR}/${out}"
+tail -n +1 -f --pid="$pid" "$out" 2>/dev/null || true
+while kill -0 "$pid" 2>/dev/null; do sleep 1; done
+status="$(cat "$status_file" 2>/dev/null || echo 1)"
+rm -f "$status_file"
 if [ "$status" -ne 0 ]; then
     echo >&2
     echo "[remote-deploy] deploy-prod.sh failed (exit $status). Its output above has the rollback recipe." >&2

@@ -289,6 +289,10 @@ take_pre_restore_snapshot() {
     fi
 
     log "Creating automatic pre-restore snapshot for rollback safety..."
+    # Local only (BACKUP_REMOTE=): an unreachable remote must not block a
+    # restore, and the snapshot of the data being replaced must never become
+    # the newest off-site backup.
+    BACKUP_REMOTE= \
     BACKUP_SKIP_LOCK=1 \
     BACKUP_INCLUDE_DB="$include_db" \
     BACKUP_INCLUDE_MEDIA="$include_media" \

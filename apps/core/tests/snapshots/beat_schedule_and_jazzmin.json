@@ -109,6 +109,13 @@
       "schedule": "<crontab: 45 * * * * (m/h/dM/MY/d)>",
       "task": "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync"
     },
+    "replay-public-cache-invalidations": {
+      "options": {
+        "queue": "default"
+      },
+      "schedule": "<crontab: */5 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.adult_content.replay_public_cache_invalidations"
+    },
     "send-pending-notifications": {
       "options": {
         "queue": "default"

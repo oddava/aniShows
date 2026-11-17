@@ -154,6 +154,24 @@ class OffsiteUploadTests(SimpleTestCase):
         self.assertEqual((self.backups / newer / "postgres.dump").read_text(), newer)
         self.assertEqual(list(self.backups.glob(".tmp-fetch-*")), [])
 
+    def test_fetch_latest_skips_safety_snapshots_like_the_local_latest(self):
+        # Council r1: a newer pre-restore (the data a restore replaced) or
+        # pre-migrate (database only) snapshot must not win "latest".
+        bucket = self.remote_root / "bucket"
+        daily = self._dated(2)
+        snapshots = [self._dated(1, "pre-restore"), self._dated(0, "pre-migrate")]
+        for name in (daily, *snapshots):
+            (bucket / name).mkdir()
+            (bucket / name / "postgres.dump").write_text(name)
+
+        fetched = self._fetch("latest", BACKUP_REMOTE="offsite:bucket")
+        self.assertEqual(fetched.returncode, 0, fetched.stderr)
+        self.assertEqual(fetched.stdout.strip(), daily)
+
+        # An explicit reference still reaches a snapshot.
+        explicit = self._fetch(snapshots[0], BACKUP_REMOTE="offsite:bucket")
+        self.assertEqual(explicit.stdout.strip(), snapshots[0])
+
     def test_fetch_refuses_a_corrupt_download_and_an_unset_remote(self):
         bucket = self.remote_root / "bucket"
         name = self._dated(1)

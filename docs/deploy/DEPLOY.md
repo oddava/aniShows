@@ -245,13 +245,19 @@ server's `backups-data/.deploy.lock`); a running deploy is never cancelled.
    | `VITE_GOOGLE_CLIENT_ID`, `VITE_SENTRY_DSN`, `VITE_UMAMI_SCRIPT_URL`, `VITE_UMAMI_WEBSITE_ID` | optional, baked into the frontend build (Google sign-in needs the first) |
 
    The images are pushed with the workflow's own `GITHUB_TOKEN`; no registry secret is needed.
-   Optional: required reviewers on the `production` environment.
+   Both the build job (it bakes in the `VITE_*` values) and the deploy job run in the
+   `production` environment, so environment secrets reach both. Optional: required reviewers on
+   `production` (a run then asks twice: before the build and before the deploy).
 4. The server is ready (steps 2–4 above: checkout, `docker login ghcr.io`, `.env`, host proxy).
 
 A run: CI on the commit → images `sha-<7>` and `latest` → SSH to `vps`, which pipes
-`scripts/deploy/remote_deploy.sh` into `bash`: it refuses local edits to tracked files, fetches,
-checks out the commit (detached) and runs `./deploy-prod.sh` with that commit's tags → the
-public health check. A failure names the previous checkout to go back to.
+`scripts/deploy/remote_deploy.sh` into `bash`: it refuses local edits to tracked files, takes the
+deploy lock (a manual deploy or restore in progress makes it stop before the checkout moves),
+fetches, checks out the commit (detached) and runs `deploy-prod.sh` with that commit's tags,
+detached from the SSH session, streaming its output → the public health check. A failure names
+the previous checkout to go back to. If the runner loses the connection, the deploy still
+finishes on the server: its output is in `backups-data/deploy-logs/remote-<time>-<sha>.out` (and
+`deploy-<time>.log`); check it there before running the workflow again.
 
 ## Edge reference
 

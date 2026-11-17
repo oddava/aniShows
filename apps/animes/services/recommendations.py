@@ -43,7 +43,7 @@ from django.utils import timezone
 
 from ...shared.errors import CACHE_ERRORS
 from ...shared.logger import logger
-from ...shared.throttling import warn_cache_outage
+from ...shared.public_cache import best_effort_get, best_effort_set, cache_outage_version
 from ...users.models import UserAnimeList, UserProfile
 from ..models import (
     Anime,
@@ -107,7 +107,7 @@ def _catalog_namespace() -> str:
     try:
         return AnimePublicPayloadService.collection_cache_namespace()
     except CACHE_ERRORS:
-        return "unavailable"  # the cache is down; the read or write after this fails too
+        return cache_outage_version()  # the cache is down: the key is never read or written
 
 
 def recommendations_cache_key(user_id: int) -> str:
@@ -950,17 +950,12 @@ class RecommendationService:
         adult setting; titles on the user's list or dismissed are dropped per request.
         """
         cache_key = fallback_cache_key(can_view_adult)
-        try:
-            items = cache.get(cache_key)
-        except CACHE_ERRORS:
-            warn_cache_outage("recommendations fallback read")
-            items = None
+        items = best_effort_get(cache_key, source="recommendations fallback read")
         if items is None:
             items = self._build_trending_fallback(can_view_adult=can_view_adult, request=request)
-            try:
-                cache.set(cache_key, items, FALLBACK_CACHE_TTL)
-            except CACHE_ERRORS:
-                warn_cache_outage("recommendations fallback write")
+            best_effort_set(
+                cache_key, items, FALLBACK_CACHE_TTL, source="recommendations fallback write"
+            )
         if not items:
             return []
 

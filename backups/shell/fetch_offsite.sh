@@ -4,7 +4,7 @@
 # which has rclone and the RCLONE_CONFIG_* variables):
 #
 #   /app/shell/fetch_offsite.sh                  # list the remote's backups
-#   /app/shell/fetch_offsite.sh latest           # download the newest one
+#   /app/shell/fetch_offsite.sh latest           # the newest daily/weekly/manual one
 #   /app/shell/fetch_offsite.sh 20261116_030000  # or a timestamp / full name
 #
 # It downloads into /backups/<name> (via a temporary directory, so a partial
@@ -35,7 +35,10 @@ fi
 name=""
 for candidate in "${names[@]}"; do
     case "$REF" in
-        latest) name="$candidate" ;;  # sorted: the last one wins
+        # Like the local "latest": a regular backup, never a pre-restore or
+        # pre-migrate snapshot (partial, or the data a restore replaced).
+        # Sorted, so the last match wins.
+        latest) if [[ "$candidate" =~ -(daily|weekly|manual)$ ]]; then name="$candidate"; fi ;;
         *) if [ "$candidate" = "$REF" ] || [[ "$candidate" == "$REF"-* ]]; then name="$candidate"; fi ;;
     esac
 done

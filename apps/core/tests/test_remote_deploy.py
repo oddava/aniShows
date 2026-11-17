@@ -17,7 +17,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 REMOTE_SCRIPT = REPO_ROOT / "scripts" / "deploy" / "remote_deploy.sh"
 
 FAKE_DEPLOY = """#!/usr/bin/env bash
+echo "fake deploy output"
 echo "tags=$BACKEND_TAG/$FRONTEND_TAG head=$(git rev-parse HEAD)" > "$DEPLOY_RECORD"
+# The caller's deploy lock is inherited on fd 8 (deploy-prod.sh skips taking it).
+if [ "${DEPLOY_LOCK_HELD:-}" = 1 ] && { : >&8; } 2>/dev/null; then echo "lock=inherited" >> "$DEPLOY_RECORD"; fi
 # stdin must not be the remote script (ssh ... bash -s).
 if read -r -t 1 line; then echo "stdin was readable: $line" >> "$DEPLOY_RECORD"; fi
 exit "${FAKE_DEPLOY_STATUS:-0}"
@@ -50,8 +53,9 @@ class RemoteDeployScriptTests(SimpleTestCase):
         self.origin = self.tmp / "origin"
         self.origin.mkdir()
         _git(self.origin, "init", "-q")
+        # Committed WITHOUT the exec bit: the script must not depend on it.
         (self.origin / "deploy-prod.sh").write_text(FAKE_DEPLOY)
-        (self.origin / "deploy-prod.sh").chmod(0o755)
+        (self.origin / "deploy-prod.sh").chmod(0o644)
         (self.origin / "README").write_text("v1\n")
         _git(self.origin, "add", ".")
         _git(self.origin, "commit", "-qm", "v1")
@@ -80,11 +84,33 @@ class RemoteDeployScriptTests(SimpleTestCase):
     def test_checks_out_the_commit_and_deploys_its_images(self):
         result = self._run(self.second)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        lines = self.record.read_text().splitlines()
         self.assertEqual(
-            self.record.read_text().strip(),
-            f"tags=sha-{self.second[:7]}/sha-{self.second[:7]} head={self.second}",
+            lines[0], f"tags=sha-{self.second[:7]}/sha-{self.second[:7]} head={self.second}"
         )
+        if shutil.which("flock"):
+            self.assertIn("lock=inherited", lines)
         self.assertTrue((self.server / ".env").exists())
+        # The detached deploy's output is streamed back over SSH and kept on the server.
+        self.assertIn("fake deploy output", result.stdout)
+        kept = list((self.server / "backups-data" / "deploy-logs").glob("remote-*.out"))
+        self.assertEqual(len(kept), 1)
+        self.assertIn("fake deploy output", kept[0].read_text())
+
+    @unittest.skipUnless(shutil.which("flock"), "flock is required")
+    def test_a_held_deploy_lock_stops_before_the_checkout_moves(self):
+        import fcntl
+
+        lock_path = self.server / "backups-data" / ".deploy.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        before = _git(self.server, "rev-parse", "HEAD")
+        with lock_path.open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)  # a manual deploy or restore
+            result = self._run(self.second)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("deploy or restore is running", result.stderr)
+        self.assertEqual(_git(self.server, "rev-parse", "HEAD"), before)
+        self.assertFalse(self.record.exists())
 
     def test_a_rollback_to_a_short_sha_works(self):
         self._run(self.second)

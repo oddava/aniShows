@@ -99,3 +99,21 @@ class OfflineAnimeSyncState(TimestampMixin, Model):
 
     def __str__(self):
         return f"Offline sync state for anime #{self.anime_id}"
+
+
+class PendingPublicCacheInvalidation(Model):
+    """An anime whose cached public payloads could not be dropped (the cache was down).
+
+    ``adult_content`` changes ``is_adult`` with ``update()`` and drops the cached
+    lists and detail pages after the commit. When Redis is unreachable then, the
+    slug is kept here, and ``replay_public_cache_invalidations`` (every 5 minutes)
+    drops them once Redis is back: a title just flagged adult must not come back
+    from a persisted cache entry, and re-running the sync would not help (the rows
+    already carry the right flag, so nothing changes and nothing is invalidated).
+    """
+
+    slug = CharField(max_length=200, unique=True)
+    created_at = DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return self.slug

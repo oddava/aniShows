@@ -8,6 +8,9 @@
 #   scripts/deploy/restore.sh latest --from-offsite --yes     # download it from BACKUP_REMOTE first
 #   scripts/deploy/restore.sh 20261116_030000 --db-only --yes # or --media-only
 #   scripts/deploy/restore.sh latest                          # without --yes: verify only, change nothing
+#   --no-migrate / --migrate: skip or force step 5 (default: skipped for a
+#   *-pre-migrate dump, run otherwise). Roll the images back BEFORE restoring
+#   a pre-migrate dump (docs/deploy/runbook.md, Rollback).
 #
 # Steps (docs/backups.md, "Restore in production"):
 #   1. (--from-offsite) fetch the backup into backups-data/ and check its checksums
@@ -16,7 +19,9 @@
 #   4. backups/shell/restore.sh: a pre-restore snapshot of the live data, the
 #      dump restored into a staging database and swapped in by name (the old
 #      database is kept as rollback_<timestamp>), then the media archive
-#   5. migrate (the backup may predate this release's schema)
+#   5. migrate (the backup may predate this release's schema). Not for a
+#      pre-migrate dump: it is the schema of the release before, and migrating
+#      it with the live (bad) release would re-apply the migrations being undone
 #   6. start web, celery and beat again (also when a step above failed), clear
 #      the cache, and check readiness
 #
@@ -30,18 +35,21 @@ log() { echo "[restore] $*"; }
 die() { echo "[restore] ERROR: $*" >&2; exit 1; }
 
 usage() {
-    sed -n '3,11p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '3,14p' "$0" | sed 's/^# \{0,1\}//'
     exit "${1:-0}"
 }
 
 REF=""
 FROM_OFFSITE=0
 APPLY=0
+MIGRATE=auto
 SCOPE=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --yes) APPLY=1 ;;
         --from-offsite) FROM_OFFSITE=1 ;;
+        --migrate) MIGRATE=1 ;;
+        --no-migrate) MIGRATE=0 ;;
         --db-only) SCOPE=(--skip-media) ;;
         --media-only) SCOPE=(--skip-db) ;;
         -h|--help) usage 0 ;;
@@ -85,6 +93,15 @@ elif [ "$REF" = latest ]; then
     [ -n "$REF" ] || die "no daily, weekly or manual backup in backups-data/"
 fi
 log "backup: $REF"
+if [ "$MIGRATE" = auto ]; then
+    if [[ "$REF" == *-pre-migrate ]]; then
+        MIGRATE=0
+        log "a pre-migrate dump: migrations are NOT applied after it (--migrate forces them)."
+        log "The images that go with it must be live first: roll back the release, then restore (runbook, Rollback)."
+    else
+        MIGRATE=1
+    fi
+fi
 
 # 2. Verify before anything changes.
 log "verifying (checksums, test restore into a temporary database)"
@@ -116,7 +133,7 @@ log "stopping ${APP_SERVICES[*]} (the site answers 502 until they are back)"
 log "restoring '$REF'"
 in_backup /app/shell/restore.sh "$REF" --yes --skip-db-verify "${SCOPE[@]}"
 
-if [[ " ${SCOPE[*]} " != *" --skip-db "* ]]; then
+if [ "$MIGRATE" = 1 ] && [[ " ${SCOPE[*]} " != *" --skip-db "* ]]; then
     log "applying this release's migrations to the restored database"
     "${COMPOSE[@]}" run --rm --no-deps -T web python manage.py migrate --noinput
 fi

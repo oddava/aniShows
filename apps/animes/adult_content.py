@@ -160,24 +160,56 @@ def sync_adult_flags_from_anilist(
     return totals
 
 
-def _invalidate_public_caches(slugs: list[str], using: str) -> None:
-    """After the flag update commits: one list-cache bump, then each row's own keys.
+def _drop_public_caches(slugs: Iterable[str]) -> None:
+    """One list-cache (namespace) bump, then each row's cached detail payload."""
+    from .services.public_anime_service import AnimePublicPayloadService
+    from .signals import _invalidate_anime_public_caches  # signals imports models
 
-    ``update()`` skips the save signals, so the changed rows' cached public
-    payloads are dropped here: an adult title must not linger in a cached
-    anonymous list or detail page. A cache failure is logged, not raised.
+    AnimePublicPayloadService.bump_collection_cache_namespace()
+    for slug in slugs:
+        _invalidate_anime_public_caches(slug, bump_namespace=False)
+
+
+def _invalidate_public_caches(slugs: list[str], using: str) -> None:
+    """After the flag update commits, drop the changed rows' cached public payloads.
+
+    ``update()`` skips the save signals, so it is done here: an adult title must
+    not linger in a cached anonymous list or detail page. When the cache is
+    down, the slugs are kept in ``PendingPublicCacheInvalidation`` and dropped
+    by ``replay_public_cache_invalidations`` once Redis is back (its entries
+    persist across an outage).
     """
 
     def invalidate():
         from ..shared.errors import CACHE_ERRORS
-        from .services.public_anime_service import AnimePublicPayloadService
-        from .signals import _invalidate_anime_public_caches  # signals imports models
 
         try:
-            AnimePublicPayloadService.bump_collection_cache_namespace()
-            for slug in slugs:
-                _invalidate_anime_public_caches(slug, bump_namespace=False)
+            _drop_public_caches(slugs)
         except CACHE_ERRORS:
-            logger.warning("Could not drop cached payloads for %s anime", len(slugs), exc_info=True)
+            pending = apps.get_model("anime", "PendingPublicCacheInvalidation")
+            pending.objects.using(using).bulk_create(
+                [pending(slug=slug) for slug in dict.fromkeys(slugs)], ignore_conflicts=True
+            )
+            logger.warning(
+                "Cache down: %s anime kept for a cache invalidation replay",
+                len(slugs),
+                exc_info=True,
+            )
 
     transaction.on_commit(invalidate, using=using)
+
+
+def replay_public_cache_invalidations(*, using: str = "default", batch_size: int = 1000) -> int:
+    """Drop the cached payloads of the anime kept while the cache was down.
+
+    Returns how many were replayed. A cache error propagates and leaves the rows
+    for the next run; rows added meanwhile are kept (deleted by primary key).
+    """
+    pending = apps.get_model("anime", "PendingPublicCacheInvalidation").objects.using(using)
+    rows = list(pending.order_by("pk").values_list("pk", "slug")[:batch_size])
+    if not rows:
+        return 0
+    _drop_public_caches(slug for _, slug in rows)
+    pending.filter(pk__in=[pk for pk, _ in rows]).delete()
+    logger.info("Replayed the cache invalidation of %s anime", len(rows))
+    return len(rows)

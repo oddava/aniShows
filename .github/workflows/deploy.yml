@@ -23,7 +23,8 @@ name: Deploy (Hetzner VPS)
 #   VPS_APP_DIR          the checkout on the server, e.g. /srv/anishows
 #   VPS_SSH_PORT         optional, default 22
 #   VITE_GOOGLE_CLIENT_ID, VITE_SENTRY_DSN, VITE_UMAMI_SCRIPT_URL,
-#   VITE_UMAMI_WEBSITE_ID  optional, baked into the frontend build
+#   VITE_UMAMI_WEBSITE_ID  optional, baked into the frontend build (the build
+#                        job also runs in "production" so it can read them)
 # docs/deploy/DEPLOY.md ("Deploying from GitHub Actions") has the setup.
 
 on:
@@ -102,6 +103,11 @@ jobs:
     if: needs.resolve.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # The VITE_* build values are environment secrets: only a job that names
+    # the environment can read them (without it the frontend builds with empty
+    # values, silently: no Google sign-in). A required-reviewer rule on
+    # "production" therefore asks twice per run (build, then deploy).
+    environment: production
     permissions:
       contents: read
       packages: write
@@ -136,7 +142,18 @@ jobs:
             echo "docker-compose.prod.yml must refuse an unset TRUSTED_PROXY_CIDRS" >&2
             exit 1
           fi
-          bash -n deploy-prod.sh backups/entrypoint.sh backups/shell/*.sh scripts/deploy/*.sh
+          # bash -n checks one file per call (further names are its arguments).
+          for script in deploy-prod.sh backups/entrypoint.sh backups/shell/*.sh scripts/deploy/*.sh; do
+            bash -n "$script"
+          done
+          # The docs and the rollback recipe run the scripts directly (./deploy-prod.sh,
+          # scripts/deploy/compose.sh): every tracked script keeps its exec bit.
+          not_executable="$(git ls-files -s -- '*.sh' | awk '$1 != "100755" {print $4}')"
+          if [ -n "$not_executable" ]; then
+            echo "::error::scripts committed without the exec bit (git update-index --chmod=+x):" >&2
+            echo "$not_executable" >&2
+            exit 1
+          fi
           rm .env
 
       - name: Set up Docker Buildx

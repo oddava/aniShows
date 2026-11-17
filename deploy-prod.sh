@@ -57,7 +57,11 @@ echo "Deploy log: $LOG_FILE"
 # One deploy at a time (CI and an operator, or two operators): two rolling
 # restarts, prunes or state writes must never interleave.
 mkdir -p backups-data
-if command -v flock >/dev/null 2>&1; then
+if [ "${DEPLOY_LOCK_HELD:-}" = 1 ] && { : >&8; } 2>/dev/null; then
+    # remote_deploy.sh took the lock before moving the checkout; it is inherited
+    # on file descriptor 8 and held until this script exits.
+    ok "deploy lock held by the caller (remote_deploy.sh)"
+elif command -v flock >/dev/null 2>&1; then
     exec 8>>backups-data/.deploy.lock
     flock -n 8 || die "another deploy-prod.sh is running on this host (backups-data/.deploy.lock)"
 else

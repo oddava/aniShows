@@ -107,6 +107,12 @@ def _catalog_entries(
             "schedule": crontab(day_of_week=3, hour=3, minute=40),  # Wednesday 3:40 AM
             "options": {"queue": "low_priority"},
         },
+        # Cache invalidations an outage kept (adult_content.py, PendingPublicCacheInvalidation).
+        "replay-public-cache-invalidations": {
+            "task": "apps.animes.tasks.adult_content.replay_public_cache_invalidations",
+            "schedule": crontab(minute="*/5"),
+            "options": {"queue": "default"},
+        },
         "update-relation-slugs-daily": {
             "task": "apps.animes.tasks.franchises.update_relation_slugs",
             "schedule": crontab(hour=4, minute=30),  # Daily at 4:30 AM

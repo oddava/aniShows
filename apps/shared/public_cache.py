@@ -14,9 +14,23 @@ PayloadValidator = Callable[[object], bool]
 PayloadBuilder = Callable[[], object]
 
 
-# The version/namespace part of a cache key while the cache is down. Nothing
-# is stored under it (the cache is unreachable); it only lets a key be built.
-CACHE_OUTAGE_VERSION = "unavailable"
+# A key built while its version/namespace lookup failed carries this marker.
+# Such a key is never read or written: Redis can come back between the failed
+# lookup and the payload read/write, and a fixed outage version would then let
+# a payload outlive the invalidations made under the real version (a profile
+# made private, a title flagged adult). Each outage version is also unique, so
+# a write that slips past the bypass lands under a key nobody reads again.
+CACHE_OUTAGE_MARKER = "cache-outage-"
+
+
+def cache_outage_version() -> str:
+    """The version/namespace part of a key whose version lookup failed (never cached)."""
+    return f"{CACHE_OUTAGE_MARKER}{uuid.uuid4().hex}"
+
+
+def is_cache_outage_key(key: str) -> bool:
+    return CACHE_OUTAGE_MARKER in key
+
 
 # How long a payload built while a dependency failed is kept (``Degraded``).
 DEGRADED_TTL_SECONDS = 60
@@ -44,6 +58,8 @@ def best_effort_get(key: str, *, source: str, default=None):
     namespace bumps) must keep raising: a dropped invalidation would serve the
     stale entry again once Redis is back.
     """
+    if is_cache_outage_key(key):
+        return default
     try:
         return cache.get(key, default)
     except CACHE_ERRORS:
@@ -53,6 +69,8 @@ def best_effort_get(key: str, *, source: str, default=None):
 
 def best_effort_set(key: str, value, timeout, *, source: str) -> bool:
     """``cache.set`` of a computed payload; False (nothing stored) when the cache is down."""
+    if is_cache_outage_key(key):
+        return False
     try:
         cache.set(key, value, timeout=timeout)
     except CACHE_ERRORS:
@@ -125,6 +143,13 @@ def get_or_build_public_payload(
     rebuild, degraded). With the cache (Redis) down, the page is still served:
     it is built for this request only and reported as "bypass".
     """
+    if is_cache_outage_key(cache_key):
+        # The version lookup failed: build for this request only (see CACHE_OUTAGE_MARKER).
+        result = builder()
+        if isinstance(result, Degraded):
+            return result.payload, "degraded"
+        return result, "bypass"
+
     built: list[object] = []
 
     def build() -> object:
