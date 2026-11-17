@@ -580,9 +580,28 @@ def test_split_alignment_tag_bypasses_are_refused(make_user, make_thread, api_fo
 
 def test_whole_text_alignment_scan_stays_linear():
     """Thousands of split tags and long quote runs: one pass over the text, not one per line."""
-    body = ('<p\nalign="center">' + "> " * 2_000 + "x</p>\n") * 20 + '<p\nalign="left">\n' * 5_000
-    started = time.perf_counter()
-    stats = container_stats(body)
-    elapsed = time.perf_counter() - started
+
+    def body_of(scale):
+        return ('<p\nalign="center">' + "> " * 2_000 + "x</p>\n") * (
+            20 * scale
+        ) + '<p\nalign="left">\n' * (5_000 * scale)
+
+    def best_of(body, repeats=5):
+        # The fastest run is the least disturbed by a busy shared runner.
+        best = float("inf")
+        for _ in range(repeats):
+            started = time.perf_counter()
+            stats = container_stats(body)
+            best = min(best, time.perf_counter() - started)
+        return best, stats
+
+    best_of(body_of(1), repeats=1)  # warm up
+    small, stats = best_of(body_of(1))
+    large, _ = best_of(body_of(2))
+
     assert stats.depth >= 2_000
-    assert elapsed < 0.25
+    # Linear work doubles with the input (ratio ~2); a per-line rescan would
+    # quadruple it. A wall-clock budget alone is flaky on shared runners, so
+    # compare two sizes and keep a generous absolute ceiling as a backstop.
+    assert large / small < 3, f"time grew {large / small:.1f}x for 2x the input"
+    assert large < 2.0
