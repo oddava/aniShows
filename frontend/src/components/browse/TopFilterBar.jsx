@@ -252,7 +252,6 @@ export default function TopFilterBar({
                         />
                     ))}
                 </div>
-                <span aria-hidden="true" className="hidden h-5 w-px bg-white/[0.08] sm:block" />
                 <div role="group" aria-label="Season" className="flex flex-wrap items-center gap-1">
                     {seasonOptions.map(season => (
                         <Pill

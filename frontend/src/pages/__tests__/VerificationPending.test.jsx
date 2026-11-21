@@ -57,7 +57,7 @@ describe('VerificationPending', () => {
 
         fireEvent.submit(form);
 
-        expect(await screen.findByText('Enter your email address.')).toBeInTheDocument();
+        expect(await screen.findByText('An email address is needed.')).toBeInTheDocument();
         expect(screen.getByLabelText('Email address')).toHaveAttribute('aria-invalid', 'true');
         expect(authApi.resendVerification).not.toHaveBeenCalled();
     });

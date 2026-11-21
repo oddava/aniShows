@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
@@ -111,8 +111,25 @@ export default function ContinueSection() {
         staleTime: 60 * 1000,
     });
 
-    const rows = sortForContinue(watching, now);
+    // The order is set once per visit: a row never jumps away under the
+    // cursor after a +1 (new shows join at the end).
+    const orderRef = useRef(null);
+    const rows = useMemo(() => {
+        const sorted = sortForContinue(watching, now);
+        if (!orderRef.current) {
+            if (sorted.length) orderRef.current = sorted.map((row) => row.entry.id);
+            return sorted;
+        }
+        const position = new Map(orderRef.current.map((id, index) => [id, index]));
+        const ordered = [...sorted].sort((a, b) => (position.get(a.entry.id) ?? Infinity) - (position.get(b.entry.id) ?? Infinity));
+        orderRef.current = ordered.map((row) => row.entry.id);
+        return ordered;
+    }, [watching, now]);
     const readyCount = rows.filter((row) => row.state.kind === 'ready').length;
+    // The next episode to air from your list, for the left column.
+    const nextUp = useMemo(() => rows
+        .filter((row) => row.entry.anime?.next_airing_date && Date.parse(row.entry.anime.next_airing_date) > now)
+        .sort((a, b) => Date.parse(a.entry.anime.next_airing_date) - Date.parse(b.entry.anime.next_airing_date))[0], [rows, now]);
     const summaryLine = isPending
         ? ''
         : rows.length === 0
@@ -131,6 +148,26 @@ export default function ContinueSection() {
                         <p className="mt-3 text-[15px] text-[var(--text-3)] tabular">
                             {summary.total} on your list · {summary.episodes_watched} episodes watched
                         </p>
+                    )}
+                    {nextUp && (
+                        <Link
+                            to={`/anime/${nextUp.entry.anime.slug}`}
+                            className="mt-8 flex items-center gap-4 rounded-[var(--radius-lg)] bg-[var(--ink-1)] p-4 transition-colors hover:bg-[var(--ink-2)] md:max-w-sm"
+                        >
+                            <img
+                                src={getOptimizedImageUrl(nextUp.entry.anime, 'cover', 'small')}
+                                onError={(event) => applyImageFallback(event, getImageFallbackUrl(nextUp.entry.anime, 'cover'))}
+                                alt=""
+                                className="h-[72px] w-12 shrink-0 rounded-md bg-[var(--ink-2)] object-cover"
+                            />
+                            <span className="min-w-0">
+                                <span className="block text-sm text-[var(--text-2)]">Next up</span>
+                                <span className="block truncate font-semibold text-[var(--text-1)]">{nextUp.entry.anime.title}</span>
+                                <span className="block text-sm text-[var(--signature)] tabular">
+                                    Episode {nextUp.entry.anime.next_airing_episode} in {countdown(Date.parse(nextUp.entry.anime.next_airing_date), now)}
+                                </span>
+                            </span>
+                        </Link>
                     )}
                 </div>
 

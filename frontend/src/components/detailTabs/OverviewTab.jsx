@@ -3,7 +3,7 @@ import FranchiseSection from '../FranchiseSection';
 import MusicSection from '../MusicSection';
 import LazyYouTube from '../LazyYouTube';
 import { getUniqueCharacterRoles } from '../../utils/characterRoles';
-import { meaningfulEpisodeTitle } from './format';
+import { meaningfulEpisodeTitle, orderCast } from './format';
 import { CharacterRow, StaffRow } from './PeopleRows';
 
 const getYouTubeId = (url) => {
@@ -45,7 +45,11 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
     }, [staff]);
 
     const topCharacters = useMemo(() => {
-        return getUniqueCharacterRoles(characters, { includeVoiceActor: false }).slice(0, 4);
+        // Main roles first, voiced ones leading: the people the show is about.
+        return orderCast(
+            getUniqueCharacterRoles(characters, { includeVoiceActor: false }),
+            { voicedFirst: true },
+        ).slice(0, 4);
     }, [characters]);
 
     // A preview of "Episode 1 … Episode 4" tells nobody anything; show it only
@@ -60,7 +64,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
         <div className="animate-tab-content space-y-4">
             {topCharacters.length > 0 && (
                 <Section title="Characters">
-                    <div className="grid grid-cols-1 gap-x-10 gap-y-6 xl:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2">
                         {topCharacters.map((role) => (
                             <CharacterRow key={role.id} role={role} />
                         ))}

@@ -28,6 +28,34 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
     } = reviews;
 
     const hasReviews = allReviews.length > 0 || Boolean(ratingFilter);
+    const showWriteButton = isAuthenticated && canReview && !isWritingReview && !editingReview && !userReview;
+
+    // Nothing to read yet: one line and, when allowed, the action. No sort
+    // menu, no summary, no empty block under it.
+    if (!reviewsLoading && !hasReviews && !isWritingReview && !editingReview) {
+        const emptyLine = isAuthenticated && !userReview && !canReview
+            ? 'No reviews yet. Add it to your list to write the first one.'
+            : 'No reviews yet.';
+        return (
+            <section className="panel mt-4 mb-16" aria-labelledby="reviews-heading">
+                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <h2 id="reviews-heading" className="section-title">Reviews</h2>
+                        <p className="text-[15px] text-[var(--text-2)]">{emptyLine}</p>
+                    </div>
+                    {showWriteButton && (
+                        <button
+                            type="button"
+                            onClick={() => setIsWritingReview(true)}
+                            className="btn-primary text-[15px]"
+                        >
+                            Write a review
+                        </button>
+                    )}
+                </div>
+            </section>
+        );
+    }
 
     return (
         <section className="panel mt-4 mb-16" aria-labelledby="reviews-heading">
@@ -55,19 +83,17 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
                         />
                     )}
 
-                    {isAuthenticated && !isWritingReview && !editingReview && !userReview && (
-                        canReview ? (
-                            <button
-                                type="button"
-                                onClick={() => setIsWritingReview(true)}
-                                className="btn-primary text-[15px]"
-                            >
-                                Write a review
-                            </button>
-                        ) : hasReviews ? (
-                            <p className="text-sm text-[var(--text-2)]">Add it to your list to write a review</p>
-                        ) : null
-                    )}
+                    {showWriteButton ? (
+                        <button
+                            type="button"
+                            onClick={() => setIsWritingReview(true)}
+                            className="btn-primary text-[15px]"
+                        >
+                            Write a review
+                        </button>
+                    ) : (isAuthenticated && hasReviews && !canReview && !userReview && !isWritingReview && !editingReview) ? (
+                        <p className="text-sm text-[var(--text-2)]">Add it to your list to write a review</p>
+                    ) : null}
                 </div>
             </div>
 

@@ -78,10 +78,10 @@ export default function UserMenu({
                         aria-expanded={isProfileOpen}
                         aria-controls={isProfileOpen ? profileMenuId : undefined}
                         aria-label={`Account menu for ${user?.username || 'you'}${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
-                        className="relative group flex items-center gap-3 rounded-full bg-white/[0.05] pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40"
+                        className="relative group flex items-center gap-3 rounded-full bg-white/[0.05] pl-1.5 pr-4 py-1 transition-colors duration-200 hover:bg-white/[0.09]"
                     >
                         {/* Avatar or Placeholder */}
-                        <div className="w-7 h-7 rounded-full overflow-hidden border border-transparent group-hover:border-white/20 transition-all duration-300">
+                        <div className="w-7 h-7 rounded-full overflow-hidden ">
                             {user?.avatar ? (
                                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                             ) : (

@@ -5,7 +5,7 @@ import { Bell, CalendarDays, Compass, Home, LibraryBig, LogIn } from 'lucide-rea
 const MAIN_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/profile', '/u', '/settings', '/notifications', '/import'];
 
 /**
- * The phone tab bar (M5): Home, Browse, Schedule, My List and Notifications
+ * The phone tab bar (M5): Home, Browse, Schedule, My list and Notifications
  * when signed in; the list is one tap away from everywhere. Account items
  * live behind the avatar in the top bar. Guests get Sign in instead of the
  * last two. Every tab is at least 44 px tall (M3); pages reserve room for
@@ -28,7 +28,7 @@ export default function MobileNav({ isAuthenticated, mobileUnreadCount = 0 }) {
             { to: '/', label: 'Home', icon: Home },
             { to: '/browse', label: 'Browse', icon: Compass },
             { to: '/schedule', label: 'Schedule', icon: CalendarDays },
-            { to: '/list', label: 'My List', icon: LibraryBig },
+            { to: '/list', label: 'My list', icon: LibraryBig },
             { to: '/notifications', label: 'Alerts', icon: Bell, badge: mobileUnreadCount },
         ]
         : [

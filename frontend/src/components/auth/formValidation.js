@@ -20,13 +20,13 @@ const isBlank = (value) => !String(value ?? '').trim();
 
 /** Error for an email field, or null. */
 export const emailProblem = (value) => {
-    if (isBlank(value)) return 'Enter your email address.';
+    if (isBlank(value)) return 'An email address is needed.';
     if (!isValidEmail(value)) return 'Enter a valid email address, like name@example.com.';
     return null;
 };
 
 /** Error for a new password, or null (empty, then the shared password rules). */
-export const newPasswordProblem = (value, emptyMessage = 'Create a password.') =>
+export const newPasswordProblem = (value, emptyMessage = 'A password is needed.') =>
     (value ? getPasswordProblem(value) : emptyMessage);
 
 /** Error for a "type it again" field, or null. */
@@ -38,14 +38,14 @@ export const confirmPasswordProblem = (password, confirmation) => {
 
 export function validateLogin({ username, password }) {
     const errors = {};
-    if (isBlank(username)) errors.username = 'Enter your username or email.';
-    if (!password) errors.password = 'Enter your password.';
+    if (isBlank(username)) errors.username = 'Type the username or email you signed up with.';
+    if (!password) errors.password = 'The password is missing.';
     return errors;
 }
 
 export function validateRegister({ username, email, password, confirmPassword }) {
     const errors = {};
-    if (isBlank(username)) errors.username = 'Choose a username.';
+    if (isBlank(username)) errors.username = 'Pick a username. It’s how friends find you.';
     const emailError = emailProblem(email);
     if (emailError) errors.email = emailError;
     const passwordError = newPasswordProblem(password);

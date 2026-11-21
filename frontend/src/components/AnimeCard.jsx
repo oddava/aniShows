@@ -123,7 +123,6 @@ function AnimeCard({
                 </Link>
                 <div className="min-w-0">
                     <Link to={href} className="flex items-start gap-1.5">
-                        {meta && <span aria-hidden="true" className="mt-[0.5rem] h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />}
                         <span className="line-clamp-2 text-base font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] group-hover:text-[var(--signature)]">{displayTitle}</span>
                     </Link>
                     <p className="mt-0.5 text-sm text-[var(--text-2)] tabular">
@@ -143,6 +142,7 @@ function AnimeCard({
                         onScore={(value) => setScore(value)}
                         onRemove={() => remove()}
                         placement="down"
+                        variant="chip"
                         className="relative"
                     />
                 ) : <span />}
@@ -248,15 +248,16 @@ function AnimeCard({
             </Link>
             {meta && <span className="sr-only">On your list: {meta.label}</span>}
             {isAuthenticated && showProgress && isWatching && (
-                <ProgressStepper
-                    size="sm"
-                    className="mt-2 self-start"
-                    value={watched}
-                    total={total}
-                    aired={aired}
-                    title={displayTitle}
-                    onCommit={(next) => setProgress(next)}
-                />
+                <div className="mt-auto flex pt-2">
+                    <ProgressStepper
+                        size="sm"
+                        value={watched}
+                        total={total}
+                        aired={aired}
+                        title={displayTitle}
+                        onCommit={(next) => setProgress(next)}
+                    />
+                </div>
             )}
         </article>
     );

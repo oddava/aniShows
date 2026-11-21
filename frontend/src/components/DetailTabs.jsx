@@ -4,6 +4,7 @@ import MusicSection from './MusicSection';
 import { getUniqueCharacterRoles } from '../utils/characterRoles';
 import { CharacterGrid, RelationLoadMoreButton } from './detailTabs/CharacterGrid';
 import { StaffRow } from './detailTabs/PeopleRows';
+import { orderCast } from './detailTabs/format';
 
 function EmptyLine({ children }) {
     return <p className="animate-tab-content py-10 text-[15px] text-[var(--text-2)]">{children}</p>;
@@ -49,7 +50,7 @@ export function CharactersTab({
 }) {
     const sourceCharacters = charactersProp || anime?.characters;
     const uniqueCharacters = useMemo(() => {
-        return getUniqueCharacterRoles(sourceCharacters);
+        return orderCast(getUniqueCharacterRoles(sourceCharacters));
     }, [sourceCharacters]);
     const resolvedCount = Number.isFinite(totalCount) && totalCount >= 0
         ? totalCount

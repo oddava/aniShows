@@ -75,7 +75,7 @@ export default function Navbar() {
                             <NavItem to="/browse" label="Browse" />
                             <NavItem to="/schedule" label="Schedule" />
                             {(isAuthenticated || authLoading) && (
-                                <NavItem to="/list" label="My List" />
+                                <NavItem to="/list" label="My list" />
                             )}
 
                             {/* Search - Collapsible */}

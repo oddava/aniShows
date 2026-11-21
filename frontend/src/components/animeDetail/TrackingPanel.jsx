@@ -74,11 +74,11 @@ export default function TrackingPanel({
 
     return (
         <div className="space-y-2.5" data-title="Tracking">
-            <div className="flex items-stretch gap-2">
+            <div className="relative flex items-stretch gap-2">
                 <QuickAdd
                     variant="button"
                     placement="down"
-                    className="relative min-w-0 flex-1"
+                    className="min-w-0 flex-1"
                     status={status}
                     score={entry.score}
                     watched={entry.episodes_watched || 0}

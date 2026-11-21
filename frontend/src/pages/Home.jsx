@@ -55,7 +55,7 @@ export default function Home() {
         return {
             trending: trendingItems,
             hideTrending: isAuthenticated && recsAreFallback,
-            topRated: topRatedItems.length >= 4 ? topRatedItems : [],
+            topRated: topRatedItems.length >= 6 ? topRatedItems : [],
         };
     }, [isAuthenticated, recommendations, trending, topRated]);
 

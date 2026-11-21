@@ -262,6 +262,9 @@ describe('toast with Undo after every write (T6)', () => {
         expect(describeListChange(base, { ...base, score: 9 })).toBe('Scored 9');
         expect(describeListChange(base, { ...base, status: 'Plan to Watch' })).toBe('Moved to Planning');
         expect(describeListChange({ id: null, status: null }, { ...base, status: 'On Hold' })).toBe('Added to On hold');
+        // A show still airing completes up to the aired episode, and the toast says so.
+        expect(describeListChange(base, { ...base, status: 'Completed', episodes_watched: 16 }, 24)).toBe('Completed. Caught up to episode 16');
+        expect(describeListChange(base, { ...base, status: 'Completed', episodes_watched: 24 }, 24)).toBe('Completed. Every episode marked watched');
     });
 });
 

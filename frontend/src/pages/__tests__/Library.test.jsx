@@ -58,7 +58,7 @@ describe('/list library (P2)', () => {
         listApi.getAll.mockResolvedValue(page({ id: 1, status: 'Watching', episodes_watched: 13, score: 0, anime: onePiece }));
         renderAt('/list');
 
-        expect(await screen.findByRole('heading', { name: 'My List' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'My list' })).toBeInTheDocument();
         await waitFor(() => expect(listApi.getAll).toHaveBeenCalledWith(expect.objectContaining({ username: 'megumin', status: 'Watching' })));
         expect(await screen.findByRole('group', { name: 'Episodes watched of One Piece' })).toHaveTextContent('13 / 1180 aired');
         const tabs = screen.getByRole('navigation', { name: 'List status' });

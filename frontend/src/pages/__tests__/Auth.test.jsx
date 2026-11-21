@@ -18,8 +18,16 @@ vi.mock('../../components/GoogleLoginButton', () => ({
 }));
 vi.mock('../../components/SEO', () => ({ default: () => null }));
 
-const type = (placeholder, value) =>
-    fireEvent.change(screen.getByPlaceholderText(placeholder), { target: { value } });
+const FIELD_LABELS = {
+    'Enter your username or email': 'Username or email',
+    'Enter your password': 'Password',
+    'Choose a username': 'Username',
+    'Enter your email': 'Email address',
+    'Create a password': 'Password',
+    'Confirm your password': 'Confirm password',
+};
+const type = (field, value) =>
+    fireEvent.change(screen.getByLabelText(FIELD_LABELS[field] || field, { selector: 'input' }), { target: { value } });
 
 function Where() {
     const location = useLocation();
@@ -154,8 +162,8 @@ describe('Login', () => {
 
         fireEvent.submit(form);
 
-        expect(await screen.findByText('Enter your username or email.')).toBeInTheDocument();
-        expect(screen.getByText('Enter your password.')).toBeInTheDocument();
+        expect(await screen.findByText('Type the username or email you signed up with.')).toBeInTheDocument();
+        expect(screen.getByText('The password is missing.')).toBeInTheDocument();
         expect(screen.getByLabelText('Username or email')).toHaveAttribute('aria-invalid', 'true');
         expect(screen.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'true');
         expect(screen.getByLabelText('Username or email')).toHaveFocus();
@@ -165,12 +173,12 @@ describe('Login', () => {
     it('clears a field error once that field is edited', async () => {
         const { container } = renderAuth('/login', <Login />);
         fireEvent.submit(container.querySelector('form'));
-        expect(await screen.findByText('Enter your password.')).toBeInTheDocument();
+        expect(await screen.findByText('The password is missing.')).toBeInTheDocument();
 
         type('Enter your password', 'x');
 
-        expect(screen.queryByText('Enter your password.')).not.toBeInTheDocument();
-        expect(screen.getByText('Enter your username or email.')).toBeInTheDocument();
+        expect(screen.queryByText('The password is missing.')).not.toBeInTheDocument();
+        expect(screen.getByText('Type the username or email you signed up with.')).toBeInTheDocument();
     });
 
     it('defaults to /browse after login', async () => {
@@ -266,7 +274,7 @@ describe('Register', () => {
 
         expect(await screen.findByRole('alert')).toHaveTextContent('This password is too common.');
         // Inline on the password field, not only in a generic banner.
-        const passwordInput = screen.getByPlaceholderText('Create a password');
+        const passwordInput = screen.getByLabelText('Password', { selector: 'input' });
         expect(passwordInput).toHaveAttribute('aria-describedby', 'register-password-error');
         expect(passwordInput).toHaveAttribute('aria-invalid', 'true');
     });
@@ -278,9 +286,9 @@ describe('Register', () => {
 
         fireEvent.submit(form);
 
-        expect(await screen.findByText('Choose a username.')).toBeInTheDocument();
-        expect(screen.getByText('Enter your email address.')).toBeInTheDocument();
-        expect(screen.getByText('Create a password.')).toBeInTheDocument();
+        expect(await screen.findByText('Pick a username. It’s how friends find you.')).toBeInTheDocument();
+        expect(screen.getByText('An email address is needed.')).toBeInTheDocument();
+        expect(screen.getByText('A password is needed.')).toBeInTheDocument();
         expect(screen.getByText('Type the password again.')).toBeInTheDocument();
         for (const label of ['Username', 'Email address', 'Password', 'Confirm password']) {
             expect(screen.getByLabelText(label)).toHaveAttribute('aria-invalid', 'true');

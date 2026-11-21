@@ -150,7 +150,6 @@ export function Login() {
                         label="Username or email"
                         autoComplete="username"
                         required
-                        placeholder="Enter your username or email"
                         value={formData.username}
                         error={fieldErrors.username}
                         onChange={updateField('username')}
@@ -163,7 +162,6 @@ export function Login() {
                             type="password"
                             autoComplete="current-password"
                             required
-                            placeholder="Enter your password"
                             value={formData.password}
                             error={fieldErrors.password}
                             onChange={updateField('password')}
@@ -289,7 +287,6 @@ export function Register() {
                         label="Username"
                         autoComplete="username"
                         required
-                        placeholder="Choose a username"
                         value={formData.username}
                         error={errors.username}
                         onChange={updateField('username')}
@@ -301,7 +298,7 @@ export function Register() {
                         type="email"
                         autoComplete="email"
                         required
-                        placeholder="Enter your email"
+                        placeholder="name@example.com"
                         value={formData.email}
                         error={errors.email}
                         onChange={updateField('email')}
@@ -313,7 +310,6 @@ export function Register() {
                         type="password"
                         autoComplete="new-password"
                         required
-                        placeholder="Create a password"
                         value={formData.password}
                         error={errors.password}
                         hint={PASSWORD_HINT}
@@ -326,7 +322,6 @@ export function Register() {
                         type="password"
                         autoComplete="new-password"
                         required
-                        placeholder="Confirm your password"
                         value={formData.confirmPassword}
                         error={errors.confirmPassword}
                         onChange={updateField('confirmPassword')}

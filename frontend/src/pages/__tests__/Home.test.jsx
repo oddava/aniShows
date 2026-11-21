@@ -185,10 +185,11 @@ describe('Home - Continue and the airing ribbon (members)', () => {
 
         const section = await screen.findByRole('region', { name: 'Continue watching' });
         await within(section).findByText('Behind By One');
-        const titles = within(section).getAllByRole('link').map((link) => link.textContent).filter((text) => text && text !== 'All of my list');
+        const titles = within(section).getAllByRole('link').map((link) => link.textContent).filter((text) => text && text !== 'All of my list' && !text.startsWith('Next up'));
         expect(titles).toEqual(['Behind By One', 'All Watched', 'Up To Date']);
         expect(within(section).getByText('Episode 8 is out')).toBeInTheDocument();
-        expect(within(section).getByText(/^Episode 4 in 2h 2[01]m$/)).toBeInTheDocument();
+        expect(within(section).getAllByText(/^Episode 4 in 2h 2[01]m$/).length).toBeGreaterThan(0);
+        expect(within(section).getByRole('link', { name: /^Next up/ })).toHaveAttribute('href', '/anime/soon');
         expect(within(section).getByText('1 of your shows has a new episode waiting.')).toBeInTheDocument();
         expect(within(section).getByRole('button', { name: 'One episode more of Behind By One' })).toBeInTheDocument();
         // A finished show asks for a score instead of +1.

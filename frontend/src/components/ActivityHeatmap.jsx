@@ -21,6 +21,11 @@ function toRgba(hex, alpha) {
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
+// One week column is 14 px wide with a 4 px gap; the scroller fades its
+// edges over 28 px (.scroll-fade in index.css).
+const WEEK_STRIDE_PX = 18;
+const EDGE_FADE_PX = 28;
+
 // Tooltip Portal component
 function TooltipPortal({ children }) {
     const [mounted, setMounted] = useState(false);
@@ -45,6 +50,9 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
     const [persistedDay, setPersistedDay] = useState(null);
     const scrollRef = useRef(null);
+    // First week column fully in view (not scrolled off or under the edge
+    // fade); month labels left of it are left out rather than shown cut.
+    const [firstVisibleWeek, setFirstVisibleWeek] = useState(0);
     const fadeRef = useScrollFade();
     const setScrollEl = useCallback((el) => {
         scrollRef.current = el;
@@ -91,9 +99,22 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
     // Keep the newest weeks visible by default when horizontal overflow exists.
     useEffect(() => {
         const el = scrollRef.current;
-        if (!el) return;
+        if (!el) return undefined;
         const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
         el.scrollLeft = maxScrollLeft;
+
+        const updateFirstVisible = () => {
+            const hidden = el.scrollLeft > 1 ? el.scrollLeft + EDGE_FADE_PX : 0;
+            setFirstVisibleWeek(hidden > 0 ? Math.ceil(hidden / WEEK_STRIDE_PX) : 0);
+        };
+        updateFirstVisible();
+        el.addEventListener('scroll', updateFirstVisible, { passive: true });
+        const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateFirstVisible) : null;
+        resizeObserver?.observe(el);
+        return () => {
+            el.removeEventListener('scroll', updateFirstVisible);
+            resizeObserver?.disconnect();
+        };
     }, [weeks]);
 
     // Calculate stats
@@ -197,7 +218,9 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
                     <div className="mb-1 flex h-5 gap-[4px] text-xs text-[var(--text-2)]">
                         {weeks.map((week, i) => {
                             const firstDay = new Date(week[0].date);
-                            const isNewMonth = firstDay.getDate() <= 7;
+                            // A label needs about two columns; one that starts
+                            // under the left edge would read "pr" for "Apr".
+                            const isNewMonth = firstDay.getDate() <= 7 && i >= firstVisibleWeek;
                             const alignRight = i >= weeks.length - 2;
 
                             return (

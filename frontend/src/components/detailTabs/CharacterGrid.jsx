@@ -7,7 +7,7 @@ const CHARACTER_VIRTUALIZE_THRESHOLD = 80;
 const CHARACTER_GRID_ROW_ESTIMATE = 84;
 const CHARACTER_GRID_OVERSCAN = 6;
 const CHARACTER_GRID_BREAKPOINTS = [
-    { query: '(min-width: 1024px)', columns: 2 },
+    { query: '(min-width: 640px)', columns: 2 },
 ];
 
 const getResponsiveColumns = (defaultColumns, breakpoints) => {
@@ -86,7 +86,7 @@ function useElementOffsetTop(ref, itemCount, columns) {
 export function CharacterGrid({ characters }) {
     if (characters.length < CHARACTER_VIRTUALIZE_THRESHOLD) {
         return (
-            <div className="grid grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-2 animate-tab-content">
+            <div className="grid grid-cols-1 gap-x-10 gap-y-5 sm:grid-cols-2 animate-tab-content">
                 {characters.map((role) => (
                     <CharacterRow key={role.id} role={role} />
                 ))}

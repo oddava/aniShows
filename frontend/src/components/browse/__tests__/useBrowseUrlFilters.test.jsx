@@ -200,7 +200,7 @@ function SortHarness() {
 }
 
 describe('SortSelect on Browse', () => {
-    it('shows "Best match" for a search, and picking "Highest Rated" keeps sort=rating', () => {
+    it('shows "Best match" for a search, and picking "Highest rated" keeps sort=rating', () => {
         const Wrapper = makeWrapper('/browse?q=frieren');
         render(<Wrapper><SortHarness /></Wrapper>);
 
@@ -208,9 +208,9 @@ describe('SortSelect on Browse', () => {
         expect(trigger).toHaveTextContent('Best match');
 
         fireEvent.click(trigger);
-        fireEvent.click(screen.getByRole('option', { name: 'Highest Rated' }));
+        fireEvent.click(screen.getByRole('option', { name: 'Highest rated' }));
         expect(searchOf().get('sort')).toBe('rating');
-        expect(screen.getByRole('button', { name: 'Sort by' })).toHaveTextContent('Highest Rated');
+        expect(screen.getByRole('button', { name: 'Sort by' })).toHaveTextContent('Highest rated');
 
         fireEvent.click(screen.getByRole('button', { name: 'Sort by' }));
         fireEvent.click(screen.getByRole('option', { name: 'Best match' }));
@@ -223,7 +223,7 @@ describe('SortSelect on Browse', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Sort by' }));
         expect(screen.queryByRole('option', { name: 'Best match' })).not.toBeInTheDocument();
-        expect(screen.getByRole('option', { name: 'Most Popular' })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('option', { name: 'Most popular' })).toHaveAttribute('aria-selected', 'true');
     });
 });
 

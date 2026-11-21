@@ -202,7 +202,7 @@ describe('Schedule Component', () => {
     expect(animeApi.getSchedule).toHaveBeenCalledTimes(1);
   });
 
-  it('returns to current week when clicking Today button', async () => {
+  it('offers a way back to today only when another day is selected', async () => {
     animeApi.getSchedule.mockResolvedValue(buildScheduleResponse());
 
     render(<Schedule />, { wrapper: createWrapper() });
@@ -210,11 +210,15 @@ describe('Schedule Component', () => {
     await waitFor(() => {
       expect(screen.getByText(/No episodes scheduled/i)).toBeInTheDocument();
     });
+    expect(screen.queryByRole('button', { name: 'Back to today' })).not.toBeInTheDocument();
 
-    const todayButton = screen.getByRole('button', { name: /today/i });
-    expect(todayButton).toBeInTheDocument();
+    const dayButtons = screen.getAllByRole('button').filter((button) => button.hasAttribute('aria-pressed') && /episode/.test(button.getAttribute('aria-label') || button.textContent));
+    const otherDay = dayButtons.find((button) => button.getAttribute('aria-pressed') === 'false');
+    fireEvent.click(otherDay);
 
-    fireEvent.click(todayButton);
+    const backButton = screen.getByRole('button', { name: 'Back to today' });
+    fireEvent.click(backButton);
+    expect(screen.queryByRole('button', { name: 'Back to today' })).not.toBeInTheDocument();
   });
 
   it('allows selecting different days of the week', async () => {
@@ -543,7 +547,7 @@ describe('Schedule Component - calendar dates and My list', () => {
 
     fireEvent.click(dayButton('Thursday 19'));
     expect(screen.getByText('No Date Yet')).toBeInTheDocument();
-    expect(screen.getByText('Time TBA')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Time not announced/ })).toBeInTheDocument();
     expect(screen.queryByText('Ten Days Out')).not.toBeInTheDocument();
   });
 
@@ -586,17 +590,18 @@ describe('Schedule Component - calendar dates and My list', () => {
     render(<Schedule />, { wrapper: createWrapper('/schedule?mine=1') });
 
     await waitFor(() => {
-      expect(screen.getByText('Watching Show')).toBeInTheDocument();
+      expect(screen.getAllByText('Watching Show').length).toBeGreaterThan(0);
     });
     const toggle = screen.getByRole('button', { name: 'My list' });
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('Planned Show')).toBeInTheDocument();
+    expect(screen.getAllByText('Planned Show').length).toBeGreaterThan(0);
+    expect(screen.getByRole('complementary', { name: 'Your week' })).toHaveTextContent('Watching Show');
     expect(screen.queryByText('Completed Show')).not.toBeInTheDocument();
     expect(screen.queryByText('Dropped Show')).not.toBeInTheDocument();
     expect(screen.queryByText('Not Listed')).not.toBeInTheDocument();
     expect(dayButton('Monday 16')).toHaveAccessibleName('Monday 16, 2 episodes');
 
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
 
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getAllByTestId('anime-card')).toHaveLength(5);

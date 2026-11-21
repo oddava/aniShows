@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import Portrait from '../ui/Portrait';
 import { getPortraitSrcSet, getPortraitUrl } from './portraits';
-import { capsToSentence } from './format';
+import { capsToSentence, displayPersonName } from './format';
 
 const PORTRAIT_CLASS = 'h-[60px] w-10 flex-shrink-0 rounded-[var(--radius-sm)]';
 
@@ -19,37 +19,43 @@ function PersonPortrait({ entity }) {
 }
 
 /**
- * One character and their voice actor in a row: character left,
- * voice actor right (like oddava.me's list with the year on the right).
+ * One character: portrait, name, and a meta line with the role and the voice
+ * actor ("Main · Tachibana Tatsumaru"). The row reads complete with or
+ * without a voice actor, and names wrap instead of being cut short.
  */
 export const CharacterRow = memo(function CharacterRow({ role }) {
     const characterHref = `/character/${role.character.id}`;
-    const actor = role.voice_actor;
+    const actor = role.voice_actor?.name ? role.voice_actor : null;
+    const roleLabel = role.role ? capsToSentence(role.role) : '';
 
     return (
-        <div className="flex h-[60px] items-center gap-3">
+        <div className="flex min-h-[60px] items-center gap-3">
             <Link to={characterHref} tabIndex={-1} aria-hidden="true" className="flex-shrink-0">
                 <PersonPortrait entity={role.character} />
             </Link>
             <div className="min-w-0 flex-1">
-                <Link to={characterHref} className="line-clamp-1 text-[15px] font-medium text-[var(--text-1)] hover:text-[var(--signature)]">
-                    {role.character.name}
+                <Link
+                    to={characterHref}
+                    className="line-clamp-2 break-words text-[15px] font-medium leading-snug text-[var(--text-1)] hover:text-[var(--signature)]"
+                >
+                    {displayPersonName(role.character.name)}
                 </Link>
-                {role.role && <p className="text-sm text-[var(--text-3)]">{capsToSentence(role.role)}</p>}
+                {(roleLabel || actor) && (
+                    <p className="mt-0.5 line-clamp-1 text-sm text-[var(--text-3)]">
+                        {roleLabel}
+                        {roleLabel && actor && ' · '}
+                        {actor && <span className="sr-only">voiced by </span>}
+                        {actor && (
+                            <Link
+                                to={`/staff/${actor.id}`}
+                                className="text-[var(--text-2)] hover:text-[var(--signature)]"
+                            >
+                                {displayPersonName(actor.name)}
+                            </Link>
+                        )}
+                    </p>
+                )}
             </div>
-            {actor && (
-                <>
-                    <div className="min-w-0 flex-1 text-right">
-                        <Link to={`/staff/${actor.id}`} className="line-clamp-1 text-[15px] text-[var(--text-2)] hover:text-[var(--signature)]">
-                            {actor.name}
-                        </Link>
-                        <p className="text-sm text-[var(--text-3)]">Japanese</p>
-                    </div>
-                    <Link to={`/staff/${actor.id}`} tabIndex={-1} aria-hidden="true" className="flex-shrink-0">
-                        <PersonPortrait entity={actor} />
-                    </Link>
-                </>
-            )}
         </div>
     );
 });
@@ -62,7 +68,7 @@ export const StaffRow = memo(function StaffRow({ staffRole }) {
             <PersonPortrait entity={staffRole.staff} />
             <div className="min-w-0 flex-1">
                 <p className="line-clamp-1 text-[15px] font-medium text-[var(--text-1)] group-hover:text-[var(--signature)]">
-                    {staffRole.staff.name}
+                    {displayPersonName(staffRole.staff.name)}
                 </p>
                 {staffRole.role && <p className="line-clamp-1 text-sm text-[var(--text-3)]">{staffRole.role}</p>}
             </div>

@@ -19,6 +19,7 @@ import {
   TYPE_OPTIONS,
   YEAR_OPTIONS,
   formatSeasonLabel,
+  SORT_OPTIONS,
 } from '../components/browse/browseFilterOptions';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -289,8 +290,16 @@ export default function Browse() {
                 {/* Controls Bar - only show view controls in grid mode */}
                 {isGridMode && (
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                    {seasonLabel && <h1 className="page-title">{seasonLabel}</h1>}
-                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto sm:ml-auto">
+                    {seasonLabel ? (
+                      <h1 className="page-title">{seasonLabel}</h1>
+                    ) : (
+                      <h1 className="section-title hidden sm:block">
+                        {currentSearch
+                          ? `Results for “${currentSearch}”`
+                          : SORT_OPTIONS.find((option) => option.value === currentSort)?.label || 'Browse'}
+                      </h1>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3 w-full sm:w-auto sm:ml-auto">
                       <SortSelect value={currentSort} hasSearch={Boolean(currentSearch)} onChange={setSort} />
                       <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
 
@@ -302,7 +311,7 @@ export default function Browse() {
                         title="Toggle title language"
                         aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}
                       >
-                        <span className="mr-1">Titles:</span>
+                        <span className="mr-1 hidden xs:inline">Titles:</span>
                         <span className="text-[var(--text-1)]">{titleLanguage === 'en' ? 'English' : 'Japanese'}</span>
                       </button>
                     </div>

@@ -4,11 +4,11 @@ export const RELEVANCE_SORT = 'relevance';
 
 export const SORT_OPTIONS = [
   { value: RELEVANCE_SORT, label: 'Best match' },
-  { value: 'popular', label: 'Most Popular' },
+  { value: 'popular', label: 'Most popular' },
   { value: 'trending', label: 'Trending' },
-  { value: 'rating', label: 'Highest Rated' },
-  { value: 'newest', label: 'Newest First' },
-  { value: 'title', label: 'Title A-Z' },
+  { value: 'rating', label: 'Highest rated' },
+  { value: 'newest', label: 'Newest first' },
+  { value: 'title', label: 'Title A–Z' },
 ];
 
 /** The sorts to offer: "Best match" only ranks something while there is a search. */

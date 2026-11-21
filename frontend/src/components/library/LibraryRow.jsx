@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import useListEntryMutation from '../../hooks/useListEntryMutation';
-import { airedEpisodeCount, knownEpisodeTotal } from '../../utils/episodes';
+import { airedEpisodeCount, knownEpisodeTotal, progressText } from '../../utils/episodes';
 import { formatTimeAgo } from '../../utils/dateUtils';
 import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
 import QuickAdd from '../ui/QuickAdd';
@@ -98,7 +98,9 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en' }) {
             </div>
 
             <div className="col-start-2 row-start-2 sm:col-start-auto sm:row-start-auto">
-                {entry.status !== 'Plan to Watch' ? (
+                {entry.status === 'Completed' ? (
+                    <span className="text-xs text-gray-400 tabular">{progressText(entry.episodes_watched, anime)}</span>
+                ) : entry.status !== 'Plan to Watch' ? (
                     <ProgressStepper
                         size="sm"
                         value={entry.episodes_watched || 0}
@@ -118,9 +120,9 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en' }) {
 
             <div className="col-start-3 row-start-2 justify-self-end sm:col-start-auto sm:row-start-auto sm:justify-self-stretch">
                 <QuickAdd
-                    variant="button"
+                    variant="chip"
                     placement="down"
-                    className="relative w-11 sm:w-full [&>button]:px-2.5 [&>button>span:nth-child(2)]:hidden sm:[&>button>span:nth-child(2)]:inline [&>button>svg:last-child]:hidden sm:[&>button>svg:last-child]:block"
+                    className="relative sm:[&>button]:w-full sm:[&>button]:justify-start"
                     status={entry.status}
                     score={entry.score}
                     watched={entry.episodes_watched || 0}

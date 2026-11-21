@@ -84,11 +84,14 @@ const UNDO_FIELDS = ['status', 'score', 'episodes_watched', 'started_at', 'finis
 /**
  * The toast line for a write: what changed, in words (T6).
  */
-export function describeListChange(previous, saved) {
+export function describeListChange(previous, saved, total = null) {
     if (!saved?.status) return 'Removed from your list';
     if (previous.status !== saved.status) {
         if (saved.status === 'Completed' && previous.status && saved.episodes_watched > previous.episodes_watched) {
-            return 'Completed. Every episode marked watched';
+            // A show still airing completes up to the aired episode (the server caps it).
+            return total && saved.episodes_watched < total
+                ? `Completed. Caught up to episode ${saved.episodes_watched}`
+                : 'Completed. Every episode marked watched';
         }
         return statusChangeMessage(previous.status, saved.status);
     }
@@ -182,7 +185,7 @@ export default function useListEntryMutation({ anime, entry } = {}) {
 
         const toastId = `list-${animeId}`;
         const onUndo = () => undoRef.current?.(before);
-        const shownMessage = silent ? null : describeListChange(before, { ...before, ...optimistic });
+        const shownMessage = silent ? null : describeListChange(before, { ...before, ...optimistic }, knownTotal({ episode_count: episodeCount }));
         if (shownMessage) notify(shownMessage, { id: toastId, onUndo });
 
         const finish = () => {
@@ -200,7 +203,7 @@ export default function useListEntryMutation({ anime, entry } = {}) {
                 refreshCaches(saved);
                 if (shownMessage) {
                     // The server may have done more (Completed fills progress): say so.
-                    const savedMessage = describeListChange(before, saved);
+                    const savedMessage = describeListChange(before, saved, knownTotal({ episode_count: episodeCount }));
                     if (savedMessage !== shownMessage) notify(savedMessage, { id: toastId, onUndo });
                 }
                 return { previous: before, saved };

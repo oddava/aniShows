@@ -30,7 +30,7 @@ export default function GuestLanding() {
         <section aria-labelledby="landing-heading" className="page-container pt-24 pb-4 md:pt-36">
             <div className="grid gap-12 md:grid-cols-[minmax(0,6fr)_minmax(0,6fr)] md:gap-16">
                 <div>
-                    <h1 id="landing-heading" className="page-title max-w-md">
+                    <h1 id="landing-heading" className="page-title max-w-[22ch] text-balance">
                         Never lose your place. Know what’s on tonight.
                     </h1>
                     <p className="mt-4 max-w-md text-[17px] leading-relaxed text-[var(--text-2)]">

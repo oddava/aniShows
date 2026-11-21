@@ -13,9 +13,12 @@ import { LIST_ORDERINGS, listQueries } from '../api/queries/lists';
 import { LIST_STATUSES, normalizeStatus, statusMeta } from '../utils/listStatus';
 import { progressText } from '../utils/episodes';
 
+const ALL = 'All';
+
 const VIEW_KEY = 'library_view';
 const SEARCH_DEBOUNCE_MS = 300;
 const STATUS_SLUGS = {
+    All: 'all',
     Watching: 'watching',
     Completed: 'completed',
     'Plan to Watch': 'planning',
@@ -25,6 +28,7 @@ const STATUS_SLUGS = {
 const SLUG_STATUS = Object.fromEntries(Object.entries(STATUS_SLUGS).map(([value, slug]) => [slug, value]));
 
 const EMPTY_COPY = {
+    All: { title: 'Your list is empty', body: 'Add a show from any poster and it lands here, with your progress and score.' },
     Watching: { title: 'Nothing in progress', body: 'Add a show you’re watching and track it episode by episode from here or the home page.' },
     Completed: { title: 'Nothing completed yet', body: 'Finished a show? Mark it Completed and score it in one tap.' },
     'Plan to Watch': { title: 'Your plan is empty', body: 'Tap + on any poster and pick Planning to save it for later.' },
@@ -81,6 +85,7 @@ export default function Library() {
     const { user, isAuthenticated, loading } = useAuth();
     const [params, setParams] = useSearchParams();
     const status = SLUG_STATUS[params.get('status')] || normalizeStatus(params.get('status')) || 'Watching';
+    const statusFilter = status === ALL ? undefined : status;
     const [view, setView] = useState(readView);
     const [query, setQuery] = useState('');
     const [ordering, setOrdering] = useState(LIST_ORDERINGS[0].value);
@@ -105,10 +110,10 @@ export default function Library() {
     const {
         data, isPending, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData,
     } = useInfiniteQuery({
-        ...listQueries.paged(username, status, search, ordering),
+        ...listQueries.paged(username, statusFilter, search, ordering),
         enabled: Boolean(username),
         placeholderData: (previous, previousQuery) => (
-            previousQuery?.queryKey?.[2] === status ? previous : undefined
+            previousQuery?.queryKey?.[2] === statusFilter ? previous : undefined
         ),
         staleTime: 60 * 1000,
     });
@@ -135,17 +140,18 @@ export default function Library() {
         setParams(next, { replace: true });
     };
 
-    const meta = statusMeta(status);
+    const meta = status === ALL ? { label: 'All', value: ALL } : statusMeta(status);
+    const tabs = [{ value: ALL, label: 'All', color: null }, ...LIST_STATUSES];
     const showSkeleton = isPending || !username;
     const empty = !showSkeleton && !isError && entries.length === 0;
 
     return (
         <>
-            <SEO customTitle="My List | AniShows" noIndex />
+            <SEO customTitle="My list | AniShows" noIndex />
             <div className="page-container pt-6 pb-16 md:pt-10">
                 <header className="flex flex-wrap items-end justify-between gap-4">
                     <div>
-                        <h1 className="page-title">My List</h1>
+                        <h1 className="page-title">My list</h1>
                         <p className="mt-1 text-sm text-gray-400 tabular">
                             {total ? `${total} anime · ${summary?.episodes_watched ?? 0} episodes watched` : 'Everything you track, in one place.'}
                         </p>
@@ -164,9 +170,9 @@ export default function Library() {
                 {/* Status tabs: fixed colours, one label each (T7), counts from the summary. */}
                 <nav aria-label="List status" className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
                     <ul className="flex min-w-max gap-1">
-                        {LIST_STATUSES.map((item) => {
+                        {tabs.map((item) => {
                             const active = item.value === status;
-                            const count = summary?.counts?.[item.value];
+                            const count = item.value === ALL ? summary?.total : summary?.counts?.[item.value];
                             return (
                                 <li key={item.value}>
                                     <button
@@ -175,7 +181,7 @@ export default function Library() {
                                         aria-current={active ? 'page' : undefined}
                                         className={`relative flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${active ? 'bg-white/[0.07] text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-100'}`}
                                     >
-                                        <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
+                                        {item.color && <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />}
                                         {item.label}
                                         {count != null && <span className="text-xs font-medium text-gray-500 tabular">{count}</span>}
                                     </button>
@@ -193,7 +199,7 @@ export default function Library() {
                             type="search"
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
-                            placeholder={`Search ${meta?.label.toLowerCase()}`}
+                            placeholder={status === ALL ? 'Search your list' : `Search ${meta?.label.toLowerCase()}`}
                             className="input h-11 w-full !py-0 !pl-10 text-[15px]"
                         />
                     </label>
@@ -254,8 +260,8 @@ export default function Library() {
                                         anime={entry.anime}
                                         userListEntry={entry}
                                         index={index}
-                                        showProgress={status === 'Watching'}
-                                        metaText={status === 'Watching' ? null : progressText(entry.episodes_watched, entry.anime)}
+                                        showProgress={entry.status === 'Watching'}
+                                        metaText={entry.status === 'Watching' ? null : progressText(entry.episodes_watched, entry.anime)}
                                     />
                                 ))}
                         </div>

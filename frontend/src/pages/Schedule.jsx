@@ -1,11 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Bell,
-  Eye,
-  EyeOff,
-} from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import AnimeCard from '../components/AnimeCard';
@@ -14,6 +10,7 @@ import { LoadingBar } from '../components/LoadingBar';
 import SEO from '../components/SEO';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorState from '../components/common/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
 import {
   bucketScheduleByDate,
   formatCalendarDate,
@@ -130,24 +127,33 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle,
       </div>
 
       <div className="flex items-center gap-2">
-        {showMyListToggle && (
+        {!isTodaySelected && (
           <button
             type="button"
-            onClick={onToggleMyList}
-            aria-pressed={myListOnly}
-            className={`btn-secondary min-h-11 whitespace-nowrap px-4 py-0 text-sm ${myListOnly ? '!border-[var(--signature)] !text-[var(--text-1)]' : ''}`}
+            onClick={onToday}
+            className="btn-ghost min-h-11 whitespace-nowrap px-4 py-0 text-sm"
           >
-            My list
+            Back to today
           </button>
         )}
-        <button
-          type="button"
-          onClick={onToday}
-          disabled={isTodaySelected}
-          className="btn-secondary min-h-11 whitespace-nowrap px-4 py-0 text-sm disabled:opacity-40 disabled:cursor-default"
-        >
-          Today
-        </button>
+        {showMyListToggle && (
+          <div role="group" aria-label="Show" className="flex rounded-lg bg-white/[0.04] p-0.5">
+            {[
+              { id: 'all', label: 'All', active: !myListOnly },
+              { id: 'mine', label: 'My list', active: myListOnly },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={option.active}
+                onClick={() => { if (!option.active) onToggleMyList(); }}
+                className={`flex h-10 items-center whitespace-nowrap rounded-md px-4 text-sm font-medium transition-colors duration-150 ${option.active ? 'bg-white/[0.1] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -162,14 +168,72 @@ const airingTime = (anime) => {
 
 const agendaGroups = (items, isAuthenticated) => {
   const sorted = [...items].sort((a, b) => airingTime(a) - airingTime(b));
-  if (!isAuthenticated) return [{ title: 'Airing', items: sorted, showTitle: false }];
-  const mine = sorted.filter(isOnMyList);
-  const rest = sorted.filter((anime) => !isOnMyList(anime));
-  if (mine.length === 0 || rest.length === 0) return [{ title: 'Airing', items: sorted, showTitle: false }];
-  return [
-    { title: 'On your list', items: mine, showTitle: true },
-    { title: 'Also airing', items: rest, showTitle: true },
-  ];
+  const mine = isAuthenticated ? sorted.filter(isOnMyList) : [];
+  const rest = isAuthenticated ? sorted.filter((anime) => !isOnMyList(anime)) : sorted;
+  const timed = rest.filter((anime) => airingTime(anime) !== Infinity);
+  const untimed = rest.filter((anime) => airingTime(anime) === Infinity);
+  const groups = [
+    { title: 'On your list', items: mine },
+    { title: mine.length ? 'Also airing' : 'Airing', items: timed },
+    { title: 'Time not announced', items: untimed, untimed: true },
+  ].filter((group) => group.items.length > 0);
+  return groups.map((group) => ({ ...group, showTitle: groups.length > 1 || group.untimed }));
+};
+
+// The side column: every show on your list that airs this week, by day.
+// A row selects its day. Guests get one line on why to sign in.
+const WeekAside = ({ isAuthenticated, isLoading, items, startOfToday, selectedOffset, preferredTimezone, onSelectDay }) => {
+  if (!isAuthenticated) {
+    return (
+      <div className="panel">
+        <h2 className="text-[15px] font-semibold text-[var(--text-1)]">Your shows, first</h2>
+        <p className="mt-2 text-sm leading-relaxed text-[var(--text-2)]">
+          Sign in and the shows on your list lead each day, with a reminder when a new episode is out.
+        </p>
+        <Link to="/register" className="text-link mt-1 text-sm">Create an account</Link>
+      </div>
+    );
+  }
+  if (isLoading) return null;
+  return (
+    <div className="panel">
+      <h2 className="text-[15px] font-semibold text-[var(--text-1)]">On your list this week</h2>
+      {items.length === 0 ? (
+        <p className="mt-2 text-sm leading-relaxed text-[var(--text-2)]">
+          Nothing on your list airs in the next 7 days.
+        </p>
+      ) : (
+        <ul className="-mx-2 mt-2">
+          {items.map(({ offset, anime }) => {
+            const date = addDays(startOfToday, offset);
+            const day = offset === 0 ? 'Today' : DAY_SHORT[date.getUTCDay()];
+            const time = hasAiringDate(anime)
+              ? formatDate(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preferredTimezone)
+              : null;
+            const active = offset === selectedOffset;
+            return (
+              <li key={`${offset}-${anime.id}`}>
+                <button
+                  type="button"
+                  onClick={() => onSelectDay(offset)}
+                  className={`flex min-h-11 w-full items-baseline gap-3 rounded-lg px-2 py-2 text-left transition-colors duration-150 ${active ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
+                >
+                  <span className={`w-12 shrink-0 text-sm tabular ${offset === 0 ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>{day}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-[var(--text-1)]">{anime.title}</span>
+                    <span className="block text-xs text-[var(--text-3)] tabular">
+                      {anime.next_airing_episode ? `Ep ${anime.next_airing_episode}` : 'New episode'}
+                      {time ? ` · ${time}` : ''}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
 };
 
 // Main Schedule Page Component
@@ -254,6 +318,12 @@ export default function Schedule() {
     [rawScheduleDays, preferredTimezone, myListOnly]
   );
 
+  const myWeek = useMemo(() => {
+    if (!isAuthenticated) return [];
+    const { days } = bucketScheduleByDate(filterMyList(rawScheduleDays), preferredTimezone);
+    return days.flatMap((items, offset) => items.map((anime) => ({ offset, anime })));
+  }, [isAuthenticated, rawScheduleDays, preferredTimezone]);
+
   const animeCounts = useMemo(
     () => scheduleByOffset.map((items) => items.length),
     [scheduleByOffset]
@@ -315,6 +385,8 @@ export default function Schedule() {
             />
           </div>
 
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-10">
+          <div className="min-w-0">
           {/* Selected Day Header */}
           <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6">
             <h2 className="section-title">
@@ -337,12 +409,12 @@ export default function Schedule() {
                 onClick={handleToggleAdultContent}
                 type="button"
                 disabled={isUpdatingAdultContent}
-                className={`flex items-center justify-center w-11 h-11 rounded-lg transition-colors ${
+                className={`flex h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
                   adultContentEnabled
                     ? 'bg-[var(--signature-soft)] text-[var(--signature)]'
                     : 'text-[var(--text-2)] hover:bg-white/[0.06] hover:text-white'
                 } ${!isAuthenticated || isUpdatingAdultContent ? 'opacity-60 cursor-not-allowed' : ''}`}
-                aria-label="Show explicit content"
+                aria-label="Show 18+ titles"
                 aria-pressed={adultContentEnabled}
                 title={
                   !isAuthenticated
@@ -353,6 +425,7 @@ export default function Schedule() {
                 }
               >
                 {adultContentEnabled ? <Eye aria-hidden="true" className="w-[18px] h-[18px]" /> : <EyeOff aria-hidden="true" className="w-[18px] h-[18px]" />}
+                <span>18+</span>
               </button>
               )}
             </div>
@@ -362,10 +435,15 @@ export default function Schedule() {
           {isLoading ? (
             <ScheduleGridSkeleton count={10} />
           ) : selectedDayAnime.length > 0 ? (
-            <div className="grid items-start gap-4 lg:grid-cols-2">
+            <div className="flex flex-col gap-4">
               {agendaGroups(selectedDayAnime, isAuthenticated).map((group) => (
                 <section key={group.title} aria-label={group.title} className="panel">
-                  {group.showTitle && <h3 className="mb-1 text-[15px] font-semibold text-[var(--text-2)]">{group.title}</h3>}
+                  {group.showTitle && (
+                    <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-semibold text-[var(--text-2)]">
+                      {group.title}
+                      <span className="text-sm font-normal text-[var(--text-3)] tabular">{group.items.length}</span>
+                    </h3>
+                  )}
                   <div>
                     {group.items.map((anime, index) => (
                       <AnimeCard
@@ -375,7 +453,7 @@ export default function Schedule() {
                         priority={index < 6}
                         index={index}
                         showAiringCountdown
-                        metaText={formatAirTime(anime, preferredTimezone)}
+                        metaText={group.untimed ? null : formatAirTime(anime, preferredTimezone)}
                       />
                     ))}
                   </div>
@@ -383,20 +461,12 @@ export default function Schedule() {
               ))}
             </div>
           ) : (
-            <div className="ui-empty-state">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-dark-200 mb-5">
-                <Bell aria-hidden="true" className="w-6 h-6 text-gray-500" />
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2">
-                No episodes scheduled
-              </h3>
-              <p className="text-sm text-gray-400 max-w-md mx-auto">
-                {myListOnly
-                  ? `Nothing from your list airs on ${DAY_NAMES[selectedDay]}.`
-                  : `There are no anime episodes airing on ${DAY_NAMES[selectedDay]}.`}
-                {' '}Try another day in the strip above.
-              </p>
-            </div>
+            <EmptyState title="No episodes scheduled">
+              {myListOnly
+                ? `Nothing from your list airs on ${DAY_NAMES[selectedDay]}.`
+                : `There are no anime episodes airing on ${DAY_NAMES[selectedDay]}.`}
+              {' '}Try another day in the strip above.
+            </EmptyState>
           )}
 
           {!isLoading && laterCount > 0 && (
@@ -404,6 +474,20 @@ export default function Schedule() {
               {laterCount} more {laterCount === 1 ? 'airs' : 'air'} later
             </p>
           )}
+          </div>
+
+          <aside aria-label="Your week" className="lg:pt-[3.75rem]">
+            <WeekAside
+              isAuthenticated={isAuthenticated}
+              isLoading={isLoading}
+              items={myWeek}
+              startOfToday={startOfToday}
+              selectedOffset={selectedOffset}
+              preferredTimezone={preferredTimezone}
+              onSelectDay={(offset) => setSelectedDay((todayDayIndex + offset) % 7)}
+            />
+          </aside>
+          </div>
         </div>
       </div>
     </ErrorBoundary>

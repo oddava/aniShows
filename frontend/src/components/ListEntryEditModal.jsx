@@ -385,7 +385,7 @@ export default function ListEntryEditModal({
                         </div>
                     )}
 
-                    <div className="mt-6 flex flex-col-reverse gap-3 pt-5 sm:flex-row sm:justify-end">
+                    <div className="sticky bottom-[calc(-1*max(1rem,env(safe-area-inset-bottom)))] -mx-4 mt-6 flex flex-col-reverse gap-3 bg-[var(--ink-1)] px-4 py-4 sm:-bottom-5 sm:-mx-6 sm:flex-row sm:justify-end sm:px-6">
                         <button
                             type="button"
                             onClick={handleRequestClose}

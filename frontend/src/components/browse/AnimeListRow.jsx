@@ -40,7 +40,6 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
 
             <div className="min-w-0 flex-1">
                 <Link to={href} className="flex items-start gap-2 rounded-sm">
-                    {meta && <span aria-hidden="true" className="mt-[0.45rem] h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />}
                     <h3 className="line-clamp-2 text-[15px] sm:text-base font-semibold leading-snug text-gray-100 group-hover:text-white">
                         {displayTitle}
                     </h3>
@@ -78,6 +77,7 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                     onScore={(value) => setScore(value)}
                     onRemove={() => remove()}
                     className="relative shrink-0 self-center"
+                    variant="chip"
                 />
             )}
         </div>
