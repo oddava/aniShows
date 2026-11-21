@@ -180,6 +180,7 @@ export default function Library() {
                                     <button
                                         type="button"
                                         onClick={() => setStatus(item.value)}
+                                        ref={active ? (node) => node?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) : undefined}
                                         aria-current={active ? 'page' : undefined}
                                         className={`relative flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${active ? 'bg-white/[0.07] text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-100'}`}
                                     >

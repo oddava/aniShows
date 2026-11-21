@@ -127,6 +127,7 @@ function AnimeCard({
                         <span className="line-clamp-2 text-base font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] group-hover:text-[var(--signature)]">{displayTitle}</span>
                     </Link>
                     <p className="mt-0.5 text-sm text-[var(--text-2)] tabular">
+                        {meta && <span className="sm:hidden" style={{ color: meta.color }}>{meta.label} · </span>}
                         {[metaLine, countdown].filter(Boolean).join(' · ')}
                     </p>
                     {meta && <span className="sr-only">On your list: {meta.label}</span>}
@@ -145,6 +146,7 @@ function AnimeCard({
                         onRemove={() => remove()}
                         placement="down"
                         variant="chip"
+                        labelFrom="sm"
                         className="relative"
                     />
                 ) : <span />}

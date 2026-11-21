@@ -114,7 +114,7 @@ function Tonight({ items, now, timezone }) {
                 className="-mx-2 mt-8 block rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04] md:max-w-sm"
             >
                 <span className="block text-sm text-[var(--text-3)]">Next up</span>
-                <span className="block truncate text-[15px] text-[var(--text-1)]">{next.anime.title}</span>
+                <span className="line-clamp-2 text-[15px] text-[var(--text-1)]">{next.anime.title}</span>
                 <span className="block text-sm text-[var(--signature)] tabular">
                     {day} {clockTime(next.at, timezone)}{next.episode ? ` · Episode ${next.episode}` : ''}
                 </span>
