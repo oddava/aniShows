@@ -78,7 +78,7 @@ export default function UserMenu({
                         aria-expanded={isProfileOpen}
                         aria-controls={isProfileOpen ? profileMenuId : undefined}
                         aria-label={`Account menu for ${user?.username || 'you'}${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
-                        className="relative group flex items-center gap-3 rounded-full border border-white/5 bg-black/20 pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40"
+                        className="relative group flex items-center gap-3 rounded-full bg-white/[0.05] pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40"
                     >
                         {/* Avatar or Placeholder */}
                         <div className="w-7 h-7 rounded-full overflow-hidden border border-transparent group-hover:border-white/20 transition-all duration-300">
@@ -101,9 +101,9 @@ export default function UserMenu({
 
                     {/* Enhanced Dropdown Menu */}
                     {isProfileOpen && (
-                        <div id={profileMenuId} className="absolute right-0 top-full mt-3 w-64 py-1.5 rounded-xl border border-white/10 bg-dark-100 shadow-lg shadow-black/40 animate-fade-in z-[1001]">
+                        <div id={profileMenuId} className="absolute right-0 top-full mt-3 w-64 py-1.5 rounded-xl bg-[var(--ink-3)] shadow-lg shadow-black/40 animate-fade-in z-[1001]">
                             {/* User Info Header */}
-                            <div className="px-4 py-3 border-b border-white/5 mb-1.5">
+                            <div className="px-4 py-3 mb-1.5">
                                 <div className="flex items-center gap-3">
                                     <div className="w-9 h-9 rounded-lg overflow-hidden">
                                         {user?.avatar ? (
@@ -155,7 +155,7 @@ export default function UserMenu({
                                     <Settings aria-hidden="true" className="w-4 h-4" />
                                     <span className="text-sm font-medium">Settings</span>
                                 </Link>
-                                <div className="border-t border-white/5 my-1.5 mx-2" />
+                                <div className=" my-1.5 mx-2" />
                                 <button
                                     type="button"
                                     onClick={() => { setIsProfileOpen(false); signOut(); }}

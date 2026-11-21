@@ -139,7 +139,7 @@ export const ForumCategoryPageSkeleton = memo(() => (
                 </aside>
 
                 <section className="min-w-0">
-                    <div className="mb-4 border-b border-[var(--forums-border)] pb-3">
+                    <div className="mb-4 border-[var(--forums-border)] pb-3">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                             <div className={`h-9 min-w-0 flex-1 ${forumsBlockPlaceholder}`} />
                             <div className="flex items-center gap-2">

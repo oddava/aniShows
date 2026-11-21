@@ -307,7 +307,7 @@ const ThreadedPost = ({
 
                         {/* Reply Actions */}
                         {!isEditing && (collapseButton || canReply || post.reply_count > 0) && (
-                            <div className="flex items-center gap-4 mt-4 pt-4 border-t border-white/[0.04]">
+                            <div className="flex items-center gap-4 mt-4 pt-4 ">
                                 {collapseButton}
 
                                 {canReply && (
@@ -344,7 +344,7 @@ const ThreadedPost = ({
 
                         {/* Inline Reply Form */}
                         {isReplying && showReplyForm && canReply && (
-                            <div className="mt-4 pt-4 border-t border-white/[0.04] animate-slide-down-fade">
+                            <div className="mt-4 pt-4 animate-slide-down-fade">
                                 {/* Context Header */}
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -379,7 +379,7 @@ const ThreadedPost = ({
             {(hasReplies || (hasHiddenReplies && !isFocused)) && (
                 <div className="mt-6 space-y-6">
                     {depth >= maxDepth && !isFocused ? (
-                        <div className="pl-4 py-2 border-l-2 border-gray-800">
+                        <div className="pl-4 py-2 ">
                             <button
                                 onClick={handleContinueThread}
                                 className="inline-flex items-center gap-2 text-accent-light hover:text-accent text-sm font-medium transition-colors group"
@@ -419,7 +419,7 @@ const ThreadedPost = ({
                                 />
                             ))}
                             {hasHiddenReplies && !isFocused && (
-                                <div className="pl-4 py-2 border-l-2 border-gray-800">
+                                <div className="pl-4 py-2 ">
                                     <button
                                         onClick={handleContinueThread}
                                         className="inline-flex items-center gap-2 text-accent-light hover:text-accent text-sm font-medium transition-colors group"

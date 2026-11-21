@@ -80,7 +80,7 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en' }) {
     const href = `/anime/${anime.slug}`;
 
     return (
-        <li className="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-white/[0.05] py-2.5 last:border-b-0 sm:grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] sm:gap-x-4">
+        <li className="-mx-2 grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-[var(--radius-md)] px-2 py-2.5 transition-colors hover:bg-white/[0.03] sm:grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] sm:gap-x-4">
             <Link to={href} tabIndex={-1} aria-hidden="true" className="row-span-2 sm:row-span-1">
                 <img
                     src={getOptimizedImageUrl(anime, 'cover', 'small')}

@@ -202,7 +202,7 @@ export default function ThreadOriginalPost({
 
                 {/* Integrated Reply Action */}
                 {canReply && (
-                    <div className="mt-4 pt-4 border-t border-white/[0.04] flex justify-end">
+                    <div className="mt-4 pt-4 flex justify-end">
                         <button
                             onClick={() => setShowReplyForm(!showReplyForm)}
                             className={`flex items-center gap-2 px-4 py-2 font-bold text-xs rounded-lg transition-all border ${showReplyForm
@@ -216,7 +216,7 @@ export default function ThreadOriginalPost({
                 )}
 
                 {showReplyForm && canReply && (
-                    <div className="mt-4 pt-4 border-t border-white/[0.04] animate-slide-down-fade">
+                    <div className="mt-4 pt-4 animate-slide-down-fade">
                         <form onSubmit={handleReplySubmit}>
                             <RichTextEditor
                                 value={replyContent}

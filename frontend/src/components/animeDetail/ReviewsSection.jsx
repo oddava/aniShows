@@ -30,7 +30,7 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
     const hasReviews = allReviews.length > 0 || Boolean(ratingFilter);
 
     return (
-        <section className="mt-16 mb-16" aria-labelledby="reviews-heading">
+        <section className="panel mt-4 mb-16" aria-labelledby="reviews-heading">
             <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
                 <h2 id="reviews-heading" className="section-title">
                     Reviews
@@ -49,7 +49,7 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
                                 { value: 'highest', label: 'Highest rated' },
                                 { value: 'lowest', label: 'Lowest rated' },
                             ]}
-                            triggerClassName="min-h-11 rounded-[var(--radius-sm)] border-white/[0.08] bg-transparent px-3 py-2 text-sm text-[var(--text-2)]"
+                            triggerClassName="min-h-11 rounded-[var(--radius-sm)] bg-transparent px-3 py-2 text-sm text-[var(--text-2)]"
                             menuClassName="z-[320]"
                             ariaLabel="Sort reviews"
                         />

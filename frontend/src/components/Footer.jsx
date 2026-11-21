@@ -11,7 +11,7 @@ export default function Footer({ className = '' }) {
     return (
         <footer className={`pt-16 pb-10 md:pt-24 ${className}`}>
             <div className="page-container">
-                <div className="flex flex-col gap-6 border-t border-white/[0.08] pt-6 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                     <nav aria-label="Footer" className="flex flex-wrap gap-x-6">
                         <Link to="/browse" className={linkClass}>Browse</Link>
                         <Link to="/schedule" className={linkClass}>Schedule</Link>

@@ -43,16 +43,17 @@ export default function AiringRibbon() {
 
     return (
         <section aria-labelledby="ribbon-heading" className="page-container">
+            <div className="panel">
             <div className="mb-5 flex items-end justify-between gap-4">
                 <h2 id="ribbon-heading" className="section-title">Your week</h2>
                 <Link to="/schedule?mine=1" className="text-link shrink-0 text-[15px]">Full schedule</Link>
             </div>
-            <ol className="scroll-fade -mx-4 flex overflow-x-auto px-4 scrollbar-hide md:mx-0 md:grid md:grid-cols-7 md:overflow-visible md:px-0">
+            <ol className="scroll-fade -mx-2 flex gap-1 overflow-x-auto px-2 scrollbar-hide md:mx-0 md:grid md:grid-cols-7 md:overflow-visible md:px-0">
                 {days.map((day) => (
                     <li
                         key={day.offset}
                         aria-label={`${day.weekday}${day.offset ? ` ${day.day}` : ''}: ${day.shows.length} of your shows`}
-                        className={`w-[9.5rem] shrink-0 border-t-2 pt-3 pr-3 md:w-auto ${day.offset === 0 ? 'border-[var(--signature)]' : 'border-white/[0.08]'}`}
+                        className={`w-[9.5rem] shrink-0 rounded-[var(--radius-md)] p-3 md:w-auto ${day.offset === 0 ? 'bg-white/[0.05]' : ''}`}
                     >
                         <p className="flex items-baseline gap-1.5 text-[15px]">
                             <span className={`font-semibold ${day.offset === 0 ? 'text-[var(--signature)]' : 'text-[var(--text-1)]'}`}>
@@ -93,6 +94,7 @@ export default function AiringRibbon() {
                     </li>
                 ))}
             </ol>
+            </div>
         </section>
     );
 }

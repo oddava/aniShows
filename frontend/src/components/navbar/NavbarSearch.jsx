@@ -94,7 +94,7 @@ export default function NavbarSearch({ search }) {
                         {!isSearchExpanded && (
                             <>
                                 <span className="hidden lg:inline text-sm text-gray-500">Search anime…</span>
-                                <kbd className="hidden lg:inline ml-auto px-1.5 py-0.5 rounded font-mono text-[10px] leading-none text-gray-500 border border-white/10">/</kbd>
+                                <kbd className="hidden lg:inline ml-auto px-1.5 py-0.5 rounded font-mono text-[10px] leading-none text-gray-500">/</kbd>
                             </>
                         )}
                     </button>
@@ -122,7 +122,7 @@ export default function NavbarSearch({ search }) {
                         aria-controls={searchSuggestions.length > 0 ? 'navbar-search-listbox' : undefined}
                         aria-activedescendant={showSuggestions && selectedIndex >= 0 ? `navbar-search-option-${selectedIndex}` : undefined}
                         tabIndex={isSearchExpanded ? 0 : -1}
-                        className={`w-full rounded-full border border-white/5 bg-dark-100 py-2 pl-10 pr-8 text-sm text-white placeholder:text-gray-500 transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] focus:border-accent/40 focus:bg-dark-100 focus:outline-none focus:ring-4 focus:ring-accent/20 ${isSearchExpanded ? 'opacity-100 scale-x-100 pointer-events-auto origin-right' : 'opacity-0 scale-x-75 pointer-events-none border-transparent bg-transparent origin-right'}`}
+                        className={`w-full rounded-full bg-white/[0.05] py-2 pl-10 pr-8 text-sm text-white placeholder:text-gray-500 transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] focus:border-accent/40 focus:bg-dark-100 focus:outline-none focus:ring-4 focus:ring-accent/20 ${isSearchExpanded ? 'opacity-100 scale-x-100 pointer-events-auto origin-right' : 'opacity-0 scale-x-75 pointer-events-none border-transparent bg-transparent origin-right'}`}
                     />
 
                     {/* Clear button */}
@@ -145,7 +145,7 @@ export default function NavbarSearch({ search }) {
                     {/* Keyboard shortcut hint */}
                     {!searchQuery && isSearchExpanded && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1 pointer-events-none">
-                            <kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px] text-gray-400 border border-white/10">/</kbd>
+                            <kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px] text-gray-400">/</kbd>
                         </div>
                     )}
                 </form>
@@ -154,7 +154,7 @@ export default function NavbarSearch({ search }) {
                 <div
                     inert={!showSuggestions}
                     tabIndex={-1}
-                    className={`absolute left-0 right-0 top-full z-50 mt-3 max-h-[70vh] overflow-y-auto overflow-hidden rounded-2xl border border-white/10 bg-dark-100 shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] origin-top ${showSuggestions ? 'opacity-100 translate-y-0' : 'pointer-events-none opacity-0 -translate-y-1'
+                    className={`absolute left-0 right-0 top-full z-50 mt-3 max-h-[70vh] overflow-y-auto overflow-hidden rounded-2xl bg-dark-100 shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] origin-top ${showSuggestions ? 'opacity-100 translate-y-0' : 'pointer-events-none opacity-0 -translate-y-1'
                         }`}
                 >
                     {isSearching && searchSuggestions.length === 0 ? (

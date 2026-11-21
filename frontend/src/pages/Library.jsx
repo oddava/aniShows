@@ -139,7 +139,7 @@ export default function Library() {
 
                 {/* Status tabs: fixed colours, one label each (T7), counts from the summary. */}
                 <nav aria-label="List status" className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
-                    <ul className="flex min-w-max gap-1 border-b border-white/[0.06]">
+                    <ul className="flex min-w-max gap-1">
                         {LIST_STATUSES.map((item) => {
                             const active = item.value === status;
                             const count = summary?.counts?.[item.value];
@@ -149,14 +149,11 @@ export default function Library() {
                                         type="button"
                                         onClick={() => setStatus(item.value)}
                                         aria-current={active ? 'page' : undefined}
-                                        className={`relative flex min-h-11 items-center gap-2 px-3.5 text-sm font-semibold transition-colors ${active ? 'text-white' : 'text-gray-400 hover:text-gray-100'}`}
+                                        className={`relative flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${active ? 'bg-white/[0.07] text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-100'}`}
                                     >
                                         <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
                                         {item.label}
                                         {count != null && <span className="text-xs font-medium text-gray-500 tabular">{count}</span>}
-                                        {active && (
-                                            <span aria-hidden="true" className="absolute inset-x-2 -bottom-px h-0.5 rounded-full" style={{ backgroundColor: item.color }} />
-                                        )}
                                     </button>
                                 </li>
                             );
@@ -239,8 +236,8 @@ export default function Library() {
                                 ))}
                         </div>
                     ) : (
-                        <div className="rounded-[var(--radius-lg)] bg-white/[0.02] px-3 sm:px-4">
-                            <div aria-hidden="true" className="hidden grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] gap-x-4 border-b border-white/[0.06] py-2.5 text-sm font-semibold text-gray-300 sm:grid">
+                        <div className="panel !px-3 !py-2 sm:!px-4">
+                            <div aria-hidden="true" className="hidden grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] gap-x-4 py-2.5 text-sm font-semibold text-gray-300 sm:grid">
                                 <span />
                                 <span>Title</span>
                                 <span>Progress</span>

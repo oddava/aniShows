@@ -71,9 +71,9 @@ export default function InformationBox({ anime, className = '' }) {
     const season = [capsToSentence(anime.season), anime.season_year].filter(Boolean).join(' ');
 
     return (
-        <div className={`flex min-w-0 flex-col gap-8 ${className}`}>
+        <div className={`flex min-w-0 flex-col gap-3 ${className}`}>
             {anime.status !== 'Finished' && anime.next_airing_date && (
-                <div>
+                <div className="panel">
                     <p className="text-sm text-[var(--signature)]">Next episode</p>
                     <p className="mt-1 text-[17px] font-semibold text-[var(--text-1)]">
                         Episode {anime.next_airing_episode ?? 'TBA'}
@@ -83,7 +83,7 @@ export default function InformationBox({ anime, className = '' }) {
                 </div>
             )}
 
-            <section aria-labelledby={`info-${anime.id}`}>
+            <section aria-labelledby={`info-${anime.id}`} className="panel">
                 <h2 id={`info-${anime.id}`} className="section-title mb-3">Details</h2>
                 <dl>
                     {anime.anime_type && <InfoRow label="Type" value={anime.anime_type} />}
@@ -101,6 +101,8 @@ export default function InformationBox({ anime, className = '' }) {
                 </dl>
             </section>
 
+            {/* Genres, tags and links share one panel (hidden when all are empty). */}
+            <div className="panel flex flex-col gap-6 empty:hidden">
             {anime.genres && anime.genres.length > 0 && (
                 <div>
                     <GroupLabel>Genres</GroupLabel>
@@ -163,6 +165,7 @@ export default function InformationBox({ anime, className = '' }) {
                     )}
                 </div>
             )}
+            </div>
         </div>
     );
 }

@@ -44,12 +44,12 @@ function SectionHead({ title, onSeeAll, seeAllLabel }) {
 }
 
 /**
- * Sections stack with a hairline between them, never a box around them.
- * `space-y` + `border-t` on every child after the first.
+ * Each section sits on its own panel (the shared .panel surface), stacked
+ * with a small gap: no lines between them.
  */
 function Column({ children }) {
     return (
-        <div className="min-w-0 [&>*+*]:mt-10 [&>*+*]:border-t [&>*+*]:border-white/[0.06] [&>*+*]:pt-8">
+        <div className="min-w-0 [&>*]:rounded-[var(--radius-lg)] [&>*]:bg-[var(--ink-1)] [&>*]:p-5 md:[&>*]:p-6 [&>*+*]:mt-4">
             {children}
         </div>
     );
@@ -80,7 +80,7 @@ function WatchingRows({ items }) {
                 const watched = item.episodes_watched || 0;
                 const total = knownEpisodeTotal(anime);
                 return (
-                    <li key={item.id} className="flex items-center gap-4 border-b border-white/[0.06] py-3 last:border-b-0">
+                    <li key={item.id} className="flex items-center gap-4 py-3 ">
                         <Link to={`/anime/${anime.slug}`} tabIndex={-1} aria-hidden="true" className="shrink-0">
                             <AnimeMediaImage
                                 anime={anime}
@@ -163,7 +163,7 @@ function TopGenres({ genres }) {
                 {genres.map((genre) => (
                     <li
                         key={genre.name}
-                        className="flex items-baseline justify-between gap-4 border-b border-white/[0.06] py-2.5 text-[15px] last:border-b-0"
+                        className="flex items-baseline justify-between gap-4 py-2.5 text-[15px] "
                     >
                         <span className="text-[var(--text-1)]">{genre.name}</span>
                         <span className="text-[var(--text-2)] tabular">{genre.count}</span>
@@ -305,7 +305,7 @@ export default function OverviewTab({
 
     return (
         <div className="animate-tab-content overview-tab pb-8">
-            <div className="grid gap-10 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)] md:gap-16">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
                 {left.length > 0 && <Column>{left}</Column>}
                 <div className={left.length > 0 ? 'min-w-0' : 'min-w-0 md:col-span-2'}>
                     <Column>{right}</Column>

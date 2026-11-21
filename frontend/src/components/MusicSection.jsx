@@ -11,7 +11,7 @@ export default function MusicSection({ anime, isCompact = false, itemLimit = nul
     const limit = (list) => (Number.isFinite(itemLimit) ? list.slice(0, itemLimit) : list);
 
     return (
-        <section className="animate-tab-content w-full min-w-0">
+        <section className="panel animate-tab-content w-full min-w-0">
             <h2 className="section-title mb-5">Themes</h2>
 
             <div className={`grid min-w-0 w-full gap-x-10 gap-y-8 ${isCompact ? 'grid-cols-1' : 'md:grid-cols-2'}`}>

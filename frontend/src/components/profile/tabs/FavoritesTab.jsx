@@ -121,7 +121,7 @@ export default function FavoritesContent({
                     />
                 </ProfileErrorBoundary>
             ) : (
-                <p className="border-t border-white/[0.06] pt-6 text-[17px] text-[var(--text-2)]">
+                <p className=" pt-6 text-[17px] text-[var(--text-2)]">
                     {isPublicView ? 'No favorites yet.' : 'No favorites yet. The heart on a show’s page puts it here.'}
                     {!isPublicView && (
                         <> <Link to="/browse?sort=rating" className="text-link">See the top rated</Link></>

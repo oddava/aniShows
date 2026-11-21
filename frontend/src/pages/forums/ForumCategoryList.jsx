@@ -503,7 +503,7 @@ const ForumCategoryList = () => {
                     {/* Pinned to its track: with no category list the main
                         column used to fall into the 170 px sidebar (C1). */}
                     <section className="min-w-0 xl:col-start-2">
-                        <div className="mb-4 border-b border-[var(--forums-border)] pb-3">
+                        <div className="mb-4 border-[var(--forums-border)] pb-3">
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                                 <div className="relative min-w-0 flex-1">
                                     <Search size={14} className="forums-meta-text absolute left-3 top-1/2 -translate-y-1/2" />

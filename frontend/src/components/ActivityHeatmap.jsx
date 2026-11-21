@@ -286,7 +286,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
                                 </p>
                             </div>
                             {/* Arrow */}
-                            <div className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-b border-r border-white/[0.08] bg-[var(--ink-3)]" />
+                            <div className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-[var(--ink-3)]" />
                         </div>
                     )}
                 </div>

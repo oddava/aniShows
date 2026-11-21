@@ -85,7 +85,7 @@ export default function VerificationPending() {
               never verified (change-email needs a signed-in, re-authenticated
               session), so the honest fix for a typo is a fresh sign-up.
             */}
-            <div className="mt-10 border-t border-white/[0.06] pt-8">
+            <div className="mt-10 pt-8">
                 <h2 className="section-title">Wrong address?</h2>
                 <p className="mt-2 text-[15px] leading-relaxed text-[var(--text-2)]">
                     Sign up again with the right one. The account with the wrong address is never

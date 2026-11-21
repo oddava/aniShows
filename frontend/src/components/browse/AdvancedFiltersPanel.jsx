@@ -313,7 +313,7 @@ export default function AdvancedFiltersPanel({
       />
 
       <div className="absolute inset-x-0 top-0 bottom-0 md:relative md:inset-auto w-full bg-dark-100 rounded-none md:rounded-2xl border-0 md:border border-gray-800/60 mb-0 md:mb-8 overflow-y-auto md:overflow-hidden animate-fade-in max-h-[100dvh] md:max-h-[80vh] flex flex-col">
-        <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-gray-800/60 bg-dark-100/95 backdrop-blur">
+        <div className="md:hidden flex items-center justify-between px-4 py-3 bg-dark-100/95 backdrop-blur">
           <h2 className="text-sm font-semibold text-gray-200">Filters</h2>
           <button
             type="button"
@@ -439,7 +439,7 @@ export default function AdvancedFiltersPanel({
             </button>
 
             {showTagFilters && (
-              <div className="border-t border-gray-800/60 flex flex-col md:min-h-0 md:h-full">
+              <div className=" flex flex-col md:min-h-0 md:h-full">
                 <div className="sticky top-0 z-10 px-4 pt-3 pb-2 bg-dark-100/95 backdrop-blur">
                 <div className="relative">
                   <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />

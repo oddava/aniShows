@@ -107,7 +107,7 @@ function AnimeCard({
         // The agenda row (Schedule): same facts and quick add, laid out like
         // oddava.me's list rows: thumb, title and what's next, action right.
         return (
-            <article className="group grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-4 border-b border-white/[0.06] py-3 last:border-b-0" aria-label={displayTitle}>
+            <article className="group -mx-3 grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-4 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03]" aria-label={displayTitle}>
                 <Link to={href} tabIndex={-1} aria-hidden="true" className="relative block h-[72px] w-12 overflow-hidden rounded-md bg-[var(--ink-2)]">
                     <img
                         ref={imageRef}

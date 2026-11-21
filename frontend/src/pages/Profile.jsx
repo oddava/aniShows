@@ -423,7 +423,7 @@ function ProfileSkeleton({ activeTab = 'overview' }) {
             </div>
 
             <div className="page-container mt-10 md:mt-12">
-                <div className="flex gap-6 border-b border-white/[0.06] py-3 md:gap-8">
+                <div className="flex gap-6 py-3 md:gap-8">
                     {['w-16', 'w-20', 'w-14', 'w-16', 'w-14'].map((width, index) => (
                         <div key={index} className={`h-4 ${width} ${bar}`} />
                     ))}
@@ -440,7 +440,7 @@ function ProfileSkeleton({ activeTab = 'overview' }) {
                         </div>
                         <div className="space-y-4">
                             {Array.from({ length: 4 }, (_, index) => (
-                                <div key={index} className="flex items-center gap-4 border-b border-white/[0.06] pb-4">
+                                <div key={index} className="flex items-center gap-4 pb-4">
                                     <div className="h-[72px] w-12 rounded-md bg-[var(--ink-2)] animate-pulse" />
                                     <div className={`h-4 w-1/2 ${bar}`} />
                                 </div>

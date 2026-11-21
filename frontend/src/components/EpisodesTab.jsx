@@ -147,7 +147,7 @@ export default function EpisodesTab({
                                                 type="button"
                                                 disabled={isProgressPending}
                                                 onClick={() => setProgress(episode.number)}
-                                                className="inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-white/[0.08] px-2.5 text-sm text-[var(--text-2)] transition-colors hover:border-white/20 hover:text-[var(--text-1)] disabled:cursor-not-allowed disabled:opacity-40"
+                                                className="inline-flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 text-sm text-[var(--text-2)] transition-colors hover:border-white/20 hover:text-[var(--text-1)] disabled:cursor-not-allowed disabled:opacity-40"
                                                 aria-label={`Watched through here (episode ${episode.number})`}
                                             >
                                                 <CheckCheck className="h-4 w-4" aria-hidden="true" />

@@ -165,7 +165,7 @@ function parseNextPage(lastPage) {
 
 function EmptyState({ filterType }) {
     return (
-        <p className="border-t border-white/[0.06] pt-6 text-[17px] text-[var(--text-2)]">
+        <p className=" pt-6 text-[17px] text-[var(--text-2)]">
             {filterType !== 'all'
                 ? 'Nothing with this status yet. Try another one.'
                 : 'No activity yet. It shows up here when a list changes.'}
@@ -178,7 +178,7 @@ function ActivityRow({ activity }) {
     const title = anime?.title || 'Unknown title';
 
     return (
-        <li className="flex items-center gap-4 border-b border-white/[0.06] py-3 last:border-b-0">
+        <li className="flex items-center gap-4 py-3 ">
             {anime?.slug ? (
                 <Link to={`/anime/${anime.slug}`} tabIndex={-1} aria-hidden="true" className="shrink-0">
                     <AnimeMediaImage
@@ -317,7 +317,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false, hea
             {isLoading && activities.length === 0 && (
                 <ul aria-hidden="true">
                     {Array.from({ length: 5 }).map((_, index) => (
-                        <li key={index} className="flex items-center gap-4 border-b border-white/[0.06] py-3">
+                        <li key={index} className="flex items-center gap-4 py-3">
                             <span className="h-14 w-10 rounded-md bg-[var(--ink-2)] animate-pulse" />
                             <span className="h-4 w-1/2 rounded bg-[var(--ink-2)] animate-pulse" />
                         </li>
@@ -340,7 +340,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false, hea
                 <div className={`space-y-8 transition-opacity duration-200 ${isFilterUpdating ? 'opacity-60' : 'opacity-100'}`}>
                     {visibleDateGroups.map((group) => (
                         <div key={group.key}>
-                            <h3 className="border-b border-white/[0.06] pb-2 text-sm text-[var(--text-2)]">
+                            <h3 className=" pb-2 text-sm text-[var(--text-2)]">
                                 {group.label}
                             </h3>
                             <ul>

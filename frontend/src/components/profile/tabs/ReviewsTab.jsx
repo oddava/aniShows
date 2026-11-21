@@ -24,7 +24,7 @@ export default function ReviewsContent({
 
     if (!reviews || reviews.length === 0) {
         return (
-            <p className="border-t border-white/[0.06] pt-6 text-[17px] text-[var(--text-2)]">
+            <p className=" pt-6 text-[17px] text-[var(--text-2)]">
                 {isPublicView ? 'No reviews yet.' : 'No reviews yet. Write one from any show’s page.'}
             </p>
         );

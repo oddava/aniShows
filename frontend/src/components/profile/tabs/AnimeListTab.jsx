@@ -233,7 +233,7 @@ function AnimeListView({
 
     if (isError && items.length === 0) {
         return (
-            <p className="border-t border-white/[0.06] pt-6 text-[17px] text-[var(--text-2)]">
+            <p className=" pt-6 text-[17px] text-[var(--text-2)]">
                 Couldn’t load this list.{' '}
                 <button type="button" onClick={() => onRetry()} className="text-link">Try again</button>
             </p>
@@ -242,7 +242,7 @@ function AnimeListView({
 
     if (items.length === 0) {
         return (
-            <p className="border-t border-white/[0.06] pt-6 text-[17px] text-[var(--text-2)]">
+            <p className=" pt-6 text-[17px] text-[var(--text-2)]">
                 {searchQuery ? 'Nothing here matches that search.' : `Nothing in ${statusLabel(listStatusFilter)} yet.`}
                 {!searchQuery && !isPublicView && (
                     <> <Link to="/browse" className="text-link">Find something to add</Link></>
@@ -312,7 +312,7 @@ function ListRow({ item, episodesWatched, children }) {
     const fallbackImageUrl = getImageFallbackUrl(item.anime, 'cover');
 
     return (
-        <div className="flex items-center gap-4 border-b border-white/[0.06] py-3 last:border-b-0">
+        <div className="flex items-center gap-4 py-3 ">
             <Link to={`/anime/${item.anime?.slug}`} className="flex flex-1 min-w-0 items-center gap-4">
                 <img
                     src={imageUrl}

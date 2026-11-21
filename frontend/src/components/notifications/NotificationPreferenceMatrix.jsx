@@ -95,7 +95,7 @@ export default function NotificationPreferenceMatrix({
                     <div className="mt-5">
                         <div
                             aria-hidden="true"
-                            className={`hidden sm:grid ${gridColumns} gap-x-4 border-b border-gray-800/80 pb-2`}
+                            className={`hidden sm:grid ${gridColumns} gap-x-4 pb-2`}
                         >
                             <span />
                             {channels.map((channel) => (
@@ -105,7 +105,7 @@ export default function NotificationPreferenceMatrix({
                             ))}
                         </div>
 
-                        <div className="divide-y divide-gray-800/80">
+                        <div className=" ">
                             {categories.map((category) => {
                                 const labelId = `${baseId}-${category.key}`;
                                 return (

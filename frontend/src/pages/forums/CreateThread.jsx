@@ -181,7 +181,7 @@ const CreateThread = () => {
                             </div>
 
                             {/* Category + Tags */}
-                            <div className="rounded-2xl bg-dark-100 border border-white/[0.06] divide-y divide-white/[0.04]">
+                            <div className="rounded-2xl bg-dark-100 border border-white/[0.06] ">
                                 {/* Category */}
                                 {!slug && (
                                     <CategorySelector
@@ -244,7 +244,7 @@ const CreateThread = () => {
                         <div className="hidden lg:block lg:w-[40%]">
                             <div className="rounded-2xl bg-dark-100 border border-white/[0.06] overflow-hidden">
                                 {/* Preview header */}
-                                <div className="flex items-center gap-2 px-5 py-3.5 border-b border-white/[0.04]">
+                                <div className="flex items-center gap-2 px-5 py-3.5 ">
                                     <Eye size={13} className="text-gray-500" />
                                     <span className="text-[11px] font-bold text-gray-500 ">Preview</span>
                                 </div>

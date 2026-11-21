@@ -178,7 +178,7 @@ export default function CustomSelect({
                 aria-label={ariaLabel}
                 aria-expanded={isOpen}
                 aria-haspopup="listbox"
-                className={`inline-flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-dark-200 px-4 py-3 text-sm font-semibold text-white outline-none transition-colors hover:border-white/20 focus-visible:ring-2 focus-visible:ring-accent/50 disabled:cursor-not-allowed disabled:opacity-60 ${triggerClassName}`}
+                className={`inline-flex w-full items-center justify-between gap-2 rounded-xl bg-dark-200 px-4 py-3 text-sm font-semibold text-white outline-none transition-colors hover:border-white/20 focus-visible:ring-2 focus-visible:ring-accent/50 disabled:cursor-not-allowed disabled:opacity-60 ${triggerClassName}`}
                 onClick={() => setIsOpen((current) => !current)}
                 onKeyDown={handleTriggerKeyDown}
             >
@@ -198,7 +198,7 @@ export default function CustomSelect({
                     ref={menuRef}
                     role="listbox"
                     aria-labelledby={selectId}
-                    className={`absolute left-0 right-0 z-[260] mt-2 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-dark-100/95 p-1 shadow-2xl backdrop-blur-xl ${menuClassName}`}
+                    className={`absolute left-0 right-0 z-[260] mt-2 max-h-64 overflow-y-auto rounded-xl bg-[var(--ink-3)] p-1 shadow-2xl backdrop-blur-xl ${menuClassName}`}
                 >
                     {resolvedOptions.map((option, index) => {
                         const isSelected = option.value === selectedValue;

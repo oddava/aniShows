@@ -230,7 +230,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                                 {genreData.map((genre) => (
                                     <li
                                         key={genre.name}
-                                        className="flex items-baseline justify-between gap-4 border-b border-white/[0.06] py-2.5 text-[15px] last:border-b-0"
+                                        className="flex items-baseline justify-between gap-4 py-2.5 text-[15px] "
                                     >
                                         <span className="text-[var(--text-1)]">{genre.name}</span>
                                         <span className="text-[var(--text-2)] tabular">{genre.value}</span>
@@ -274,7 +274,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                                 const total = knownEpisodeTotal(item.anime);
                                 const progress = total > 0 ? Math.min(eps / total, 1) * 100 : 0;
                                 return (
-                                    <li key={item.id} className="flex items-center gap-4 border-b border-white/[0.06] py-3 last:border-b-0">
+                                    <li key={item.id} className="flex items-center gap-4 py-3 ">
                                         <AnimeMediaImage
                                             anime={item.anime}
                                             kind="cover"

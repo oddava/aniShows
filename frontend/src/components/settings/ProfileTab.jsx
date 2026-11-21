@@ -319,7 +319,7 @@ export default function ProfileTab({ user, profile }) {
                 </div>
 
                 {/* Profile Primary Color */}
-                <div className="pt-4 border-t border-gray-800">
+                <div className="pt-4 ">
                     <label className="block text-sm font-medium text-gray-300 mb-3">
                         Profile Primary Color
                     </label>

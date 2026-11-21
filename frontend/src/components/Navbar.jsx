@@ -60,7 +60,7 @@ export default function Navbar() {
             <nav
                 aria-label="Main"
                 data-autohide-nav
-                className={`hidden md:block fixed inset-x-0 top-0 z-[1000] border-b border-white/[0.06] backdrop-blur-md transition-[transform,opacity] duration-200 ease-out ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}
+                className={`hidden md:block fixed inset-x-0 top-0 z-[1000] backdrop-blur-md transition-[transform,opacity] duration-200 ease-out ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}
                 style={{ background: 'var(--color-navbar-bg)' }}
             >
                 <div className="page-container">

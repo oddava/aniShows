@@ -63,7 +63,7 @@ export function AnimeDetailSkeleton() {
                                 </div>
                             </div>
 
-                            <div className="mb-8 flex items-center gap-6 overflow-hidden border-b border-white/[0.08] sm:mb-10">
+                            <div className="mb-8 flex items-center gap-6 overflow-hidden sm:mb-10">
                                 {['w-16', 'w-14', 'w-16', 'w-12', 'w-20'].map((width, i) => (
                                     <div key={i} className="flex min-h-11 flex-shrink-0 items-center">
                                         <SkeletonBlock className={`${width} h-4`} />

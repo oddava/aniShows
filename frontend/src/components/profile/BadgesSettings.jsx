@@ -198,7 +198,7 @@ export default function BadgesSettings() {
                                         )}
                                     </div>
                                     
-                                    <div className="text-xs text-gray-500 mt-auto font-medium pt-2 w-full border-t border-dark-300">
+                                    <div className="text-xs text-gray-500 mt-auto font-medium pt-2 w-full ">
                                         Earned {formatDateInUserTimezone(userBadge.granted_at)}
                                     </div>
                                 </div>

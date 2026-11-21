@@ -59,13 +59,13 @@ function FriendAvatar({ friend, accentColor }) {
             {showTooltip && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50"
                 >
-                    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-lg whitespace-nowrap"
+                    <div className="bg-gray-900 rounded-lg px-3 py-2 shadow-lg whitespace-nowrap"
                     >
                         <p className="text-white font-medium text-sm">{user.username}</p>
                         <p className="text-gray-400 text-xs mt-0.5">{getStatusText()}</p>
                         {/* Arrow */}
                         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
-                            <div className="w-2 h-2 bg-gray-900 border-r border-b border-gray-700 rotate-45"></div>
+                            <div className="w-2 h-2 bg-gray-900 rotate-45"></div>
                         </div>
                     </div>
                 </div>
@@ -79,7 +79,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
 
     if (loading) {
         return (
-            <div className="pt-2">
+            <div className="panel">
                 <div className="flex items-center gap-2 mb-4">
                     <Users aria-hidden="true" className="w-4 h-4 text-[var(--text-3)]" />
                     <h3 className="text-sm font-semibold text-gray-300">Friends watching</h3>
@@ -95,7 +95,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
 
     if (error) {
         return (
-            <div className="pt-2">
+            <div className="panel">
                 <div className="flex items-center gap-2 mb-4">
                     <Users aria-hidden="true" className="w-4 h-4 text-[var(--text-3)]" />
                     <h3 className="text-sm font-semibold text-gray-300">Friends watching</h3>
@@ -116,7 +116,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
 
     if (friends.length === 0) {
         return (
-            <div className="pt-2">
+            <div className="panel">
                 <div className="flex items-center gap-2 mb-4">
                     <Users aria-hidden="true" className="w-4 h-4 text-[var(--text-3)]" />
                     <h3 className="text-sm font-semibold text-gray-300">Friends watching</h3>
@@ -133,7 +133,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
     const remainingCount = Math.max(total, friends.length) - displayedFriends.length;
 
     return (
-        <div className="pt-2">
+        <div className="panel">
             <div className="flex items-center gap-2 mb-4">
                 <Users aria-hidden="true" className="w-4 h-4 text-[var(--text-3)]" />
                 <h3 className="text-sm font-semibold text-gray-300">Friends watching</h3>

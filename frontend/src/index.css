@@ -298,6 +298,21 @@
     }
   }
 
+  /* A section's surface: a slightly raised slate panel. Sections are told
+     apart by these, never by lines or borders. One level only: nothing
+     inside a panel gets its own panel. */
+  .panel {
+    background: var(--ink-1);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+  }
+
+  @media (width >= 48rem) {
+    .panel {
+      padding: 1.5rem;
+    }
+  }
+
   /* A secondary action as plain accent text: no underline, no box. */
   .text-link {
     display: inline-flex;
@@ -345,14 +360,15 @@
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-gray-800 bg-transparent px-5 py-2.5 font-medium text-gray-200 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent px-5 py-2.5 font-medium text-gray-200 disabled:cursor-not-allowed disabled:opacity-50;
+    background-color: rgb(255 255 255 / 0.06);
     min-height: 2.75rem;
     transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
   }
 
   .btn-secondary:hover:not(:disabled) {
-    @apply bg-dark-200 text-white;
-    border-color: var(--line-4);
+    @apply text-white;
+    background-color: rgb(255 255 255 / 0.1);
   }
 
   /* Quiet text-only action ("Undo", "View all"). */

@@ -14,8 +14,8 @@ const getYouTubeId = (url) => {
 
 function Section({ title, children }) {
     return (
-        <section className="min-w-0">
-            <h2 className="section-title mb-5">{title}</h2>
+        <section className="panel min-w-0">
+            <h2 className="section-title mb-4">{title}</h2>
             {children}
         </section>
     );
@@ -57,7 +57,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
     }, [episodes]);
 
     return (
-        <div className="animate-tab-content space-y-16">
+        <div className="animate-tab-content space-y-4">
             {topCharacters.length > 0 && (
                 <Section title="Characters">
                     <div className="grid grid-cols-1 gap-x-10 gap-y-6 xl:grid-cols-2">

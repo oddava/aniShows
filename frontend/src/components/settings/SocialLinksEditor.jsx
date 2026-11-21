@@ -5,7 +5,7 @@ import { getSocialLinkDuplicateKey } from './settingsUtils';
 /** Up to five social links, with duplicate and missing-platform warnings. */
 export default function SocialLinksEditor({ socialLinks, setSocialLinks, isSavingProfile }) {
     return (
-        <div className="pt-4 border-t border-gray-800">
+        <div className="pt-4 ">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                     <h3 className="text-lg font-medium text-white">Social Links</h3>

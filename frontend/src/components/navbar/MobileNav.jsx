@@ -41,7 +41,7 @@ export default function MobileNav({ isAuthenticated, mobileUnreadCount = 0 }) {
     return (
         <nav
             aria-label="Primary"
-            className="md:hidden fixed inset-x-0 bottom-0 z-[1001] border-t border-white/[0.07] bg-[rgb(14_16_20/0.94)] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl select-none"
+            className="md:hidden fixed inset-x-0 bottom-0 z-[1001] bg-[rgb(14_16_20/0.94)] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl select-none"
         >
             <ul className={`mx-auto grid h-[var(--tabbar-h)] max-w-md ${tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}>
                 {tabs.map(({ to, label, icon: Icon, badge }) => {
@@ -55,7 +55,6 @@ export default function MobileNav({ isAuthenticated, mobileUnreadCount = 0 }) {
                                 aria-label={badge > 0 ? name : undefined}
                                 className={`relative flex min-h-11 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors [-webkit-tap-highlight-color:transparent] ${active ? 'text-white' : 'text-gray-400 active:text-white'}`}
                             >
-                                {active && <span aria-hidden="true" className="absolute top-0 h-0.5 w-8 rounded-full bg-[var(--signature)]" />}
                                 <span className="relative">
                                     <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={active ? 2.2 : 1.8} />
                                     {badge > 0 && (

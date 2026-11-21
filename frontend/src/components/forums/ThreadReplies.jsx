@@ -48,7 +48,7 @@ export default function ThreadReplies({
         <div className="lg:w-[85%] mx-auto relative">
             {/* Replies Header */}
             {(postsData?.count > 0 || focusedPostId) && (
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
+                <div className="flex items-center justify-between mb-6 pb-4 ">
                     <div className="flex items-center gap-4">
                         <h3 className="text-sm font-bold text-gray-400">
                             {focusedPostId ? 'Thread Context' : `${postsData.count} ${postsData.count === 1 ? 'Reply' : 'Replies'}`}

@@ -46,20 +46,20 @@ export default function GuestLanding() {
                     </p>
                 </div>
 
-                <div>
+                <div className="panel">
                     <h2 className="section-title">Airing today</h2>
                     <p className="mt-1 text-[15px] text-[var(--text-2)]">In your time zone.</p>
                     <ul className="mt-3">
                         {isPending
                             ? Array.from({ length: 4 }, (_, i) => (
-                                <li key={i} className="flex items-center gap-4 border-b border-white/[0.06] py-3" aria-hidden="true">
+                                <li key={i} className="flex items-center gap-4 py-3" aria-hidden="true">
                                     <Skeleton className="h-16 w-11 shrink-0" />
                                     <Skeleton className="h-4 w-1/2" />
                                 </li>
                             ))
                             : today.map((anime) => (
-                                <li key={anime.id} className="border-b border-white/[0.06] last:border-b-0">
-                                    <Link to={`/anime/${anime.slug}`} className="group flex items-center gap-4 py-3">
+                                <li key={anime.id}>
+                                    <Link to={`/anime/${anime.slug}`} className="group -mx-3 flex items-center gap-4 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03]">
                                         <img
                                             src={getOptimizedImageUrl(anime, 'cover', 'small')}
                                             onError={(event) => applyImageFallback(event, getImageFallbackUrl(anime, 'cover'))}
@@ -83,7 +83,7 @@ export default function GuestLanding() {
                             ))}
                     </ul>
                     {!isPending && today.length === 0 && (
-                        <p className="border-t border-white/[0.06] pt-4 text-[15px] text-[var(--text-2)]">Nothing airs today.</p>
+                        <p className="pt-2 text-[15px] text-[var(--text-2)]">Nothing airs today.</p>
                     )}
                     <Link to="/schedule" className="text-link mt-2">See the week</Link>
                 </div>

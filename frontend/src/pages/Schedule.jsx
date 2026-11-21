@@ -77,7 +77,7 @@ const addDays = (date, days) => {
 // scrolling.
 const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday }) => {
   return (
-    <div className="grid grid-cols-7" role="group" aria-label="Day">
+    <div className="grid grid-cols-7 gap-1" role="group" aria-label="Day">
       {Array.from({ length: 7 }, (_, position) => (todayDay + position) % 7).map((index, position) => {
         const isSelected = selectedDay === index;
         const count = animeCounts[position] || 0;
@@ -93,9 +93,9 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
             aria-pressed={isSelected}
             aria-current={isToday ? 'date' : undefined}
             aria-label={`${DAY_NAMES[index]} ${dayOfMonth}, ${count} ${count === 1 ? 'episode' : 'episodes'}`}
-            className={`relative flex min-h-16 flex-col items-start border-t-2 px-1 pt-2.5 pb-2 text-left transition-colors duration-200 sm:px-2 ${isSelected
-              ? 'border-[var(--signature)]'
-              : 'border-white/[0.08] hover:border-white/20'}`}
+            className={`relative flex min-h-16 flex-col items-start rounded-[var(--radius-md)] px-2 py-2.5 text-left transition-colors duration-200 sm:px-3 ${isSelected
+              ? 'bg-white/[0.08]'
+              : 'hover:bg-white/[0.04]'}`}
           >
             <span className={`text-sm font-semibold ${isSelected || isToday ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>
               {isToday ? 'Today' : DAY_SHORT[index]}
@@ -362,9 +362,9 @@ export default function Schedule() {
           {isLoading ? (
             <ScheduleGridSkeleton count={10} />
           ) : selectedDayAnime.length > 0 ? (
-            <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
+            <div className="grid items-start gap-4 lg:grid-cols-2">
               {agendaGroups(selectedDayAnime, isAuthenticated).map((group) => (
-                <section key={group.title} aria-label={group.title}>
+                <section key={group.title} aria-label={group.title} className="panel">
                   {group.showTitle && <h3 className="mb-1 text-[15px] font-semibold text-[var(--text-2)]">{group.title}</h3>}
                   <div>
                     {group.items.map((anime, index) => (

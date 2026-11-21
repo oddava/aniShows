@@ -326,7 +326,7 @@ const ImportPage = () => {
 
             {/* Import Tabs */}
             <div className="bg-dark-100 rounded-2xl border border-gray-800 overflow-hidden mb-8">
-                <div className="flex flex-col sm:flex-row border-b border-gray-800">
+                <div className="flex flex-col sm:flex-row ">
                     <button
                         className={`flex-1 py-3 sm:py-4 px-4 sm:px-6 text-center font-medium flex items-center justify-center gap-2 transition-colors text-sm sm:text-base ${
                             activeTab === 'mal' 
@@ -512,10 +512,10 @@ const ImportPage = () => {
             {/* Import Jobs */}
             {jobs.length > 0 && (
                 <div className="bg-dark-100 rounded-xl sm:rounded-2xl border border-gray-800 overflow-hidden">
-                    <div className="p-4 sm:p-6 border-b border-gray-800">
+                    <div className="p-4 sm:p-6 ">
                         <h2 className="text-lg sm:text-xl font-bold text-white">Import History</h2>
                     </div>
-                    <div className="divide-y divide-gray-800">
+                    <div className=" ">
                         {jobs.map((job) => (
                             <ImportJobCard
                                 key={job.id}
@@ -661,7 +661,7 @@ function ImportJobCard({ job, expanded, onToggle, onCancel, cancelling, onRunAga
             )}
 
             {expanded && (
-                <div className="mt-4 pt-4 border-t border-gray-800">
+                <div className="mt-4 pt-4 ">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4">
                         <div className="text-center p-2 sm:p-3 bg-dark-50 rounded-lg border border-gray-800">
                             <p className="text-xl sm:text-2xl font-bold text-white">{job.total_entries}</p>

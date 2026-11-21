@@ -234,7 +234,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                 </div>
 
                 {/* Sub Ratings Toggle */}
-                <div className="border-t border-gray-800 pt-4">
+                <div className=" pt-4">
                     <button
                         type="button"
                         onClick={() => setShowAdvanced(!showAdvanced)}
@@ -245,7 +245,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                     </button>
 
                     {showAdvanced && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6 animate-fade-in pl-2 border-l-2 border-gray-800">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-6 animate-fade-in pl-2 ">
                             <StarInput
                                 label="Story"
                                 value={subRatings.story}
@@ -294,7 +294,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
                 </div>
 
                 {/* Spoilers & Actions */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 pt-4 border-t border-gray-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 pt-4 ">
                     <label className="flex items-center gap-3 cursor-pointer group select-none hover:bg-white/5 p-2 -ml-2 rounded-lg transition-colors w-fit">
                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${hasSpoilers ? 'bg-red-500 border-red-500' : 'border-gray-600 bg-dark-50 group-hover:border-gray-500'
                             }`}>

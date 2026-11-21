@@ -202,7 +202,7 @@ export default function ListEntryEditModal({
                 ref={modalRef}
                 className="sheet-panel flex max-h-[calc(100dvh-env(safe-area-inset-top,0px)-0.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-[20px] bg-[var(--ink-1)] shadow-[var(--shadow-pop)] sm:max-h-[min(90dvh,48rem)] sm:rounded-[var(--radius-lg)]"
             >
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-4 py-4 sm:px-6 sm:py-5">
+                <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5">
                     <div className="min-w-0">
                         <h2 id="list-entry-modal-title" className="text-xl font-semibold tracking-[-0.02em] text-[var(--text-1)] sm:text-2xl">
                             {animeTitle ? (
@@ -331,7 +331,7 @@ export default function ListEntryEditModal({
                         </Field>
                     </div>
 
-                    <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/[0.06] pt-4">
+                    <div className="mt-5 flex items-center justify-between gap-4 rounded-xl bg-dark-200 px-4 py-3">
                         <div className="min-w-0">
                             <span id="list-entry-rewatching-label" className="text-sm font-semibold text-gray-300">
                                 Rewatching
@@ -385,7 +385,7 @@ export default function ListEntryEditModal({
                         </div>
                     )}
 
-                    <div className="mt-6 flex flex-col-reverse gap-3 border-t border-white/10 pt-5 sm:flex-row sm:justify-end">
+                    <div className="mt-6 flex flex-col-reverse gap-3 pt-5 sm:flex-row sm:justify-end">
                         <button
                             type="button"
                             onClick={handleRequestClose}

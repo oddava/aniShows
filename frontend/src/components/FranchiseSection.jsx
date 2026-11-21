@@ -71,7 +71,7 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
     const relationLabel = (type) => RELATION_LABELS[type] || 'Related';
 
     return (
-        <section className={`min-w-0 ${isRetro ? 'retro-window p-4 pb-2' : ''}`} data-title={`Franchise (${relations.length} total)`} aria-labelledby="franchise-heading">
+        <section className={`panel min-w-0 ${isRetro ? 'retro-window p-4 pb-2' : ''}`} data-title={`Franchise (${relations.length} total)`} aria-labelledby="franchise-heading">
             {/* Full-page loading overlay when fetching a franchise anime */}
             {loadingId && (
                 <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center">

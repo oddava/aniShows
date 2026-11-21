@@ -85,7 +85,7 @@ export default function FriendsTab({ username, isPrivate }) {
 
     if (friends.length === 0) {
         return (
-            <p className="border-t border-white/[0.06] pt-6 text-[17px] text-[var(--text-2)] max-w-xl">
+            <p className=" pt-6 text-[17px] text-[var(--text-2)] max-w-xl">
                 No friends yet. Friends are mutual follows: follow people you know, and when they follow back they show up here.
             </p>
         );

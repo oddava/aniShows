@@ -11,7 +11,7 @@ export default function RecommendationsSidebar({ anime, recommendations, contain
     const genre = anime.genres?.[0]?.slug;
 
     return (
-        <section ref={containerRef} aria-labelledby={items.length > 0 ? 'recommendations-heading' : undefined} className={items.length > 0 ? 'mt-16' : undefined}>
+        <section ref={containerRef} aria-labelledby={items.length > 0 ? 'recommendations-heading' : undefined} className={items.length > 0 ? 'panel mt-4' : undefined}>
             {items.length > 0 && (
                 <>
                     <SectionHeader

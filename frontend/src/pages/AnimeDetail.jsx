@@ -275,7 +275,7 @@ export default function AnimeDetail() {
                             <nav
                                 ref={tabStripRef}
                                 aria-label="Sections"
-                                className={`scroll-fade mb-8 flex items-center overflow-x-auto scrollbar-hide border-b border-white/[0.08] pr-6 sm:mb-10 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : ''}`}
+                                className={`scroll-fade mb-4 flex items-center gap-1 overflow-x-auto scrollbar-hide pr-6 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : ''}`}
                                 data-title="Navigation"
                             >
                                 {tabsWithCounts.map((tab) => (
@@ -302,7 +302,7 @@ export default function AnimeDetail() {
                             {/* Phones/tablets: the key facts are already in the title's
                                 meta line, so the full details follow the overview. */}
                             {activeTab === DEFAULT_TAB_ID && (
-                                <div className="lg:hidden mt-16">
+                                <div className="lg:hidden mt-4">
                                     <InformationBox anime={anime} accentColor={accentColor} />
                                 </div>
                             )}

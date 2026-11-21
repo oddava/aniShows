@@ -73,9 +73,9 @@ export default function PushDeviceCard({ push }) {
                     </div>
 
                     {push.otherDevices.length > 0 && (
-                        <div className="mt-5 border-t border-gray-800/80 pt-4">
+                        <div className="mt-5 pt-4">
                             <h3 className="text-sm font-semibold text-gray-100">Other devices</h3>
-                            <ul className="mt-2 divide-y divide-gray-800/80">
+                            <ul className="mt-2 ">
                                 {push.otherDevices.map((device) => (
                                     <li key={device.id} className="flex items-center justify-between gap-3 py-3">
                                         <div className="min-w-0">

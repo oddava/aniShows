@@ -238,7 +238,7 @@ const ExportPage = () => {
             {showPreview && jsonPreview && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
                     <div className="bg-dark-100 rounded-2xl max-w-4xl w-full max-h-[80vh] flex flex-col border border-gray-800">
-                        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                        <div className="p-4 flex items-center justify-between">
                             <h3 className="text-lg font-semibold text-white">Data Preview</h3>
                             <button
                                 onClick={() => setShowPreview(false)}
@@ -295,7 +295,7 @@ const ExportPage = () => {
                             </div>
                         </div>
                         
-                        <div className="p-4 border-t border-gray-800 flex justify-end">
+                        <div className="p-4 flex justify-end">
                             <button
                                 onClick={() => setShowPreview(false)}
                                 className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors"
@@ -353,7 +353,7 @@ const ExportPage = () => {
                     </div>
                 </div>
                 
-                <div className="mt-6 pt-6 border-t border-gray-800">
+                <div className="mt-6 pt-6 ">
                     <h4 className="font-medium text-white mb-2">Not Included:</h4>
                     <ul className="text-sm text-gray-400 space-y-1">
                         <li>Passwords or authentication credentials</li>

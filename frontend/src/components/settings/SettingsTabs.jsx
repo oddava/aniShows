@@ -56,7 +56,7 @@ export default function SettingsTabs({ user, activeTab, setActiveTab }) {
             role="tablist"
             aria-label="Settings sections"
             onKeyDown={handleKeyDown}
-            className="flex gap-1 sm:gap-4 mb-8 border-b border-gray-800 overflow-x-auto scrollbar-hide whitespace-nowrap touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0"
+            className="flex gap-1 sm:gap-4 mb-8 overflow-x-auto scrollbar-hide whitespace-nowrap touch-pan-x -mx-4 px-4 sm:mx-0 sm:px-0"
         >
             {tabs.map(({ key, label }) => {
                 const isActive = activeTab === key;

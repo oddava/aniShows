@@ -27,7 +27,7 @@ function EpisodeRatingsTooltip({ active, payload }) {
     }
 
     return (
-        <div className="rounded-[var(--radius-md)] border border-white/10 bg-[var(--ink-2)] px-3 py-2 shadow-[var(--shadow-pop)]">
+        <div className="rounded-[var(--radius-md)] bg-[var(--ink-2)] px-3 py-2 shadow-[var(--shadow-pop)]">
             <p className="text-sm font-medium text-[var(--text-1)]">Episode {snapshot.episodeNumber}</p>
             <p className="mt-1 text-sm text-[var(--text-2)]">
                 {snapshot.average != null ? `${snapshot.average.toFixed(2)} / 5` : 'Unrated'} · {snapshot.votes} votes
@@ -81,16 +81,16 @@ export default function StatsTab({
     ].filter(Boolean);
 
     return (
-        <div className="animate-tab-content space-y-14">
+        <div className="animate-tab-content space-y-4">
             {stats.length > 0 && (
-                <div className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
+                <div className="panel grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
                     {stats.map((stat) => (
                         <StatCard key={stat.label} {...stat} />
                     ))}
                 </div>
             )}
 
-            <section>
+            <section className="panel">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
                     <h2 className="section-title">Episode ratings</h2>
                     {ratedEpisodes.length > 0 && (

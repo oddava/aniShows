@@ -200,7 +200,7 @@ function FollowersDialog({
         >
             <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-gray-800 bg-dark-100 shadow-xl">
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                <div className="flex items-center justify-between p-4 ">
                     <h2 className="text-lg font-bold text-white">@{username}</h2>
                     <button
                         type="button"
@@ -213,7 +213,7 @@ function FollowersDialog({
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-gray-800" role="tablist">
+                <div className="flex " role="tablist">
                     <TabButton
                         active={activeTab === 'following'}
                         onClick={() => handleTabChange('following')}
