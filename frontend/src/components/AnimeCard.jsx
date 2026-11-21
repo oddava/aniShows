@@ -72,9 +72,17 @@ function AnimeCard({
         return () => cancelAnimationFrame(frame);
     }, [imageUrl]);
 
+    // A missing optimised cover swaps to the original; the skeleton stays and
+    // the fallback fades in on its own load. Only if that fails too does the
+    // card stop waiting.
     const handleImageError = useCallback((event) => {
+        const img = event.currentTarget;
+        if (img.dataset.fallbackTried === 'true') {
+            setImageLoaded(true);
+            return;
+        }
+        img.dataset.fallbackTried = 'true';
         applyImageFallback(event, fallbackImageUrl);
-        setImageLoaded(true);
     }, [fallbackImageUrl]);
 
     const displayTitle = titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title;
@@ -192,6 +200,7 @@ function AnimeCard({
                             alt=""
                             src={placeholderUrl}
                             data-hidden={imageLoaded}
+                            onError={(event) => { event.currentTarget.style.display = 'none'; }}
                             className="poster-blur absolute inset-0 h-full w-full object-cover"
                         />
                     )}

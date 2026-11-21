@@ -45,8 +45,8 @@ export default function QuickAdd({
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState('status');
     const isTouch = useMediaQuery(TOUCH_QUERY);
-    // A menu that would stick out past its card's left edge (first column)
-    // slides right just enough to stay inside the page.
+    // A menu that would stick out of the content column (first or last
+    // column) slides in just enough to stay inside it.
     const menuRef = useRef(null);
     const [nudge, setNudge] = useState(0);
     useLayoutEffect(() => {
@@ -57,12 +57,29 @@ export default function QuickAdd({
         const menu = menuRef.current;
         const rect = menu?.getBoundingClientRect?.();
         if (!rect) return;
-        // Keep it inside the card it belongs to (first column: inside the page).
+        // Keep it inside the content column (the page's padding box), on both
+        // sides: under the + where it fits, nudged in where it would not.
+        // The column is the card's grid: the first ancestor clearly wider
+        // than the card (rows: the page container).
         const card = menu.closest('article');
-        const edge = card ? card.getBoundingClientRect().left : 16;
-        const room = window.innerWidth - 16 - rect.right;
-        const shift = Math.min(Math.max(0, edge - rect.left), Math.max(0, room));
-        if (shift > 0) setNudge(shift);
+        let column = null;
+        if (card) {
+            const cardWidth = card.getBoundingClientRect().width;
+            column = card.parentElement;
+            while (column && column.getBoundingClientRect().width < cardWidth * 2.5) column = column.parentElement;
+        } else {
+            column = menu.closest('.page-container');
+        }
+        let left = 16;
+        let right = window.innerWidth - 16;
+        if (column) {
+            const box = column.getBoundingClientRect();
+            const style = window.getComputedStyle(column);
+            left = Math.max(left, box.left + parseFloat(style.paddingLeft || 0));
+            right = Math.min(right, box.right - parseFloat(style.paddingRight || 0));
+        }
+        const shift = rect.left < left ? left - rect.left : rect.right > right ? right - rect.right : 0;
+        if (shift !== 0) setNudge(shift);
     }, [open]);
     const wrapRef = useRef(null);
     const buttonRef = useRef(null);

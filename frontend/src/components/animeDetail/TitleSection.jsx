@@ -121,7 +121,7 @@ export default function TitleSection({
                             </p>
                         ))}
                         {isLongSynopsis && !synopsisExpanded && (
-                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[var(--ink-0)] to-transparent" />
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[var(--ink-0)] to-transparent" />
                         )}
                     </div>
                     {isLongSynopsis && (
@@ -129,7 +129,7 @@ export default function TitleSection({
                             type="button"
                             onClick={() => setSynopsisExpanded(!synopsisExpanded)}
                             aria-expanded={synopsisExpanded}
-                            className="text-link mt-2 inline-flex min-h-11 items-center text-[15px]"
+                            className="text-link -mt-1 inline-flex min-h-11 items-center text-[15px]"
                         >
                             {synopsisExpanded ? 'Show less' : 'Read more'}
                         </button>
