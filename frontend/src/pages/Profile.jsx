@@ -432,13 +432,9 @@ function ProfileSkeleton({ activeTab = 'overview' }) {
 
             <div className="page-container mt-8 md:mt-10">
                 {activeTab === 'overview' ? (
-                    <div className="grid gap-10 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)] md:gap-16">
-                        <div className="space-y-3">
+                    <div className="space-y-4">
+                        <div className="panel space-y-4">
                             <div className={`h-5 w-24 ${bar}`} />
-                            <div className={`h-4 w-full ${bar}`} />
-                            <div className={`h-4 w-5/6 ${bar}`} />
-                        </div>
-                        <div className="space-y-4">
                             {Array.from({ length: 4 }, (_, index) => (
                                 <div key={index} className="flex items-center gap-4 pb-4">
                                     <div className="h-[72px] w-12 rounded-md bg-[var(--ink-2)] animate-pulse" />

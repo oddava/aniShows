@@ -14,8 +14,9 @@ const plural = (count, one, many = `${one}s`) => `${count.toLocaleString()} ${co
  */
 function statsLine(user, summary) {
     const parts = [];
-    const anime = Number(user.anime_count ?? summary?.total) || 0;
-    const episodes = Number(user.episodes_watched ?? summary?.episodes_watched) || 0;
+    // The live list summary wins over the profile's cached counts (one number, P1).
+    const anime = Number(summary?.total ?? user.anime_count) || 0;
+    const episodes = Number(summary?.episodes_watched ?? user.episodes_watched) || 0;
     const days = Number(user.days_watched) || 0;
     const { mean, rated } = profileScore(user, summary);
     const favorites = Number(user.favorites_count) || 0;
