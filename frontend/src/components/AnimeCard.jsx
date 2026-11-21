@@ -179,7 +179,7 @@ function AnimeCard({
 
     return (
         <article className="card-enter group relative flex h-full flex-col" style={{ '--stagger': index % 12 }} aria-label={displayTitle}>
-            <div className="poster-frame relative aspect-[2/3] shrink-0 rounded-[var(--radius-md)] bg-[var(--ink-2)] has-[a:focus-visible]:shadow-[0_0_0_2px_var(--signature)]">
+            <div className="relative aspect-[2/3] shrink-0 rounded-[var(--radius-md)] bg-[var(--ink-2)] has-[a:focus-visible]:shadow-[0_0_0_2px_var(--signature)]">
                 <Link
                     to={href}
                     aria-label={displayTitle}
@@ -207,7 +207,7 @@ function AnimeCard({
                         onLoad={() => setImageLoaded(true)}
                         onError={handleImageError}
                         data-loaded={imageLoaded}
-                        className="img-fade relative h-full w-full object-cover transition-[opacity,transform] duration-300 ease-out [@media(hover:hover)]:group-hover:scale-[1.04] motion-reduce:group-hover:scale-100"
+                        className="img-fade relative h-full w-full object-cover transition-[opacity,filter] duration-300 ease-out [@media(hover:hover)]:group-hover:brightness-[1.08]"
                     />
                 </Link>
 

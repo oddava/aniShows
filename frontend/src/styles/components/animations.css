@@ -29,6 +29,13 @@
   animation: skeleton-sweep 1.6s ease-in-out infinite;
 }
 
+/* Panels fade in when they mount (opacity only: no transform is left on
+   them, so fixed popovers inside still position against the viewport). */
+@keyframes panel-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Cards arrive with a short fade-up, a few at a time, instead of popping in.
    The fill is "backwards", so no transform stays on the card afterwards. */
 @keyframes card-in {
@@ -39,23 +46,6 @@
 .card-enter {
   animation: card-in 320ms var(--ease-out) backwards;
   animation-delay: calc(var(--stagger, 0) * 35ms);
-}
-
-/* Posters: a small lift and a soft shadow on hover (pointer only), a slight
-   press on tap. No glow. */
-.poster-frame {
-  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .group:hover > .poster-frame {
-    transform: translateY(-2px);
-    box-shadow: 0 14px 28px -14px rgb(0 0 0 / 0.75);
-  }
-}
-
-.group:active > .poster-frame {
-  transform: scale(0.985);
 }
 
 /* The small cover, blurred, holds the poster's place while the full image
@@ -102,7 +92,6 @@
   background-color: var(--color-dark-50);
 }
 
-.card-enter,
 .grid-stagger > *,
 .skeleton-fade-in {
   opacity: 1;
@@ -328,14 +317,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card-enter {
+  .card-enter,
+  .panel {
     animation: none;
   }
 
-  .poster-frame,
-  .group:hover > .poster-frame,
-  .group:active > .poster-frame {
-    transform: none;
-    transition: none;
-  }
 }

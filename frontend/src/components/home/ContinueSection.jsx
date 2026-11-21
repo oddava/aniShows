@@ -49,7 +49,7 @@ const ContinueRow = memo(function ContinueRow({ entry, now, onLive }) {
     }, [onLive, entry.id, entry.episodes_watched, state.kind, watched]);
 
     return (
-        <li className="-mx-3 grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03] sm:grid-cols-[3rem_minmax(0,1fr)_auto]">
+        <li className="card-enter -mx-3 grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03] sm:grid-cols-[3rem_minmax(0,1fr)_auto]">
             <Link to={href} tabIndex={-1} aria-hidden="true" className="row-span-2 self-start sm:row-span-1 sm:self-center">
                 <img
                     src={getOptimizedImageUrl(anime, 'cover', 'small')}

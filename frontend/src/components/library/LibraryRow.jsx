@@ -92,7 +92,7 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = fals
     const href = `/anime/${anime.slug}`;
 
     return (
-        <li className="group -mx-2 grid grid-cols-[2.75rem_minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1 rounded-[var(--radius-md)] px-2 py-2.5 transition-colors hover:bg-white/[0.03] sm:grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] sm:gap-x-4">
+        <li className="card-enter group -mx-2 grid grid-cols-[2.75rem_minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1 rounded-[var(--radius-md)] px-2 py-2.5 transition-colors hover:bg-white/[0.03] sm:grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] sm:gap-x-4">
             <Link to={href} tabIndex={-1} aria-hidden="true" className="row-span-2 sm:row-span-1">
                 <img
                     src={getOptimizedImageUrl(anime, 'cover', 'small')}
