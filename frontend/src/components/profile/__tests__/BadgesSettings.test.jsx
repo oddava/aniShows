@@ -36,7 +36,7 @@ beforeEach(() => {
 describe('BadgesSettings', () => {
     it('disables saving while a save is in flight and shows a failure', async () => {
         renderSettings();
-        const save = await screen.findByRole('button', { name: 'Save Badges' });
+        const save = await screen.findByRole('button', { name: 'Save badges' });
 
         fireEvent.click(save);
         const saving = await screen.findByRole('button', { name: 'Saving...' });
@@ -69,7 +69,7 @@ describe('BadgesSettings', () => {
         fireEvent.keyDown(active, { key: ' ' });
         expect(active).toHaveAttribute('aria-checked', 'true');
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save Badges' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Save badges' }));
         await waitFor(() => expect(updateFeatured).toHaveBeenCalledWith([1]));
     });
 

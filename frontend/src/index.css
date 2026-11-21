@@ -314,7 +314,7 @@
     border-radius: var(--radius-lg);
     padding: 1.25rem;
     /* Sections arrive with a short fade when their content loads. */
-    animation: panel-in 260ms var(--ease-out) backwards;
+    animation: panel-in var(--dur-slow) var(--ease-out) backwards;
   }
 
   @media (width >= 48rem) {

@@ -36,7 +36,7 @@ describe('ExportPage', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /Preview/i }));
 
-        expect(await screen.findByText('Anime List (1 entries)')).toBeInTheDocument();
+        expect(await screen.findByText('Anime list (1 entries)')).toBeInTheDocument();
         expect(screen.getByText(/"Frieren"/)).toBeInTheDocument();
         expect(screen.queryByText('Failed to load preview')).not.toBeInTheDocument();
     });

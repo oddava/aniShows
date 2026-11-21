@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import usePresence from '../../hooks/usePresence';
 import { ChevronDown, Loader2, Plus } from 'lucide-react';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import useDelayedLoading from '../../hooks/useDelayedLoading';
@@ -45,6 +46,7 @@ export default function QuickAdd({
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState('status');
     const isTouch = useMediaQuery(TOUCH_QUERY);
+    const popover = usePresence(open && !isTouch, 120);
     // A menu that would stick out of the content column (first or last
     // column) slides in just enough to stay inside it.
     const menuRef = useRef(null);
@@ -222,10 +224,11 @@ export default function QuickAdd({
                 )}
             </button>
 
-            {open && !isTouch && (
+            {popover.mounted && (
                 <div
                     id={menuId}
                     ref={menuRef}
+                    data-state={popover.closing ? 'closing' : 'open'}
                     style={variant === 'button' || !nudge ? undefined : { right: -nudge }}
                     className={`popover-in absolute ${variant === 'button' ? 'left-0 right-0 min-w-52' : 'right-0 w-52'} z-[300] rounded-[var(--radius-md)] bg-[var(--ink-3)] p-1 shadow-[var(--shadow-pop)] ${placement === 'down' ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                 >

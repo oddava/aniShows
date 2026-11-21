@@ -50,7 +50,7 @@ export default function SessionsCard() {
 
     return (
         <div>
-            <p className="text-gray-400 text-sm mb-3">
+            <p className="text-sm text-[var(--text-2)] mb-3">
                 {active === null ? 'Sign out from this device.' : describeDevices(active)}
                 {' '}Other devices may stay signed in for up to 15 minutes after being signed out.
             </p>
@@ -59,14 +59,14 @@ export default function SessionsCard() {
                     type="button"
                     onClick={handleRevokeOthers}
                     disabled={isRevoking}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors font-medium text-sm disabled:opacity-50"
+                    className="btn-ghost -ml-3 text-sm"
                 >
                     {isRevoking ? 'Signing out...' : 'Sign out everywhere else'}
                 </button>
             )}
             <div aria-live="polite">
-                {message && <p className="text-green-400 text-sm mt-3">{message}</p>}
-                {error && <p role="alert" className="text-red-400 text-sm mt-3">{error}</p>}
+                {message && <p className="text-sm text-[var(--text-2)] mt-3">{message}</p>}
+                {error && <p role="alert" className="text-sm text-[var(--danger)] mt-3">{error}</p>}
             </div>
         </div>
     );

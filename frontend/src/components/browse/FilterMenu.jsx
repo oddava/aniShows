@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import usePresence from '../../hooks/usePresence';
 import PropTypes from 'prop-types';
 import { Check, ChevronDown } from 'lucide-react';
 
@@ -18,6 +19,7 @@ export default function FilterMenu({
     anyLabel,
 }) {
     const [open, setOpen] = useState(false);
+    const panel = usePresence(open, 120);
     const ref = useRef(null);
     const buttonRef = useRef(null);
     const panelId = useId();
@@ -79,9 +81,10 @@ export default function FilterMenu({
                 <ChevronDown aria-hidden="true" className={`h-4 w-4 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
             </button>
 
-            {open && (
+            {panel.mounted && (
                 <div
                     id={panelId}
+                    data-state={panel.closing ? 'closing' : 'open'}
                     role="group"
                     aria-label={label}
                     className={`popover-in absolute left-0 top-full z-40 mt-2 rounded-xl bg-[var(--ink-3)] p-1.5 shadow-[var(--shadow-pop)] ${columns > 1 ? 'w-[26rem]' : 'min-w-48'}`}

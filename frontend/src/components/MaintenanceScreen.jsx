@@ -21,7 +21,7 @@ export default function MaintenanceScreen({ message, onRetry, checkingStatus }) 
                         disabled={checkingStatus}
                         className="px-5 py-2.5 min-h-[44px] rounded-lg bg-[#7c3aed] text-white font-medium hover:bg-violet-700 transition-colors disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400"
                     >
-                        {checkingStatus ? 'Checking...' : 'Try Again'}
+                        {checkingStatus ? 'Checking...' : 'Try again'}
                     </button>
                     <span className="text-sm text-white/45">
                         We automatically retry in the background.

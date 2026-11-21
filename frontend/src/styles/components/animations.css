@@ -44,8 +44,8 @@
 }
 
 .card-enter {
-  animation: card-in 320ms var(--ease-out) backwards;
-  animation-delay: calc(var(--stagger, 0) * 35ms);
+  animation: card-in 240ms var(--ease-out) backwards;
+  animation-delay: calc(min(var(--stagger, 0), 11) * 30ms);
 }
 
 /* The small cover, blurred, holds the poster's place while the full image
@@ -240,6 +240,32 @@
   animation: sheet-down var(--dur-base) var(--ease-out) forwards;
 }
 
+/* Overlays on their way out take no clicks. */
+[data-state="closing"] {
+  pointer-events: none;
+}
+
+/* Centred dialogs (desktop): a short fade-and-settle instead of the sheet slide. */
+@media (min-width: 640px) {
+  .sheet-panel.modal-panel {
+    animation: modal-in var(--dur-base) var(--ease-out);
+  }
+
+  [data-state="closing"] .sheet-panel.modal-panel {
+    animation: modal-out var(--dur-fast) ease-in forwards;
+  }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes modal-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+
 @keyframes sheet-up {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
@@ -254,6 +280,17 @@
 .popover-in {
   animation: popover-in var(--dur-fast) var(--ease-out);
   transform-origin: bottom right;
+}
+
+/* Same popover on its way out (usePresence keeps it mounted meanwhile). */
+.popover-in[data-state="closing"],
+[data-state="closing"] > .popover-in {
+  animation: popover-out 120ms ease-in forwards;
+}
+
+@keyframes popover-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(4px) scale(0.98); }
 }
 
 @keyframes popover-in {
@@ -322,4 +359,35 @@
     animation: none;
   }
 
+}
+
+/* Page change in progress (components/common/RouteProgress.jsx): a 2 px
+   accent bar that eases towards 85 % while waiting, then completes and fades. */
+.route-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+.route-progress-bar {
+  height: 100%;
+  width: 100%;
+  background: var(--signature);
+  transform-origin: left center;
+  transform: scaleX(0.85);
+  animation: route-progress-grow 2.4s cubic-bezier(0.1, 0.7, 0.2, 1);
+}
+
+.route-progress[data-phase="done"] .route-progress-bar {
+  transform: scaleX(1);
+  opacity: 0;
+  animation: none;
+  transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-slow) ease-out 80ms;
+}
+
+@keyframes route-progress-grow {
+  from { transform: scaleX(0.08); }
+  to { transform: scaleX(0.85); }
 }

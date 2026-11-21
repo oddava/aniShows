@@ -34,7 +34,7 @@ export default function BrowseResults({
       title="Failed to load anime"
       message="The catalog didn’t respond. Your filters are kept; try again."
       onRetry={() => refetch()}
-      retryLabel="Try Again"
+      retryLabel="Try again"
     />
   );
 
@@ -43,7 +43,7 @@ export default function BrowseResults({
     return (
       <div>
         {currentSearch && !isError && (isLoading || allAnime.length > 0) && (
-          <h2 role="status" className="mb-5 text-sm font-medium text-gray-400">
+          <h2 role="status" className="sr-only">
             {isLoading ? 'Searching for ' : 'Results for '}
             &ldquo;<span className="text-gray-100">{currentSearch}</span>&rdquo;
           </h2>

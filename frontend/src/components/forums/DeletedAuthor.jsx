@@ -8,6 +8,6 @@ export function DeletedAuthorAvatar({ size = 'md' }) {
     return <Avatar user={null} size={size} />;
 }
 
-export function DeletedAuthorName({ className = 'text-sm italic text-gray-500' }) {
+export function DeletedAuthorName({ className = 'text-sm italic text-[var(--text-3)]' }) {
     return <span className={className}>{DELETED_AUTHOR_LABEL}</span>;
 }

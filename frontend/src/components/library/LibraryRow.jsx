@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
+import usePresence from '../../hooks/usePresence';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import useListEntryMutation from '../../hooks/useListEntryMutation';
@@ -24,6 +25,7 @@ import ScorePicker from '../ui/ScorePicker';
 /** The score cell: "★ 9" (or "Rate"), opening a one-tap 1–10 row in place (T4). */
 function ScoreCell({ score, title, onChange, disabled }) {
     const [open, setOpen] = useState(false);
+    const picker = usePresence(open, 120);
     const ref = useRef(null);
 
     useEffect(() => {
@@ -60,8 +62,8 @@ function ScoreCell({ score, title, onChange, disabled }) {
                     <span className="font-medium text-[var(--text-3)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">Rate</span>
                 )}
             </button>
-            {open && (
-                <div className="popover-in absolute right-0 top-full z-30 mt-1 w-64 rounded-[var(--radius-md)] bg-[var(--ink-3)] p-2 shadow-[var(--shadow-pop)]">
+            {picker.mounted && (
+                <div data-state={picker.closing ? 'closing' : 'open'} className="popover-in absolute right-0 top-full z-30 mt-1 w-64 rounded-[var(--radius-md)] bg-[var(--ink-3)] p-2 shadow-[var(--shadow-pop)]">
                     <ScorePicker
                         value={score}
                         size="sm"

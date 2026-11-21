@@ -74,7 +74,7 @@ describe('UserMenu (desktop account disclosure)', () => {
 
         const button = screen.getByRole('button', { name: /Account menu for oddava/ });
         await user.click(button);
-        // Profile, Notifications, Settings, Sign Out, then out of the menu.
+        // Profile, Notifications, Settings, Sign out, then out of the menu.
         for (let i = 0; i < 5; i += 1) await user.tab();
 
         expect(screen.getByRole('link', { name: 'After the menu' })).toHaveFocus();
@@ -97,7 +97,7 @@ describe('UserMenu (desktop account disclosure)', () => {
         renderAt('/settings');
 
         await user.click(screen.getByRole('button', { name: /Account menu for oddava/ }));
-        await user.click(screen.getByRole('button', { name: 'Sign Out' }));
+        await user.click(screen.getByRole('button', { name: 'Sign out' }));
 
         await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/));
         expect(logoutMock).toHaveBeenCalledTimes(1);

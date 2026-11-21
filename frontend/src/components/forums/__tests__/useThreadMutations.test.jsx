@@ -1,15 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import toast from 'react-hot-toast';
+import { notify, notifyError } from '../../ui/toast';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import useThreadMutations from '../useThreadMutations';
 import { forumsApi } from '../../../api/client';
 import { forumKeys } from '../../../api/queries/forums';
 
-vi.mock('react-hot-toast', () => ({
-    default: { success: vi.fn(), error: vi.fn() },
+vi.mock('../../ui/toast', () => ({
+    notify: vi.fn(),
+    notifyError: vi.fn(),
 }));
+
+// Forum writes report through the shared toast helpers.
+const toast = { success: notify, error: notifyError };
 
 vi.mock('../../../api/client', () => ({
     forumsApi: {

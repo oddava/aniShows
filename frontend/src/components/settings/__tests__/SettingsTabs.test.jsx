@@ -82,12 +82,12 @@ describe('SocialLinksEditor', () => {
         );
 
         expect(screen.getByText('No social links added yet.')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Add Link' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
         expect(setSocialLinks).toHaveBeenCalledWith([{ platform: '', value: '' }]);
 
         const five = Array.from({ length: 5 }, (_, i) => ({ platform: `p${i}`, value: `v${i}` }));
         rerender(<SocialLinksEditor socialLinks={five} setSocialLinks={setSocialLinks} isSavingProfile={false} />);
-        expect(screen.queryByRole('button', { name: 'Add Link' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Add link' })).not.toBeInTheDocument();
         expect(screen.getByText(/Maximum of 5 links reached/)).toBeInTheDocument();
     });
 });

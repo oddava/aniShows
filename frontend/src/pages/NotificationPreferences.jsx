@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Loader2, MailX } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 import { notificationApi } from '../api/modules/notifications';
 import SEO from '../components/SEO';
@@ -44,20 +44,20 @@ export default function NotificationPreferences() {
     let body;
     if (!token) {
         body = (
-            <p className="text-sm leading-relaxed text-gray-400">
+            <p className="text-[15px] leading-relaxed text-[var(--text-2)]">
                 This link is missing its unsubscribe code. You can turn episode emails off in Settings.
             </p>
         );
     } else if (status === 'done') {
         body = (
-            <p className="text-sm leading-relaxed text-gray-400">
+            <p className="text-[15px] leading-relaxed text-[var(--text-2)]">
                 You won’t get episode emails any more. In-app and push notifications are unchanged.
             </p>
         );
     } else {
         body = (
             <>
-                <p className="text-sm leading-relaxed text-gray-400">
+                <p className="text-[15px] leading-relaxed text-[var(--text-2)]">
                     Stop the emails AniShows sends when a new episode of a show you’re watching airs.
                 </p>
                 <button
@@ -74,20 +74,17 @@ export default function NotificationPreferences() {
     }
 
     return (
-        <div className="max-w-md mx-auto px-4 py-12 sm:py-16">
+        <div className="page-container pt-6 pb-16 md:pt-10">
             <SEO page="notifications" noIndex />
-            <div className="rounded-2xl border border-gray-800 bg-dark-100 p-6 sm:p-8 text-center">
-                <MailX aria-hidden="true" className="w-10 h-10 mx-auto text-gray-500 mb-4" />
-                <h1 className="text-2xl font-semibold text-white mb-3">
-                    {status === 'done' ? 'Unsubscribed' : 'Episode emails'}
-                </h1>
+            <h1 className="page-title">
+                {status === 'done' ? 'Unsubscribed' : 'Episode emails'}
+            </h1>
+            <div className="mt-6 max-w-xl">
                 {body}
-                <p role="status" className="mt-4 text-sm text-red-400 empty:hidden">{error}</p>
-                <p className="mt-6 text-sm">
-                    <Link to={SETTINGS_LINK} className="text-accent hover:text-accent/80 transition-colors">
-                        Manage notifications
-                    </Link>
-                </p>
+                <p role="status" className="mt-4 text-sm text-[var(--danger)] empty:hidden">{error}</p>
+                <Link to={SETTINGS_LINK} className="text-link mt-4">
+                    Manage notifications
+                </Link>
             </div>
         </div>
     );

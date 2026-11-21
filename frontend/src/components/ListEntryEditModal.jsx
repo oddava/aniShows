@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Minus, Plus, X } from 'lucide-react';
 import useFocusTrap from '../hooks/useFocusTrap';
+import usePresence from '../hooks/usePresence';
 import CustomSelect from './common/CustomSelect';
 import ScorePicker from './ui/ScorePicker';
 
@@ -78,6 +79,7 @@ export default function ListEntryEditModal({
         }
     }, [isSaving, onClose]);
     const modalRef = useFocusTrap(isOpen, handleRequestClose);
+    const { mounted, closing } = usePresence(isOpen, 200);
 
     useEffect(() => {
         if (isOpen && !wasOpenRef.current) {
@@ -108,7 +110,7 @@ export default function ListEntryEditModal({
         [totalEpisodes]
     );
 
-    if (!isOpen) return null;
+    if (!mounted) return null;
 
     const handleBackdropClick = (event) => {
         if (event.target === event.currentTarget && !isSaving) {
@@ -198,7 +200,8 @@ export default function ListEntryEditModal({
     // Portalled above the header and tab bar (z 1000/1001), like BottomSheet.
     return createPortal(
         <div
-            className="fixed inset-0 z-[1100] flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+            className="sheet-backdrop fixed inset-0 z-[1100] flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+            data-state={closing ? 'closing' : 'open'}
             onClick={handleBackdropClick}
             role="dialog"
             aria-modal="true"
@@ -206,7 +209,7 @@ export default function ListEntryEditModal({
         >
             <div
                 ref={modalRef}
-                className="sheet-panel flex max-h-[calc(100dvh-env(safe-area-inset-top,0px)-0.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-[20px] bg-[var(--ink-1)] shadow-[var(--shadow-pop)] sm:max-h-[min(90dvh,48rem)] sm:rounded-[var(--radius-lg)]"
+                className="sheet-panel modal-panel flex max-h-[calc(100dvh-env(safe-area-inset-top,0px)-0.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-[20px] bg-[var(--ink-1)] shadow-[var(--shadow-pop)] sm:max-h-[min(90dvh,48rem)] sm:rounded-[var(--radius-lg)]"
             >
                 <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5">
                     <div className="min-w-0">

@@ -32,10 +32,6 @@ vi.mock('../../components/SEO', () => ({
     ),
 }));
 
-vi.mock('../../components/common/AnimeMediaImage', () => ({
-    default: ({ alt }) => <img alt={alt} />,
-}));
-
 const anime = (id) => ({ id, slug: `anime-${id}`, title: `Anime ${id}` });
 
 const voiceRole = (id, animeId, character, role = 'MAIN') => ({
@@ -102,17 +98,17 @@ describe('VoiceActorDetail', () => {
         renderStaff({ ...baseStaff, voice_roles: roles });
 
         await screen.findByRole('heading', { name: 'Atsumi Tanezaki' });
-        // Title links (the cover links are named by their image alt text).
+        // Title links (the cover links are decorative duplicates).
         expect(screen.getAllByText(/^Anime \d+$/)).toHaveLength(60);
-        expect(screen.getByText('75 Appearances')).toBeInTheDocument();
+        expect(screen.getByText('75 appearances')).toBeInTheDocument();
 
         // Anime 1 appears once, with both of its characters.
         const anime1 = screen.getAllByText('Anime 1');
         expect(anime1).toHaveLength(1);
-        const card = anime1[0].closest('div.group');
+        const card = anime1[0].closest('li');
         expect(within(card).getByRole('link', { name: 'Frieren' })).toHaveAttribute('href', '/character/1');
         expect(within(card).getByRole('link', { name: 'Fern' })).toHaveAttribute('href', '/character/2');
-        expect(within(card).getByText('MAIN · SUPPORTING')).toBeInTheDocument();
+        expect(within(card).getByText('Main · Supporting')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Show all 75' }));
 

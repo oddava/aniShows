@@ -391,7 +391,7 @@ function ErrorState({ tab, onRetry }) {
                     onClick={onRetry}
                     className="px-4 py-2 rounded-lg bg-dark-200 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-colors"
                 >
-                    Try Again
+                    Try again
                 </button>
             )}
         </div>

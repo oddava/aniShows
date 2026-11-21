@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
+import usePresence from '../../hooks/usePresence';
 import { Link, useLocation } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import useSignOut from '../auth/useSignOut';
@@ -9,7 +10,7 @@ import { isAuthFlowPath } from '../auth/authPaths';
  * profile button and its dropdown when signed in, or the sign-in links
  * (left out on the sign-in / sign-up pages themselves).
  * `isProfileOpen` is owned by Navbar (auto-hide and Escape need it).
- * Sign Out goes through useSignOut (toast + home), not a `logout` prop.
+ * Sign out goes through useSignOut (toast + home), not a `logout` prop.
  */
 export default function UserMenu({
     user,
@@ -27,6 +28,8 @@ export default function UserMenu({
     const { pathname } = useLocation();
 
     // Escape closes the dropdown and returns focus to its button.
+    const menu = usePresence(isProfileOpen, 120);
+
     useEffect(() => {
         if (!isProfileOpen) return undefined;
         const onKeyDown = (event) => {
@@ -100,8 +103,8 @@ export default function UserMenu({
                     </button>
 
                     {/* Enhanced Dropdown Menu */}
-                    {isProfileOpen && (
-                        <div id={profileMenuId} className="absolute right-0 top-full mt-3 w-64 py-1.5 rounded-xl bg-[var(--ink-3)] shadow-lg shadow-black/40 animate-fade-in z-[1001]">
+                    {menu.mounted && (
+                        <div id={profileMenuId} data-state={menu.closing ? 'closing' : 'open'} className="popover-in absolute right-0 top-full mt-3 w-64 py-1.5 rounded-xl bg-[var(--ink-3)] shadow-[var(--shadow-pop)] z-[1001]" style={{ transformOrigin: 'top right' }}>
                             {/* User Info Header */}
                             <div className="px-4 py-3 mb-1.5">
                                 <div className="flex items-center gap-3">
@@ -162,7 +165,7 @@ export default function UserMenu({
                                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-red-500/10 hover:text-red-400"
                                 >
                                     <LogOut aria-hidden="true" className="w-4 h-4" />
-                                    <span className="text-sm font-medium">Sign Out</span>
+                                    <span className="text-sm font-medium">Sign out</span>
                                 </button>
                             </div>
                         </div>
