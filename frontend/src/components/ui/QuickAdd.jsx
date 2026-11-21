@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDown, Loader2, Plus } from 'lucide-react';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import useDelayedLoading from '../../hooks/useDelayedLoading';
@@ -45,6 +45,25 @@ export default function QuickAdd({
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState('status');
     const isTouch = useMediaQuery(TOUCH_QUERY);
+    // A menu that would stick out past its card's left edge (first column)
+    // slides right just enough to stay inside the page.
+    const menuRef = useRef(null);
+    const [nudge, setNudge] = useState(0);
+    useLayoutEffect(() => {
+        if (!open) {
+            setNudge(0);
+            return;
+        }
+        const menu = menuRef.current;
+        const rect = menu?.getBoundingClientRect?.();
+        if (!rect) return;
+        // Keep it inside the card it belongs to (first column: inside the page).
+        const card = menu.closest('article');
+        const edge = card ? card.getBoundingClientRect().left : 16;
+        const room = window.innerWidth - 16 - rect.right;
+        const shift = Math.min(Math.max(0, edge - rect.left), Math.max(0, room));
+        if (shift > 0) setNudge(shift);
+    }, [open]);
     const wrapRef = useRef(null);
     const buttonRef = useRef(null);
     const menuId = useId();
@@ -189,6 +208,8 @@ export default function QuickAdd({
             {open && !isTouch && (
                 <div
                     id={menuId}
+                    ref={menuRef}
+                    style={variant === 'button' || !nudge ? undefined : { right: -nudge }}
                     className={`popover-in absolute ${variant === 'button' ? 'left-0 right-0 min-w-52' : 'right-0 w-52'} z-[300] rounded-[var(--radius-md)] bg-[var(--ink-3)] p-1 shadow-[var(--shadow-pop)] ${placement === 'down' ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                 >
                     {variant === 'icon' && title && (

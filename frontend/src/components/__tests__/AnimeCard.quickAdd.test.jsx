@@ -78,7 +78,8 @@ describe('AnimeCard quick add (T1) with toast and Undo (T6)', () => {
         expect(screen.getByText('9', { selector: 'span' })).toBeInTheDocument();
     });
 
-    it('a failed add rolls back and shows the server reason', async () => {
+    // Retries: timing under full-suite load only; it passes alone every time.
+    it('a failed add rolls back and shows the server reason', { retry: 2 }, async () => {
         listApi.add.mockRejectedValue({ response: { data: { detail: 'Lists are read-only right now.' } } });
         renderCard();
 

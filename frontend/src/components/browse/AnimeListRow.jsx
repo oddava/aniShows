@@ -30,7 +30,10 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
     const airing = airingState(anime);
     const airingNote = airing.nextAt
         ? `Ep ${airing.nextEpisode} · ${formatDate(airing.nextAt, { weekday: 'short' })} ${formatDate(airing.nextAt, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`
-        : airing.justAired ? `Ep ${airing.aired} out` : null;
+        : airing.justAired ? `Ep ${airing.aired} out`
+            : anime.status === 'Finished' ? 'Finished airing'
+                : anime.status === 'Upcoming' ? 'Not yet aired'
+                    : anime.status === 'Airing' ? 'Airing weekly' : null;
 
     return (
         <div className="card-enter group relative flex items-center gap-3 sm:gap-5 rounded-[var(--radius-md)] p-2 transition-colors hover:bg-white/[0.03] active:bg-white/[0.05]">
@@ -39,8 +42,10 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                     src={imageUrl}
                     alt=""
                     loading="lazy"
-                    onError={(event) => applyImageFallback(event, fallbackImageUrl)}
-                    className="h-[108px] w-[72px] sm:h-24 sm:w-16 rounded-[var(--radius-sm)] bg-[var(--ink-3)] object-cover"
+                    ref={(node) => { if (node?.complete && node.naturalWidth) node.dataset.loaded = 'true'; }}
+                    onLoad={(event) => { event.currentTarget.dataset.loaded = 'true'; }}
+                    onError={(event) => { event.currentTarget.dataset.loaded = 'true'; applyImageFallback(event, fallbackImageUrl); }}
+                    className="img-fade h-[108px] w-[72px] sm:h-24 sm:w-16 rounded-[var(--radius-sm)] bg-[var(--ink-3)] object-cover"
                 />
                 {entry.score > 0 && <ScoreBadge score={entry.score} className="absolute left-1 top-1 !h-5 !px-1 text-[11px]" />}
             </Link>

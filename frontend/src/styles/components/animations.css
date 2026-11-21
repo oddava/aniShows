@@ -11,14 +11,14 @@
   }
 }
 
-.shimmer,
-.shimmer-bg,
 /* Skeletons: a soft light sweeps across, slower than a blink and calmer. */
 @keyframes skeleton-sweep {
   from { background-position: 160% 0; }
   to { background-position: -60% 0; }
 }
 
+.shimmer,
+.shimmer-bg,
 .skeleton-shimmer,
 .skeleton-wave,
 .shimmer-gradient,
@@ -264,7 +264,7 @@
 /* Images fade in once decoded; the box is sized beforehand, so nothing shifts. */
 .img-fade {
   opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-out);
+  transition: opacity var(--dur-slow) var(--ease-out), filter var(--dur-base) var(--ease-out);
 }
 
 .img-fade[data-loaded="true"] {
