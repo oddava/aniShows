@@ -83,6 +83,26 @@ def _known_total(anime: Anime | None) -> int | None:
     return total if total > 0 else None
 
 
+def _aired_so_far(anime: Anime | None) -> int | None:
+    """Episodes out so far for a show still airing (``None`` when not known).
+
+    Known only while the next episode has a date in the future: everything before it
+    has aired. A past or missing date says nothing reliable.
+    """
+    next_episode = getattr(anime, "next_airing_episode", None)
+    next_date = getattr(anime, "next_airing_date", None)
+    if not next_episode or next_date is None or next_date <= timezone.now():
+        return None
+    return max(int(next_episode) - 1, 0)
+
+
+def _completion_target(total: int | None, aired: int | None) -> int | None:
+    """Where Completed puts progress: every aired episode of a show still airing, else all."""
+    if aired is not None and (total is None or aired < total):
+        return aired
+    return total
+
+
 def _check_episodes(value: int, total: int | None, *, strict: bool) -> int:
     limit = total if total is not None else MAX_EPISODES_UNKNOWN_TOTAL
     if value < 0:
@@ -135,6 +155,10 @@ def normalize_entry(
     result = dict(attrs)
     current = _current(instance)
     total = _known_total(anime)
+    completion_target = _completion_target(total, _aired_so_far(anime))
+    # Below this a Completed entry is being watched again (the total, or the aired count
+    # when the total is not announced yet).
+    completed_floor = total if total is not None else completion_target
     status_sent = "status" in result
     episodes_sent = "episodes_watched" in result
 
@@ -166,17 +190,24 @@ def normalize_entry(
         episodes_sent
         and not status_sent
         and current.status == Status.completed
-        and total is not None
-        and episodes < total
+        and completed_floor is not None
+        and episodes < completed_floor
+        and episodes != current.episodes_watched
     ):
-        # Progress lowered on a finished entry: it is being watched again.
+        # Progress moved below the end on a finished entry: it is being watched again
+        # (lowered, or new episodes of a show completed while airing). Re-sending the
+        # same progress changes nothing.
         status = Status.watching
     elif not status_sent and status == Status.plan_to_watch and episodes > 0 and episodes_sent:
         status = Status.watching
 
     if status == Status.completed:
-        if total is not None:
+        if completion_target is not None and completion_target == total:
             episodes = total
+        elif completion_target is not None:
+            # Still airing: fill up to the aired episodes, never lowering progress the
+            # user already has (they may have watched ahead of our airing data).
+            episodes = max(episodes, completion_target)
         becoming_completed = current.status != Status.completed or current.is_rewatching
         if becoming_completed and is_rewatching and not starting_rewatch:
             total_rewatches += 1

@@ -1,9 +1,10 @@
 """The list-entry transition rules (spec 3 P0-8), shared by the API and the importers."""
 
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 from django.test import SimpleTestCase
+from django.utils import timezone
 from freezegun import freeze_time
 
 from ...animes.models import Anime
@@ -99,6 +100,89 @@ class CompletionRuleTests(SimpleTestCase):
         )
 
         self.assertEqual(result["status"], Status.on_hold)
+
+
+def airing(total=12, aired=6, *, days_ahead=3):
+    """A show still airing: episode ``aired + 1`` is scheduled ``days_ahead`` from now."""
+    return Anime(
+        title="Airing",
+        slug="airing",
+        episode_count=total,
+        status=Anime.AnimeStatus.airing,
+        next_airing_episode=aired + 1,
+        next_airing_date=timezone.now() + timedelta(days=days_ahead),
+    )
+
+
+class AiringCompletionRuleTests(SimpleTestCase):
+    """Completed on a show still airing fills progress to the aired episodes, not the total."""
+
+    def run_rules(self, instance, attrs, show):
+        return normalize_entry(instance, attrs, show, TODAY, strict=True)
+
+    def test_completed_fills_up_to_the_aired_count(self):
+        result = self.run_rules(entry(episodes_watched=2), {"status": Status.completed}, airing())
+
+        self.assertEqual((result["status"], result["episodes_watched"]), (Status.completed, 6))
+        self.assertEqual(result["finished_at"], TODAY)
+
+    def test_completed_never_lowers_progress_watched_ahead(self):
+        result = self.run_rules(entry(episodes_watched=8), {"status": Status.completed}, airing())
+
+        self.assertEqual(result["status"], Status.completed)
+        self.assertEqual(result.get("episodes_watched", 8), 8)  # unchanged: not resent
+
+    def test_completed_with_a_past_airing_date_fills_to_total(self):
+        # A stale schedule says nothing about what has aired: today's rule applies.
+        show = airing(days_ahead=-1)
+        result = self.run_rules(entry(episodes_watched=2), {"status": Status.completed}, show)
+
+        self.assertEqual(result["episodes_watched"], 12)
+
+    def test_completed_on_a_finished_show_still_fills_to_total(self):
+        show = airing(aired=12)  # every episode out (next marker past the end)
+        result = self.run_rules(entry(episodes_watched=2), {"status": Status.completed}, show)
+
+        self.assertEqual(result["episodes_watched"], 12)
+
+    def test_completed_with_unknown_total_fills_to_the_aired_count(self):
+        show = airing(total=0, aired=40)
+        result = self.run_rules(entry(episodes_watched=10), {"status": Status.completed}, show)
+
+        self.assertEqual((result["status"], result["episodes_watched"]), (Status.completed, 40))
+
+    def test_full_progress_still_auto_completes(self):
+        result = self.run_rules(entry(episodes_watched=11), {"episodes_watched": 12}, airing())
+
+        self.assertEqual((result["status"], result["episodes_watched"]), (Status.completed, 12))
+
+    def test_caught_up_progress_does_not_auto_complete(self):
+        result = self.run_rules(entry(episodes_watched=5), {"episodes_watched": 6}, airing())
+
+        self.assertEqual(result["status"], Status.watching)
+
+    def test_watching_a_new_episode_after_completing_reopens_the_entry(self):
+        completed = entry(status=Status.completed, episodes_watched=6)
+        result = self.run_rules(completed, {"episodes_watched": 7}, airing(aired=7))
+
+        self.assertEqual((result["status"], result["episodes_watched"]), (Status.watching, 7))
+
+    def test_resending_the_same_progress_keeps_completed(self):
+        completed = entry(status=Status.completed, episodes_watched=6)
+        result = self.run_rules(completed, {"episodes_watched": 6}, airing())
+
+        self.assertEqual((result["status"], result["episodes_watched"]), (Status.completed, 6))
+
+    def test_lowering_progress_on_a_completed_airing_entry_uncompletes_it(self):
+        completed = entry(status=Status.completed, episodes_watched=6)
+        result = self.run_rules(completed, {"episodes_watched": 4}, airing())
+
+        self.assertEqual((result["status"], result["episodes_watched"]), (Status.watching, 4))
+
+    def test_imports_follow_the_same_fill(self):
+        result = normalize_entry(None, {"status": Status.completed}, airing(), TODAY, strict=False)
+
+        self.assertEqual(result["episodes_watched"], 6)
 
 
 class RewatchRuleTests(SimpleTestCase):
