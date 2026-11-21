@@ -60,6 +60,16 @@ describe('Detail page tracking (T5, V1, M3)', () => {
         expect(await screen.findAllByRole('radiogroup')).not.toHaveLength(0);
     });
 
+    it('opens the editor on a +1 that is not written yet, so Save keeps it', () => {
+        renderPanel({ id: 3, status: 'Watching', episodes_watched: 13, score: 0 });
+
+        fireEvent.click(screen.getByRole('button', { name: 'One episode more of Frieren' }));
+        // Straight away, before the stepper writes its batch.
+        fireEvent.click(screen.getByRole('button', { name: 'Edit dates, notes and rewatches' }));
+
+        expect(screen.getByLabelText('Episode progress')).toHaveValue(14);
+    });
+
     it('uses a visible stepper for progress, clamped to the episode count', () => {
         renderPanel({ id: 3, status: 'Watching', episodes_watched: 28, score: 0 });
         expect(screen.getByRole('group', { name: 'Episodes watched of Frieren' })).toHaveTextContent('28 / 28');

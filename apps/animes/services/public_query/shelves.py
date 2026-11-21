@@ -79,13 +79,13 @@ class ShelfMixin:
         return [
             {
                 "key": "trending",
-                "title": "Trending Now",
+                "title": "Trending now",
                 "browse_params": {"sort": "trending"},
                 "query_kwargs": {"sort": "trending"},
             },
             {
                 "key": "popular-season",
-                "title": "Popular This Season",
+                "title": "Popular this season",
                 "browse_params": {
                     "season": current_season,
                     "year": str(current_year),
@@ -99,7 +99,7 @@ class ShelfMixin:
             },
             {
                 "key": "upcoming",
-                "title": "Upcoming Next Season",
+                "title": "Upcoming next season",
                 "browse_params": {
                     "season": next_season,
                     "year": str(next_year),
@@ -113,7 +113,7 @@ class ShelfMixin:
             },
             {
                 "key": "all-time",
-                "title": "All Time Popular",
+                "title": "All-time popular",
                 "browse_params": {"sort": "popular", "shelf": "all-time"},
                 "query_kwargs": {
                     "sort": "popular",
@@ -122,7 +122,7 @@ class ShelfMixin:
             },
             {
                 "key": "top-rated",
-                "title": "Top Rated",
+                "title": "Top rated",
                 "browse_params": {"sort": "rating"},
                 "query_kwargs": {"sort": "rating"},
             },

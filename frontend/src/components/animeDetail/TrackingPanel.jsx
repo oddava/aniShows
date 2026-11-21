@@ -31,6 +31,9 @@ export default function TrackingPanel({
         entry: anime.user_list_status,
     });
     const [scoreOpen, setScoreOpen] = useState(false);
+    // Taps the stepper has not written yet (it batches them): the editor
+    // opens on this value, so its Save never undoes a +1.
+    const [stepperDraft, setStepperDraft] = useState(null);
     const [editOpen, setEditOpen] = useState(false);
 
     const status = entry.status;
@@ -126,6 +129,7 @@ export default function TrackingPanel({
                     aired={aired}
                     title={anime.title}
                     onCommit={async (next) => report(await setProgress(next))}
+                    onDraft={setStepperDraft}
                 />
             )}
 
@@ -188,7 +192,7 @@ export default function TrackingPanel({
                     if (saved) setEditOpen(false);
                     return saved;
                 }}
-                initialEntry={{ status: 'Plan to Watch', ...entry }}
+                initialEntry={{ status: 'Plan to Watch', ...entry, episodes_watched: stepperDraft ?? entry.episodes_watched }}
                 totalEpisodes={anime.episode_count}
                 statusOptions={MODAL_STATUS_OPTIONS}
                 isSaving={isPending}

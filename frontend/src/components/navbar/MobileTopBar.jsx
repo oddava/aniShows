@@ -44,7 +44,7 @@ export default function MobileTopBar() {
     const showSearch = path !== '/browse';
     // Over artwork (top of the page) the icon buttons get a dark backing so
     // they stay legible on bright banners.
-    const iconButtonClasses = `w-10 h-10 flex items-center justify-center rounded-full text-gray-100 transition-colors ${scrolled ? 'hover:bg-white/10' : 'bg-[rgb(21_24_29/0.6)] backdrop-blur-sm hover:bg-[rgb(21_24_29/0.8)]'}`;
+    const iconButtonClasses = `w-11 h-11 flex items-center justify-center rounded-full text-gray-100 transition-colors ${scrolled ? 'hover:bg-white/10' : 'bg-[rgb(21_24_29/0.6)] backdrop-blur-sm hover:bg-[rgb(21_24_29/0.8)]'}`;
 
     const goBack = () => {
         // location.key is "default" on the first entry of a session: nothing to go back to.
@@ -55,7 +55,7 @@ export default function MobileTopBar() {
     return (
         <header
             onFocus={() => setHidden(false)}
-            className={`md:hidden fixed inset-x-0 top-0 z-[1000] pt-[env(safe-area-inset-top)] transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${hidden ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'bg-dark/80 backdrop-blur-xl shadow-[inset_0_-1px_0_rgb(255_255_255/0.06)]' : 'bg-gradient-to-b from-black/50 to-transparent'}`}
+            className={`md:hidden fixed inset-x-0 top-0 z-[1000] pt-[env(safe-area-inset-top)] transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${hidden ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'bg-dark/80 backdrop-blur-xl' : 'bg-gradient-to-b from-black/50 to-transparent'}`}
         >
             <div className="h-14 px-2 flex items-center justify-between">
                 <div className="flex items-center min-w-0">

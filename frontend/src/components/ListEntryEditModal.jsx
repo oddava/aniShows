@@ -257,7 +257,7 @@ export default function ListEntryEditModal({
                                     type="button"
                                     onClick={() => stepEpisodes(-1)}
                                     aria-label="One episode less"
-                                    className="-my-2 -ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-300 hover:bg-white/[0.08] hover:text-white"
+                                    className="-my-2 -ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-300 hover:bg-white/[0.08] hover:text-white"
                                 >
                                     <Minus aria-hidden="true" className="h-4 w-4" />
                                 </button>
@@ -277,7 +277,7 @@ export default function ListEntryEditModal({
                                     type="button"
                                     onClick={() => stepEpisodes(1)}
                                     aria-label="One episode more"
-                                    className="-my-2 -mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--signature)] hover:bg-white/[0.08]"
+                                    className="-my-2 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--signature)] hover:bg-white/[0.08]"
                                 >
                                     <Plus aria-hidden="true" className="h-4 w-4" />
                                 </button>
@@ -434,7 +434,7 @@ function Field({ label, htmlFor, hint, error, wide = false, children }) {
 
 function InputShell({ children, invalid = false }) {
     return (
-        <div className={`flex min-h-11 items-center gap-3 rounded-xl bg-dark-200 px-4 py-2.5 transition-shadow focus-within:shadow-[0_0_0_2px_var(--signature)] ${invalid ? 'shadow-[0_0_0_1px_var(--danger)]' : ''}`}>
+        <div className={`flex min-h-11 items-center gap-3 rounded-xl px-4 py-2.5 transition-colors duration-150 ${invalid ? 'bg-[rgb(242_135_143/0.1)] focus-within:bg-[rgb(242_135_143/0.16)]' : 'bg-white/[0.06] focus-within:bg-white/[0.12]'}`}>
             {children}
         </div>
     );

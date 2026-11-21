@@ -34,7 +34,7 @@ describe('BrowseRowMode', () => {
             data: [
                 {
                     key: 'trending',
-                    title: 'Trending Now',
+                    title: 'Trending now',
                     browse_params: { sort: 'trending' },
                     anime_list: [
                         { id: 1, title: 'Trend 1' },
@@ -47,7 +47,7 @@ describe('BrowseRowMode', () => {
                 },
                 {
                     key: 'popular-season',
-                    title: 'Popular This Season',
+                    title: 'Popular this season',
                     browse_params: { season: 'spring', year: '2026', sort: 'popular' },
                     anime_list: [
                         { id: 1, title: 'Trend 1' },
@@ -63,7 +63,7 @@ describe('BrowseRowMode', () => {
                 },
                 {
                     key: 'all-time',
-                    title: 'All Time Popular',
+                    title: 'All-time popular',
                     browse_params: { sort: 'popular', shelf: 'all-time' },
                     anime_list: [
                         { id: 13, title: 'Popular 13' },
@@ -94,17 +94,17 @@ describe('BrowseRowMode', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByTestId('Trending Now')).toHaveTextContent('Trend 1');
-            expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 7');
+            expect(screen.getByTestId('Trending now')).toHaveTextContent('Trend 1');
+            expect(screen.getByTestId('Popular this season')).toHaveTextContent('Season 7');
         });
 
-        expect(screen.getByTestId('Popular This Season')).not.toHaveTextContent('Trend 1');
-        expect(screen.getByTestId('Popular This Season')).not.toHaveTextContent('Trend 2');
-        expect(screen.getByTestId('Popular This Season')).toHaveTextContent('Season 9');
-        expect(screen.getByTestId('Popular This Season-link')).toHaveTextContent('season=');
-        expect(screen.getByTestId('All Time Popular-link')).toHaveTextContent('shelf=all-time');
-        expect(screen.getByTestId('Trending Now-eager-count')).toHaveTextContent('6');
-        expect(screen.getByTestId('Popular This Season-eager-count')).toHaveTextContent('0');
+        expect(screen.getByTestId('Popular this season')).not.toHaveTextContent('Trend 1');
+        expect(screen.getByTestId('Popular this season')).not.toHaveTextContent('Trend 2');
+        expect(screen.getByTestId('Popular this season')).toHaveTextContent('Season 9');
+        expect(screen.getByTestId('Popular this season-link')).toHaveTextContent('season=');
+        expect(screen.getByTestId('All-time popular-link')).toHaveTextContent('shelf=all-time');
+        expect(screen.getByTestId('Trending now-eager-count')).toHaveTextContent('6');
+        expect(screen.getByTestId('Popular this season-eager-count')).toHaveTextContent('0');
     });
 
     it('hides a shelf when every card is already shown in an earlier row', async () => {
@@ -112,7 +112,7 @@ describe('BrowseRowMode', () => {
             data: [
                 {
                     key: 'trending',
-                    title: 'Trending Now',
+                    title: 'Trending now',
                     browse_params: { sort: 'trending' },
                     anime_list: Array.from({ length: 6 }, (_, index) => ({
                         id: index + 1,
@@ -121,7 +121,7 @@ describe('BrowseRowMode', () => {
                 },
                 {
                     key: 'popular-season',
-                    title: 'Popular This Season',
+                    title: 'Popular this season',
                     browse_params: { season: 'spring', year: '2026', sort: 'popular' },
                     anime_list: Array.from({ length: 6 }, (_, index) => ({
                         id: index + 1,
@@ -130,7 +130,7 @@ describe('BrowseRowMode', () => {
                 },
                 {
                     key: 'top-rated',
-                    title: 'Top Rated',
+                    title: 'Top rated',
                     browse_params: { sort: 'rating' },
                     anime_list: Array.from({ length: 6 }, (_, index) => ({
                         id: index + 101,
@@ -155,9 +155,9 @@ describe('BrowseRowMode', () => {
         );
 
         await waitFor(() => {
-            expect(screen.getByTestId('Trending Now')).toHaveTextContent('Trend 1');
+            expect(screen.getByTestId('Trending now')).toHaveTextContent('Trend 1');
         });
 
-        expect(screen.queryByTestId('Popular This Season')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('Popular this season')).not.toBeInTheDocument();
     });
 });
