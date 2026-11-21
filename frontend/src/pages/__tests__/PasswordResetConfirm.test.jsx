@@ -57,6 +57,35 @@ describe('PasswordResetConfirm', () => {
         expect(currentLocation.state.message).toMatch(/password reset successfully/i);
     });
 
+    it('shows an inline error under both empty fields at once', async () => {
+        renderAt('/reset-password/MQ/abc-123');
+        await waitFor(() => expect(currentLocation.pathname).toBe('/reset-password'));
+        const form = document.querySelector('form');
+        expect(form).toHaveAttribute('novalidate');
+
+        fireEvent.submit(form);
+
+        expect(await screen.findByText('Enter a new password.')).toBeInTheDocument();
+        expect(screen.getByText('Type the password again.')).toBeInTheDocument();
+        expect(screen.getByLabelText('New Password')).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.getByLabelText('Confirm Password')).toHaveAttribute('aria-invalid', 'true');
+        expect(authApi.resetPassword).not.toHaveBeenCalled();
+    });
+
+    it('puts a mismatch under the confirmation field', async () => {
+        renderAt('/reset-password/MQ/abc-123');
+        await waitFor(() => expect(currentLocation.pathname).toBe('/reset-password'));
+
+        const fields = document.querySelectorAll('input[type="password"]');
+        fireEvent.change(fields[0], { target: { value: 'N3w-Passphrase!' } });
+        fireEvent.change(fields[1], { target: { value: 'different-one' } });
+        fireEvent.submit(fields[0].closest('form'));
+
+        expect(await screen.findByText('Passwords do not match.')).toBeInTheDocument();
+        expect(screen.getByLabelText('Confirm Password')).toHaveAttribute('aria-invalid', 'true');
+        expect(authApi.resetPassword).not.toHaveBeenCalled();
+    });
+
     it('refuses to submit when opened without a token', async () => {
         renderAt('/reset-password');
 

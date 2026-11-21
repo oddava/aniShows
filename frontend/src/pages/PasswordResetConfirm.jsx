@@ -1,10 +1,18 @@
 import { useState } from 'react';
 import { getApiErrorMessage } from '../api/errors';
-import { PASSWORD_HINT, PASSWORD_MIN_LENGTH, getPasswordProblem } from '../utils/password';
-import { useNavigate, Link } from 'react-router-dom';
+import { PASSWORD_HINT } from '../utils/password';
+import { useNavigate } from 'react-router-dom';
 import useTokenLinkParams from '../components/auth/useTokenLinkParams';
+import AuthField from '../components/auth/AuthField';
+import {
+    confirmPasswordProblem,
+    focusFirstError,
+    newPasswordProblem,
+} from '../components/auth/formValidation';
 import { authApi } from '../api/client';
 import { Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+
+const FIELD_IDS = { password: 'reset-new-password', confirmPassword: 'reset-new-password-confirm' };
 
 export default function PasswordResetConfirm() {
     // The token moves out of the address bar before anything else runs (A14).
@@ -15,6 +23,7 @@ export default function PasswordResetConfirm() {
     const navigate = useNavigate();
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [fieldErrors, setFieldErrors] = useState({});
     const [status, setStatus] = useState('idle');
     const [error, setError] = useState('');
 
@@ -26,13 +35,15 @@ export default function PasswordResetConfirm() {
             return;
         }
 
-        if (password !== confirmPassword) {
-            setError('Passwords do not match');
-            return;
-        }
-        const passwordProblem = getPasswordProblem(password);
-        if (passwordProblem) {
-            setError(passwordProblem);
+        // Both fields checked at once, each message under its field.
+        const problems = {};
+        const passwordError = newPasswordProblem(password, 'Enter a new password.');
+        if (passwordError) problems.password = passwordError;
+        const confirmError = confirmPasswordProblem(password, confirmPassword);
+        if (confirmError) problems.confirmPassword = confirmError;
+        setFieldErrors(problems);
+        if (Object.keys(problems).length > 0) {
+            focusFirstError(problems, FIELD_IDS);
             return;
         }
 
@@ -45,12 +56,17 @@ export default function PasswordResetConfirm() {
                 state: { message: 'Password reset successfully. Please login with your new password.' }
             });
         } catch (err) {
-            setStatus('error');
+            setStatus('idle');
             setError(getApiErrorMessage(err, 'Failed to reset password'));
-        } finally {
-            if (status !== 'success') setStatus('idle');
         }
     };
+
+    const clearFieldError = (field) => setFieldErrors((current) => {
+        if (!current[field]) return current;
+        const next = { ...current };
+        delete next[field];
+        return next;
+    });
 
     return (
         <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
@@ -60,50 +76,47 @@ export default function PasswordResetConfirm() {
                     <p className="text-gray-400">Create a new password for your account</p>
                 </div>
 
-                <div className="bg-dark-100 rounded-2xl p-8 border border-gray-800 shadow-xl">
+                <div className="bg-dark-100 rounded-2xl p-6 sm:p-8 border border-gray-800 shadow-xl">
                     {error && (
-                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
-                            <AlertCircle className="w-5 h-5 shrink-0" />
+                        <div role="alert" className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
+                            <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
                             <p className="text-sm">{error}</p>
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                New Password
-                            </label>
-                            <div className="relative group">
-                                <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-                                <input
-                                    type="password"
-                                    required
-                                    className="input !pl-12 w-full"
-                                    placeholder="Enter new password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    minLength={PASSWORD_MIN_LENGTH}
-                                />
-                            </div>
-                            <p className="text-gray-500 text-xs mt-1">{PASSWORD_HINT}</p>
-                        </div>
+                    <form onSubmit={handleSubmit} noValidate className="space-y-6">
+                        <AuthField
+                            id={FIELD_IDS.password}
+                            label="New Password"
+                            icon={Lock}
+                            type="password"
+                            autoComplete="new-password"
+                            required
+                            placeholder="Enter new password"
+                            value={password}
+                            error={fieldErrors.password}
+                            hint={PASSWORD_HINT}
+                            onChange={(e) => {
+                                setPassword(e.target.value);
+                                clearFieldError('password');
+                            }}
+                        />
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Confirm Password
-                            </label>
-                            <div className="relative group">
-                                <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-accent transition-colors" />
-                                <input
-                                    type="password"
-                                    required
-                                    className="input !pl-12 w-full"
-                                    placeholder="Confirm new password"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                />
-                            </div>
-                        </div>
+                        <AuthField
+                            id={FIELD_IDS.confirmPassword}
+                            label="Confirm Password"
+                            icon={Lock}
+                            type="password"
+                            autoComplete="new-password"
+                            required
+                            placeholder="Confirm new password"
+                            value={confirmPassword}
+                            error={fieldErrors.confirmPassword}
+                            onChange={(e) => {
+                                setConfirmPassword(e.target.value);
+                                clearFieldError('confirmPassword');
+                            }}
+                        />
 
                         <button
                             type="submit"

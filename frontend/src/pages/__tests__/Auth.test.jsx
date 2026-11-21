@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { Login, Register } from '../Auth';
 
@@ -94,13 +94,83 @@ describe('Login', () => {
         expect(screen.getByText('Password reset successfully. Please login with your new password.')).toBeInTheDocument();
     });
 
-    it('announces a login error', async () => {
+    it('announces a login error that is not about credentials as the server worded it', async () => {
+        loginMock.mockRejectedValue({ response: { status: 403, data: { detail: 'Sign-in is paused.', code: 'forbidden' } } });
+        const { container } = renderAuth('/login', <Login />);
+
+        submitLogin(container);
+
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('Sign-in is paused.');
+        expect(within(alert).queryByRole('link')).not.toBeInTheDocument();
+    });
+
+    it('turns the SimpleJWT credentials error into a plain line with a reset link, inside the form', async () => {
+        loginMock.mockRejectedValue({
+            response: {
+                status: 401,
+                data: { detail: 'No active account found with the given credentials', code: 'no_active_account' },
+            },
+        });
+        const { container } = renderAuth('/login', <Login />);
+
+        submitLogin(container);
+
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent('Wrong username or password.');
+        expect(alert).not.toHaveTextContent(/no active account/i);
+        expect(within(alert).getByRole('link', { name: 'Reset your password' })).toHaveAttribute('href', '/forgot-password');
+        expect(container.querySelector('form')).toContainElement(alert);
+    });
+
+    it('maps the same wording without a status code too', async () => {
         loginMock.mockRejectedValue({ response: { data: { detail: 'Invalid credentials', code: 'auth_failed' } } });
         const { container } = renderAuth('/login', <Login />);
 
         submitLogin(container);
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('Invalid credentials');
+        expect(await screen.findByRole('alert')).toHaveTextContent('Wrong username or password.');
+    });
+
+    it('says how long to wait when sign-in is throttled', async () => {
+        loginMock.mockRejectedValue({
+            response: {
+                status: 429,
+                headers: { 'retry-after': '42' },
+                data: { detail: 'Request was throttled. Expected available in 42 seconds.', code: 'throttled' },
+            },
+        });
+        const { container } = renderAuth('/login', <Login />);
+
+        submitLogin(container);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('Too many sign-in attempts. Try again in 42 seconds.');
+    });
+
+    it('shows an inline error under every empty field at once, without the browser tooltip', async () => {
+        const { container } = renderAuth('/login', <Login />);
+        const form = container.querySelector('form');
+        expect(form).toHaveAttribute('novalidate');
+
+        fireEvent.submit(form);
+
+        expect(await screen.findByText('Enter your username or email.')).toBeInTheDocument();
+        expect(screen.getByText('Enter your password.')).toBeInTheDocument();
+        expect(screen.getByLabelText('Username or Email')).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.getByLabelText('Username or Email')).toHaveFocus();
+        expect(loginMock).not.toHaveBeenCalled();
+    });
+
+    it('clears a field error once that field is edited', async () => {
+        const { container } = renderAuth('/login', <Login />);
+        fireEvent.submit(container.querySelector('form'));
+        expect(await screen.findByText('Enter your password.')).toBeInTheDocument();
+
+        type('Enter your password', 'x');
+
+        expect(screen.queryByText('Enter your password.')).not.toBeInTheDocument();
+        expect(screen.getByText('Enter your username or email.')).toBeInTheDocument();
     });
 
     it('defaults to /browse after login', async () => {
@@ -199,6 +269,39 @@ describe('Register', () => {
         const passwordInput = screen.getByPlaceholderText('Create a password');
         expect(passwordInput.className).toContain('!border-red-500');
         expect(passwordInput).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    it('shows an inline error under every empty field at once', async () => {
+        const { container } = render(<MemoryRouter><Register /></MemoryRouter>);
+        const form = container.querySelector('form');
+        expect(form).toHaveAttribute('novalidate');
+
+        fireEvent.submit(form);
+
+        expect(await screen.findByText('Choose a username.')).toBeInTheDocument();
+        expect(screen.getByText('Enter your email address.')).toBeInTheDocument();
+        expect(screen.getByText('Create a password.')).toBeInTheDocument();
+        expect(screen.getByText('Type the password again.')).toBeInTheDocument();
+        for (const label of ['Username', 'Email Address', 'Password', 'Confirm Password']) {
+            expect(screen.getByLabelText(label)).toHaveAttribute('aria-invalid', 'true');
+        }
+        expect(screen.getByLabelText('Username')).toHaveFocus();
+        expect(registerMock).not.toHaveBeenCalled();
+    });
+
+    it('flags a malformed email and a mismatched confirmation together', async () => {
+        const { container } = render(<MemoryRouter><Register /></MemoryRouter>);
+
+        type('Choose a username', 'newbie');
+        type('Enter your email', 'not-an-email');
+        type('Create a password', 'long-enough-pass');
+        type('Confirm your password', 'something-else');
+        fireEvent.submit(container.querySelector('form'));
+
+        expect(await screen.findByText('Enter a valid email address, like name@example.com.')).toBeInTheDocument();
+        expect(screen.getByText('Passwords do not match.')).toBeInTheDocument();
+        expect(screen.getByLabelText('Email Address')).toHaveFocus();
+        expect(registerMock).not.toHaveBeenCalled();
     });
 
     it('rejects an all-numeric password before calling the server', async () => {

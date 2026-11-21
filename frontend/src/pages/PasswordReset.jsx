@@ -3,20 +3,31 @@ import { getApiErrorMessage } from '../api/errors';
 import { Link } from 'react-router-dom';
 import { authApi } from '../api/client';
 import AuthField from '../components/auth/AuthField';
+import { emailProblem } from '../components/auth/formValidation';
 import { Mail, ArrowRight, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function PasswordReset() {
     const [email, setEmail] = useState('');
     const [status, setStatus] = useState('idle'); // idle, loading, success, error
     const [message, setMessage] = useState('');
+    const [emailError, setEmailError] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setStatus('loading');
         setMessage('');
 
+        const problem = emailProblem(email);
+        if (problem) {
+            setStatus('idle');
+            setEmailError(problem);
+            document.getElementById('reset-email')?.focus();
+            return;
+        }
+        setEmailError('');
+        setStatus('loading');
+
         try {
-            await authApi.requestPasswordReset(email);
+            await authApi.requestPasswordReset(email.trim());
             setStatus('success');
             setMessage('If an account exists with this email, a reset link has been sent.');
         } catch (err) {
@@ -53,12 +64,12 @@ export default function PasswordReset() {
                 <div className="bg-dark-100 rounded-2xl p-6 sm:p-8 border border-gray-800 shadow-xl">
                     {status === 'error' && (
                         <div role="alert" className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
-                            <AlertCircle className="w-5 h-5 shrink-0" />
+                            <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
                             <p className="text-sm">{message}</p>
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <form onSubmit={handleSubmit} noValidate className="space-y-6">
                         <AuthField
                             id="reset-email"
                             label="Email Address"
@@ -68,7 +79,11 @@ export default function PasswordReset() {
                             required
                             placeholder="Enter your email"
                             value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            error={emailError}
+                            onChange={(e) => {
+                                setEmail(e.target.value);
+                                setEmailError('');
+                            }}
                         />
 
                         <button

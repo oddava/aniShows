@@ -75,7 +75,7 @@ def build_episode_email(notification: Notification) -> dict:
         'font-family:Arial,Helvetica,sans-serif;">'
         '<div style="max-width:600px;margin:0 auto;">'
         '<div style="background:{header};color:#ffffff;padding:20px;text-align:center;">'
-        '<h1 style="margin:0;font-size:22px;">aniShows</h1></div>'
+        '<h1 style="margin:0;font-size:22px;">AniShows</h1></div>'
         '<div style="padding:24px;background:#ffffff;">'
         '<h2 style="color:#18181b;margin:0 0 12px;">{title}</h2>'
         '<p style="color:#3f3f46;font-size:16px;line-height:1.5;">{message}</p>'

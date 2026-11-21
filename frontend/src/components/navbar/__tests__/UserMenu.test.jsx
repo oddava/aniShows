@@ -1,33 +1,60 @@
 import { useState } from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import UserMenu from '../UserMenu';
 
-function Harness() {
+const logoutMock = vi.fn();
+const notifyMock = vi.fn();
+
+vi.mock('../../../context/AuthContext', () => ({
+    useAuth: () => ({ logout: logoutMock }),
+}));
+vi.mock('../../ui/toast', () => ({
+    notify: (...args) => notifyMock(...args),
+}));
+
+function Where() {
+    return <div data-testid="where">{useLocation().pathname}</div>;
+}
+
+function Harness({ isAuthenticated = true }) {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     return (
-        <MemoryRouter>
+        <>
             <UserMenu
-                user={{ username: 'oddava', email: 'someone@example.com' }}
-                isAuthenticated
+                user={isAuthenticated ? { username: 'oddava', email: 'someone@example.com' } : null}
+                isAuthenticated={isAuthenticated}
                 authLoading={false}
-                logout={vi.fn()}
                 isProfileOpen={isProfileOpen}
                 setIsProfileOpen={setIsProfileOpen}
                 mobileUnreadCount={0}
                 currentUserProfilePath="/u/oddava"
             />
             <a href="/after">After the menu</a>
-        </MemoryRouter>
+            <Where />
+        </>
     );
 }
 
+const renderAt = (path = '/settings', props = {}) => render(
+    <MemoryRouter initialEntries={[path]}>
+        <Routes>
+            <Route path="*" element={<Harness {...props} />} />
+        </Routes>
+    </MemoryRouter>,
+);
+
 describe('UserMenu (desktop account disclosure)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        logoutMock.mockResolvedValue(undefined);
+    });
+
     it('returns focus to its button when Escape is pressed inside the open menu', async () => {
         const user = userEvent.setup();
-        render(<Harness />);
+        renderAt();
 
         const button = screen.getByRole('button', { name: /Account menu for oddava/ });
         await user.click(button);
@@ -43,7 +70,7 @@ describe('UserMenu (desktop account disclosure)', () => {
 
     it('closes when keyboard focus moves past the menu', async () => {
         const user = userEvent.setup();
-        render(<Harness />);
+        renderAt();
 
         const button = screen.getByRole('button', { name: /Account menu for oddava/ });
         await user.click(button);
@@ -56,12 +83,48 @@ describe('UserMenu (desktop account disclosure)', () => {
 
     it('deep-links Settings to the Account tab', async () => {
         const user = userEvent.setup();
-        render(<Harness />);
+        renderAt();
 
         await user.click(screen.getByRole('button', { name: /Account menu for oddava/ }));
         expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
             'href',
             '/settings?tab=account',
         );
+    });
+
+    it('signs out, goes home and says so with the shared toast', async () => {
+        const user = userEvent.setup();
+        renderAt('/settings');
+
+        await user.click(screen.getByRole('button', { name: /Account menu for oddava/ }));
+        await user.click(screen.getByRole('button', { name: 'Sign Out' }));
+
+        await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/));
+        expect(logoutMock).toHaveBeenCalledTimes(1);
+        expect(notifyMock).toHaveBeenCalledWith('Signed out.', expect.objectContaining({ id: 'signed-out' }));
+    });
+});
+
+describe('UserMenu sign-in buttons', () => {
+    it('shows Sign In and Get Started to guests on ordinary pages', () => {
+        renderAt('/browse', { isAuthenticated: false });
+
+        expect(screen.getByRole('link', { name: 'Sign In' })).toHaveAttribute('href', '/login');
+        expect(screen.getByRole('link', { name: 'Get Started' })).toHaveAttribute('href', '/register');
+    });
+
+    it.each([
+        '/login',
+        '/register',
+        '/forgot-password',
+        '/reset-password',
+        '/reset-password/MQ/abc-123',
+        '/verification-pending',
+        '/login/',
+    ])('hides them on the auth page %s', (path) => {
+        renderAt(path, { isAuthenticated: false });
+
+        expect(screen.queryByRole('link', { name: 'Sign In' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Get Started' })).not.toBeInTheDocument();
     });
 });

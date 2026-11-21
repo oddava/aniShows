@@ -1,17 +1,20 @@
 import { useEffect, useId, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Settings, User } from 'lucide-react';
+import useSignOut from '../auth/useSignOut';
+import { isAuthFlowPath } from '../auth/authPaths';
 
 /**
  * The right side of the desktop navbar: a skeleton while auth loads, the
- * profile button and its dropdown when signed in, or the sign-in links.
+ * profile button and its dropdown when signed in, or the sign-in links
+ * (left out on the sign-in / sign-up pages themselves).
  * `isProfileOpen` is owned by Navbar (auto-hide and Escape need it).
+ * Sign Out goes through useSignOut (toast + home), not a `logout` prop.
  */
 export default function UserMenu({
     user,
     isAuthenticated,
     authLoading,
-    logout,
     isProfileOpen,
     setIsProfileOpen,
     mobileUnreadCount,
@@ -20,6 +23,8 @@ export default function UserMenu({
     const profileRef = useRef(null);
     const profileButtonRef = useRef(null);
     const profileMenuId = useId();
+    const signOut = useSignOut();
+    const { pathname } = useLocation();
 
     // Escape closes the dropdown and returns focus to its button.
     useEffect(() => {
@@ -153,7 +158,7 @@ export default function UserMenu({
                                 <div className="border-t border-white/5 my-1.5 mx-2" />
                                 <button
                                     type="button"
-                                    onClick={() => { logout(); setIsProfileOpen(false); }}
+                                    onClick={() => { setIsProfileOpen(false); signOut(); }}
                                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-red-500/10 hover:text-red-400"
                                 >
                                     <LogOut aria-hidden="true" className="w-4 h-4" />
@@ -163,7 +168,7 @@ export default function UserMenu({
                         </div>
                     )}
                 </div>
-            ) : (
+            ) : isAuthFlowPath(pathname) ? null : (
                 <>
                     <Link to="/login" className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
                         Sign In

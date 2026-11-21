@@ -8,7 +8,14 @@ import { safeReturnPath } from '../components/auth/returnTo';
 import SEO from '../components/SEO';
 import logger from '../utils/logger';
 import { getApiErrorMessage, getApiFieldErrors } from '../api/errors';
-import { PASSWORD_HINT, getPasswordProblem } from '../utils/password';
+import { PASSWORD_HINT } from '../utils/password';
+import {
+    UNVERIFIED_ACCOUNT_DAYS,
+    focusFirstError,
+    validateLogin,
+    validateRegister,
+} from '../components/auth/formValidation';
+import { describeLoginError } from '../components/auth/loginErrors';
 
 const CARD_CLASS = 'bg-dark-100 rounded-2xl p-6 sm:p-8 border border-gray-800 shadow-xl';
 
@@ -37,12 +44,50 @@ function useReturnPath() {
 
 const isAdminAccount = (account) => Boolean(account?.is_staff || account?.is_superuser);
 
+/** Drop one field's error once the person edits that field. */
+const withoutError = (errors, field) => {
+    if (!errors[field]) return errors;
+    const next = { ...errors };
+    delete next[field];
+    return next;
+};
+
+const LOGIN_FIELD_IDS = { username: 'login-username', password: 'login-password' };
+const REGISTER_FIELD_IDS = {
+    username: 'register-username',
+    email: 'register-email',
+    password: 'register-password',
+    confirmPassword: 'register-password-confirm',
+};
+
+/** A failed sign-in, inside the form next to the button: one line, maybe a reset link. */
+function LoginErrorMessage({ error }) {
+    return (
+        <div role="alert" className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-400">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-px" aria-hidden="true" />
+            <p className="text-sm">
+                {error.message}
+                {error.offerReset && (
+                    <>
+                        {' '}
+                        <Link to="/forgot-password" className="font-semibold text-red-300 underline underline-offset-2 hover:text-white">
+                            Reset your password
+                        </Link>
+                    </>
+                )}
+            </p>
+        </div>
+    );
+}
+
 export function Login() {
     const [formData, setFormData] = useState({
         username: '',
         password: '',
     });
-    const [error, setError] = useState('');
+    const [fieldErrors, setFieldErrors] = useState({});
+    // { message, offerReset } from describeLoginError, or null.
+    const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const { login, isAuthenticated, user } = useAuth();
     const navigate = useNavigate();
@@ -69,7 +114,15 @@ export function Login() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
+        setError(null);
+
+        const problems = validateLogin(formData);
+        setFieldErrors(problems);
+        if (Object.keys(problems).length > 0) {
+            focusFirstError(problems, LOGIN_FIELD_IDS);
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -78,10 +131,15 @@ export function Login() {
             navigate(toAdmin ? '/admin' : returnPath, { replace: true });
         } catch (err) {
             logger.error('Login error:', err);
-            setError(getApiErrorMessage(err, 'Invalid username or password'));
+            setError(describeLoginError(err));
         } finally {
             setLoading(false);
         }
+    };
+
+    const updateField = (field) => (e) => {
+        setFormData({ ...formData, [field]: e.target.value });
+        setFieldErrors((current) => withoutError(current, field));
     };
 
     return (
@@ -101,8 +159,6 @@ export function Login() {
                             <p className="text-sm">{stateMessage}</p>
                         </div>
                     )}
-                    {error && <ErrorBanner>{error}</ErrorBanner>}
-
                     <div className="mb-6">
                         <GoogleLoginButton returnTo={returnPath} />
                         <div className="relative mt-6">
@@ -115,21 +171,22 @@ export function Login() {
                         </div>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <form onSubmit={handleSubmit} noValidate className="space-y-6">
                         <AuthField
-                            id="login-username"
+                            id={LOGIN_FIELD_IDS.username}
                             label="Username or Email"
                             icon={User}
                             autoComplete="username"
                             required
                             placeholder="Enter your username or email"
                             value={formData.username}
-                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                            error={fieldErrors.username}
+                            onChange={updateField('username')}
                         />
 
                         <div>
                             <AuthField
-                                id="login-password"
+                                id={LOGIN_FIELD_IDS.password}
                                 label="Password"
                                 icon={Lock}
                                 type="password"
@@ -137,7 +194,8 @@ export function Login() {
                                 required
                                 placeholder="Enter your password"
                                 value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                error={fieldErrors.password}
+                                onChange={updateField('password')}
                             />
                             <div className="flex justify-end mt-2">
                                 <Link to="/forgot-password" className="text-xs text-accent hover:text-accent-hover transition-colors">
@@ -145,6 +203,8 @@ export function Login() {
                                 </Link>
                             </div>
                         </div>
+
+                        {error && <LoginErrorMessage error={error} />}
 
                         <button
                             type="submit"
@@ -208,15 +268,12 @@ export function Register() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setErrors({});
 
-        if (formData.password !== formData.confirmPassword) {
-            setErrors({ password: ['Passwords do not match'] });
-            return;
-        }
-        const passwordProblem = getPasswordProblem(formData.password);
-        if (passwordProblem) {
-            setErrors({ password: [passwordProblem] });
+        // Every problem at once, under its own field (the form is noValidate).
+        const problems = validateRegister(formData);
+        setErrors(problems);
+        if (Object.keys(problems).length > 0) {
+            focusFirstError(problems, REGISTER_FIELD_IDS);
             return;
         }
 
@@ -257,9 +314,14 @@ export function Register() {
         navigate('/verification-pending', {
             state: {
                 email: formData.email,
-                message: "Please check your email to verify your account. Unverified accounts are automatically deleted after 7 days."
+                message: `Please check your email to verify your account. Unverified accounts are automatically deleted after ${UNVERIFIED_ACCOUNT_DAYS} days.`,
             }
         });
+    };
+
+    const updateField = (field) => (e) => {
+        setFormData({ ...formData, [field]: e.target.value });
+        setErrors((current) => withoutError(current, field));
     };
 
     return (
@@ -287,9 +349,9 @@ export function Register() {
                         </div>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <form onSubmit={handleSubmit} noValidate className="space-y-6">
                         <AuthField
-                            id="register-username"
+                            id={REGISTER_FIELD_IDS.username}
                             label="Username"
                             icon={User}
                             autoComplete="username"
@@ -297,11 +359,11 @@ export function Register() {
                             placeholder="Choose a username"
                             value={formData.username}
                             error={errors.username}
-                            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                            onChange={updateField('username')}
                         />
 
                         <AuthField
-                            id="register-email"
+                            id={REGISTER_FIELD_IDS.email}
                             label="Email Address"
                             icon={Mail}
                             type="email"
@@ -310,11 +372,11 @@ export function Register() {
                             placeholder="Enter your email"
                             value={formData.email}
                             error={errors.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            onChange={updateField('email')}
                         />
 
                         <AuthField
-                            id="register-password"
+                            id={REGISTER_FIELD_IDS.password}
                             label="Password"
                             icon={Lock}
                             type="password"
@@ -324,11 +386,11 @@ export function Register() {
                             value={formData.password}
                             error={errors.password}
                             hint={PASSWORD_HINT}
-                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                            onChange={updateField('password')}
                         />
 
                         <AuthField
-                            id="register-password-confirm"
+                            id={REGISTER_FIELD_IDS.confirmPassword}
                             label="Confirm Password"
                             icon={Lock}
                             type="password"
@@ -336,7 +398,8 @@ export function Register() {
                             required
                             placeholder="Confirm your password"
                             value={formData.confirmPassword}
-                            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                            error={errors.confirmPassword}
+                            onChange={updateField('confirmPassword')}
                         />
 
                         <button
