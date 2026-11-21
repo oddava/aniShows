@@ -57,7 +57,7 @@ BUDGETS = {
     "schedule": 4,
     # +1 for G3's cached site_status_counts aggregate (site_status_distribution, D-3).
     "detail": 9,
-    "public_profile": 4,
+    "public_profile": 5,  # +1: live list totals, one stats calculation (UX P1)
     "detail_authenticated": 12,
     "search_signed_in": 8,
     "trending_signed_in": 7,

@@ -511,10 +511,12 @@
     "mean_score": "float",
     "points": "int",
     "profile_primary_color": "str",
+    "rated_count": "int",
     "resonance_count": "int",
     "reviews_count": "int",
     "social_links": [],
     "total_badges_count": "int",
+    "total_minutes": "int",
     "username": "str"
   },
   "schedule": {

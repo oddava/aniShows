@@ -177,7 +177,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                     <div className="flex items-center gap-6">
                         <div className="flex flex-col items-end">
                             <span className="text-white font-black text-sm">{stats.totalActivity}</span>
-                            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Episodes</span>
+                            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest" title="Episodes you logged here in the last 12 months. Imports and shows marked Completed in one go are not day-by-day activity.">Logged</span>
                         </div>
                         <div className="w-px h-6 bg-gray-700/30" />
                         <div className="flex flex-col items-end">

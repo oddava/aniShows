@@ -10,31 +10,74 @@ const OVERVIEW_GRID_MAX_ROWS = 6;
 const OVERVIEW_GRID_COLUMNS = 6;
 const OVERVIEW_GRID_MAX_ITEMS = OVERVIEW_GRID_MAX_ROWS * OVERVIEW_GRID_COLUMNS;
 
-function TopStatsRow({ user }) {
+/*
+ * The profile's headline numbers. They come from the same server calculation
+ * as the Stats tab (P1), and each says what it counts.
+ */
+function TopStatsRow({ user, isOwnProfile }) {
     if (!user) return null;
 
+    if (!user.anime_count && isOwnProfile) {
+        return <GettingStarted user={user} />;
+    }
+
+    const rated = Number(user.rated_count) || 0;
     const stats = [
-        { label: 'Total Anime', value: user.anime_count || 0 },
-        { label: 'Mean Score', value: user.mean_score || 0 },
-        { label: 'Favorites', value: user.favorites_count || 0 },
-        { label: 'Reviews', value: user.reviews_count || 0 },
-        { label: 'Resonance', value: user.resonance_count || 0 },
+        { label: 'Anime', value: user.anime_count || 0, note: 'on the list' },
+        { label: 'Episodes', value: (user.episodes_watched || 0).toLocaleString(), note: 'watched' },
+        {
+            label: 'Mean score',
+            value: user.mean_score ?? '—',
+            note: rated ? `of ${rated} rated` : 'nothing rated yet',
+        },
+        { label: 'Days', value: user.days_watched ?? 0, note: 'of watching' },
+        { label: 'Favourites', value: user.favorites_count || 0 },
+        {
+            label: 'Resonance',
+            value: user.resonance_count || 0,
+            note: 'helpful votes',
+            title: 'Resonance: how many times people marked this user’s reviews helpful',
+        },
     ];
 
     return (
-        <div className="mb-8 border-b border-accent/30 py-4">
-            <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-x-5 gap-y-3 text-center sm:gap-x-8">
-                {stats.map((stat, i) => (
-                    <div key={i} className="min-w-[78px]">
-                        <span className="text-xl sm:text-2xl font-bold text-white">
+        <div className="mb-8 border-b border-white/[0.06] pb-6">
+            <dl className="mx-auto grid max-w-4xl grid-cols-3 gap-x-4 gap-y-5 text-center sm:grid-cols-6">
+                {stats.map((stat) => (
+                    <div key={stat.label} title={stat.title}>
+                        <dt className="sr-only">{stat.label}</dt>
+                        <dd className="font-display text-[1.75rem] font-extrabold leading-none text-white tabular">
                             {stat.value}
-                        </span>
-                        <span className="mt-1 block text-[11px] uppercase tracking-wider text-gray-500">
-                            {stat.label}
-                        </span>
+                        </dd>
+                        <dd className="mt-1.5 text-xs font-semibold text-gray-300">{stat.label}</dd>
+                        {stat.note && <dd className="text-[11px] text-gray-500">{stat.note}</dd>}
                     </div>
                 ))}
-            </div>
+            </dl>
+        </div>
+    );
+}
+
+/** A new profile gets three next steps instead of a wall of zeros (P3). */
+function GettingStarted({ user }) {
+    const steps = [
+        { done: false, title: 'Bring your list', body: 'Import from MyAnimeList or AniList in one go. Nothing is ever written back.', to: '/import', cta: 'Import' },
+        { done: (user.anime_count || 0) >= 5, title: 'Add five shows', body: 'Tap + on any poster: Watching, Completed, Planning.', to: '/browse', cta: 'Browse' },
+        { done: (user.favorites_count || 0) > 0, title: 'Pick favourites', body: 'The heart on a show’s page puts it on your profile.', to: '/browse?sort=rating', cta: 'Top rated' },
+    ];
+    return (
+        <div className="mb-8">
+            <h2 className="section-title mb-4">Get started</h2>
+            <ol className="grid gap-3 sm:grid-cols-3">
+                {steps.map((step, index) => (
+                    <li key={step.title} className="flex flex-col rounded-[var(--radius-lg)] bg-white/[0.03] p-4">
+                        <span className="text-xs font-semibold text-gray-500 tabular">Step {index + 1}</span>
+                        <span className="mt-1 font-semibold text-white">{step.title}</span>
+                        <span className="mt-1 flex-1 text-sm text-gray-400">{step.body}</span>
+                        <Link to={step.to} className="btn-secondary mt-4 self-start px-4 text-sm">{step.cta}</Link>
+                    </li>
+                ))}
+            </ol>
         </div>
     );
 }
@@ -315,7 +358,8 @@ export default function OverviewTab({
     displayUser,
     targetUsername,
     isPrivate,
-    onTabChange
+    onTabChange,
+    isOwnProfile = false,
 }) {
     const { data: watchingItemsData } = useQuery({
         ...listQueries.overview(targetUsername, 'Watching', OVERVIEW_GRID_MAX_ITEMS),
@@ -352,7 +396,7 @@ export default function OverviewTab({
 
     return (
         <div className="animate-tab-content pb-8 overview-tab">
-            <TopStatsRow user={displayUser} />
+            <TopStatsRow user={displayUser} isOwnProfile={isOwnProfile} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
                 <div className="lg:col-span-6 space-y-8">

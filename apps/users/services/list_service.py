@@ -8,18 +8,14 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import (
-    Avg,
     Count,
     ExpressionWrapper,
     F,
     FloatField,
-    IntegerField,
     Max,
     Q,
-    Sum,
-    Value,
 )
-from django.db.models.functions import Coalesce, NullIf
+from django.db.models.functions import NullIf
 from django.http import Http404
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
@@ -30,6 +26,7 @@ from ...shared.logger import logger
 from ..models import UserAnimeList
 from .cache import invalidate_user_caches
 from .profile_visibility import can_view_profile
+from .stats_service import list_stat_expressions
 
 User = get_user_model()
 Status = UserAnimeList.UserAnimeStatus
@@ -133,6 +130,10 @@ def _save_entry(serializer, **save_kwargs) -> None:
 
 def _after_write(user) -> None:
     invalidate_user_caches(user.id, user.username)
+    # Also now, not only on commit (the side-effects handler does that): the
+    # profile reads these numbers, so the response to this write's follow-up
+    # GET must not see the old ones (P1).
+    invalidate_lists_summary(user.id)
 
 
 def upsert_user_anime_list_entry(serializer_class, user, data, context) -> tuple[Any, bool]:
@@ -206,14 +207,19 @@ def delete_user_anime_list_entry(instance, user):
 
 
 def lists_summary_cache_key(user_id: int) -> str:
-    return f"lists_summary:v1:{user_id}"
+    # v2: adds ``rated_count``.
+    return f"lists_summary:v2:{user_id}"
+
+
+def list_stats_cache_key(user_id: int) -> str:
+    return f"list_stats:v1:{user_id}"
 
 
 def invalidate_lists_summary(user_id: int | None) -> None:
     if not user_id:
         return
     try:
-        cache.delete(lists_summary_cache_key(user_id))
+        cache.delete_many([lists_summary_cache_key(user_id), list_stats_cache_key(user_id)])
     except CACHE_ERRORS:
         logger.warning("Could not drop the list summary cache for %s", user_id, exc_info=True)
 
@@ -225,6 +231,7 @@ def empty_lists_summary() -> dict:
         "episodes_watched": 0,
         "minutes": 0,
         "mean_score": None,
+        "rated_count": 0,
         "score_histogram": {str(score): 0 for score in range(1, 11)},
         "top_genres": [],
         "updated_at": None,
@@ -233,21 +240,13 @@ def empty_lists_summary() -> dict:
 
 def _compute_lists_summary(user_id: int) -> dict:
     entries = UserAnimeList.objects.filter(user_id=user_id)
-    episode_minutes = Coalesce(
-        NullIf(F("anime__duration_minutes"), 0), Value(DEFAULT_EPISODE_MINUTES)
-    )
+    shared = list_stat_expressions()
     aggregates = entries.aggregate(
-        total=Count("id"),
-        episodes_total=Coalesce(Sum("episodes_watched"), 0),
-        minutes=Coalesce(
-            Sum(
-                ExpressionWrapper(
-                    F("episodes_watched") * episode_minutes, output_field=IntegerField()
-                )
-            ),
-            0,
-        ),
-        mean_score=Avg("score", filter=Q(score__gt=0)),
+        total=shared["anime_count"],
+        episodes_total=shared["episodes"],
+        minutes=shared["minutes"],
+        mean_score=shared["mean"],
+        rated_count=shared["rated"],
         last_updated=Max("updated_at"),
         **{f"status_{i}": Count("id", filter=Q(status=s)) for i, s in enumerate(Status.values)},
         **{f"score_{n}": Count("id", filter=Q(score=n)) for n in range(1, 11)},
@@ -265,6 +264,7 @@ def _compute_lists_summary(user_id: int) -> dict:
         "episodes_watched": aggregates["episodes_total"],
         "minutes": aggregates["minutes"],
         "mean_score": round(mean_score, 1) if mean_score is not None else None,
+        "rated_count": aggregates["rated_count"],
         "score_histogram": {str(n): aggregates[f"score_{n}"] for n in range(1, 11)},
         "top_genres": [
             {
@@ -285,14 +285,68 @@ def get_lists_summary(request_user, username: str | None) -> dict:
     target_user = resolve_list_owner(request_user, username)
     if target_user is None:
         return empty_lists_summary()
-    key = lists_summary_cache_key(target_user.id)
+    return cached_lists_summary(target_user.id)
+
+
+def list_stats_from_summary(summary: dict) -> dict:
+    """The list-derived profile numbers, read off the summary (P1: one calculation)."""
+    minutes = int(summary.get("minutes") or 0)
+    return {
+        "anime_count": int(summary.get("total") or 0),
+        "episodes_watched": int(summary.get("episodes_watched") or 0),
+        "total_minutes": minutes,
+        "days_watched": round(minutes / 1440.0, 1),
+        "mean_score": summary.get("mean_score"),
+        "rated_count": int(summary.get("rated_count") or 0),
+    }
+
+
+def live_list_stats(user_id: int) -> dict:
+    """List stats as of the last write: the cached summary is dropped on every write.
+
+    Reads the cached summary when there is one; otherwise runs only the totals
+    aggregate (one query, same expressions), not the genre breakdown.
+    """
+    try:
+        cached = cache.get(lists_summary_cache_key(user_id))
+    except CACHE_ERRORS:
+        cached = None
+    if cached is not None:
+        return list_stats_from_summary(cached)
+    try:
+        stats = cache.get(list_stats_cache_key(user_id))
+    except CACHE_ERRORS:
+        stats = None
+    if stats is not None:
+        return stats
+    shared = list_stat_expressions()
+    totals = UserAnimeList.objects.filter(user_id=user_id).aggregate(
+        total=shared["anime_count"],
+        episodes_total=shared["episodes"],
+        minutes=shared["minutes"],
+        mean_score=shared["mean"],
+        rated_count=shared["rated"],
+    )
+    totals["episodes_watched"] = totals.pop("episodes_total")
+    mean = totals["mean_score"]
+    totals["mean_score"] = round(mean, 1) if mean is not None else None
+    stats = list_stats_from_summary(totals)
+    try:
+        cache.set(list_stats_cache_key(user_id), stats, timeout=LISTS_SUMMARY_CACHE_TIMEOUT)
+    except CACHE_ERRORS:
+        logger.warning("Could not cache the list stats", exc_info=True)
+    return stats
+
+
+def cached_lists_summary(user_id: int) -> dict:
+    key = lists_summary_cache_key(user_id)
     try:
         cached = cache.get(key)
     except CACHE_ERRORS:
         cached = None
     if cached is not None:
         return cached
-    summary = _compute_lists_summary(target_user.id)
+    summary = _compute_lists_summary(user_id)
     try:
         cache.set(key, summary, timeout=LISTS_SUMMARY_CACHE_TIMEOUT)
     except CACHE_ERRORS:

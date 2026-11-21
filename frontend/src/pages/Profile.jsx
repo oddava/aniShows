@@ -365,6 +365,7 @@ export default function Profile({ forcedUsername }) {
                             targetUsername={targetUsername}
                             isPrivate={isPrivate}
                             onTabChange={handleTabChange}
+                            isOwnProfile={isOwnProfile}
                         />
                     ) : (
                         <ProfileContent
