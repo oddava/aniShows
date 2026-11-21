@@ -103,6 +103,8 @@ function AnimeCard({
 
     const loading = priority || index < 6 ? 'eager' : 'lazy';
     const href = `/anime/${anime.slug}`;
+    const smallUrl = getOptimizedImageUrl(anime, 'cover', 'small');
+    const placeholderUrl = !lite && smallUrl && smallUrl !== imageUrl ? smallUrl : null;
 
     if (variant === 'row') {
         // The agenda row (Schedule): same facts and quick add, laid out like
@@ -176,14 +178,23 @@ function AnimeCard({
     }
 
     return (
-        <article className="group relative flex h-full flex-col" aria-label={displayTitle}>
-            <div className="relative aspect-[2/3] shrink-0 rounded-[var(--radius-md)] bg-[var(--ink-2)] has-[a:focus-visible]:shadow-[0_0_0_2px_var(--signature)]">
+        <article className="card-enter group relative flex h-full flex-col" style={{ '--stagger': index % 12 }} aria-label={displayTitle}>
+            <div className="poster-frame relative aspect-[2/3] shrink-0 rounded-[var(--radius-md)] bg-[var(--ink-2)] has-[a:focus-visible]:shadow-[0_0_0_2px_var(--signature)]">
                 <Link
                     to={href}
                     aria-label={displayTitle}
                     className="absolute inset-0 block overflow-hidden rounded-[var(--radius-md)] focus-visible:!outline-none focus-visible:!shadow-none"
                 >
                     {!imageLoaded && <div aria-hidden="true" className="absolute inset-0 skeleton-shimmer rounded-[var(--radius-md)]" />}
+                    {placeholderUrl && (
+                        <img
+                            aria-hidden="true"
+                            alt=""
+                            src={placeholderUrl}
+                            data-hidden={imageLoaded}
+                            className="poster-blur absolute inset-0 h-full w-full object-cover"
+                        />
+                    )}
                     <img
                         ref={imageRef}
                         src={imageUrl}
@@ -196,7 +207,7 @@ function AnimeCard({
                         onLoad={() => setImageLoaded(true)}
                         onError={handleImageError}
                         data-loaded={imageLoaded}
-                        className="img-fade relative h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02] motion-reduce:group-hover:scale-100"
+                        className="img-fade relative h-full w-full object-cover transition-[opacity,transform] duration-300 ease-out [@media(hover:hover)]:group-hover:scale-[1.04] motion-reduce:group-hover:scale-100"
                     />
                 </Link>
 

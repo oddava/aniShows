@@ -13,12 +13,62 @@
 
 .shimmer,
 .shimmer-bg,
+/* Skeletons: a soft light sweeps across, slower than a blink and calmer. */
+@keyframes skeleton-sweep {
+  from { background-position: 160% 0; }
+  to { background-position: -60% 0; }
+}
+
 .skeleton-shimmer,
 .skeleton-wave,
 .shimmer-gradient,
 .shimmer-overlay {
-  background: var(--color-overlay-base);
-  animation: pulse-soft 1.4s ease-in-out infinite;
+  background-color: var(--color-overlay-base);
+  background-image: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.05) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+
+/* Cards arrive with a short fade-up, a few at a time, instead of popping in.
+   The fill is "backwards", so no transform stays on the card afterwards. */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.card-enter {
+  animation: card-in 320ms var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger, 0) * 35ms);
+}
+
+/* Posters: a small lift and a soft shadow on hover (pointer only), a slight
+   press on tap. No glow. */
+.poster-frame {
+  transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .group:hover > .poster-frame {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 28px -14px rgb(0 0 0 / 0.75);
+  }
+}
+
+.group:active > .poster-frame {
+  transform: scale(0.985);
+}
+
+/* The small cover, blurred, holds the poster's place while the full image
+   loads; the full image then fades in over it. */
+.poster-blur {
+  filter: blur(14px) saturate(1.1);
+  transform: scale(1.12);
+  opacity: 0.75;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+
+.poster-blur[data-hidden="true"] {
+  opacity: 0;
 }
 
 /* Route change: a short fade so pages arrive instead of snapping in.
@@ -275,4 +325,17 @@
 
 .value-settle {
   animation: value-settle var(--dur-base) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-enter {
+    animation: none;
+  }
+
+  .poster-frame,
+  .group:hover > .poster-frame,
+  .group:active > .poster-frame {
+    transform: none;
+    transition: none;
+  }
 }

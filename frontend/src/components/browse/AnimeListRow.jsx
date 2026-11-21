@@ -33,7 +33,7 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
         : airing.justAired ? `Ep ${airing.aired} out` : null;
 
     return (
-        <div className="group relative flex items-center gap-3 sm:gap-5 rounded-[var(--radius-md)] p-2 transition-colors hover:bg-white/[0.03]">
+        <div className="card-enter group relative flex items-center gap-3 sm:gap-5 rounded-[var(--radius-md)] p-2 transition-colors hover:bg-white/[0.03] active:bg-white/[0.05]">
             <Link to={href} tabIndex={-1} aria-hidden="true" className="relative shrink-0">
                 <img
                     src={imageUrl}
