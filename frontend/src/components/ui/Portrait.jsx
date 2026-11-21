@@ -21,7 +21,7 @@ function Portrait({ src, srcSet, sizes = '64px', alt = '', className = '', imgCl
             {state !== 'loaded' && (
                 <span
                     {...(state === 'missing' && alt ? { role: 'img', 'aria-label': alt } : { 'aria-hidden': true })}
-                    className="absolute inset-0 flex items-center justify-center text-gray-600"
+                    className="absolute inset-0 flex items-center justify-center text-[var(--text-3)]"
                 >
                     <User aria-hidden="true" className="h-1/2 max-h-10 w-1/2 max-w-10" strokeWidth={1.5} />
                 </span>

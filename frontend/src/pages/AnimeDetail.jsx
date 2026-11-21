@@ -60,7 +60,7 @@ export default function AnimeDetail() {
         gcTime: 600000, // 10 minutes
     });
 
-    // Sidebar recommendations load once their column is about to show.
+    // Recommendations load once their row is about to show.
     const [recommendationsRef, recommendationsNear] = useNearViewport({ resetKey: slug });
 
     // Tab data (characters, staff, episodes, ratings, recommendations) and reviews
@@ -167,11 +167,11 @@ export default function AnimeDetail() {
                 <SEO page="notFound" noIndex />
                 {isNotFound ? (
                     <div className="ui-empty-state w-full max-w-lg">
-                        <h1 className="text-lg font-semibold text-white mb-2">Anime not found</h1>
-                        <p className="text-sm text-gray-400 mb-6">
+                        <h1 className="text-lg font-semibold text-[var(--text-1)] mb-2">Anime not found</h1>
+                        <p className="text-sm text-[var(--text-2)] mb-6">
                             This page may have moved, or the title isn’t in the catalog yet.
                         </p>
-                        <Link to="/browse" className="btn-primary text-sm">Browse Anime</Link>
+                        <Link to="/browse" className="btn-primary text-sm">Browse anime</Link>
                     </div>
                 ) : (
                     <ErrorState
@@ -180,7 +180,7 @@ export default function AnimeDetail() {
                         message="The server didn’t respond. Try again in a moment."
                         onRetry={() => refetch()}
                     >
-                        <Link to="/browse" className="btn-secondary text-sm">Browse Anime</Link>
+                        <Link to="/browse" className="btn-secondary text-sm">Browse anime</Link>
                     </ErrorState>
                 )}
             </div>
@@ -236,13 +236,7 @@ export default function AnimeDetail() {
             <AnimeDetailSEO anime={anime} />
 
             {/* Banner */}
-            <div className="relative h-[40vh] min-h-[300px] overflow-hidden bg-dark-200">
-                {!isBannerLoaded && (
-                    <div
-                        aria-hidden="true"
-                        className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
-                    />
-                )}
+            <div className="relative h-[34vh] min-h-[260px] overflow-hidden bg-[var(--ink-1)] lg:h-[40vh] lg:min-h-[300px]">
                 <img
                     src={bannerUrl}
                     srcSet={bannerSrcSet}
@@ -262,9 +256,9 @@ export default function AnimeDetail() {
             {/* Content Container */}
             <div className="relative -mt-32 pb-16">
                 <div className="page-container">
-                    {/* Sidebar column only from xl; at lg, recommendations sit under the main
-                        column so the tabs and title get a usable width. */}
-                    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_300px] gap-8 min-w-0">
+                    {/* Two columns: poster + facts, then everything else. Recommendations
+                        sit under the main column as a row of posters (D3). */}
+                    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)] gap-8 xl:gap-12 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
                         <PosterColumn {...trackingProps} />
 
@@ -278,7 +272,10 @@ export default function AnimeDetail() {
                             />
 
                             {/* Tab Navigation */}
-                            <div ref={tabStripRef} className={`scroll-fade flex items-center gap-1.5 sm:gap-2 lg:gap-1 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
+                            <nav
+                                ref={tabStripRef}
+                                aria-label="Sections"
+                                className={`scroll-fade mb-8 flex items-center overflow-x-auto scrollbar-hide border-b border-white/[0.08] pr-6 sm:mb-10 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : ''}`}
                                 data-title="Navigation"
                             >
                                 {tabsWithCounts.map((tab) => (
@@ -291,15 +288,7 @@ export default function AnimeDetail() {
                                         count={tab.count}
                                     />
                                 ))}
-                            </div>
-
-                            {/* Phones/tablets: key facts sit at the top of Overview, under
-                                the tabs, so the tabs stay near the title. */}
-                            {activeTab === DEFAULT_TAB_ID && (
-                                <div className="lg:hidden mb-8">
-                                    <InformationBox anime={anime} accentColor={accentColor} />
-                                </div>
-                            )}
+                            </nav>
 
                             {/* Tab Content */}
                             <AnimeDetailTabContent
@@ -308,6 +297,22 @@ export default function AnimeDetail() {
                                 accentColor={accentColor}
                                 isAuthenticated={isAuthenticated}
                                 tabData={tabData}
+                            />
+
+                            {/* Phones/tablets: the key facts are already in the title's
+                                meta line, so the full details follow the overview. */}
+                            {activeTab === DEFAULT_TAB_ID && (
+                                <div className="lg:hidden mt-16">
+                                    <InformationBox anime={anime} accentColor={accentColor} />
+                                </div>
+                            )}
+
+                            {/* Recommendations: loaded once this block nears the viewport */}
+                            <RecommendationsSidebar
+                                anime={anime}
+                                recommendations={recommendations}
+                                accentColor={accentColor}
+                                containerRef={recommendationsRef}
                             />
 
                             {/* Reviews Section */}
@@ -319,14 +324,6 @@ export default function AnimeDetail() {
                                 mappedAccent={mappedAccent}
                             />
                         </div>
-
-                        {/* Column 3: Sidebar - Recommendations */}
-                        <RecommendationsSidebar
-                            anime={anime}
-                            recommendations={recommendations}
-                            accentColor={accentColor}
-                            containerRef={recommendationsRef}
-                        />
                     </div>
                 </div>
             </div>

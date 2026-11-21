@@ -19,7 +19,7 @@ describe('StatusDistribution', () => {
             />
         );
 
-        expect(screen.getByText('Status Distribution')).toBeInTheDocument();
+        expect(screen.getByText('Status distribution')).toBeInTheDocument();
     });
 
     it('renders compact counts from canonical snake_case status keys', () => {
@@ -123,7 +123,7 @@ describe('StatsTab', () => {
             />
         );
 
-        const label = screen.getByText('Total Members');
+        const label = screen.getByText('Total members');
         expect(label.previousElementSibling).toHaveTextContent('23');
     });
 
@@ -146,7 +146,7 @@ describe('StatsTab', () => {
             />
         );
 
-        const label = screen.getByText('Total Members');
+        const label = screen.getByText('Total members');
         expect(label.previousElementSibling).toHaveTextContent('55k');
     });
 });

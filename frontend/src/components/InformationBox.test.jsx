@@ -49,7 +49,7 @@ describe('InformationBox', () => {
             </MemoryRouter>
         );
 
-        expect(screen.getByText('Next Episode')).toBeInTheDocument();
+        expect(screen.getByText('Next episode')).toBeInTheDocument();
         expect(screen.getByText('Episode 8')).toBeInTheDocument();
     });
 });

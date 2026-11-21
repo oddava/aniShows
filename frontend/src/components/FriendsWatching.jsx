@@ -79,10 +79,10 @@ export default function FriendsWatching({ animeId, accentColor }) {
 
     if (loading) {
         return (
-            <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
+            <div className="pt-2">
                 <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-sm font-semibold text-gray-300">Friends Watching</h3>
+                    <Users aria-hidden="true" className="w-4 h-4 text-[var(--text-3)]" />
+                    <h3 className="text-sm font-semibold text-gray-300">Friends watching</h3>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-gray-800 animate-pulse"></div>
@@ -95,10 +95,10 @@ export default function FriendsWatching({ animeId, accentColor }) {
 
     if (error) {
         return (
-            <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
+            <div className="pt-2">
                 <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-sm font-semibold text-gray-300">Friends Watching</h3>
+                    <Users aria-hidden="true" className="w-4 h-4 text-[var(--text-3)]" />
+                    <h3 className="text-sm font-semibold text-gray-300">Friends watching</h3>
                 </div>
                 <p className="text-gray-500 text-sm" role="alert">
                     Couldn't load friends watching.
@@ -106,7 +106,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
                 <button
                     type="button"
                     onClick={() => refetch()}
-                    className="mt-3 px-4 py-2 rounded-lg bg-dark-100 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-colors"
+                    className="mt-1 text-link text-sm"
                 >
                     Try Again
                 </button>
@@ -116,10 +116,10 @@ export default function FriendsWatching({ animeId, accentColor }) {
 
     if (friends.length === 0) {
         return (
-            <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
+            <div className="pt-2">
                 <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-sm font-semibold text-gray-300">Friends Watching</h3>
+                    <Users aria-hidden="true" className="w-4 h-4 text-[var(--text-3)]" />
+                    <h3 className="text-sm font-semibold text-gray-300">Friends watching</h3>
                 </div>
                 <p className="text-gray-500 text-sm">
                     Connect with friends to see who's watching this anime.
@@ -133,10 +133,10 @@ export default function FriendsWatching({ animeId, accentColor }) {
     const remainingCount = Math.max(total, friends.length) - displayedFriends.length;
 
     return (
-        <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
+        <div className="pt-2">
             <div className="flex items-center gap-2 mb-4">
-                <Users className="w-4 h-4 text-gray-500" />
-                <h3 className="text-sm font-semibold text-gray-300">Friends Watching</h3>
+                <Users aria-hidden="true" className="w-4 h-4 text-[var(--text-3)]" />
+                <h3 className="text-sm font-semibold text-gray-300">Friends watching</h3>
             </div>
 
             <div className="flex flex-wrap gap-3 items-center">

@@ -1,50 +1,32 @@
-import { Link } from 'react-router-dom';
-import { MobileRelatedCard, RelatedAnimeCard } from './RelatedAnimeCards';
+import SectionHeader from '../common/SectionHeader';
+import { RelatedPosterCard } from './RelatedAnimeCards';
 
 /**
- * Column 3: recommendations (a list on large screens, a carousel below).
- * `containerRef` lets the page fetch them only once this column nears the
+ * Recommendations as a row of posters under the main column (D3).
+ * `containerRef` lets the page fetch them only once this block nears the
  * viewport, so the container renders even before there is data.
  */
-export default function RecommendationsSidebar({ anime, recommendations, accentColor, containerRef }) {
+export default function RecommendationsSidebar({ anime, recommendations, containerRef }) {
+    const items = Array.isArray(recommendations) ? recommendations.slice(0, 6) : [];
+    const genre = anime.genres?.[0]?.slug;
+
     return (
-        <div ref={containerRef} className="space-y-6 lg:space-y-8 lg:col-start-2 xl:col-start-auto xl:pt-40">
-            {recommendations && recommendations.length > 0 && (
-                <div>
-                    <h2 className="text-sm font-semibold text-gray-300 mb-4 sm:mb-6">
-                        Recommendations
-                    </h2>
-                    <div className="hidden lg:grid grid-cols-1 gap-4">
-                        {recommendations.slice(0, 5).map((rel) => (
-                            <RelatedAnimeCard
-                                key={rel.id}
-                                anime={rel}
-                            />
+        <section ref={containerRef} aria-labelledby={items.length > 0 ? 'recommendations-heading' : undefined} className={items.length > 0 ? 'mt-16' : undefined}>
+            {items.length > 0 && (
+                <>
+                    <SectionHeader
+                        id="recommendations-heading"
+                        title="Recommendations"
+                        viewAllTo={recommendations.length > 5 && genre ? `/browse?genre=${genre}` : undefined}
+                        viewAllLabel="Find more like this"
+                    />
+                    <div className="grid grid-cols-3 gap-x-3 gap-y-6 sm:grid-cols-4 lg:grid-cols-6 lg:gap-x-4">
+                        {items.map((rel) => (
+                            <RelatedPosterCard key={rel.id} anime={rel} />
                         ))}
                     </div>
-                    <div className="lg:hidden flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory pl-0 sm:pl-0">
-                        {recommendations.slice(0, 6).map((rel) => (
-                            <MobileRelatedCard
-                                key={rel.id}
-                                anime={rel}
-                            />
-                        ))}
-                    </div>
-                    {recommendations.length > 5 && (
-                        <Link
-                            to={`/browse?genre=${anime.genres?.[0]?.slug || ''}`}
-                            className="block text-center mt-4 sm:mt-6 text-xs font-bold hover:text-white transition-colors py-2 rounded-lg border"
-                            style={{
-                                color: '#c3cad4',
-                                backgroundColor: 'rgba(255,255,255,0.05)',
-                                borderColor: 'rgba(255,255,255,0.08)'
-                            }}
-                        >
-                            FIND MORE TITLES LIKE THIS
-                        </Link>
-                    )}
-                </div>
+                </>
             )}
-        </div>
+        </section>
     );
 }

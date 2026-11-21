@@ -22,15 +22,9 @@ export default function PosterColumn({
     handleFavorite,
 }) {
     return (
-        <div className="hidden lg:flex lg:flex-col gap-5">
+        <div className="hidden lg:flex lg:flex-col gap-6">
             <div className="flex-shrink-0">
-                <div className="relative w-44 sm:w-48 lg:w-full aspect-[2/3] overflow-hidden rounded-[var(--radius-lg)] bg-dark-200 shadow-[var(--shadow-pop)]">
-                    {!isCoverLoaded && (
-                        <div
-                            aria-hidden="true"
-                            className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
-                        />
-                    )}
+                <div className="relative w-full aspect-[2/3] overflow-hidden rounded-[var(--radius-lg)] bg-[var(--ink-2)] shadow-[var(--shadow-pop)]">
                     <img
                         src={coverUrl}
                         srcSet={coverSrcSet}
@@ -41,7 +35,7 @@ export default function PosterColumn({
                             setIsCoverLoaded(false);
                             applyImageFallback(event, coverFallbackUrl);
                         }}
-                        className={`w-full h-full object-cover text-transparent transition-opacity duration-700 ease-out ${isCoverLoaded ? 'opacity-100' : 'opacity-0'}`}
+                        className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isCoverLoaded ? 'opacity-100' : 'opacity-0'}`}
                     />
                 </div>
             </div>
@@ -57,7 +51,7 @@ export default function PosterColumn({
                 />
             )}
 
-            <InformationBox anime={anime} accentColor={accentColor} className="hidden lg:flex" />
+            <InformationBox anime={anime} accentColor={accentColor} />
             <div className="hidden lg:block">
                 <FriendsWatching animeId={anime.id} accentColor={accentColor} />
             </div>

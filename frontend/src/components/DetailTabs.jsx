@@ -1,11 +1,24 @@
 import { useMemo } from 'react';
-import { Users, Mic, Loader, Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Loader } from 'lucide-react';
 import MusicSection from './MusicSection';
 import { getUniqueCharacterRoles } from '../utils/characterRoles';
-import { getPortraitSrcSet, getPortraitUrl } from './detailTabs/portraits';
 import { CharacterGrid, RelationLoadMoreButton } from './detailTabs/CharacterGrid';
-import Portrait from './ui/Portrait';
+import { StaffRow } from './detailTabs/PeopleRows';
+
+function EmptyLine({ children }) {
+    return <p className="animate-tab-content py-10 text-[15px] text-[var(--text-2)]">{children}</p>;
+}
+
+function LoadedLine({ loaded, total, noun }) {
+    if (loaded >= total) {
+        return <p className="text-sm text-[var(--text-3)] tabular">{total} {noun}</p>;
+    }
+    return (
+        <p className="text-sm text-[var(--text-3)] tabular">
+            Showing {loaded} of {total} {noun}
+        </p>
+    );
+}
 
 // The Overview tab lives in its own file; it is re-exported so the anime page
 // keeps importing every tab from here.
@@ -15,12 +28,7 @@ export function ThemesTab({ anime, accentColor }) {
     const hasThemes = anime?.theme_songs?.length > 0;
 
     if (!hasThemes) {
-        return (
-            <div className="text-center py-12 animate-tab-content">
-                <Search className="w-12 h-12 text-gray-700 mx-auto mb-3" />
-                <p className="text-gray-400 text-sm">No theme songs available.</p>
-            </div>
-        );
+        return <EmptyLine>No theme songs listed for this one yet.</EmptyLine>;
     }
 
     return (
@@ -50,27 +58,18 @@ export function CharactersTab({
     if (isLoading) {
         return (
             <div className="flex justify-center items-center py-24">
-                <Loader className="w-10 h-10 text-accent animate-spin" />
+                <Loader className="w-8 h-8 text-[var(--text-3)] animate-spin" aria-label="Loading" />
             </div>
         );
     }
 
     if (uniqueCharacters.length === 0) {
-        return (
-            <div className="text-center py-12 animate-tab-content">
-                <Users className="w-12 h-12 text-gray-700 mx-auto mb-3" />
-                <p className="text-gray-400 text-sm">No character information available.</p>
-            </div>
-        );
+        return <EmptyLine>No characters listed for this one yet.</EmptyLine>;
     }
 
     return (
         <div className="animate-tab-content min-w-0 space-y-3 sm:space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 rounded-xl border border-white/5 bg-dark-200/30 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs text-gray-400">
-                <div>
-                    Loaded <span className="font-bold text-gray-300">{uniqueCharacters.length}</span> of <span className="font-bold text-gray-300">{resolvedCount}</span> characters
-                </div>
-            </div>
+            <LoadedLine loaded={uniqueCharacters.length} total={resolvedCount} noun="characters" />
 
             <CharacterGrid characters={uniqueCharacters} />
 
@@ -78,7 +77,7 @@ export function CharactersTab({
                 hasNextPage={hasNextPage}
                 isFetchingNextPage={isFetchingNextPage}
                 onLoadMore={onLoadMore}
-                label="Load More Characters"
+                label="Load more characters"
             />
         </div>
     );
@@ -114,45 +113,22 @@ export function StaffTab({
     if (isLoading) {
         return (
             <div className="flex justify-center items-center py-24">
-                <Loader className="w-10 h-10 text-accent animate-spin" />
+                <Loader className="w-8 h-8 text-[var(--text-3)] animate-spin" aria-label="Loading" />
             </div>
         );
     }
 
     if (!uniqueStaff || uniqueStaff.length === 0) {
-        return (
-            <div className="text-center py-16 animate-tab-content">
-                <Mic className="w-16 h-16 text-gray-700 mx-auto mb-4" />
-                <p className="text-gray-400">No staff information available.</p>
-            </div>
-        );
+        return <EmptyLine>No staff listed for this one yet.</EmptyLine>;
     }
 
     return (
         <div className="animate-tab-content min-w-0 space-y-3 sm:space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 rounded-xl border border-white/5 bg-dark-200/30 px-3 py-2.5 sm:px-4 sm:py-3 text-[11px] sm:text-xs text-gray-400">
-                <div>
-                    Loaded <span className="font-bold text-gray-300">{uniqueStaff.length}</span> of <span className="font-bold text-gray-300">{resolvedCount}</span> staff credits
-                </div>
-            </div>
+            <LoadedLine loaded={uniqueStaff.length} total={resolvedCount} noun="staff credits" />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-x-10 gap-y-6 sm:grid-cols-2 xl:grid-cols-3">
                 {uniqueStaff.map((staffRole) => (
-                    <Link
-                        key={staffRole.id}
-                        to={staffRole.staff?.id ? `/staff/${staffRole.staff.id}` : '#'}
-                        className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 hover:border-gray-700 transition-colors"
-                    >
-                        <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
-                            <Portrait src={getPortraitUrl(staffRole.staff)} srcSet={getPortraitSrcSet(staffRole.staff)} sizes="96px" alt={staffRole.staff.name} className="h-full w-full" />
-                        </div>
-                        <div className="flex flex-col min-w-0 pr-4">
-                            <h4 className="font-medium text-gray-300 text-[13px] truncate">
-                                <span className="transition-colors hover:text-accent">{staffRole.staff.name}</span>
-                            </h4>
-                            <p className="text-[11px] text-gray-500 mt-1 truncate">{staffRole.role}</p>
-                        </div>
-                    </Link>
+                    <StaffRow key={staffRole.id} staffRole={staffRole} />
                 ))}
             </div>
 
@@ -160,7 +136,7 @@ export function StaffTab({
                 hasNextPage={hasNextPage}
                 isFetchingNextPage={isFetchingNextPage}
                 onLoadMore={onLoadMore}
-                label="Load More Staff"
+                label="Load more staff"
             />
         </div>
     );
