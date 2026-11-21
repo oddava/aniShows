@@ -85,7 +85,9 @@ describe('AnimeCard quick add (T1) with toast and Undo (T6)', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Add Frieren to your list' }));
         fireEvent.click(screen.getByRole('menuitemradio', { name: 'Watching' }));
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('Lists are read-only right now.');
+        // A toast from the previous test may still be leaving: look for this
+        // message, not "the only alert".
+        expect(await screen.findByText('Lists are read-only right now.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Add Frieren to your list' })).toBeInTheDocument();
     });
 

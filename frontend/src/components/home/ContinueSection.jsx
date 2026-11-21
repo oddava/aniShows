@@ -10,6 +10,7 @@ import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '.
 import ProgressStepper from '../ui/ProgressStepper';
 import ScorePicker from '../ui/ScorePicker';
 import Skeleton from '../ui/Skeleton';
+import QuickAdd from '../ui/QuickAdd';
 import { continueState, countdown, sortForContinue } from './continueModel';
 import { airingPreview, clockTime, dayOffset, listedAirings, previewWhen, tonightFrom, useMinuteClock } from './airingModel';
 import { formatDate } from '../../utils/dateUtils';
@@ -146,6 +147,54 @@ function Tonight({ items, now, timezone }) {
     );
 }
 
+/** A fresh list's "Airing soon" row: what airs, and one tap to start it. */
+function AiringSoonRow({ row, timezone }) {
+    const { anime } = row;
+    const { entry, setStatus, setScore, remove, isPending } = useListEntryMutation({
+        anime: {
+            id: anime.id, slug: anime.slug, episode_count: anime.episode_count,
+            next_airing_episode: anime.next_airing_episode, next_airing_date: anime.next_airing_date,
+        },
+        entry: anime.user_list_status,
+    });
+    const total = knownEpisodeTotal(anime);
+    return (
+        <li className="-mx-3 flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 transition-colors hover:bg-white/[0.03]">
+            <Link to={`/anime/${anime.slug}`} className="group flex min-w-0 flex-1 items-center gap-4">
+                <img
+                    src={getOptimizedImageUrl(anime, 'cover', 'small')}
+                    onError={(event) => applyImageFallback(event, getImageFallbackUrl(anime, 'cover'))}
+                    alt=""
+                    loading="lazy"
+                    className="h-14 w-10 shrink-0 rounded-md bg-[var(--ink-2)] object-cover"
+                />
+                <span className="min-w-0 flex-1">
+                    <span className="line-clamp-2 font-semibold leading-snug text-[var(--text-1)] group-hover:text-[var(--signature)] sm:line-clamp-1">{anime.title}</span>
+                    <span className="block text-sm text-[var(--text-2)] tabular">
+                        {anime.next_airing_episode ? `Episode ${anime.next_airing_episode} · ` : ''}{previewWhen(row, timezone)}
+                    </span>
+                </span>
+            </Link>
+            <QuickAdd
+                variant="chip"
+                labelFrom="sm"
+                placement="down"
+                className="relative shrink-0"
+                status={entry.status}
+                score={entry.score}
+                watched={entry.episodes_watched || 0}
+                total={total}
+                aired={airedEpisodeCount(anime)}
+                title={anime.title}
+                pending={isPending}
+                onSelect={(value) => setStatus(value)}
+                onScore={(value) => setScore(value)}
+                onRemove={() => remove()}
+            />
+        </li>
+    );
+}
+
 /**
  * The top of the signed-in home (L2), laid out like oddava.me's front page:
  * who you are and one line about tonight on the left; your shows on the
@@ -252,23 +301,7 @@ export default function ContinueSection() {
                             {airingSoon.length > 0 && (
                                 <ul className="mb-4">
                                     {airingSoon.map((row) => (
-                                        <li key={row.anime.id}>
-                                            <Link to={`/anime/${row.anime.slug}`} className="group -mx-3 flex items-center gap-4 rounded-[var(--radius-md)] px-3 py-2.5 transition-colors hover:bg-white/[0.03]">
-                                                <img
-                                                    src={getOptimizedImageUrl(row.anime, 'cover', 'small')}
-                                                    onError={(event) => applyImageFallback(event, getImageFallbackUrl(row.anime, 'cover'))}
-                                                    alt=""
-                                                    loading="lazy"
-                                                    className="h-14 w-10 shrink-0 rounded-md bg-[var(--ink-2)] object-cover"
-                                                />
-                                                <span className="min-w-0 flex-1">
-                                                    <span className="block truncate font-semibold text-[var(--text-1)] group-hover:text-[var(--signature)]">{row.anime.title}</span>
-                                                    <span className="block text-sm text-[var(--text-2)] tabular">
-                                                        {row.anime.next_airing_episode ? `Episode ${row.anime.next_airing_episode} · ` : ''}{previewWhen(row, timezone)}
-                                                    </span>
-                                                </span>
-                                            </Link>
-                                        </li>
+                                        <AiringSoonRow key={row.anime.id} row={row} timezone={timezone} />
                                     ))}
                                 </ul>
                             )}

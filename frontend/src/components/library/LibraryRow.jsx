@@ -2,7 +2,19 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import useListEntryMutation from '../../hooks/useListEntryMutation';
-import { airedEpisodeCount, knownEpisodeTotal, progressText } from '../../utils/episodes';
+import { airedEpisodeCount, airingState, knownEpisodeTotal, progressText } from '../../utils/episodes';
+import { statusMeta } from '../../utils/listStatus';
+import { formatDate } from '../../utils/dateUtils';
+
+/** "Ep 9 out" when you are behind, else "Next Tue 17:43" while airing. */
+function airingHint(anime, watched) {
+    const state = airingState(anime);
+    if (state.aired && watched < state.aired) return `Ep ${watched + 1} out`;
+    if (state.nextAt) {
+        return `Next ${formatDate(state.nextAt, { weekday: 'short' })} ${formatDate(state.nextAt, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`;
+    }
+    return null;
+}
 import { formatTimeAgo } from '../../utils/dateUtils';
 import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
 import QuickAdd from '../ui/QuickAdd';
@@ -90,14 +102,14 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = fals
                     className="h-16 w-11 rounded-[var(--radius-sm)] bg-[var(--ink-3)] object-cover"
                 />
             </Link>
-            <div className="col-span-2 min-w-0 sm:col-span-1">
+            <div className="col-span-3 min-w-0 sm:col-span-1">
                 <Link to={href} className="line-clamp-2 text-sm font-medium text-gray-100 hover:text-white">{title}</Link>
-                <p className="mt-0.5 text-xs text-gray-500 tabular sm:hidden">
-                    {anime.anime_type}{entry.status === 'Watching' ? '' : ` · ${entry.episodes_watched || 0} eps`}
+                <p className="mt-0.5 text-xs text-[var(--text-3)] tabular sm:hidden">
+                    {[statusMeta(entry.status)?.label, airingHint(anime, entry.episodes_watched || 0) || anime.anime_type].filter(Boolean).join(' · ')}
                 </p>
             </div>
 
-            <div className="col-span-2 col-start-2 row-start-2 min-w-0 sm:col-span-1 sm:col-start-auto sm:row-start-auto">
+            <div className="col-start-2 row-start-2 min-w-0 sm:col-start-auto sm:row-start-auto">
                 {entry.status === 'Completed' ? (
                     <span className="text-xs text-gray-400 tabular">{progressText(entry.episodes_watched, anime)}</span>
                 ) : entry.status !== 'Plan to Watch' ? (
@@ -114,7 +126,7 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = fals
                 )}
             </div>
 
-            <div className="col-start-4 row-start-1 justify-self-end sm:col-start-auto sm:row-start-auto sm:justify-self-start">
+            <div className="col-start-3 row-start-2 justify-self-end sm:col-start-auto sm:row-start-auto sm:justify-self-start">
                 <ScoreCell score={entry.score} title={title} disabled={isPending} onChange={(value) => setScore(value)} />
             </div>
 
@@ -123,6 +135,7 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = fals
                     variant="chip"
                     quiet={quietStatus}
                     compact={quietStatus}
+                    labelFrom="sm"
                     placement="down"
                     className="relative sm:[&>button]:w-full sm:[&>button]:justify-start"
                     status={entry.status}

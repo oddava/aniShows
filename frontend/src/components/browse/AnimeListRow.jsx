@@ -5,7 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import useListEntryMutation from '../../hooks/useListEntryMutation';
 import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
 import { statusMeta } from '../../utils/listStatus';
-import { airedEpisodeCount } from '../../utils/episodes';
+import { airedEpisodeCount, airingState } from '../../utils/episodes';
+import { formatDate } from '../../utils/dateUtils';
 import QuickAdd from '../ui/QuickAdd';
 import { ScoreBadge } from '../ui/Badge';
 
@@ -25,6 +26,11 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
     const meta = statusMeta(entry.status);
     const year = anime.start_date || anime.release_date ? new Date(anime.start_date || anime.release_date).getFullYear() : null;
     const href = `/anime/${anime.slug}`;
+    // Desktop: when the next episode airs, in the row's open middle.
+    const airing = airingState(anime);
+    const airingNote = airing.nextAt
+        ? `Ep ${airing.nextEpisode} · ${formatDate(airing.nextAt, { weekday: 'short' })} ${formatDate(airing.nextAt, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`
+        : airing.justAired ? `Ep ${airing.aired} out` : null;
 
     return (
         <div className="group relative flex items-center gap-3 sm:gap-5 rounded-[var(--radius-md)] p-2 transition-colors hover:bg-white/[0.03]">
@@ -59,6 +65,10 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                     </p>
                 )}
             </div>
+
+            {airingNote && (
+                <div className="hidden w-40 shrink-0 text-right text-sm text-[var(--text-2)] tabular md:block">{airingNote}</div>
+            )}
 
             {anime.rating ? (
                 <div className="hidden sm:flex w-16 shrink-0 items-center justify-end gap-1 text-sm font-semibold text-gray-200 tabular" title="Average rating">

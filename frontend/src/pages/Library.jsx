@@ -54,10 +54,10 @@ function useDebounced(value, delay) {
 }
 
 /**
- * Entries that leave this tab (moved to Completed, removed) stay where they
- * were, showing their new state, until the tab, search or sort changes: a
- * card never vanishes under your finger, and the score prompt after
- * Completed stays open.
+ * The list keeps the order it opened with until the tab, search or sort
+ * changes: entries that leave this tab (moved to Completed, removed) stay
+ * where they were, showing their new state, and a +1 never moves a card
+ * from under your finger. Recency reorders on the next visit.
  */
 function useStickyEntries(fetched, viewKey) {
     const shown = useRef({ key: viewKey, list: [] });
@@ -66,11 +66,15 @@ function useStickyEntries(fetched, viewKey) {
             shown.current = { key: viewKey, list: fetched };
             return fetched;
         }
-        const fetchedIds = new Set(fetched.map((entry) => entry.id));
-        const merged = [...fetched];
-        shown.current.list.forEach((entry, index) => {
-            if (!fetchedIds.has(entry.id)) merged.splice(Math.min(index, merged.length), 0, entry);
-        });
+        // Same view: keep the order on screen (a +1 bumps "Recently updated",
+        // but the card stays under your finger); fresh data replaces each
+        // entry in place, and new entries (another page) join at the end.
+        const fetchedById = new Map(fetched.map((entry) => [entry.id, entry]));
+        const shownIds = new Set(shown.current.list.map((entry) => entry.id));
+        const merged = [
+            ...shown.current.list.map((entry) => fetchedById.get(entry.id) || entry),
+            ...fetched.filter((entry) => !shownIds.has(entry.id)),
+        ];
         shown.current = { key: viewKey, list: merged };
         return merged;
     }, [fetched, viewKey]);
@@ -132,6 +136,13 @@ export default function Library() {
         return () => observer.disconnect();
     }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+    // A deep link or a tab change brings the active tab into view on phones;
+    // nothing else (a +1, a save) moves the page.
+    const tabsRef = useRef(null);
+    useEffect(() => {
+        tabsRef.current?.querySelector('[data-active-tab]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }, [status]);
+
     if (!loading && !isAuthenticated) return <Navigate to="/login" replace state={{ from: '/list' }} />;
 
     const setStatus = (value) => {
@@ -168,7 +179,7 @@ export default function Library() {
                 </header>
 
                 {/* Status tabs: fixed colours, one label each (T7), counts from the summary. */}
-                <nav aria-label="List status" className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
+                <nav ref={tabsRef} aria-label="List status" className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
                     <ul className="flex min-w-max gap-1">
                         {tabs.map((item) => {
                             const active = item.value === status;
@@ -180,7 +191,7 @@ export default function Library() {
                                     <button
                                         type="button"
                                         onClick={() => setStatus(item.value)}
-                                        ref={active ? (node) => node?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) : undefined}
+                                        data-active-tab={active ? 'true' : undefined}
                                         aria-current={active ? 'page' : undefined}
                                         className={`relative flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${active ? 'bg-white/[0.07] text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-100'}`}
                                     >
