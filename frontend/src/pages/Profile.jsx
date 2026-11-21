@@ -19,6 +19,7 @@ import {
 } from '../utils/profileAccent';
 
 import OverviewTab from '../components/profile/OverviewTab';
+import ErrorState from '../components/common/ErrorState';
 import { favoriteKeys, listQueries, profileKeys, profileQueries, reviewKeys } from '../api/queries/user';
 const PROFILE_TABS = new Set(['overview', 'anime_list', 'friends', 'favorites', 'reviews', 'activity', 'insights']);
 
@@ -165,7 +166,7 @@ export default function Profile({ forcedUsername }) {
         }
     }, [forcedUsername, pathSegments, loading, currentUser?.username, location.pathname, navigate]);
 
-    const { data: publicProfile, isLoading: profileLoading, isError } = useQuery({
+    const { data: publicProfile, isPending: profilePending, isError, error: profileError, refetch: refetchProfile } = useQuery({
         ...profileQueries.byUsername(targetUsername),
         enabled: isPublicView,
         staleTime: 30 * 1000, // 30 seconds — allow quick revisits to use cache, but refetch often
@@ -296,7 +297,7 @@ export default function Profile({ forcedUsername }) {
     }, [selectedPrimaryColor]);
 
     // Handle loading states first
-    if (isPublicView && profileLoading) {
+    if (isPublicView && profilePending && !isError) {
         return <ProfileSkeleton activeTab={activeTab} />;
     }
 
@@ -308,7 +309,20 @@ export default function Profile({ forcedUsername }) {
         return <Navigate to="/login" replace />;
     }
 
-    if (isPublicView && (isError || (!profileLoading && !displayUser))) {
+    if (isPublicView && isError && profileError?.response?.status !== 404) {
+        return (
+            <div className="page-container min-h-[60vh] flex items-center justify-center py-16">
+                <ErrorState
+                    className="w-full max-w-lg"
+                    title="Couldn’t load this profile"
+                    message="The server didn’t answer. Try again in a moment."
+                    onRetry={() => refetchProfile()}
+                />
+            </div>
+        );
+    }
+
+    if (isPublicView && (isError || !displayUser)) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center text-gray-400">
                 <User className="w-16 h-16 mb-4 opacity-50" />
@@ -360,7 +374,7 @@ export default function Profile({ forcedUsername }) {
                             isOwnProfile={isOwnProfile}
                             targetUsername={targetUsername}
                             displayUser={displayUser}
-                            profileLoading={profileLoading}
+                            profileLoading={isPublicView && profilePending}
                             favoritesData={favoritesData}
                             favoritesLoading={favoritesLoading}
                             isFetchingNextFavorites={isFetchingNextFavorites}

@@ -207,6 +207,7 @@ export default function Browse() {
     isLoading,
     isFetching,
     isError,
+    isPlaceholderData,
     refetch,
   } = useBrowseAnimeList({ filters, adultContentEnabled });
 
@@ -364,6 +365,7 @@ export default function Browse() {
                     clearAllFilters={clearAllFilters}
                     searchWithoutFilters={searchWithoutFilters}
                     isLoading={isLoading}
+                    isStale={isPlaceholderData}
                     isError={isError}
                     isFetchingNextPage={isFetchingNextPage}
                     refetch={refetch}

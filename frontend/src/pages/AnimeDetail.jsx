@@ -56,7 +56,7 @@ export default function AnimeDetail() {
     const animeDetailQueryKey = useMemo(() => animeKeys.detail(slug, user?.id), [slug, user?.id]);
 
     // Queries
-    const { data: anime, isLoading, isError, error, refetch } = useQuery({
+    const { data: anime, isPending, isError, error, refetch } = useQuery({
         ...animeQueries.detail(slug, user?.id),
         staleTime: 300000, // 5 minutes
         gcTime: 600000, // 10 minutes
@@ -157,13 +157,14 @@ export default function AnimeDetail() {
         }
     }, [activeTabConfig, navigate, slug, tabPath]);
 
-    // Loading & Error states
-    if (isLoading) return <AnimeDetailSkeleton />;
+    // Loading & error states. "Not found" only ever follows a failed request
+    // (F1): until the first answer arrives the page is a skeleton.
+    if (isPending) return <AnimeDetailSkeleton />;
 
     // An 18+ title for a viewer who has not opted in (D-2): an opt-in gate, not a 404.
     if (isError && isAdultGateError(error)) return <AdultContentGate onEnabled={() => refetch()} />;
 
-    const isNotFound = !isError || error?.response?.status === 404;
+    const isNotFound = error?.response?.status === 404 || (!isError && !anime);
     if (isError || !anime) {
         return (
             <div className="min-h-[70vh] flex items-center justify-center px-4 pt-24">
