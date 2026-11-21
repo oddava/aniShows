@@ -92,7 +92,7 @@ function WatchingRows({ items }) {
                         </Link>
                         <Link
                             to={`/anime/${anime.slug}`}
-                            className="line-clamp-1 min-w-0 flex-1 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text-1)] hover:text-[var(--signature)]"
+                            className="line-clamp-2 min-w-0 flex-1 text-[17px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] hover:text-[var(--signature)]"
                         >
                             {anime.title}
                         </Link>
