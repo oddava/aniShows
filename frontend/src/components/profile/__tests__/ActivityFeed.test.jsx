@@ -55,7 +55,7 @@ describe('ActivityFeed filters', () => {
     it('uses the display string for multi-word statuses', async () => {
         activityApi.getFeed.mockResolvedValue({ data: { next: null, results: [] } });
         renderFeed();
-        fireEvent.click(await screen.findByRole('button', { name: 'Plan to Watch' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Planning' }));
         await waitFor(() => expect(activityApi.getFeed).toHaveBeenLastCalledWith(
             expect.objectContaining({ status: 'Plan to Watch' }),
         ));

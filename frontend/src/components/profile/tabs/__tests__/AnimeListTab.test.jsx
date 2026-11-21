@@ -80,7 +80,7 @@ describe('AnimeListTab', () => {
         listApi.getAll.mockResolvedValue(page([1, 2], { next: 'http://x/api/v1/lists/?page=2' }));
         renderTab({ isPublicView: false });
 
-        expect(await screen.findByText('120 Anime in Watching')).toBeInTheDocument();
+        expect(await screen.findByText('120 in Watching')).toBeInTheDocument();
         expect(listApi.getAll).toHaveBeenCalledWith({
             username: 'kiyo', status: 'Watching', ordering: '-updated_at', page: 1, page_size: 50,
         });
@@ -124,7 +124,7 @@ describe('AnimeListTab', () => {
         const watchingTab = screen.getByRole('button', { name: /^Watching/ });
         expect(watchingTab).toHaveAttribute('aria-pressed', 'true');
         await waitFor(() => expect(watchingTab).toHaveTextContent('Watching120'));
-        ['Completed', 'Planning', 'On Hold', 'Dropped'].forEach((label) => {
+        ['Completed', 'Planning', 'On hold', 'Dropped'].forEach((label) => {
             const tab = screen.getByRole('button', { name: new RegExp(`^${label}`) });
             expect(tab).toHaveAttribute('aria-pressed', 'false');
             expect(tab.textContent).not.toMatch(EMOJI);

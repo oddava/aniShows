@@ -54,9 +54,9 @@ export function getSocialLinkDuplicateKey(link = {}) {
     return `platform:${platform}|value:${value.toLowerCase()}`;
 }
 
-export const DEFAULT_PROFILE_PRIMARY_COLOR = '#d4f65a';
+export const DEFAULT_PROFILE_PRIMARY_COLOR = '#8db1ff';
 export const PROFILE_COLOR_PRESETS = [
-    '#d4f65a',
+    '#8db1ff',
     '#ef4444',
     '#f97316',
     '#eab308',
@@ -68,8 +68,9 @@ export const PROFILE_COLOR_PRESETS = [
 
 export function normalizeProfilePrimaryColor(value) {
     const normalized = String(value || '').trim().toLowerCase();
-    // The pre-overhaul violet default was never a choice: show the signature.
-    if (normalized === '#8b5cf6') return DEFAULT_PROFILE_PRIMARY_COLOR;
+    // The old defaults (pre-overhaul violet, retired lime) were never a
+    // choice: show the signature.
+    if (normalized === '#8b5cf6' || normalized === '#d4f65a') return DEFAULT_PROFILE_PRIMARY_COLOR;
     return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
 }
 

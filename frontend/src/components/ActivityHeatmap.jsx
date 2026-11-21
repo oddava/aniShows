@@ -1,6 +1,6 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Flame } from 'lucide-react';
+import useScrollFade from '../hooks/useScrollFade';
 import { useTheme } from '../context/ThemeContext';
 import {
     getProfileAccentTheme,
@@ -36,7 +36,7 @@ function TooltipPortal({ children }) {
  * ActivityHeatmap - GitHub-style contribution/watching activity graph
  * Shows user's anime watching activity over the past year
  */
-export default function ActivityHeatmap({ activityData = [], accentColor }) {
+export default function ActivityHeatmap({ activityData = [], accentColor, hideWhenEmpty = false }) {
     const { theme } = useTheme();
     const isPastel = theme === 'retro-anime';
     const { baseColor: profileAccentColor, lightColor: profileAccentLight } = getProfileAccentTheme(accentColor);
@@ -45,6 +45,11 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
     const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
     const [persistedDay, setPersistedDay] = useState(null);
     const scrollRef = useRef(null);
+    const fadeRef = useScrollFade();
+    const setScrollEl = useCallback((el) => {
+        scrollRef.current = el;
+        fadeRef(el);
+    }, [fadeRef]);
 
     // Keep tooltip content stable during fade out
     useEffect(() => {
@@ -133,7 +138,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
 
     // Get color intensity based on count - using inline styles for better theme support
     const getColorStyle = (count) => {
-        if (count === 0) return { backgroundColor: 'rgba(100, 100, 110, 0.25)' };
+        if (count === 0) return { backgroundColor: 'rgba(255, 255, 255, 0.05)' };
         if (isPastel) {
             if (count <= 1) return { backgroundColor: 'rgba(232, 90, 156, 0.2)' };
             if (count <= 3) return { backgroundColor: 'rgba(232, 90, 156, 0.4)' };
@@ -149,7 +154,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
     };
 
     const getHoverStyle = (count) => {
-        if (count === 0) return { backgroundColor: 'rgba(100, 100, 110, 0.45)' };
+        if (count === 0) return { backgroundColor: 'rgba(255, 255, 255, 0.13)' };
         if (isPastel) {
             if (count <= 1) return { backgroundColor: 'rgba(232, 90, 156, 0.4)' };
             if (count <= 3) return { backgroundColor: 'rgba(232, 90, 156, 0.6)' };
@@ -165,107 +170,85 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
     };
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const legendColor = (alpha) => (isPastel
+        ? `rgba(232, 90, 156, ${alpha})`
+        : toRgba(profileAccentColor, alpha));
+
+    if (hideWhenEmpty && stats.totalActivity === 0) return null;
 
     return (
         <div className="relative w-full max-w-full">
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-4 ml-4 mr-4 gap-4">
-                <h3 className="text-sm font-semibold text-gray-300">
-                    Activity
-                </h3>
-
+            <p className="mb-4 text-[15px] text-[var(--text-2)] tabular">
                 {stats.totalActivity > 0 ? (
-                    <div className="flex items-center gap-6">
-                        <div className="flex flex-col items-end">
-                            <span className="text-white font-black text-sm">{stats.totalActivity}</span>
-                            <span className="text-xs text-gray-500 font-semibold " title="Episodes you logged here in the last 12 months. Imports and shows marked Completed in one go are not day-by-day activity.">Logged</span>
-                        </div>
-                        <div className="w-px h-6 bg-gray-700/30" />
-                        <div className="flex flex-col items-end">
-                            <div className="flex items-center gap-1.5">
-                                <Flame size={14} className="text-accent" strokeWidth={2.5} fill="currentColor" fillOpacity={0.2} />
-                                <span className="text-accent font-black text-sm">{stats.currentStreak}</span>
-                            </div>
-                            <span className="text-xs text-gray-500 font-semibold mt-0.5">Day Streak</span>
-                        </div>
+                    <>
+                        <span title="Episodes logged here in the last 12 months. Imports and shows marked completed in one go are not day-by-day activity.">
+                            {stats.totalActivity.toLocaleString()} {stats.totalActivity === 1 ? 'episode' : 'episodes'} logged this year
+                        </span>
+                        {stats.currentStreak > 0 && (
+                            <> · {stats.currentStreak}-day streak</>
+                        )}
+                    </>
+                ) : 'Nothing logged this year yet.'}
+            </p>
+
+            <div ref={setScrollEl} className="scroll-fade overflow-x-auto scrollbar-hide">
+                <div className="inline-block min-w-max py-1">
+                    {/* Month labels */}
+                    <div className="mb-1 flex h-5 gap-[4px] text-xs text-[var(--text-2)]">
+                        {weeks.map((week, i) => {
+                            const firstDay = new Date(week[0].date);
+                            const isNewMonth = firstDay.getDate() <= 7;
+                            const alignRight = i >= weeks.length - 2;
+
+                            return (
+                                <div key={week[0].date} className="relative w-[14px]">
+                                    {isNewMonth && (
+                                        <span className={`absolute top-0 whitespace-nowrap ${alignRight ? 'right-0 text-right' : 'left-0'}`}>
+                                            {months[firstDay.getMonth()]}
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
-                ) : (
-                    <span className="text-xs font-semibold text-gray-500 bg-dark-100/50 px-3 py-1 rounded-full border border-gray-700/30">No activity yet</span>
-                )}
-            </div>
 
-            <div className="ui-surface-subtle p-5">
-                <div ref={scrollRef} className="flex gap-3 min-h-[140px] overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-                    {/* Overflown Content Area */}
-                    <div className="py-1 min-w-full">
-                        <div className="inline-block min-w-max">
-                            {/* Month labels */}
-                            <div className="mb-1 flex h-6 gap-[4px] text-xs font-semibold tracking-[0.2em] text-gray-500">
-                                {weeks.map((week, i) => {
-                                    const firstDay = new Date(week[0].date);
-                                    const isNewMonth = firstDay.getDate() <= 7;
-                                    const alignRight = i >= weeks.length - 2;
-
-                                    return (
-                                        <div key={week[0].date} className="relative w-[14px]">
-                                            {isNewMonth && (
-                                                <span className={`absolute top-0 whitespace-nowrap ${alignRight ? 'right-0 text-right' : 'left-0'}`}>
-                                                    {months[firstDay.getMonth()]}
-                                                </span>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Cells Grid */}
-                            <div className="flex gap-[4px]">
-                                {weeks.map((week, weekIndex) => (
-                                    <div key={weekIndex} className="flex flex-col gap-[4px]">
-                                        {week.map((day) => (
-                                            <div
-                                                key={day.date}
-                                                onMouseMove={(e) => {
-                                                    setHoveredDay(day);
-                                                    setTooltipPos({
-                                                        x: e.clientX,
-                                                        y: e.clientY
-                                                    });
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    setHoveredDay(day);
-                                                    setTooltipPos({
-                                                        x: e.clientX,
-                                                        y: e.clientY
-                                                    });
-                                                }}
-                                                onMouseLeave={() => {
-                                                    setHoveredDay(null);
-                                                }}
-                                                className="w-[14px] h-[14px] rounded-[3px] transition-all duration-300 cursor-pointer"
-                                                style={hoveredDay?.date === day.date ? getHoverStyle(day.count) : getColorStyle(day.count)}
-                                            />
-                                        ))}
-                                    </div>
+                    {/* Cells Grid */}
+                    <div className="flex gap-[4px]">
+                        {weeks.map((week, weekIndex) => (
+                            <div key={weekIndex} className="flex flex-col gap-[4px]">
+                                {week.map((day) => (
+                                    <div
+                                        key={day.date}
+                                        onMouseMove={(e) => {
+                                            setHoveredDay(day);
+                                            setTooltipPos({ x: e.clientX, y: e.clientY });
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            setHoveredDay(day);
+                                            setTooltipPos({ x: e.clientX, y: e.clientY });
+                                        }}
+                                        onMouseLeave={() => {
+                                            setHoveredDay(null);
+                                        }}
+                                        className="h-[14px] w-[14px] cursor-pointer rounded-[3px] transition-colors duration-150"
+                                        style={hoveredDay?.date === day.date ? getHoverStyle(day.count) : getColorStyle(day.count)}
+                                    />
                                 ))}
                             </div>
-                        </div>
+                        ))}
                     </div>
                 </div>
+            </div>
 
-                {/* Legend */}
-                <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 mt-4">
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs font-semibold text-gray-500">Less</span>
-                        <div className="flex gap-1">
-                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.2)' : toRgba(profileAccentColor, 0.2) }} />
-                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.4)' : toRgba(profileAccentColor, 0.4) }} />
-                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.6)' : toRgba(profileAccentColor, 0.6) }} />
-                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.8)' : toRgba(profileAccentColor, 0.8) }} />
-                            <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgb(232, 90, 156)' : profileAccentColor }} />
-                        </div>
-                        <span className="text-xs font-semibold text-gray-500">More</span>
-                    </div>
+            {/* Legend */}
+            <div className="mt-3 flex items-center justify-end gap-2 text-xs text-[var(--text-2)]">
+                <span>Less</span>
+                <div className="flex gap-1">
+                    {[0.2, 0.4, 0.6, 0.8, 1].map((alpha) => (
+                        <div key={alpha} className="h-[10px] w-[10px] rounded-[2px]" style={{ backgroundColor: legendColor(alpha) }} />
+                    ))}
                 </div>
+                <span>More</span>
             </div>
 
             {/* Custom AniList-style Tooltip - Portal to body to avoid overflow clipping */}
@@ -284,8 +267,8 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                 >
                     {/* Inner wrapper to keep content during fade out */}
                     {persistedDay && (
-                        <div className="bg-dark-100/95 backdrop-blur-md border border-gray-700/30 rounded-xl px-4 py-2.5 shadow-[0_20px_50px_rgba(0,0,0,0.1)] min-w-[150px] ring-1 ring-gray-700/10">
-                            <p className="text-white font-bold text-[11px] mb-1.5 whitespace-nowrap tracking-wide">
+                        <div className="min-w-[150px] rounded-[var(--radius-md)] border border-white/[0.08] bg-[var(--ink-3)] px-3.5 py-2.5 shadow-lg shadow-black/30">
+                            <p className="mb-1 whitespace-nowrap text-[13px] font-medium text-[var(--text-1)]">
                                 {new Date(persistedDay.date).toLocaleDateString('en-US', {
                                     weekday: 'long',
                                     month: 'short',
@@ -298,12 +281,12 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                                     className="w-2 h-2 rounded-full" 
                                     style={getColorStyle(persistedDay.count)} 
                                 />
-                                <p className="text-[11px] text-gray-400 font-medium">
-                                    <span className="text-accent font-bold">{persistedDay.count}</span> episodes
+                                <p className="text-[13px] text-[var(--text-2)] tabular">
+                                    {persistedDay.count} {persistedDay.count === 1 ? 'episode' : 'episodes'}
                                 </p>
                             </div>
                             {/* Arrow */}
-                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-dark-100 border-r border-b border-gray-700/30 rotate-45" />
+                            <div className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-b border-r border-white/[0.08] bg-[var(--ink-3)]" />
                         </div>
                     )}
                 </div>

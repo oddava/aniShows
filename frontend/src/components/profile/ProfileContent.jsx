@@ -1,5 +1,4 @@
 import React, { Suspense } from 'react';
-import { Lock } from 'lucide-react';
 import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
 import FriendsTab from './FriendsTab';
 import ActivityTab from './tabs/ActivityTab';
@@ -45,10 +44,9 @@ export default function ProfileContent({
 }) {
     if (isPrivate) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-                <Lock className="w-16 h-16 mb-4 opacity-50" />
-                <h3 className="text-xl font-semibold mb-2">This profile is private</h3>
-                <p>Only the user can see their lists and reviews.</p>
+            <div className="pb-8">
+                <h2 className="section-title">This profile is private</h2>
+                <p className="mt-2 text-[17px] text-[var(--text-2)]">Only its owner can see their lists and reviews.</p>
             </div>
         );
     }
@@ -105,7 +103,7 @@ export default function ProfileContent({
         case 'activity':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Activity">
-                    <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
+                    <Suspense fallback={<div className="py-12 text-[15px] text-[var(--text-3)]">Loading…</div>}>
                         <ActivityTab username={targetUsername} isPrivate={isPrivate} />
                     </Suspense>
                 </ProfileErrorBoundary>
@@ -114,7 +112,7 @@ export default function ProfileContent({
         case 'insights':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Insights">
-                    <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
+                    <Suspense fallback={<div className="py-12 text-[15px] text-[var(--text-3)]">Loading…</div>}>
                         <InsightsTab
                             username={targetUsername}
                             isPrivate={isPrivate}

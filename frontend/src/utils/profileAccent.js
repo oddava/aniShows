@@ -1,11 +1,12 @@
-// The signature colour. Accounts created before the overhaul store the old
-// violet default, which nobody chose, so it reads as "no choice".
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#d4f65a';
-const LEGACY_DEFAULT_PROFILE_COLOR = '#8b5cf6';
+// The signature colour (--signature, periwinkle). Accounts store the old
+// defaults nobody chose (the pre-overhaul violet and the retired lime), so
+// both read as "no choice" and get the current one.
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#8db1ff';
+const LEGACY_DEFAULT_PROFILE_COLORS = new Set(['#8b5cf6', '#d4f65a']);
 
 export function normalizeProfilePrimaryColor(value) {
     const normalized = String(value || '').trim().toLowerCase();
-    if (normalized === LEGACY_DEFAULT_PROFILE_COLOR) return DEFAULT_PROFILE_PRIMARY_COLOR;
+    if (LEGACY_DEFAULT_PROFILE_COLORS.has(normalized)) return DEFAULT_PROFILE_PRIMARY_COLOR;
     return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
 }
 
@@ -117,6 +118,8 @@ export function contrastRatio(hexA, hexB) {
 
 export function toneProfileAccentColor(value) {
     const normalized = normalizeProfilePrimaryColor(value);
+    // The default is the site accent itself: already readable, drawn as is.
+    if (normalized === DEFAULT_PROFILE_PRIMARY_COLOR) return normalized;
     const hsl = rgbToHsl(hexToRgb(normalized));
 
     const toned = {

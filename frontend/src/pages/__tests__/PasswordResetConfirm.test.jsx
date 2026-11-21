@@ -67,8 +67,8 @@ describe('PasswordResetConfirm', () => {
 
         expect(await screen.findByText('Enter a new password.')).toBeInTheDocument();
         expect(screen.getByText('Type the password again.')).toBeInTheDocument();
-        expect(screen.getByLabelText('New Password')).toHaveAttribute('aria-invalid', 'true');
-        expect(screen.getByLabelText('Confirm Password')).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.getByLabelText('New password')).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.getByLabelText('Confirm password')).toHaveAttribute('aria-invalid', 'true');
         expect(authApi.resetPassword).not.toHaveBeenCalled();
     });
 
@@ -82,7 +82,7 @@ describe('PasswordResetConfirm', () => {
         fireEvent.submit(fields[0].closest('form'));
 
         expect(await screen.findByText('Passwords do not match.')).toBeInTheDocument();
-        expect(screen.getByLabelText('Confirm Password')).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.getByLabelText('Confirm password')).toHaveAttribute('aria-invalid', 'true');
         expect(authApi.resetPassword).not.toHaveBeenCalled();
     });
 

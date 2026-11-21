@@ -64,7 +64,7 @@ describe('Login', () => {
     it('ties labels to inputs and sets phone/password-manager attributes', () => {
         render(<MemoryRouter><Login /></MemoryRouter>);
 
-        const username = screen.getByLabelText('Username or Email');
+        const username = screen.getByLabelText('Username or email');
         expect(username).toHaveAttribute('autocomplete', 'username');
         expect(username).toHaveAttribute('autocapitalize', 'none');
         expect(username).toHaveAttribute('spellcheck', 'false');
@@ -156,9 +156,9 @@ describe('Login', () => {
 
         expect(await screen.findByText('Enter your username or email.')).toBeInTheDocument();
         expect(screen.getByText('Enter your password.')).toBeInTheDocument();
-        expect(screen.getByLabelText('Username or Email')).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.getByLabelText('Username or email')).toHaveAttribute('aria-invalid', 'true');
         expect(screen.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'true');
-        expect(screen.getByLabelText('Username or Email')).toHaveFocus();
+        expect(screen.getByLabelText('Username or email')).toHaveFocus();
         expect(loginMock).not.toHaveBeenCalled();
     });
 
@@ -241,12 +241,12 @@ describe('Register', () => {
         render(<MemoryRouter><Register /></MemoryRouter>);
 
         expect(screen.getByLabelText('Username')).toHaveAttribute('autocomplete', 'username');
-        const email = screen.getByLabelText('Email Address');
+        const email = screen.getByLabelText('Email address');
         expect(email).toHaveAttribute('autocomplete', 'email');
         expect(email).toHaveAttribute('inputmode', 'email');
         expect(email).toHaveAttribute('autocapitalize', 'none');
         expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'new-password');
-        expect(screen.getByLabelText('Confirm Password')).toHaveAttribute('autocomplete', 'new-password');
+        expect(screen.getByLabelText('Confirm password')).toHaveAttribute('autocomplete', 'new-password');
     });
 
     it('shows server field errors next to their fields', async () => {
@@ -267,7 +267,7 @@ describe('Register', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent('This password is too common.');
         // Inline on the password field, not only in a generic banner.
         const passwordInput = screen.getByPlaceholderText('Create a password');
-        expect(passwordInput.className).toContain('!border-red-500');
+        expect(passwordInput).toHaveAttribute('aria-describedby', 'register-password-error');
         expect(passwordInput).toHaveAttribute('aria-invalid', 'true');
     });
 
@@ -282,7 +282,7 @@ describe('Register', () => {
         expect(screen.getByText('Enter your email address.')).toBeInTheDocument();
         expect(screen.getByText('Create a password.')).toBeInTheDocument();
         expect(screen.getByText('Type the password again.')).toBeInTheDocument();
-        for (const label of ['Username', 'Email Address', 'Password', 'Confirm Password']) {
+        for (const label of ['Username', 'Email address', 'Password', 'Confirm password']) {
             expect(screen.getByLabelText(label)).toHaveAttribute('aria-invalid', 'true');
         }
         expect(screen.getByLabelText('Username')).toHaveFocus();
@@ -300,7 +300,7 @@ describe('Register', () => {
 
         expect(await screen.findByText('Enter a valid email address, like name@example.com.')).toBeInTheDocument();
         expect(screen.getByText('Passwords do not match.')).toBeInTheDocument();
-        expect(screen.getByLabelText('Email Address')).toHaveFocus();
+        expect(screen.getByLabelText('Email address')).toHaveFocus();
         expect(registerMock).not.toHaveBeenCalled();
     });
 

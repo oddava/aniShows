@@ -5,6 +5,8 @@ import {
     contrastRatio,
     getProfileAccentTheme,
     toneProfileAccentColor,
+    DEFAULT_PROFILE_PRIMARY_COLOR,
+    normalizeProfilePrimaryColor,
 } from '../profileAccent';
 
 // Deterministic PRNG (mulberry32) so the "random" colours are the same every run.
@@ -61,5 +63,21 @@ describe('toneProfileAccentColor', () => {
         expect(theme.darkColor).toMatch(/^#[0-9a-f]{6}$/);
         expect(contrastRatio(theme.lightColor, PROFILE_ACCENT_BACKGROUND))
             .toBeGreaterThanOrEqual(contrastRatio(theme.baseColor, PROFILE_ACCENT_BACKGROUND));
+    });
+});
+
+describe('default profile colour', () => {
+    it('is the periwinkle accent, drawn unchanged', () => {
+        expect(DEFAULT_PROFILE_PRIMARY_COLOR).toBe('#8db1ff');
+        expect(toneProfileAccentColor(undefined)).toBe('#8db1ff');
+    });
+
+    it('maps the old violet and the retired lime defaults to it', () => {
+        expect(normalizeProfilePrimaryColor('#8B5CF6')).toBe('#8db1ff');
+        expect(normalizeProfilePrimaryColor('#d4f65a')).toBe('#8db1ff');
+    });
+
+    it('keeps a colour someone picked', () => {
+        expect(normalizeProfilePrimaryColor('#EF4444')).toBe('#ef4444');
     });
 });

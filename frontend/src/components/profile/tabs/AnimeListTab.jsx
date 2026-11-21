@@ -2,7 +2,7 @@
 // The tab owns its list query: every page of one status, searched and sorted on the server.
 import React, { useEffect, useState } from 'react';
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { Search, LayoutGrid, LayoutList, Star } from 'lucide-react';
+import { Search, LayoutGrid, LayoutList } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import AnimeCard, { AnimeCardSkeleton } from '../../AnimeCard';
 import CustomSelect from '../../common/CustomSelect';
@@ -15,14 +15,11 @@ import {
     getImageFallbackUrl,
     getOptimizedImageUrl,
 } from '../../../utils/imageUtils';
+import { LIST_STATUSES, statusLabel } from '../../../utils/listStatus';
+import useScrollFade from '../../../hooks/useScrollFade';
 
-const STATUS_TABS = [
-    { value: 'Watching', label: 'Watching' },
-    { value: 'Completed', label: 'Completed' },
-    { value: 'Plan to Watch', label: 'Planning' },
-    { value: 'On Hold', label: 'On Hold' },
-    { value: 'Dropped', label: 'Dropped' },
-];
+// Status tabs: labels and colours from utils/listStatus, like everywhere else.
+const STATUS_TABS = LIST_STATUSES;
 
 const SEARCH_DEBOUNCE_MS = 300;
 const LIST_STALE_TIME = 60 * 1000;
@@ -95,42 +92,45 @@ export default function AnimeListContent({
     );
     const totalCount = data?.pages?.[0]?.count ?? items.length;
     const listsFetching = isFetching && !isFetchingNextPage;
+    const fadeRef = useScrollFade();
+    const currentLabel = statusLabel(listStatusFilter);
 
     return (
         <div className="space-y-6 animate-tab-content">
-            <div className="flex flex-wrap gap-2.5 p-1 bg-dark-100/50 rounded-xl border border-gray-800/60 w-fit">
-                {STATUS_TABS.map((tab) => {
-                    const isActive = listStatusFilter === tab.value;
-                    const count = summary?.counts?.[tab.value];
-                    return (
-                        <button
-                            key={tab.value}
-                            type="button"
-                            aria-pressed={isActive}
-                            onClick={() => setListStatusFilter(tab.value)}
-                            className={`px-5 py-2 rounded-lg font-bold text-sm transition-colors ${isActive
-                                ? 'bg-accent-dark text-white'
-                                : 'text-gray-500 hover:text-gray-200 hover:bg-dark-50'
-                                }`}
-                        >
-                            {tab.label}
-                            {count != null && (
-                                <span className={`ml-2 text-xs font-semibold ${isActive ? 'text-white/70' : 'text-gray-600'}`}>
-                                    {count}
-                                </span>
-                            )}
-                        </button>
-                    );
-                })}
+            <div ref={fadeRef} className="scroll-fade -mx-1 overflow-x-auto scrollbar-hide px-1">
+                <div className="flex w-max gap-2">
+                    {STATUS_TABS.map((tab) => {
+                        const isActive = listStatusFilter === tab.value;
+                        const count = summary?.counts?.[tab.value];
+                        return (
+                            <button
+                                key={tab.value}
+                                type="button"
+                                aria-pressed={isActive}
+                                onClick={() => setListStatusFilter(tab.value)}
+                                className={`inline-flex min-h-[2.75rem] shrink-0 items-center gap-2 rounded-full border px-4 text-[15px] transition-colors ${isActive
+                                    ? 'border-[var(--line-4)] bg-white/[0.06] text-[var(--text-1)]'
+                                    : 'border-white/[0.06] text-[var(--text-2)] hover:text-[var(--text-1)]'
+                                    }`}
+                            >
+                                <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: tab.color }} />
+                                {tab.label}
+                                {count != null && (
+                                    <span className="text-[var(--text-3)] tabular">{count}</span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <div className="relative flex-1 max-w-md w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-3)]" />
                     <input
                         type="search"
-                        placeholder={`Search in ${listStatusFilter}...`}
-                        aria-label={`Search in ${listStatusFilter}`}
+                        placeholder={`Search ${currentLabel.toLowerCase()}`}
+                        aria-label={`Search in ${currentLabel}`}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="input w-full pl-10 py-2 text-sm"
@@ -142,17 +142,18 @@ export default function AnimeListContent({
                         value={ordering}
                         onChange={setOrdering}
                         options={LIST_ORDERINGS}
-                        triggerClassName="bg-dark-100 border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300"
+                        triggerClassName="min-h-[2.75rem] rounded-lg border-white/[0.08] bg-transparent px-3 py-2 text-[15px] text-[var(--text-2)]"
                         menuClassName="z-[320]"
                         ariaLabel="Sort list"
                     />
-                    <div className="flex items-center gap-1 bg-dark-100 rounded-lg p-1 border border-gray-800">
+                    <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] p-1">
                         <button
                             type="button"
                             onClick={() => setViewMode('grid')}
                             aria-pressed={viewMode === 'grid'}
-                            className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-accent-dark text-white' : 'text-gray-400 hover:text-white'}`}
+                            className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white/[0.08] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
                             title="Grid view"
+                            aria-label="Grid view"
                         >
                             <LayoutGrid className="w-4 h-4" />
                         </button>
@@ -160,8 +161,9 @@ export default function AnimeListContent({
                             type="button"
                             onClick={() => setViewMode('list')}
                             aria-pressed={viewMode === 'list'}
-                            className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-accent-dark text-white' : 'text-gray-400 hover:text-white'}`}
+                            className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white/[0.08] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
                             title="List view"
+                            aria-label="List view"
                         >
                             <LayoutList className="w-4 h-4" />
                         </button>
@@ -170,15 +172,12 @@ export default function AnimeListContent({
             </div>
 
             {items.length > 0 && (
-                <div className="flex items-center gap-3 text-sm font-semibold text-gray-300">
-                    {totalCount} Anime in {listStatusFilter}
+                <p className="flex items-center gap-3 text-[15px] text-[var(--text-2)] tabular">
+                    {totalCount} in {currentLabel}
                     {listsFetching && !listsLoading && (
-                        <span className="inline-flex items-center gap-1.5 text-[10px] text-gray-400 opacity-60">
-                            <span className="w-3 h-3 border border-gray-400/50 border-t-gray-200 rounded-full animate-spin" />
-                            Updating...
-                        </span>
+                        <span className="text-sm text-[var(--text-3)]">Updating…</span>
                     )}
-                </div>
+                </p>
             )}
 
             <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Anime List">
@@ -202,9 +201,9 @@ export default function AnimeListContent({
                         type="button"
                         onClick={() => fetchNextPage()}
                         disabled={isFetchingNextPage}
-                        className="rounded-lg bg-dark-100 px-5 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-dark-50 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        className="btn-secondary px-5 text-[15px]"
                     >
-                        {isFetchingNextPage ? 'Loading...' : 'Load more'}
+                        {isFetchingNextPage ? 'Loading…' : 'Load more'}
                     </button>
                 </div>
             )}
@@ -234,23 +233,21 @@ function AnimeListView({
 
     if (isError && items.length === 0) {
         return (
-            <div className="text-center py-16 text-gray-400 bg-dark-100/50 rounded-xl border border-gray-800 border-dashed">
-                <p>Failed to load this list.</p>
-                <button type="button" onClick={() => onRetry()} className="text-accent hover:underline mt-2 inline-block">
-                    Try again
-                </button>
-            </div>
+            <p className="border-t border-white/[0.06] pt-6 text-[17px] text-[var(--text-2)]">
+                Couldn’t load this list.{' '}
+                <button type="button" onClick={() => onRetry()} className="text-link">Try again</button>
+            </p>
         );
     }
 
     if (items.length === 0) {
         return (
-            <div className="text-center py-16 text-gray-400 bg-dark-100/50 rounded-xl border border-gray-800 border-dashed">
-                <p>{searchQuery ? "No anime found matching your search." : `No anime in ${listStatusFilter}.`}</p>
+            <p className="border-t border-white/[0.06] pt-6 text-[17px] text-[var(--text-2)]">
+                {searchQuery ? 'Nothing here matches that search.' : `Nothing in ${statusLabel(listStatusFilter)} yet.`}
                 {!searchQuery && !isPublicView && (
-                    <Link to="/browse" className="text-accent hover:underline mt-2 inline-block">Browse anime to add some!</Link>
+                    <> <Link to="/browse" className="text-link">Find something to add</Link></>
                 )}
-            </div>
+            </p>
         );
     }
 
@@ -275,7 +272,7 @@ function AnimeListView({
 
     return (
         <div className="relative">
-            <div className={`space-y-2 transition-opacity duration-200 ${listsFetching ? 'opacity-60' : 'opacity-100'}`}>
+            <div className={`transition-opacity duration-200 ${listsFetching ? 'opacity-60' : 'opacity-100'}`}>
                 {items.map((item) => (canEdit
                     ? <EditableListRow key={item.id} item={item} />
                     : <ListRow key={item.id} item={item} episodesWatched={item.episodes_watched || 0} />
@@ -302,7 +299,7 @@ function EditableListRow({ item }) {
                 onClick={() => increment()}
                 disabled={isPending || atEnd}
                 aria-label={`Add one episode to ${item.anime?.title || 'this anime'}`}
-                className="shrink-0 rounded-md bg-dark-200 px-2.5 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-dark-50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="min-h-[2.75rem] min-w-[2.75rem] shrink-0 rounded-lg border border-white/[0.08] px-2.5 text-sm font-medium text-[var(--text-1)] transition-colors hover:border-[var(--line-4)] disabled:cursor-not-allowed disabled:opacity-40"
             >
                 +1
             </button>
@@ -315,32 +312,22 @@ function ListRow({ item, episodesWatched, children }) {
     const fallbackImageUrl = getImageFallbackUrl(item.anime, 'cover');
 
     return (
-        <div className="flex items-center gap-4 bg-dark-100 rounded-lg p-3 border border-gray-800/60">
+        <div className="flex items-center gap-4 border-b border-white/[0.06] py-3 last:border-b-0">
             <Link to={`/anime/${item.anime?.slug}`} className="flex flex-1 min-w-0 items-center gap-4">
                 <img
                     src={imageUrl}
                     alt={item.anime?.title}
                     onError={(event) => applyImageFallback(event, fallbackImageUrl)}
-                    className="w-12 h-16 rounded object-cover shrink-0"
+                    className="h-[72px] w-12 shrink-0 rounded-md bg-[var(--ink-2)] object-cover"
                 />
                 <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-white truncate">
+                    <h4 className="truncate text-[17px] font-semibold tracking-[-0.01em] text-[var(--text-1)]">
                         {item.anime?.title}
                     </h4>
-                    <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                        <span>{item.anime?.anime_type || 'TV'}</span>
-                        <span>•</span>
-                        <span>{item.anime?.episode_count || '?'} eps</span>
-                        {item.score > 0 && (
-                            <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1 text-yellow-500">
-                                    <Star className="w-3 h-3 fill-current" />
-                                    {item.score}
-                                </span>
-                            </>
-                        )}
-                    </div>
+                    <p className="mt-0.5 text-[15px] text-[var(--text-2)] tabular">
+                        {item.anime?.anime_type || 'TV'} · {item.anime?.episode_count || '?'} episodes
+                        {item.score > 0 && <> · scored {item.score}</>}
+                    </p>
                 </div>
             </Link>
             <ListProgress episodesWatched={episodesWatched} total={item.anime?.episode_count || 0} />
@@ -352,8 +339,8 @@ function ListRow({ item, episodesWatched, children }) {
 function ListProgress({ episodesWatched, total }) {
     if (total <= 0) {
         return (
-            <span className="shrink-0 px-2 text-[11px] text-gray-400">
-                {episodesWatched}/? eps
+            <span className="shrink-0 px-2 text-sm text-[var(--text-2)] tabular">
+                {episodesWatched}/?
             </span>
         );
     }
@@ -361,13 +348,13 @@ function ListProgress({ episodesWatched, total }) {
     const ratio = Math.min(episodesWatched / total, 1);
     return (
         <div className="flex flex-col items-end gap-1 shrink-0 px-2">
-            <div className="hidden sm:block w-32 h-2 bg-dark-200 rounded-full overflow-hidden">
+            <div className="hidden h-1 w-28 overflow-hidden rounded-full bg-white/[0.06] sm:block">
                 <div
-                    className={`h-full ${ratio >= 1 ? 'bg-green-500' : 'bg-accent-dark'}`}
-                    style={{ width: `${ratio * 100}%` }}
+                    className="h-full rounded-full"
+                    style={{ width: `${ratio * 100}%`, backgroundColor: ratio >= 1 ? 'var(--status-completed)' : 'var(--signature)' }}
                 />
             </div>
-            <span className="text-[11px] text-gray-400">
+            <span className="text-sm text-[var(--text-2)] tabular">
                 {episodesWatched}/{total}
             </span>
         </div>

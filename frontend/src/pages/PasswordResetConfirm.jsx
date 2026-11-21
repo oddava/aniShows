@@ -4,13 +4,13 @@ import { PASSWORD_HINT } from '../utils/password';
 import { useNavigate } from 'react-router-dom';
 import useTokenLinkParams from '../components/auth/useTokenLinkParams';
 import AuthField from '../components/auth/AuthField';
+import AuthLayout, { AuthNotice } from '../components/auth/AuthLayout';
 import {
     confirmPasswordProblem,
     focusFirstError,
     newPasswordProblem,
 } from '../components/auth/formValidation';
 import { authApi } from '../api/client';
-import { Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
 const FIELD_IDS = { password: 'reset-new-password', confirmPassword: 'reset-new-password-confirm' };
 
@@ -69,71 +69,45 @@ export default function PasswordResetConfirm() {
     });
 
     return (
-        <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12">
-            <div className="w-full max-w-md">
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-white mb-2">Set New Password</h1>
-                    <p className="text-gray-400">Create a new password for your account</p>
-                </div>
+        <AuthLayout title="Set a new password" lead="Pick something you haven’t used here before.">
+            {error && <AuthNotice className="mb-8">{error}</AuthNotice>}
 
-                <div className="bg-dark-100 rounded-2xl p-6 sm:p-8 border border-gray-800 shadow-xl">
-                    {error && (
-                        <div role="alert" className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
-                            <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
-                            <p className="text-sm">{error}</p>
-                        </div>
-                    )}
+            <form onSubmit={handleSubmit} noValidate className="space-y-6">
+                <AuthField
+                    id={FIELD_IDS.password}
+                    label="New password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    placeholder="Enter new password"
+                    value={password}
+                    error={fieldErrors.password}
+                    hint={PASSWORD_HINT}
+                    onChange={(e) => {
+                        setPassword(e.target.value);
+                        clearFieldError('password');
+                    }}
+                />
 
-                    <form onSubmit={handleSubmit} noValidate className="space-y-6">
-                        <AuthField
-                            id={FIELD_IDS.password}
-                            label="New Password"
-                            icon={Lock}
-                            type="password"
-                            autoComplete="new-password"
-                            required
-                            placeholder="Enter new password"
-                            value={password}
-                            error={fieldErrors.password}
-                            hint={PASSWORD_HINT}
-                            onChange={(e) => {
-                                setPassword(e.target.value);
-                                clearFieldError('password');
-                            }}
-                        />
+                <AuthField
+                    id={FIELD_IDS.confirmPassword}
+                    label="Confirm password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    error={fieldErrors.confirmPassword}
+                    onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        clearFieldError('confirmPassword');
+                    }}
+                />
 
-                        <AuthField
-                            id={FIELD_IDS.confirmPassword}
-                            label="Confirm Password"
-                            icon={Lock}
-                            type="password"
-                            autoComplete="new-password"
-                            required
-                            placeholder="Confirm new password"
-                            value={confirmPassword}
-                            error={fieldErrors.confirmPassword}
-                            onChange={(e) => {
-                                setConfirmPassword(e.target.value);
-                                clearFieldError('confirmPassword');
-                            }}
-                        />
-
-                        <button
-                            type="submit"
-                            disabled={status === 'loading'}
-                            className="btn-primary w-full flex items-center justify-center gap-2"
-                        >
-                            {status === 'loading' ? (
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                            ) : (
-                                <>
-                                    Reset Password <ArrowRight className="w-5 h-5" />
-                                </>
-                            )}
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
+                <button type="submit" disabled={status === 'loading'} className="btn-primary w-full text-[15px]">
+                    {status === 'loading' ? 'Saving…' : 'Set new password'}
+                </button>
+            </form>
+        </AuthLayout>
     );
 }

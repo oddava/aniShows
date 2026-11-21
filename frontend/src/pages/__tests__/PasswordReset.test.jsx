@@ -24,13 +24,13 @@ describe('PasswordReset', () => {
         fireEvent.submit(form);
 
         expect(await screen.findByText('Enter your email address.')).toBeInTheDocument();
-        expect(screen.getByLabelText('Email Address')).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.getByLabelText('Email address')).toHaveAttribute('aria-invalid', 'true');
         expect(authApi.requestPasswordReset).not.toHaveBeenCalled();
     });
 
     it('flags a malformed address', async () => {
         renderPage();
-        fireEvent.change(screen.getByLabelText('Email Address'), { target: { value: 'me@home' } });
+        fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'me@home' } });
         fireEvent.submit(document.querySelector('form'));
 
         expect(await screen.findByText('Enter a valid email address, like name@example.com.')).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe('PasswordReset', () => {
 
     it('sends a valid address and shows the neutral confirmation', async () => {
         renderPage();
-        fireEvent.change(screen.getByLabelText('Email Address'), { target: { value: ' me@example.com ' } });
+        fireEvent.change(screen.getByLabelText('Email address'), { target: { value: ' me@example.com ' } });
         fireEvent.submit(document.querySelector('form'));
 
         await waitFor(() => expect(authApi.requestPasswordReset).toHaveBeenCalledWith('me@example.com'));
