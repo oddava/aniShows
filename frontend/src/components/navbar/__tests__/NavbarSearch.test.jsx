@@ -58,7 +58,7 @@ describe('NavbarSearch', () => {
     it('shows the spinner while the first search is in flight', () => {
         render(<NavbarSearch search={searchState({ isSearching: true })} />);
 
-        expect(screen.getByText('Searching...')).toBeInTheDocument();
+        expect(screen.getByText('Searching…')).toBeInTheDocument();
     });
 
     it('shows the no-matches state with a way to search all anime', () => {
@@ -165,8 +165,8 @@ describe('NavbarSearch with useNavbarSearch', () => {
     it('searches the API after typing and shows the results', { timeout: 10000 }, async () => {
         renderHarness();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
-        fireEvent.change(screen.getByPlaceholderText('Search anime...'), { target: { value: 'frieren' } });
+        fireEvent.focus(screen.getByPlaceholderText('Search anime'));
+        fireEvent.change(screen.getByPlaceholderText('Search anime'), { target: { value: 'frieren' } });
 
         expect(await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
         expect(mockGetAll).toHaveBeenCalledTimes(1);
@@ -179,8 +179,8 @@ describe('NavbarSearch with useNavbarSearch', () => {
         await wait(300);
         expect(mockGetAll).not.toHaveBeenCalled();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
-        fireEvent.change(screen.getByPlaceholderText('Search anime...'), { target: { value: 'frieren' } });
+        fireEvent.focus(screen.getByPlaceholderText('Search anime'));
+        fireEvent.change(screen.getByPlaceholderText('Search anime'), { target: { value: 'frieren' } });
         await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 });
 
         mockGetAll.mock.calls.forEach(([params]) => expect(params.page_size).not.toBe(100));
@@ -189,8 +189,8 @@ describe('NavbarSearch with useNavbarSearch', () => {
     it('sends no request for one character', { timeout: 10000 }, async () => {
         renderHarness();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
-        const input = screen.getByPlaceholderText('Search anime...');
+        fireEvent.focus(screen.getByPlaceholderText('Search anime'));
+        const input = screen.getByPlaceholderText('Search anime');
         fireEvent.change(input, { target: { value: 'f' } });
         await wait(450);
 
@@ -212,8 +212,8 @@ describe('NavbarSearch with useNavbarSearch', () => {
         });
         renderHarness();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
-        const input = screen.getByPlaceholderText('Search anime...');
+        fireEvent.focus(screen.getByPlaceholderText('Search anime'));
+        const input = screen.getByPlaceholderText('Search anime');
         fireEvent.change(input, { target: { value: 'fr' } });
         await waitFor(() => expect(signals.map((s) => s.q)).toEqual(['fr']));
 
@@ -236,8 +236,8 @@ describe('NavbarSearch with useNavbarSearch', () => {
             </QueryClientProvider>
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
-        fireEvent.change(screen.getByPlaceholderText('Search anime...'), { target: { value: 'frieren' } });
+        fireEvent.focus(screen.getByPlaceholderText('Search anime'));
+        fireEvent.change(screen.getByPlaceholderText('Search anime'), { target: { value: 'frieren' } });
         await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 });
 
         expect(client.getQueryData(['navbarSearch', 'results', 'frieren', true])).toEqual([SUGGESTIONS[0]]);
@@ -248,8 +248,8 @@ describe('NavbarSearch with useNavbarSearch', () => {
         mockGetAll.mockResolvedValue({ data: { results: [] } });
         renderHarness();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
-        fireEvent.change(screen.getByPlaceholderText('Search anime...'), { target: { value: 'zzqx' } });
+        fireEvent.focus(screen.getByPlaceholderText('Search anime'));
+        fireEvent.change(screen.getByPlaceholderText('Search anime'), { target: { value: 'zzqx' } });
 
         fireEvent.click(await screen.findByRole('button', { name: 'Search all anime' }, { timeout: 5000 }));
         expect(latestLocation.pathname).toBe('/browse');
@@ -261,8 +261,8 @@ describe('NavbarSearch with useNavbarSearch', () => {
         const onNextLink = vi.fn((event) => event.preventDefault());
         renderHarness(<a href="/login" onClick={onNextLink}>Sign In</a>);
 
-        await user.click(screen.getByRole('button', { name: 'Search anime' }));
-        await user.type(screen.getByPlaceholderText('Search anime...'), 'frieren');
+        await user.click(screen.getByPlaceholderText('Search anime'));
+        await user.type(screen.getByPlaceholderText('Search anime'), 'frieren');
         expect(await screen.findByRole('option', { name: /Beyond Journey/ }, { timeout: 5000 })).toBeInTheDocument();
         await user.keyboard('{ArrowDown}');
 
@@ -270,7 +270,7 @@ describe('NavbarSearch with useNavbarSearch', () => {
         await user.tab();
         await user.tab();
         expect(screen.getByRole('link', { name: 'Sign In' })).toHaveFocus();
-        expect(screen.getByPlaceholderText('Search anime...')).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.getByPlaceholderText('Search anime')).toHaveAttribute('aria-expanded', 'false');
 
         await user.keyboard('{ArrowDown}{Enter}');
         expect(onNextLink).toHaveBeenCalled();
@@ -287,8 +287,8 @@ describe('NavbarSearch with useNavbarSearch', () => {
 
         renderHarness();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
-        const input = screen.getByPlaceholderText('Search anime...');
+        fireEvent.focus(screen.getByPlaceholderText('Search anime'));
+        const input = screen.getByPlaceholderText('Search anime');
         fireEvent.change(input, { target: { value: 'frieren' } });
         await waitFor(() => expect(mockGetAll).toHaveBeenCalledWith({ q: 'frieren', page_size: 10 }, expect.any(AbortSignal)));
 
@@ -306,8 +306,8 @@ describe('NavbarSearch with useNavbarSearch', () => {
         mockGetAll.mockImplementation(() => new Promise((resolve) => { resolveSearch = resolve; }));
         renderHarness();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Search anime' }));
-        const input = screen.getByPlaceholderText('Search anime...');
+        fireEvent.focus(screen.getByPlaceholderText('Search anime'));
+        const input = screen.getByPlaceholderText('Search anime');
         input.focus();
         fireEvent.change(input, { target: { value: 'frieren' } });
         await waitFor(() => expect(mockGetAll).toHaveBeenCalled());

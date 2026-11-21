@@ -71,6 +71,7 @@ vi.mock('../../components/StatsTab', () => ({
 
 vi.mock('../../components/InformationBox', () => ({
     default: () => <div data-testid="information-box" />,
+    NextEpisodePanel: () => null,
 }));
 
 vi.mock('../../components/FriendsWatching', () => ({
@@ -392,6 +393,17 @@ describe('AnimeDetail list update invalidation', () => {
         await waitFor(() => {
             const watchLink = screen.getByRole('link', { name: /watch/i });
             expect(watchLink.textContent?.replace(/\s+/g, '').trim()).toBe('Watch');
+        });
+    });
+
+    it('loads the first staff page on Overview so the key crew can be picked', async () => {
+        animeApi.getBySlug.mockResolvedValue({ data: { ...mockAnime, staff_count: 47 } });
+        const { wrapper } = createHarness();
+
+        render(<AnimeDetail />, { wrapper });
+
+        await waitFor(() => {
+            expect(animeApi.getStaff).toHaveBeenCalledWith('frieren', { page: 1, page_size: 50 });
         });
     });
 

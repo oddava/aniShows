@@ -142,7 +142,7 @@ export default function QuickAdd({
                     ? `inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition-colors duration-150 touch-manipulation ${meta ? 'bg-white/[0.06] text-[var(--text-1)] hover:bg-white/[0.1]' : 'bg-[var(--signature-soft)] text-[var(--signature)] hover:bg-[rgb(141_177_255/0.2)]'}`
                     : variant === 'button'
                     ? `flex h-11 w-full items-center gap-2.5 rounded-[var(--radius-md)] px-3.5 text-sm font-semibold transition-colors duration-150 touch-manipulation ${meta ? 'bg-white/[0.07] text-white hover:bg-white/[0.11]' : 'bg-[var(--signature)] text-[var(--on-signature)] hover:bg-[var(--signature-hover)]'}`
-                    : "quick-add relative flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-[rgb(11_13_16/0.78)] text-white backdrop-blur-sm transition-colors duration-150 hover:bg-[rgb(11_13_16/0.92)] after:absolute after:-inset-1.5 after:content-[''] touch-manipulation"}
+                    : `quick-add relative flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[rgb(27_31_37/0.88)] text-[var(--text-1)] backdrop-blur-sm transition-colors duration-150 hover:bg-[rgb(40_46_54/0.95)] after:absolute after:-inset-1.5 after:content-[''] touch-manipulation ${meta ? 'px-2.5 text-[12.5px] font-medium' : 'w-8'}`}
             >
                 {variant === 'chip' ? (
                     <>
@@ -170,7 +170,10 @@ export default function QuickAdd({
                 ) : showSpinner ? (
                     <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
                 ) : meta ? (
-                    <span aria-hidden="true" className="h-3 w-3 rounded-full ring-2 ring-[rgb(11_13_16/0.6)]" style={{ backgroundColor: meta.color }} />
+                    <>
+                        <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />
+                        <span aria-hidden="true">{meta.label}</span>
+                    </>
                 ) : (
                     <Plus aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
                 )}

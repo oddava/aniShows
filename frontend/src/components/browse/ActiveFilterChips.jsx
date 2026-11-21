@@ -79,7 +79,7 @@ export default function ActiveFilterChips({
     const next = canStepSeason ? stepSeason(currentSeason, currentYear, direction) : null;
     return next ? formatSeasonLabel(next.season, next.year) : '';
   };
-  const stepButtonClass = 'flex items-center justify-center w-6 h-6 rounded-full bg-dark-100 text-gray-300 border border-gray-700 hover:border-gray-600 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed';
+  const stepButtonClass = 'flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05] text-[var(--text-2)] hover:bg-white/[0.09] hover:text-[var(--text-1)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
   const renderSeasonStep = (direction) => {
     const target = seasonStep(direction);
     const Icon = direction < 0 ? ChevronLeft : ChevronRight;
@@ -198,24 +198,19 @@ export default function ActiveFilterChips({
   });
 
   return (
-    <div className="flex flex-wrap items-center gap-2 mb-6 animate-fade-in">
-      <div className="flex items-center gap-1.5 text-xs text-gray-500 mr-1">
-        <span>Active:</span>
-      </div>
-      
+    <div className="mb-6 flex flex-wrap items-center gap-2 animate-fade-in">
+
       {filters.map((filter) => {
         const chip = (
           <button
             key={filter.key}
+            type="button"
             onClick={filter.onClear}
-            className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all
-              ${filter.isGenre
-                ? 'bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20'
-                : 'bg-dark-100 text-gray-300 border border-gray-700 hover:border-gray-600 hover:text-white'
-              }`}
+            aria-label={`Remove ${filter.label}`}
+            className="group flex h-8 items-center gap-1.5 rounded-lg bg-white/[0.05] pl-3 pr-2 text-[13px] text-[var(--text-1)] transition-colors hover:bg-white/[0.09]"
           >
             {filter.label}
-            <X className="w-3 h-3 opacity-60 group-hover:opacity-100 transition-opacity" />
+            <X aria-hidden="true" className="h-3.5 w-3.5 text-[var(--text-3)] transition-colors group-hover:text-[var(--text-1)]" />
           </button>
         );
         if (!filter.isSeason || !canStepSeason) return chip;
@@ -229,8 +224,9 @@ export default function ActiveFilterChips({
       })}
       
       <button
+        type="button"
         onClick={onClearAll}
-        className="text-xs text-gray-500 hover:text-accent transition-colors ml-1"
+        className="text-link ml-1 !min-h-8 text-[13px]"
       >
         Clear all
       </button>

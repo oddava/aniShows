@@ -12,13 +12,74 @@ import {
 } from '../utils/statusDistribution';
 import { capsToSentence } from './detailTabs/format';
 
-/** A fact as a row: label left, value right; whitespace, no rules. */
-const InfoRow = ({ label, value }) => (
-    <div className="flex min-w-0 items-baseline justify-between gap-4 py-1.5">
-        <dt className="shrink-0 text-sm text-[var(--text-2)]">{label}</dt>
-        <dd className="min-w-0 max-w-[65%] break-words text-right text-[15px] text-[var(--text-1)]">{value}</dd>
-    </div>
+/**
+ * A fact as a row: label left, value right; whitespace, no rules. A long
+ * value (a date range) is `stacked`: label above, value below at full width,
+ * so it never wraps into a ragged right-aligned pair of lines.
+ */
+const InfoRow = ({ label, value, stacked = false }) => (
+    stacked ? (
+        <div className="min-w-0 py-1.5">
+            <dt className="text-sm text-[var(--text-2)]">{label}</dt>
+            <dd className="mt-0.5 min-w-0 break-words text-[15px] text-[var(--text-1)]">{value}</dd>
+        </div>
+    ) : (
+        <div className="flex min-w-0 items-baseline justify-between gap-4 py-1.5">
+            <dt className="shrink-0 text-sm text-[var(--text-2)]">{label}</dt>
+            <dd className="min-w-0 max-w-[65%] break-words text-right text-[15px] text-[var(--text-1)]">{value}</dd>
+        </div>
+    )
 );
+
+const DATE_OPTIONS = { month: 'short', day: 'numeric', year: 'numeric' };
+
+/**
+ * When it aired, short: "Since Oct 2, 2026" while it is still running,
+ * "Jan 5 – Mar 30, 2026" inside one year, "Oct 20, 1999 – Dec 18, 2026"
+ * across years (each date kept whole when the range wraps). `isRange` says
+ * whether the value is a two-date range, which reads best stacked.
+ */
+export function getAiredValue(anime) {
+    const start = formatDate(anime?.release_date, DATE_OPTIONS);
+    if (!start) return { value: '', isRange: false };
+
+    if (!anime.end_date) {
+        return { value: anime.status === 'Airing' ? `Since ${start}` : start, isRange: false };
+    }
+
+    const end = formatDate(anime.end_date, DATE_OPTIONS);
+    if (!end || end === start) return { value: start, isRange: false };
+
+    const sameYear = start.slice(-4) === end.slice(-4);
+    const from = sameYear ? formatDate(anime.release_date, { month: 'short', day: 'numeric' }) : start;
+    return {
+        value: (
+            <>
+                <span className="whitespace-nowrap">{from} –</span>{' '}
+                <span className="whitespace-nowrap">{end}</span>
+            </>
+        ),
+        isRange: !sameYear,
+    };
+}
+
+/**
+ * The next episode and when it airs. Its own export so the page can lift it
+ * near the tracking controls on phones; hidden when nothing is scheduled.
+ */
+export function NextEpisodePanel({ anime, className = '' }) {
+    if (!anime || anime.status === 'Finished' || !anime.next_airing_date) return null;
+    return (
+        <div className={`panel ${className}`}>
+            <p className="text-sm text-[var(--signature)]">Next episode</p>
+            <p className="mt-1 text-[17px] font-semibold text-[var(--text-1)]">
+                Episode {anime.next_airing_episode ?? 'TBA'}
+                <span className="font-normal text-[var(--text-2)]"> · {formatRelativeTime(anime.next_airing_date)}</span>
+            </p>
+            <p className="mt-0.5 text-sm text-[var(--text-3)]">{formatAiringTime(anime.next_airing_date)}</p>
+        </div>
+    );
+}
 
 const getBrowseFilterHref = (key, value) => {
     const params = new URLSearchParams({ [key]: value });
@@ -34,7 +95,7 @@ function GroupLabel({ children }) {
     return <p className="mb-3 text-sm text-[var(--text-2)]">{children}</p>;
 }
 
-export default function InformationBox({ anime, className = '' }) {
+export default function InformationBox({ anime, className = '', showNextEpisode = true }) {
     const [showAllTags, setShowAllTags] = useState(false);
     const [showAllLinks, setShowAllLinks] = useState(false);
     const tagCount = anime?.tags?.length || 0;
@@ -45,43 +106,12 @@ export default function InformationBox({ anime, className = '' }) {
         normalizeStatusDistribution(anime?.status_distribution)
     );
 
-    const formatDateRange = () => {
-        const options = { month: 'short', day: 'numeric', year: 'numeric' };
-        const startStr = formatDate(anime.release_date, options);
-
-        if (anime.status === 'Airing' && !anime.end_date) {
-            return `${startStr} to now`;
-        }
-
-        if (anime.end_date) {
-            const endStr = formatDate(anime.end_date, options);
-            if (startStr === endStr) return startStr;
-            return (
-                <>
-                    {startStr}
-                    <br />
-                    <span className="text-[var(--text-2)]">to</span> {endStr}
-                </>
-            );
-        }
-
-        return startStr;
-    };
-
+    const aired = getAiredValue(anime);
     const season = [capsToSentence(anime.season), anime.season_year].filter(Boolean).join(' ');
 
     return (
         <div className={`flex min-w-0 flex-col gap-3 ${className}`}>
-            {anime.status !== 'Finished' && anime.next_airing_date && (
-                <div className="panel">
-                    <p className="text-sm text-[var(--signature)]">Next episode</p>
-                    <p className="mt-1 text-[17px] font-semibold text-[var(--text-1)]">
-                        Episode {anime.next_airing_episode ?? 'TBA'}
-                        <span className="font-normal text-[var(--text-2)]"> · {formatRelativeTime(anime.next_airing_date)}</span>
-                    </p>
-                    <p className="mt-0.5 text-sm text-[var(--text-3)]">{formatAiringTime(anime.next_airing_date)}</p>
-                </div>
-            )}
+            {showNextEpisode && <NextEpisodePanel anime={anime} />}
 
             <section aria-labelledby={`info-${anime.id}`} className="panel">
                 <h2 id={`info-${anime.id}`} className="section-title mb-3">Details</h2>
@@ -91,7 +121,7 @@ export default function InformationBox({ anime, className = '' }) {
                     {anime.duration_minutes > 0 && (
                         <InfoRow label="Duration" value={`${anime.duration_minutes} min`} />
                     )}
-                    {anime.release_date && <InfoRow label="Aired" value={formatDateRange()} />}
+                    {aired.value && <InfoRow label="Aired" value={aired.value} stacked={aired.isRange} />}
                     {season && <InfoRow label="Season" value={season} />}
                     {anime.source_material && <InfoRow label="Source" value={anime.source_material} />}
                     {anime.studio && <InfoRow label="Studio" value={anime.studio.name} />}

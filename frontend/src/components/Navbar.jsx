@@ -71,7 +71,7 @@ export default function Navbar() {
                         </Link>
 
                         {/* Desktop Nav */}
-                        <div className="hidden md:flex items-center gap-6 flex-1 ml-10">
+                        <div className="hidden md:flex items-center gap-1 flex-1 ml-8">
                             <NavItem to="/browse" label="Browse" />
                             <NavItem to="/schedule" label="Schedule" />
                             {(isAuthenticated || authLoading) && (

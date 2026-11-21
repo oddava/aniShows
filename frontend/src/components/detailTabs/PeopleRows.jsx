@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import Portrait from '../ui/Portrait';
 import { getPortraitSrcSet, getPortraitUrl } from './portraits';
-import { capsToSentence, displayPersonName } from './format';
+import { capsToSentence, displayPersonName, roleToSentence } from './format';
 
 const PORTRAIT_CLASS = 'h-[60px] w-10 flex-shrink-0 rounded-[var(--radius-sm)]';
 
@@ -70,7 +70,7 @@ export const StaffRow = memo(function StaffRow({ staffRole }) {
                 <p className="line-clamp-1 text-[15px] font-medium text-[var(--text-1)] group-hover:text-[var(--signature)]">
                     {displayPersonName(staffRole.staff.name)}
                 </p>
-                {staffRole.role && <p className="line-clamp-1 text-sm text-[var(--text-3)]">{staffRole.role}</p>}
+                {staffRole.role && <p className="line-clamp-1 text-sm text-[var(--text-3)]">{roleToSentence(staffRole.role)}</p>}
             </div>
         </>
     );

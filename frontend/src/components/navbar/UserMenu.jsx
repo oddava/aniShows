@@ -78,25 +78,25 @@ export default function UserMenu({
                         aria-expanded={isProfileOpen}
                         aria-controls={isProfileOpen ? profileMenuId : undefined}
                         aria-label={`Account menu for ${user?.username || 'you'}${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
-                        className="relative group flex items-center gap-3 rounded-full bg-white/[0.05] pl-1.5 pr-4 py-1 transition-colors duration-200 hover:bg-white/[0.09]"
+                        className="relative group flex h-10 items-center gap-2.5 rounded-lg pl-1.5 pr-2.5 transition-colors duration-150 hover:bg-white/[0.06]"
                     >
                         {/* Avatar or Placeholder */}
                         <div className="w-7 h-7 rounded-full overflow-hidden ">
                             {user?.avatar ? (
                                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                             ) : (
-                                <div className="w-full h-full bg-accent-dark flex items-center justify-center">
-                                    <span className="text-sm font-bold text-white">{user?.username?.charAt(0)}</span>
+                                <div className="w-full h-full bg-[var(--signature-soft)] flex items-center justify-center">
+                                    <span className="text-sm font-semibold uppercase text-[var(--signature)]">{user?.username?.charAt(0)}</span>
                                 </div>
                             )}
                         </div>
                         {isAuthenticated && mobileUnreadCount > 0 && (
                             <span className="absolute top-1 left-7 w-2 h-2 bg-red-500 rounded-full ring-2 ring-dark shadow-sm z-10" />
                         )}
-                        <span className="text-sm font-semibold text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
+                        <span className="text-[15px] font-medium text-[var(--text-1)] max-w-[120px] truncate">
                             {user?.username}
                         </span>
-                        <ChevronDown className={`w-4 h-4 text-gray-400 group-hover:text-white transition-all duration-300 ${isProfileOpen ? 'rotate-180 text-white' : ''}`} />
+                        <ChevronDown aria-hidden="true" className={`w-4 h-4 text-[var(--text-3)] transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
                     </button>
 
                     {/* Enhanced Dropdown Menu */}

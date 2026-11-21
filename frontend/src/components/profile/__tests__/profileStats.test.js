@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { profileScore } from '../profileStats';
+import { genreLine, profileScore } from '../profileStats';
 
 describe('profileScore', () => {
     it('uses the profile payload when it carries rated_count', () => {
@@ -21,5 +21,28 @@ describe('profileScore', () => {
     it('shows no mean when nothing is rated', () => {
         expect(profileScore({ mean_score: 7.7, rated_count: 0 })).toEqual({ mean: null, rated: 0 });
         expect(profileScore({}, undefined)).toEqual({ mean: null, rated: 0 });
+    });
+});
+
+describe('genreLine', () => {
+    it('reads the top three genres as one sentence-case line', () => {
+        expect(genreLine([
+            { name: 'Fantasy', count: 4 },
+            { name: 'Romance', count: 3 },
+            { name: 'Action', count: 2 },
+            { name: 'Drama', count: 1 },
+        ])).toBe('Mostly fantasy, romance and action');
+    });
+
+    it('handles one or two genres', () => {
+        expect(genreLine([{ name: 'Sci-Fi', count: 2 }])).toBe('Mostly sci-fi');
+        expect(genreLine([{ name: 'Slice of Life', count: 2 }, { name: 'Comedy', count: 1 }]))
+            .toBe('Mostly slice of life and comedy');
+    });
+
+    it('says nothing without genres', () => {
+        expect(genreLine([])).toBeNull();
+        expect(genreLine(undefined)).toBeNull();
+        expect(genreLine([{ name: 'Action', count: 0 }])).toBeNull();
     });
 });

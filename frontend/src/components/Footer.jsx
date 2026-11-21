@@ -4,12 +4,12 @@ import { Link } from 'react-router-dom';
 const linkClass = 'inline-flex min-h-11 items-center gap-1.5 text-[15px] text-[var(--text-2)] transition-colors hover:text-[var(--text-1)]';
 
 /**
- * Set like oddava.me's footer: one hairline, then a quiet row of text links
- * with small icons, and who made it.
+ * Set like oddava.me's footer: a quiet row of text links with small icons,
+ * and who made it. On phones it clears the floating tab bar (M1).
  */
 export default function Footer({ className = '' }) {
     return (
-        <footer className={`pt-16 pb-10 md:pt-24 ${className}`}>
+        <footer className={`pt-16 pb-[calc(var(--tabbar-h)+2.5rem+env(safe-area-inset-bottom,0px))] md:pt-24 md:pb-10 ${className}`}>
             <div className="page-container">
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                     <nav aria-label="Footer" className="flex flex-wrap gap-x-6">

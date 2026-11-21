@@ -48,6 +48,7 @@ function AnimeCard({
     metaText = null,
     showProgress = false,
     variant = 'poster',
+    showStatusDot = true,
 }) {
     const { isAuthenticated } = useAuth();
     const listEntry = userListEntry || anime.user_list_status || null;
@@ -234,7 +235,7 @@ function AnimeCard({
             {/* The poster link is the tab stop; this one repeats it for pointers. */}
             <Link to={href} className="mt-2.5 block" tabIndex={-1} aria-hidden="true">
                 <span className="flex items-start gap-1.5">
-                    {meta && (
+                    {meta && showStatusDot && (
                         <span
                             className="mt-[0.4rem] h-2 w-2 shrink-0 rounded-full"
                             style={{ backgroundColor: meta.color }}
@@ -276,6 +277,7 @@ const arePropsEqual = (prev, next) => {
     if (prev.metaText !== next.metaText) return false;
     if (prev.showProgress !== next.showProgress) return false;
     if (prev.variant !== next.variant) return false;
+    if (prev.showStatusDot !== next.showStatusDot) return false;
     if (prev.anime.episode_count !== next.anime.episode_count) return false;
     if (prev.anime.next_airing_date !== next.anime.next_airing_date) return false;
 

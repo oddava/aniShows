@@ -300,10 +300,12 @@ export default function AnimeDetail() {
                             />
 
                             {/* Phones/tablets: the key facts are already in the title's
-                                meta line, so the full details follow the overview. */}
+                                meta line, so the full details follow the overview. The
+                                next episode is not repeated here: it sits under the
+                                tracking controls in TitleSection. */}
                             {activeTab === DEFAULT_TAB_ID && (
                                 <div className="lg:hidden mt-4">
-                                    <InformationBox anime={anime} accentColor={accentColor} />
+                                    <InformationBox anime={anime} accentColor={accentColor} showNextEpisode={false} />
                                 </div>
                             )}
 

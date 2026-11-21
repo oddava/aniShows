@@ -3,7 +3,8 @@ import FranchiseSection from '../FranchiseSection';
 import MusicSection from '../MusicSection';
 import LazyYouTube from '../LazyYouTube';
 import { getUniqueCharacterRoles } from '../../utils/characterRoles';
-import { meaningfulEpisodeTitle, orderCast } from './format';
+import { meaningfulEpisodeTitle, orderCast, pickKeyStaff } from './format';
+import { getPortraitUrl } from './portraits';
 import { CharacterRow, StaffRow } from './PeopleRows';
 
 const getYouTubeId = (url) => {
@@ -31,18 +32,12 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
     const videoId = getYouTubeId(anime.trailer_url);
     const hasThemes = anime?.theme_songs && anime.theme_songs.some((t) => t.song_type === 'opening' || t.song_type === 'ending');
 
-    const topStaff = useMemo(() => {
-        if (!Array.isArray(staff)) return [];
-        const seen = new Set();
-        return staff
-            .filter((s) => {
-                const name = s?.staff?.name;
-                if (!name || seen.has(name)) return false;
-                seen.add(name);
-                return true;
-            })
-            .slice(0, 4);
-    }, [staff]);
+    // Director, writer, designer, composer: not whoever the catalog lists first
+    // (usually producers, often without a photo).
+    const topStaff = useMemo(
+        () => pickKeyStaff(staff, { hasPortrait: (person) => Boolean(getPortraitUrl(person)) }),
+        [staff],
+    );
 
     const topCharacters = useMemo(() => {
         // Main roles first, voiced ones leading: the people the show is about.

@@ -55,19 +55,19 @@ function Column({ children }) {
     );
 }
 
-/** An own profile with an empty list: one line and two ways to start. */
+/** An own profile with an empty list: one line and two ways to start, side by side. */
 function GettingStarted() {
     return (
         <section>
             <h2 className="section-title">Start your list</h2>
-            <p className="mt-3 max-w-md text-[17px] leading-relaxed text-[var(--text-2)]">
+            <p className="mt-3 max-w-xl text-[17px] leading-relaxed text-[var(--text-2)]">
                 Your profile fills in as you watch: shows, scores, favorites and a year of activity.
+                Coming from MAL or AniList? Bring your list with you.
             </p>
-            <p className="mt-4 text-[17px] text-[var(--text-2)]">
-                <Link to="/import" className="text-link">Import from MAL or AniList</Link>
-                <span className="mx-2 text-[var(--text-3)]">or</span>
-                <Link to="/browse?sort=trending" className="text-link">Find something to watch</Link>
-            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <Link to="/browse?sort=trending" className="btn-primary px-4 text-[15px]">Find something to watch</Link>
+                <Link to="/import" className="text-link text-[15px]">Import a list</Link>
+            </div>
         </section>
     );
 }
@@ -107,7 +107,7 @@ function WatchingRows({ items }) {
 }
 
 function CoverGrid({ children }) {
-    return <ul className="grid grid-cols-4 gap-3 sm:grid-cols-6">{children}</ul>;
+    return <ul className="grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-12">{children}</ul>;
 }
 
 function AnimeCovers({ favorites }) {
@@ -155,29 +155,10 @@ function PersonCovers({ items, itemKey, hrefBuilder }) {
     );
 }
 
-function TopGenres({ genres }) {
-    return (
-        <section>
-            <SectionHead title="Top genres" />
-            <ul>
-                {genres.map((genre) => (
-                    <li
-                        key={genre.name}
-                        className="flex items-baseline justify-between gap-4 py-2.5 text-[15px] "
-                    >
-                        <span className="text-[var(--text-1)]">{genre.name}</span>
-                        <span className="text-[var(--text-2)] tabular">{genre.count}</span>
-                    </li>
-                ))}
-            </ul>
-        </section>
-    );
-}
-
 /**
- * The profile overview, laid out like the home page: who this is on the left
- * (about, links, taste), what they are watching and doing on the right.
- * Sections with nothing to show are left out, not drawn empty.
+ * The profile overview: one column of soft panels, what they are watching
+ * first. Taste (top genres) is a line in the header, so no half-empty side
+ * column. Sections with nothing to show are left out, not drawn empty.
  */
 export default function OverviewTab({
     displayUser,
@@ -208,51 +189,28 @@ export default function OverviewTab({
     const favorites = getFavoritesItems(favsData).slice(0, GRID_ITEMS);
     const characters = getFavoritesItems(characterFavsData).slice(0, GRID_ITEMS);
     const staff = getFavoritesItems(staffFavsData).slice(0, GRID_ITEMS);
-    const genres = (summary?.top_genres || []).slice(0, 5);
     const links = displayUser?.social_links || [];
-    const listIsEmpty = !summaryPending && !(Number(displayUser?.anime_count ?? summary?.total) > 0);
-    const hasHeatmap = Array.isArray(heatmapData) && heatmapData.some((day) => day.count > 0);
+    // The list summary is the source of truth for "is there a list": the
+    // profile's cached anime_count can lag behind a removal.
+    const listTotal = Number(summary?.total ?? displayUser?.anime_count);
+    const listIsEmpty = !summaryPending && !(listTotal > 0);
+    // A year of activity (and its streak) only means something next to a
+    // list; an emptied list must not claim "24 episodes logged this year".
+    const hasHeatmap = !summaryPending
+        && !listIsEmpty
+        && Array.isArray(heatmapData)
+        && heatmapData.some((day) => day.count > 0);
 
-    const left = [];
-    if (listIsEmpty && isOwnProfile) left.push(<GettingStarted key="start" />);
-    if (displayUser?.bio) {
-        left.push(
-            <section key="about">
-                <SectionHead title="About" />
-                <div className="overview-about-scroll overflow-y-auto custom-scrollbar pr-1 text-[15px] text-[var(--text-2)]">
-                    <MarkdownRenderer content={displayUser.bio} className="overview-about-markdown" />
-                </div>
-            </section>,
-        );
-    }
-    if (links.length > 0) {
-        left.push(
-            <section key="links">
-                <SectionHead title="Links" />
-                <ul className="flex flex-wrap gap-x-5 gap-y-2 text-[15px]">
-                    {links.map((link, index) => (
-                        <li key={`${link.platform}-${index}`}>
-                            <a href={link.value} target="_blank" rel="noreferrer" className="text-link">
-                                {link.platform || 'Link'}
-                            </a>
-                        </li>
-                    ))}
-                </ul>
-            </section>,
-        );
-    }
-    if (genres.length > 0) left.push(<TopGenres key="genres" genres={genres} />);
-    if (listIsEmpty && !isOwnProfile) {
-        left.push(
+    const sections = [];
+    if (listIsEmpty) {
+        sections.push(isOwnProfile ? <GettingStarted key="start" /> : (
             <p key="empty" className="text-[17px] text-[var(--text-2)]">
                 Nothing on {displayUser?.username}’s list yet.
-            </p>,
-        );
+            </p>
+        ));
     }
-
-    const right = [];
     if (watching.length > 0) {
-        right.push(
+        sections.push(
             <section key="watching">
                 <SectionHead title="Watching" onSeeAll={() => onTabChange?.('anime_list')} seeAllLabel="See the whole list" />
                 <WatchingRows items={watching} />
@@ -260,7 +218,7 @@ export default function OverviewTab({
         );
     }
     if (favorites.length > 0) {
-        right.push(
+        sections.push(
             <section key="favorites">
                 <SectionHead title="Favorites" onSeeAll={() => onTabChange?.('favorites')} />
                 <AnimeCovers favorites={favorites} />
@@ -268,7 +226,7 @@ export default function OverviewTab({
         );
     }
     if (characters.length > 0) {
-        right.push(
+        sections.push(
             <section key="characters">
                 <SectionHead title="Characters" />
                 <PersonCovers items={characters} itemKey="character" hrefBuilder={(c) => `/character/${c?.id}`} />
@@ -276,7 +234,7 @@ export default function OverviewTab({
         );
     }
     if (staff.length > 0) {
-        right.push(
+        sections.push(
             <section key="staff">
                 <SectionHead title="Voice actors" />
                 <PersonCovers items={staff} itemKey="staff" hrefBuilder={(s) => `/staff/${s?.id}`} />
@@ -284,7 +242,8 @@ export default function OverviewTab({
         );
     }
     // One "Activity" section: the year at a glance, then the latest rows.
-    right.push(
+    // With an empty list the rows stay (they are what happened), the year doesn't.
+    sections.push(
         <ActivityFeed
             key="activity"
             username={targetUsername}
@@ -292,9 +251,14 @@ export default function OverviewTab({
             compact
             header={(
                 <>
-                    <SectionHead title="Activity" onSeeAll={() => onTabChange?.('activity')} seeAllLabel="See all activity" />
+                    <SectionHead
+                        title={listIsEmpty ? 'Recent activity' : 'Activity'}
+                        onSeeAll={() => onTabChange?.('activity')}
+                        seeAllLabel="See all activity"
+                    />
                     {hasHeatmap && (
-                        <div className="mb-6">
+                        // As wide as the year, so the legend sits under the grid's edge.
+                        <div className="mb-6 w-fit max-w-full">
                             <ActivityHeatmap activityData={heatmapData} accentColor={displayUser?.profile_primary_color} />
                         </div>
                     )}
@@ -302,16 +266,35 @@ export default function OverviewTab({
             )}
         />,
     );
+    // Who this is (bio and links) closes the column: on phones and desktop
+    // alike the shows come first.
+    if (displayUser?.bio || links.length > 0) {
+        sections.push(
+            <section key="about">
+                <SectionHead title={displayUser?.bio ? 'About' : 'Links'} />
+                {displayUser?.bio && (
+                    <div className="overview-about-scroll max-w-3xl overflow-y-auto custom-scrollbar pr-1 text-[15px] text-[var(--text-2)]">
+                        <MarkdownRenderer content={displayUser.bio} className="overview-about-markdown" />
+                    </div>
+                )}
+                {links.length > 0 && (
+                    <ul className={`flex flex-wrap gap-x-5 gap-y-2 text-[15px] ${displayUser?.bio ? 'mt-3' : ''}`}>
+                        {links.map((link, index) => (
+                            <li key={`${link.platform}-${index}`}>
+                                <a href={link.value} target="_blank" rel="noreferrer" className="text-link">
+                                    {link.platform || 'Link'}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>,
+        );
+    }
 
     return (
         <div className="animate-tab-content overview-tab pb-8">
-            <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
-                {/* Phones: what you're watching comes before genres and links. */}
-                {left.length > 0 && <div className="order-2 min-w-0 md:order-none"><Column>{left}</Column></div>}
-                <div className={left.length > 0 ? 'min-w-0' : 'min-w-0 md:col-span-2'}>
-                    <Column>{right}</Column>
-                </div>
-            </div>
+            <Column>{sections}</Column>
         </div>
     );
 }

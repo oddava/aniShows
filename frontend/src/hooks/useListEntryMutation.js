@@ -87,11 +87,11 @@ const UNDO_FIELDS = ['status', 'score', 'episodes_watched', 'started_at', 'finis
 export function describeListChange(previous, saved, total = null) {
     if (!saved?.status) return 'Removed from your list';
     if (previous.status !== saved.status) {
-        if (saved.status === 'Completed' && previous.status && saved.episodes_watched > previous.episodes_watched) {
+        if (saved.status === 'Completed' && saved.episodes_watched > (previous.episodes_watched || 0)) {
             // A show still airing completes up to the aired episode (the server caps it).
             return total && saved.episodes_watched < total
                 ? `Completed. Caught up to episode ${saved.episodes_watched}`
-                : 'Completed. Every episode marked watched';
+                : `Completed. All ${saved.episodes_watched} episodes marked watched`;
         }
         return statusChangeMessage(previous.status, saved.status);
     }

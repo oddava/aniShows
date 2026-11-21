@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { Cell, BarChart, Bar, LabelList, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Link } from 'react-router-dom';
 import { getProfileAccentTheme, normalizeProfilePrimaryColor } from '../utils/profileAccent';
 import { LIST_STATUSES } from '../utils/listStatus';
@@ -127,6 +127,9 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                         : toRgba(profileAccentDark, 0.5),
         };
     });
+    // The tallest bar fills the chart: the scale tops out at the largest
+    // count, and each bar carries its own number instead of a y-axis.
+    const maxScoreCount = Math.max(...scoreData.map((entry) => entry.count), 1);
     // Same source as the overview's line: the summary's own rated_count.
     const { mean, rated: ratedCount } = profileScore(null, summary);
 
@@ -197,14 +200,23 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                         <Section title="Scores" note={`Mean ${mean} from ${ratedCount} rated`}>
                             <div className="h-56">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={scoreData} margin={{ top: 8, right: 0, left: -24, bottom: 0 }}>
+                                    <BarChart data={scoreData} margin={{ top: 24, right: 0, left: 0, bottom: 0 }}>
                                         <XAxis dataKey="score" tick={AXIS_TICK} axisLine={false} tickLine={false} dy={8} />
-                                        <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} />
+                                        <YAxis hide domain={[0, maxScoreCount]} allowDataOverflow />
                                         <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                                         <Bar dataKey="count" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                                             {scoreData.map((entry) => (
                                                 <Cell key={entry.score} fill={entry.fill} />
                                             ))}
+                                            <LabelList
+                                                dataKey="count"
+                                                position="top"
+                                                offset={8}
+                                                fill="#a3abb6"
+                                                fontSize={13}
+                                                className="tabular"
+                                                formatter={(value) => (value > 0 ? value : '')}
+                                            />
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>

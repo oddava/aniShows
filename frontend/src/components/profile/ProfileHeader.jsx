@@ -4,7 +4,7 @@ import FollowButton from '../FollowButton';
 import ProfileAvatar from './ProfileAvatar';
 import UserBadges from './UserBadges';
 import { listQueries } from '../../api/queries/lists';
-import { profileScore } from './profileStats';
+import { genreLine, profileScore } from './profileStats';
 
 const plural = (count, one, many = `${one}s`) => `${count.toLocaleString()} ${count === 1 ? one : many}`;
 
@@ -51,6 +51,10 @@ export default function ProfileHeader({
     if (!displayUser) return null;
 
     const parts = isPrivate ? [] : statsLine(displayUser, summary);
+    // Taste in one line ("Mostly fantasy, romance and action"), only once
+    // there is a list for it to describe.
+    const listTotal = Number(summary?.total ?? displayUser.anime_count) || 0;
+    const taste = !isPrivate && listTotal > 0 ? genreLine(summary?.top_genres) : null;
     const following = displayUser.following_count ?? 0;
     const followers = displayUser.followers_count ?? 0;
 
@@ -83,6 +87,12 @@ export default function ProfileHeader({
                         {parts.length > 0 && (
                             <p className="mt-2.5 max-w-2xl text-[17px] leading-relaxed text-[var(--text-2)] tabular">
                                 {parts.join(' · ')}
+                            </p>
+                        )}
+
+                        {taste && (
+                            <p className="mt-1 max-w-2xl text-[17px] leading-relaxed text-[var(--text-2)]">
+                                {taste}
                             </p>
                         )}
 

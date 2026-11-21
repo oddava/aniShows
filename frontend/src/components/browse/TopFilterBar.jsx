@@ -1,31 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import useScrollFade from '../../hooks/useScrollFade';
 import PropTypes from 'prop-types';
-import { Search, X, Filter, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
+import FilterMenu from './FilterMenu';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 const SEARCH_DEBOUNCE_MS = 450;
 const MIN_SEARCH_LENGTH = 2;
-
-const Pill = ({ active, label, onClick }) => (
-    <button
-        onClick={onClick}
-        aria-pressed={Boolean(active)}
-        className={`min-h-10 px-3.5 rounded-lg text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
-            active
-            ? 'bg-[var(--signature-soft)] text-[var(--signature)]'
-            : 'text-[var(--text-2)] hover:bg-white/[0.05] hover:text-[var(--text-1)]'
-        }`}
-    >
-        {label}
-    </button>
-);
-
-Pill.propTypes = {
-    active: PropTypes.bool,
-    label: PropTypes.string.isRequired,
-    onClick: PropTypes.func.isRequired
-};
 
 export default function TopFilterBar({
     genres,
@@ -37,13 +17,10 @@ export default function TopFilterBar({
     onOpenMobileFilters,
     hasActiveFilters,
     adultContentEnabled,
-    onToggleAdultContent,
-    isUpdatingAdultContent,
-    canToggleAdultContent,
+    trailing = null,
 }) {
     const [searchParams, setSearchParams] = useSearchParams();
     const localSearchInputRef = useRef(null);
-    const chipRowRef = useScrollFade();
     const isSearchFocusedRef = useRef(false);
     const inputRef = searchInputRef || localSearchInputRef;
     const currentQuery = searchParams.get('q') || '';
@@ -80,52 +57,25 @@ export default function TopFilterBar({
         return () => clearTimeout(timeout);
     }, [searchInput, currentQuery, searchParams, setSearchParams]);
 
-    const handleSingleToggle = (key, value) => {
+    const setSingle = (key, value) => {
         const newParams = new URLSearchParams(searchParams);
         newParams.delete('exclude_ids');
-        if (newParams.get(key) === value) {
-            newParams.delete(key);
-            if (key === 'season') {
-                newParams.delete('year');
-            }
-        } else {
+        if (value) {
             newParams.set(key, value);
             if (key === 'season' && !newParams.get('year')) {
                 newParams.set('year', new Date().getFullYear().toString());
             }
-        }
-        setSearchParams(newParams);
-    };
-
-    const handleGenreToggle = (genreSlug) => {
-        const newParams = new URLSearchParams(searchParams);
-        newParams.delete('exclude_ids');
-        const updated = currentGenres.includes(genreSlug)
-            ? currentGenres.filter(g => g !== genreSlug)
-            : [...currentGenres, genreSlug];
-            
-        if (updated.length > 0) {
-            newParams.set('genre', updated.join(','));
         } else {
-            newParams.delete('genre');
+            newParams.delete(key);
         }
         setSearchParams(newParams);
     };
 
-    const handleYearStep = (direction) => {
-        const currentYearNum = currentYear ? parseInt(currentYear, 10) : new Date().getFullYear();
-        let newYear = currentYearNum + direction;
-        
-        // Boundaries based on options
-        const maxYear = yearOptions[0];
-        const minYear = yearOptions[yearOptions.length - 1];
-        
-        if (newYear > maxYear) newYear = maxYear;
-        if (newYear < minYear) newYear = minYear;
-
+    const setGenres = (slugs) => {
         const newParams = new URLSearchParams(searchParams);
         newParams.delete('exclude_ids');
-        newParams.set('year', newYear.toString());
+        if (slugs.length > 0) newParams.set('genre', slugs.join(','));
+        else newParams.delete('genre');
         setSearchParams(newParams);
     };
 
@@ -137,21 +87,22 @@ export default function TopFilterBar({
         setSearchParams(newParams);
     };
 
-    // Use a subset of genres for the quick bar to avoid overwhelming it
-    // Every genre is one tap away; the 18+ ones come last.
+    // Every genre is one tap away; the 18+ ones only show with 18+ on (or
+    // while one is selected), and then last.
     const ADULT_GENRES = new Set(['ecchi', 'hentai']);
+    const isAdultGenre = (genre) => ADULT_GENRES.has(String(genre.slug).toLowerCase());
     const quickGenres = !isGenresError && genres
-        ? [...genres].sort((a, b) => Number(ADULT_GENRES.has(String(a.slug).toLowerCase())) - Number(ADULT_GENRES.has(String(b.slug).toLowerCase())))
+        ? [...genres]
+            .filter((genre) => !isAdultGenre(genre) || adultContentEnabled || currentGenres.includes(genre.slug))
+            .sort((a, b) => Number(isAdultGenre(a)) - Number(isAdultGenre(b)))
         : [];
 
     return (
-        <div className="w-full mb-8">
-            {/* Top Anchor Row */}
-            <div className="flex items-center gap-3 w-full mb-4">
-                
-                {/* Search Input - Main Anchor */}
-                <div className="flex-1 relative group">
-                    <Search aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-gray-400 group-focus-within:text-accent transition-colors" />
+        <div className="mb-6 w-full">
+            {/* Search, and on phones the filters sheet next to it. */}
+            <div className="flex items-center gap-2">
+                <div className="group relative flex-1">
+                    <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[var(--text-3)] transition-colors group-focus-within:text-[var(--signature)]" />
                     <input
                         ref={inputRef}
                         type="search"
@@ -162,123 +113,74 @@ export default function TopFilterBar({
                         onChange={(e) => setSearchInput(e.target.value)}
                         onFocus={() => { isSearchFocusedRef.current = true; }}
                         onBlur={() => { isSearchFocusedRef.current = false; }}
-                        placeholder="Search anime..."
-                        className="w-full rounded-xl bg-dark-200 pl-11 pr-10 py-3 text-base text-white transition-colors placeholder:text-gray-500 focus:bg-dark-100 [&::-webkit-search-cancel-button]:appearance-none"
+                        placeholder="Search anime"
+                        className="h-12 w-full rounded-xl bg-white/[0.06] pl-11 pr-11 text-base text-[var(--text-1)] transition-colors placeholder:text-[var(--text-3)] hover:bg-white/[0.08] [&::-webkit-search-cancel-button]:appearance-none"
                     />
                     {searchInput && (
                         <button
                             type="button"
                             onClick={clearSearch}
                             aria-label="Clear search"
-                            className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-dark p-1 text-gray-400 hover:text-white"
+                            className="absolute right-1.5 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--text-3)] hover:bg-white/[0.08] hover:text-[var(--text-1)]"
                         >
-                            <X aria-hidden="true" className="w-3.5 h-3.5" />
+                            <X aria-hidden="true" className="h-4 w-4" />
                         </button>
                     )}
                 </div>
-
-                {/* Compact Year Stepper */}
-                <div className="hidden sm:flex items-center bg-dark-200 rounded-xl p-1 h-[48px]">
-                    <button
-                        type="button"
-                        onClick={() => handleYearStep(-1)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-100 transition-colors"
-                        aria-label="Previous year"
-                    >
-                        <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <span className="w-[4.5rem] text-center text-sm font-semibold text-gray-300 tabular" aria-live="polite">
-                        {currentYear || 'Any year'}
-                    </span>
-                    <button
-                        type="button"
-                        onClick={() => handleYearStep(1)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-100 transition-colors"
-                        aria-label="Next year"
-                    >
-                        <ChevronRight className="w-4 h-4" />
-                    </button>
-                </div>
-
-                {/* Adult Content Toggle (members only; guests would see a dead control) */}
-                {canToggleAdultContent && (
                 <button
                     type="button"
-                    onClick={onToggleAdultContent}
-                    disabled={isUpdatingAdultContent || !canToggleAdultContent}
-                    className={`flex flex-shrink-0 items-center justify-center w-[48px] h-[48px] rounded-xl transition-colors ${
-                        adultContentEnabled
-                            ? 'bg-accent/20 text-accent'
-                            : 'bg-dark-200 text-gray-400 hover:text-white'
-                    } ${isUpdatingAdultContent || !canToggleAdultContent ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    aria-label={
-                        adultContentEnabled ? 'Hide explicit hentai content' : 'Show explicit hentai content'
-                    }
-                    title={
-                        !canToggleAdultContent
-                            ? 'Log in to change explicit content visibility'
-                            : adultContentEnabled
-                                ? 'Explicit hentai: visible'
-                                : 'Explicit hentai: hidden'
-                    }
-                >
-                    {adultContentEnabled ? <Eye aria-hidden="true" className="w-[18px] h-[18px]" /> : <EyeOff aria-hidden="true" className="w-[18px] h-[18px]" />}
-                </button>
-                )}
-
-                {/* Advanced Filters Button */}
-                <button
                     onClick={onOpenMobileFilters}
-                    className="flex-shrink-0 relative w-[48px] h-[48px] flex items-center justify-center rounded-xl bg-dark-200 text-gray-400"
-                    aria-label="Advanced Filters"
+                    className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-[var(--text-2)] transition-colors hover:bg-white/[0.09] hover:text-[var(--text-1)] sm:hidden"
+                    aria-label="Filters"
                 >
-                    <Filter className="w-[18px] h-[18px]" />
-                    {hasActiveFilters && (
-                        <span className="absolute top-3 right-3 w-2 h-2 bg-accent-dark rounded-full border-2 border-dark-200" />
-                    )}
+                    <SlidersHorizontal aria-hidden="true" className="h-[18px] w-[18px]" />
+                    {hasActiveFilters && <span aria-hidden="true" className="absolute right-3 top-3 h-2 w-2 rounded-full bg-[var(--signature)]" />}
                 </button>
             </div>
 
-            {/* Format and season: two short rows that wrap, never scroll (B2).
-                On phones they live in the filters sheet so the posters come first. */}
-            <div className="hidden flex-wrap items-center gap-x-5 gap-y-1 sm:flex">
-                <div role="group" aria-label="Format" className="flex flex-wrap items-center gap-1">
-                    {typeOptions.map(type => (
-                        <Pill
-                            key={type.value}
-                            active={currentType === type.value}
-                            label={type.label}
-                            onClick={() => handleSingleToggle('type', type.value)}
+            {/* One row: filters on the left (desktop), sort and view on the right. */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="hidden flex-wrap items-center gap-2 sm:flex">
+                    <FilterMenu
+                        label="Format"
+                        options={typeOptions}
+                        value={currentType}
+                        onChange={(value) => setSingle('type', value)}
+                    />
+                    <FilterMenu
+                        label="Season"
+                        options={seasonOptions}
+                        value={currentSeason}
+                        onChange={(value) => setSingle('season', value)}
+                    />
+                    <FilterMenu
+                        label="Year"
+                        options={yearOptions.map((year) => ({ value: String(year), label: String(year) }))}
+                        value={currentYear}
+                        onChange={(value) => setSingle('year', value)}
+                    />
+                    {quickGenres.length > 0 && (
+                        <FilterMenu
+                            label="Genres"
+                            multiple
+                            columns={2}
+                            options={quickGenres.map((genre) => ({ value: genre.slug, label: genre.name }))}
+                            value={currentGenres}
+                            onChange={setGenres}
                         />
-                    ))}
+                    )}
+                    <button
+                        type="button"
+                        onClick={onOpenMobileFilters}
+                        className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)]"
+                    >
+                        <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
+                        More filters
+                        {hasActiveFilters && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[var(--signature)]" />}
+                    </button>
                 </div>
-                <div role="group" aria-label="Season" className="flex flex-wrap items-center gap-1">
-                    {seasonOptions.map(season => (
-                        <Pill
-                            key={season.value}
-                            active={currentSeason === season.value}
-                            label={season.label}
-                            onClick={() => handleSingleToggle('season', season.value)}
-                        />
-                    ))}
-                </div>
+                {trailing && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{trailing}</div>}
             </div>
-
-            {/* Genres: one scrolling row with an edge fade where it continues. */}
-            {quickGenres.length > 0 && (
-                <div ref={chipRowRef} role="group" aria-label="Genres" className="scroll-fade mt-1 hidden overflow-x-auto scrollbar-hide sm:block">
-                    <div className="flex min-w-max items-center gap-1">
-                        {quickGenres.map(genre => (
-                            <Pill
-                                key={genre.slug}
-                                active={currentGenres.includes(genre.slug)}
-                                label={genre.name}
-                                onClick={() => handleGenreToggle(genre.slug)}
-                            />
-                        ))}
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
@@ -297,7 +199,5 @@ TopFilterBar.propTypes = {
     onOpenMobileFilters: PropTypes.func,
     hasActiveFilters: PropTypes.bool,
     adultContentEnabled: PropTypes.bool,
-    onToggleAdultContent: PropTypes.func,
-    isUpdatingAdultContent: PropTypes.bool,
-    canToggleAdultContent: PropTypes.bool,
+    trailing: PropTypes.node,
 };

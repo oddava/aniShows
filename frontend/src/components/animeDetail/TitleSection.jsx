@@ -1,4 +1,5 @@
 import TrackingPanel from './TrackingPanel';
+import { NextEpisodePanel } from '../InformationBox';
 import { applyImageFallback } from '../../utils/imageUtils';
 import { capsToSentence } from '../detailTabs/format';
 
@@ -44,7 +45,7 @@ function TitleMeta({ anime }) {
 /**
  * The head of the main column. Small screens: the poster beside the title,
  * then the tracking controls on their own opaque surface (off the banner
- * art), then the synopsis. Large screens: the title and synopsis only; the
+ * art), the next episode, then the synopsis. Large screens: the title and synopsis only; the
  * poster and tracking live in PosterColumn.
  */
 export default function TitleSection({
@@ -104,6 +105,10 @@ export default function TitleSection({
                         onListUpdate={handleListUpdate}
                         compact
                     />
+                    {/* "When's the next one?" is the question this page answers
+                        first, so on phones it follows the controls instead of
+                        waiting below the whole overview. */}
+                    <NextEpisodePanel anime={anime} className="mt-4" />
                 </div>
             )}
 

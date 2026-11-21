@@ -9,7 +9,7 @@ const VIEW_MODES = [
 
 export default function ViewModeToggle({ viewMode, onChange, showLabels = false }) {
   return (
-    <div role="group" aria-label="View" className="flex items-center rounded-lg bg-white/[0.04] p-0.5">
+    <div role="group" aria-label="View" className="flex items-center rounded-lg bg-white/[0.05] p-0.5">
       {VIEW_MODES.map((mode) => {
         const Icon = mode.icon;
         const isActive = viewMode === mode.value;
@@ -20,7 +20,7 @@ export default function ViewModeToggle({ viewMode, onChange, showLabels = false 
             onClick={() => onChange(mode.value)}
             title={mode.label}
             aria-label={`${mode.label} view`}
-            className={`flex h-10 min-w-11 items-center justify-center gap-1.5 px-2.5 rounded-md transition-colors duration-150
+            className={`flex h-9 min-w-10 items-center justify-center gap-1.5 px-2.5 rounded-md transition-colors duration-150
               ${isActive
                 ? 'bg-white/[0.1] text-[var(--text-1)]'
                 : 'text-[var(--text-2)] hover:text-[var(--text-1)]'

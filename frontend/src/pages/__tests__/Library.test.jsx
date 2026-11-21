@@ -63,7 +63,10 @@ describe('/list library (P2)', () => {
         expect(await screen.findByRole('group', { name: 'Episodes watched of One Piece' })).toHaveTextContent('13 / 1180 aired');
         const tabs = screen.getByRole('navigation', { name: 'List status' });
         expect(within(tabs).getByRole('button', { name: /Watching\s*1/ })).toHaveAttribute('aria-current', 'page');
-        expect(within(tabs).getByRole('button', { name: /Planning\s*0/ })).toBeInTheDocument();
+        expect(within(tabs).getByRole('button', { name: /All\s*2/ })).toBeInTheDocument();
+        expect(within(tabs).getByRole('button', { name: /Completed\s*1/ })).toBeInTheDocument();
+        // Empty statuses are left out of the strip.
+        expect(within(tabs).queryByRole('button', { name: /Planning/ })).not.toBeInTheDocument();
     });
 
     it('has a dense table view with inline score editing (T2, T4)', async () => {

@@ -173,6 +173,8 @@ export default function Library() {
                         {tabs.map((item) => {
                             const active = item.value === status;
                             const count = item.value === ALL ? summary?.total : summary?.counts?.[item.value];
+                            // Empty statuses stay out of the way (the URL still opens them).
+                            if (count === 0 && !active && item.value !== ALL && item.value !== 'Watching') return null;
                             return (
                                 <li key={item.value}>
                                     <button
@@ -261,6 +263,7 @@ export default function Library() {
                                         userListEntry={entry}
                                         index={index}
                                         showProgress={entry.status === 'Watching'}
+                                        showStatusDot={status === ALL}
                                         metaText={entry.status === 'Watching' ? null : progressText(entry.episodes_watched, entry.anime)}
                                     />
                                 ))}

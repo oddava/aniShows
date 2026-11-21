@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
@@ -37,16 +37,22 @@ function stateText(state, now) {
  * the episode stepper on the right. A finished show asks for a score and
  * completes in one tap.
  */
-const ContinueRow = memo(function ContinueRow({ entry, now }) {
+const ContinueRow = memo(function ContinueRow({ entry, now, onLive }) {
     const anime = entry.anime || {};
     const { entry: current, setProgress, save, isPending } = useListEntryMutation({
         anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
         entry,
     });
     const href = `/anime/${anime.slug}`;
-    // From the live entry, so "episode 8 is out" changes the moment you +1.
-    const state = continueState({ ...entry, episodes_watched: current.episodes_watched, score: current.score }, now);
+    // From what is on screen (a tap not yet written counts), so "episode 8 is
+    // out" and the headline change the moment you +1.
+    const [draft, setDraft] = useState(null);
+    const watched = draft ?? current.episodes_watched;
+    const state = continueState({ ...entry, episodes_watched: watched, score: current.score }, now);
     const line = stateText(state, now);
+    useEffect(() => {
+        onLive?.(entry.id, { kind: state.kind, delta: (watched || 0) - (entry.episodes_watched || 0) });
+    }, [onLive, entry.id, entry.episodes_watched, state.kind, watched]);
 
     return (
         <li className="-mx-3 grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03] sm:grid-cols-[3rem_minmax(0,1fr)_auto]">
@@ -87,11 +93,64 @@ const ContinueRow = memo(function ContinueRow({ entry, now }) {
                     aired={airedEpisodeCount(anime)}
                     title={anime.title}
                     onCommit={(next) => setProgress(next)}
+                    onDraft={setDraft}
                 />
             )}
         </li>
     );
 });
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const timeOf = (at) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const dayOf = (at) => new Date(at).toLocaleDateString([], { weekday: 'short' });
+
+/** Shows on your list airing before the end of today, by time; else the next one. */
+function tonightFrom(entries, now) {
+    const upcoming = (entries || [])
+        .map((entry) => ({ entry, at: Date.parse(entry.anime?.next_airing_date) }))
+        .filter((row) => Number.isFinite(row.at) && row.at > now)
+        .sort((a, b) => a.at - b.at);
+    const endOfToday = new Date(now);
+    endOfToday.setHours(23, 59, 59, 999);
+    const today = upcoming.filter((row) => row.at <= endOfToday.getTime());
+    return { today, next: today.length ? null : upcoming.find((row) => row.at - now < 7 * DAY_MS) || null };
+}
+
+/** The left column under the headline: what airs tonight, as a timetable. */
+function Tonight({ items, now }) {
+    if (!items.today.length && !items.next) return null;
+    return (
+        <div className="mt-10 md:max-w-sm">
+            <h2 className="text-[15px] font-semibold text-[var(--text-2)]">Tonight</h2>
+            {items.today.length ? (
+                <ul className="mt-2">
+                    {items.today.map(({ entry, at }) => (
+                        <li key={entry.id}>
+                            <Link
+                                to={`/anime/${entry.anime.slug}`}
+                                className="-mx-2 flex min-h-11 items-baseline gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
+                            >
+                                <span className="w-12 shrink-0 text-[15px] font-semibold text-[var(--signature)] tabular">{timeOf(at)}</span>
+                                <span className="min-w-0">
+                                    <span className="block truncate text-[15px] text-[var(--text-1)]">{entry.anime.title}</span>
+                                    <span className="block text-sm text-[var(--text-3)] tabular">
+                                        Episode {entry.anime.next_airing_episode} · in {countdown(at, now)}
+                                    </span>
+                                </span>
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <p className="mt-2 text-[15px] leading-relaxed text-[var(--text-2)]">
+                    Nothing from your list airs today. Next:{' '}
+                    <Link to={`/anime/${items.next.entry.anime.slug}`} className="text-link">{items.next.entry.anime.title}</Link>
+                    , {dayOf(items.next.at)} {timeOf(items.next.at)}.
+                </p>
+            )}
+        </div>
+    );
+}
 
 /**
  * The top of the signed-in home (L2), laid out like oddava.me's front page:
@@ -125,11 +184,17 @@ export default function ContinueSection() {
         orderRef.current = ordered.map((row) => row.entry.id);
         return ordered;
     }, [watching, now]);
-    const readyCount = rows.filter((row) => row.state.kind === 'ready').length;
-    // The next episode to air from your list, for the left column.
-    const nextUp = useMemo(() => rows
-        .filter((row) => row.entry.anime?.next_airing_date && Date.parse(row.entry.anime.next_airing_date) > now)
-        .sort((a, b) => Date.parse(a.entry.anime.next_airing_date) - Date.parse(b.entry.anime.next_airing_date))[0], [rows, now]);
+    // Each row reports its live state, so the headline and the episode count
+    // follow a +1 in the same frame as the row.
+    const [live, setLive] = useState({});
+    const onLive = useCallback((id, value) => {
+        setLive((previous) => (
+            previous[id]?.kind === value.kind && previous[id]?.delta === value.delta ? previous : { ...previous, [id]: value }
+        ));
+    }, []);
+    const readyCount = rows.filter((row) => (live[row.entry.id]?.kind ?? row.state.kind) === 'ready').length;
+    const episodeDelta = rows.reduce((sum, row) => sum + (live[row.entry.id]?.delta || 0), 0);
+    const tonight = useMemo(() => tonightFrom(watching, now), [watching, now]);
     const summaryLine = isPending
         ? ''
         : rows.length === 0
@@ -146,29 +211,10 @@ export default function ContinueSection() {
                     <p className="mt-3 max-w-sm text-[17px] leading-relaxed text-[var(--text-2)]">{summaryLine}</p>
                     {summary?.total > 0 && (
                         <p className="mt-3 text-[15px] text-[var(--text-3)] tabular">
-                            {summary.total} on your list · {summary.episodes_watched} episodes watched
+                            {summary.total} on your list · {(summary.episodes_watched || 0) + episodeDelta} episodes watched
                         </p>
                     )}
-                    {nextUp && (
-                        <Link
-                            to={`/anime/${nextUp.entry.anime.slug}`}
-                            className="mt-8 flex items-center gap-4 rounded-[var(--radius-lg)] bg-[var(--ink-1)] p-4 transition-colors hover:bg-[var(--ink-2)] md:max-w-sm"
-                        >
-                            <img
-                                src={getOptimizedImageUrl(nextUp.entry.anime, 'cover', 'small')}
-                                onError={(event) => applyImageFallback(event, getImageFallbackUrl(nextUp.entry.anime, 'cover'))}
-                                alt=""
-                                className="h-[72px] w-12 shrink-0 rounded-md bg-[var(--ink-2)] object-cover"
-                            />
-                            <span className="min-w-0">
-                                <span className="block text-sm text-[var(--text-2)]">Next up</span>
-                                <span className="block truncate font-semibold text-[var(--text-1)]">{nextUp.entry.anime.title}</span>
-                                <span className="block text-sm text-[var(--signature)] tabular">
-                                    Episode {nextUp.entry.anime.next_airing_episode} in {countdown(Date.parse(nextUp.entry.anime.next_airing_date), now)}
-                                </span>
-                            </span>
-                        </Link>
-                    )}
+                    <Tonight items={tonight} now={now} />
                 </div>
 
                 <div className="panel">
@@ -195,7 +241,7 @@ export default function ContinueSection() {
                         <>
                             <ul>
                                 {rows.map(({ entry }) => (
-                                    <ContinueRow key={entry.id} entry={entry} now={now} />
+                                    <ContinueRow key={entry.id} entry={entry} now={now} onLive={onLive} />
                                 ))}
                             </ul>
                             <Link to="/list" className="text-link mt-5 inline-block text-[15px]">All of my list</Link>

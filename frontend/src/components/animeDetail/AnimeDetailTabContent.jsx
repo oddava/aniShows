@@ -43,7 +43,10 @@ export default function AnimeDetailTabContent({ activeTab, anime, accentColor, i
                     anime={anime}
                     accentColor={accentColor}
                     characters={anime.characters_preview}
-                    staff={anime.staff_preview}
+                    // The first staff page once it arrives (nothing while it
+                    // loads, so producers never flash in); the inline preview
+                    // if that request fails.
+                    staff={staffLoading ? [] : (staff.length > 0 ? staff : anime.staff_preview)}
                     episodes={displayEpisodes}
                 />
             )}

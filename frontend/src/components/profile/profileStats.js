@@ -21,3 +21,19 @@ export function profileScore(user, summary) {
         : null;
     return { mean, rated };
 }
+
+/**
+ * Taste in one sentence-case line from the summary's top genres:
+ * "Mostly fantasy, romance and action". Null when there is nothing to say.
+ */
+export function genreLine(genres, limit = 3) {
+    const names = (Array.isArray(genres) ? genres : [])
+        .filter((genre) => genre?.name && Number(genre.count ?? 1) > 0)
+        .slice(0, limit)
+        .map((genre) => String(genre.name).toLowerCase());
+    if (names.length === 0) return null;
+    const list = names.length === 1
+        ? names[0]
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    return `Mostly ${list}`;
+}

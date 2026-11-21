@@ -204,12 +204,6 @@
     text-wrap: balance;
   }
 
-  /* Phones: content never hides under the floating tab bar (M1). */
-  @media (width < 48rem) {
-    body {
-      padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
-    }
-  }
 
   select option {
     background: var(--color-dark-100);
@@ -254,7 +248,10 @@
   textarea:focus-visible,
   select:focus-visible,
   .input:focus-visible {
-    box-shadow: 0 0 0 1px var(--color-focus-ring-strong), 0 0 0 4px var(--color-focus-ring) !important;
+    /* Owner ruling: no rings or glow on fields. Focus lifts the fill. */
+    box-shadow: none !important;
+    background-color: rgb(255 255 255 / 0.09) !important;
+    caret-color: var(--signature);
   }
 
   .richtext-editor-textarea:focus-visible,

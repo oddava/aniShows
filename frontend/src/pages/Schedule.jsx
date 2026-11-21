@@ -1,8 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Eye, EyeOff } from 'lucide-react';
-import { authApi } from '../api/client';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import AnimeCard from '../components/AnimeCard';
 import { ScheduleGridSkeleton } from '../components/skeletons';
@@ -19,8 +17,7 @@ import {
   hasAiringDate,
   resolveTimeZone,
 } from '../utils/dateUtils';
-import { animeKeys, scheduleKeys, scheduleQueries } from '../api/queries/anime';
-import { profileKeys } from '../api/queries/user';
+import { scheduleQueries } from '../api/queries/anime';
 
 // Day names for display
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -239,10 +236,8 @@ const WeekAside = ({ isAuthenticated, isLoading, items, startOfToday, selectedOf
 // Main Schedule Page Component
 export default function Schedule() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const queryClient = useQueryClient();
-  const { isAuthenticated, user, refreshProfile } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const adultContentEnabled = Boolean(user?.show_adult_content);
-  const [isUpdatingAdultContent, setIsUpdatingAdultContent] = useState(false);
   const preferredTimezone = user?.preferred_timezone;
   const timezoneLabel = useMemo(() => getTimezoneLabel(preferredTimezone), [preferredTimezone]);
 
@@ -273,35 +268,6 @@ export default function Schedule() {
     if (myListOnly) params.set('mine', '1');
     setSearchParams(params, { replace: true });
   }, [selectedDay, myListOnly, setSearchParams]);
-
-  const handleToggleAdultContent = useCallback(async () => {
-    if (!isAuthenticated || isUpdatingAdultContent) return;
-
-    const nextValue = !adultContentEnabled;
-    setIsUpdatingAdultContent(true);
-    try {
-      const response = await authApi.updateProfile({ show_adult_content: nextValue });
-      const updatedProfile = response?.data;
-      if (updatedProfile && typeof updatedProfile === 'object') {
-        await refreshProfile(updatedProfile);
-        queryClient.setQueryData(profileKeys.own, updatedProfile);
-      } else {
-        await refreshProfile();
-      }
-      queryClient.removeQueries({ queryKey: scheduleKeys.all });
-      queryClient.removeQueries({ queryKey: animeKeys.all });
-      queryClient.invalidateQueries({ queryKey: profileKeys.own });
-      queryClient.invalidateQueries({ queryKey: profileKeys.all });
-    } finally {
-      setIsUpdatingAdultContent(false);
-    }
-  }, [
-    adultContentEnabled,
-    isAuthenticated,
-    isUpdatingAdultContent,
-    queryClient,
-    refreshProfile,
-  ]);
 
   // Fetch schedule data
   const { data: rawScheduleDays, isLoading, isFetching, error, refetch } = useQuery({
@@ -403,31 +369,6 @@ export default function Schedule() {
               <div className="text-sm text-[var(--text-2)]">
                 {selectedDayAnime.length} {selectedDayAnime.length === 1 ? 'episode' : 'episodes'}
               </div>
-              {/* Members only: guests would just see a disabled control. */}
-              {isAuthenticated && (
-              <button
-                onClick={handleToggleAdultContent}
-                type="button"
-                disabled={isUpdatingAdultContent}
-                className={`flex h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors ${
-                  adultContentEnabled
-                    ? 'bg-[var(--signature-soft)] text-[var(--signature)]'
-                    : 'text-[var(--text-2)] hover:bg-white/[0.06] hover:text-white'
-                } ${!isAuthenticated || isUpdatingAdultContent ? 'opacity-60 cursor-not-allowed' : ''}`}
-                aria-label="Show 18+ titles"
-                aria-pressed={adultContentEnabled}
-                title={
-                  !isAuthenticated
-                    ? 'Log in to change explicit content visibility'
-                    : adultContentEnabled
-                      ? 'Explicit hentai: visible'
-                      : 'Explicit hentai: hidden'
-                }
-              >
-                {adultContentEnabled ? <Eye aria-hidden="true" className="w-[18px] h-[18px]" /> : <EyeOff aria-hidden="true" className="w-[18px] h-[18px]" />}
-                <span>18+</span>
-              </button>
-              )}
             </div>
           </div>
 

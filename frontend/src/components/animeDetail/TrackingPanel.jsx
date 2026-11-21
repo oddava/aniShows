@@ -58,9 +58,12 @@ export default function TrackingPanel({
         return saved;
     };
 
+    // The score prompt after Completed opens in place (not as a second
+    // popover): the stepper above it stays visible, showing where you stopped.
     const handleStatus = async (value) => {
+        if (value === 'Completed' && !entry.score) setJustCompleted(true);
         const saved = report(await setStatus(value));
-        if (saved?.status === 'Completed' && !saved.score) setJustCompleted(true);
+        if (!saved || saved.status !== 'Completed') setJustCompleted(false);
     };
 
     const handleScore = async (value) => {
@@ -87,7 +90,6 @@ export default function TrackingPanel({
                     title={anime.title}
                     pending={isPending}
                     onSelect={handleStatus}
-                    onScore={(value) => handleScore(value)}
                     onRemove={async () => report(await remove())}
                 />
                 <button

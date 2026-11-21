@@ -31,6 +31,7 @@ export default function ProgressStepper({
     commitDelay = 450,
     title = '',
     className = '',
+    onDraft,
 }) {
     const [draft, setDraft] = useState(null);
     const draftRef = useRef(null);
@@ -45,6 +46,16 @@ export default function ProgressStepper({
     useEffect(() => {
         onCommitRef.current = onCommit;
     }, [onCommit]);
+
+    // Tell the parent what is on screen during a burst (null when settled), so
+    // text around the stepper can follow the tap before the write lands.
+    const onDraftRef = useRef(onDraft);
+    useEffect(() => {
+        onDraftRef.current = onDraft;
+    }, [onDraft]);
+    useEffect(() => {
+        onDraftRef.current?.(draft);
+    }, [draft]);
 
     // Leaving the page mid-burst still saves the taps (they were acknowledged).
     useEffect(() => () => {
