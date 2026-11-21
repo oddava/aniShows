@@ -11,8 +11,8 @@ import { statusesFromEntries, tidyActivities } from './activityTidy';
 // The overview shows a handful of rows; it asks for more than that because
 // tidying (dropped churn, merged runs) can leave fewer rows than events.
 const COMPACT_ROWS = 6;
-const COMPACT_FETCH = 20;
-const PAGE_SIZE = 16;
+const COMPACT_FETCH = 40;
+const PAGE_SIZE = 50;
 // When a page tidies down to a few rows, fetch on by itself (up to this many
 // pages) until there are enough rows to read.
 const AUTO_PAGES = 4;
@@ -285,6 +285,9 @@ export default function ActivityFeed({ username, isPrivate, isOwner = false, com
     // Most of what loaded was churn: look further back before showing a short
     // feed (or "nothing yet").
     const wantedRows = compact ? COMPACT_ROWS : MIN_ROWS;
+    // While it looks further back by itself, the feed shows skeletons, not a
+    // single row that then jumps.
+    const autoPaging = hasNextPage && rawCount > 0 && activities.length < wantedRows && pagesLoaded < AUTO_PAGES;
     useEffect(() => {
         if (isFetching || !hasNextPage || rawCount === 0) return;
         if (activities.length < wantedRows && pagesLoaded < AUTO_PAGES) fetchNextPage();
@@ -333,7 +336,7 @@ export default function ActivityFeed({ username, isPrivate, isOwner = false, com
 
     return (
         <section className="space-y-6">
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by status">
+            <div className="scroll-fade -mx-4 flex items-center gap-2 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Filter by status">
                 {FILTER_OPTIONS.map((filter) => {
                     const isActive = filterType === filter.value;
                     return (
@@ -359,7 +362,7 @@ export default function ActivityFeed({ username, isPrivate, isOwner = false, com
                 )}
             </div>
 
-            {isLoading && activities.length === 0 && (
+            {(isLoading || autoPaging) && activities.length < wantedRows && (isLoading || isFetching || autoPaging) && (
                 <ul aria-hidden="true">
                     {Array.from({ length: 5 }).map((_, index) => (
                         <li key={index} className="flex items-center gap-4 py-3">
@@ -381,7 +384,7 @@ export default function ActivityFeed({ username, isPrivate, isOwner = false, com
                 <EmptyState filterType={filterType} />
             )}
 
-            {!isLoading && !isError && visibleActivityCount > 0 && (
+            {!isLoading && !autoPaging && !isError && visibleActivityCount > 0 && (
                 <div className={`space-y-8 transition-opacity duration-200 ${isFilterUpdating ? 'opacity-60' : 'opacity-100'}`}>
                     {visibleDateGroups.map((group) => (
                         <div key={group.key}>
@@ -398,7 +401,7 @@ export default function ActivityFeed({ username, isPrivate, isOwner = false, com
                 </div>
             )}
 
-            {hasNextPage && !isError && (
+            {hasNextPage && !autoPaging && !isError && (
                 <button
                     type="button"
                     onClick={() => fetchNextPage()}

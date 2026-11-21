@@ -22,7 +22,10 @@ export default function GuestLanding() {
 
     // Today's episodes by time (aired ones say so), topped up with the next
     // ones tomorrow and after rather than "Time TBA" rows.
-    const rows = useMemo(() => airingPreview(scheduleDays, undefined, now, PREVIEW_ROWS), [scheduleDays, now]);
+    const rows = useMemo(
+        () => airingPreview(scheduleDays, undefined, now, PREVIEW_ROWS + 3).filter((row) => !row.aired).slice(0, PREVIEW_ROWS),
+        [scheduleDays, now],
+    );
     const allToday = rows.length > 0 && rows.every((row) => row.offset === 0);
 
     return (

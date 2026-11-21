@@ -40,6 +40,7 @@ export default function QuickAdd({
     aired = null,
     quiet = false,
     compact = false,
+    labelFrom = null,
 }) {
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState('status');
@@ -141,7 +142,7 @@ export default function QuickAdd({
                 aria-label={label}
                 title={variant === 'icon' ? (meta ? meta.label : 'Add to list') : undefined}
                 className={variant === 'chip'
-                    ? `inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-lg ${compact && meta ? 'w-11 justify-center' : 'px-3'} text-sm font-medium transition-colors duration-150 touch-manipulation ${meta ? (quiet ? 'text-[var(--text-2)] hover:bg-white/[0.06] hover:text-[var(--text-1)]' : 'bg-white/[0.06] text-[var(--text-1)] hover:bg-white/[0.1]') : 'bg-[var(--signature-soft)] text-[var(--signature)] hover:bg-[rgb(141_177_255/0.2)]'}`
+                    ? `inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-lg ${compact && meta ? 'w-11 justify-center' : labelFrom === 'sm' ? 'max-sm:w-11 max-sm:justify-center sm:px-3' : 'px-3'} text-sm font-medium transition-colors duration-150 touch-manipulation ${meta ? (quiet ? 'text-[var(--text-2)] hover:bg-white/[0.06] hover:text-[var(--text-1)]' : 'bg-white/[0.06] text-[var(--text-1)] hover:bg-white/[0.1]') : 'bg-[var(--signature-soft)] text-[var(--signature)] hover:bg-[rgb(141_177_255/0.2)]'}`
                     : variant === 'button'
                     ? `flex h-11 w-full items-center gap-2.5 rounded-[var(--radius-md)] px-3.5 text-sm font-semibold transition-colors duration-150 touch-manipulation ${meta ? 'bg-white/[0.07] text-white hover:bg-white/[0.11]' : 'bg-[var(--signature)] text-[var(--on-signature)] hover:bg-[var(--signature-hover)]'}`
                     : `quick-add relative flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[rgb(27_31_37/0.88)] text-[var(--text-1)] backdrop-blur-sm transition-colors duration-150 hover:bg-[rgb(40_46_54/0.95)] after:absolute after:-inset-1.5 after:content-[''] touch-manipulation ${meta && !compact ? 'px-2.5 text-[12.5px] font-medium' : 'w-8'}`}
@@ -159,7 +160,7 @@ export default function QuickAdd({
                         ) : (
                             <Plus aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
                         )}
-                        <span>{meta ? meta.label : 'Add'}</span>
+                        <span className={labelFrom === 'sm' ? 'hidden sm:inline' : undefined}>{meta ? meta.label : 'Add'}</span>
                     </>
                 ) : variant === 'button' ? (
                     <>

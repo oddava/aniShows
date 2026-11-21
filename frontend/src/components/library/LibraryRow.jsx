@@ -118,7 +118,7 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = fals
                 <ScoreCell score={entry.score} title={title} disabled={isPending} onChange={(value) => setScore(value)} />
             </div>
 
-            <div className="col-start-3 row-start-2 justify-self-end sm:col-start-auto sm:row-start-auto sm:justify-self-stretch">
+            <div className={`col-start-3 row-start-2 justify-self-end sm:col-start-auto sm:row-start-auto ${quietStatus ? 'sm:order-1 sm:justify-self-end' : 'sm:justify-self-stretch'}`}>
                 <QuickAdd
                     variant="chip"
                     quiet={quietStatus}

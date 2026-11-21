@@ -275,8 +275,17 @@ export default function Library() {
                                 <span>Title</span>
                                 <span>Progress</span>
                                 <span>Score</span>
-                                <span>{status === ALL ? 'Status' : ''}</span>
-                                <span>Updated</span>
+                                {status === ALL ? (
+                                    <>
+                                        <span>Status</span>
+                                        <span>Updated</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>Updated</span>
+                                        <span />
+                                    </>
+                                )}
                             </div>
                             {showSkeleton ? (
                                 Array.from({ length: 8 }, (_, i) => <RowSkeleton key={i} />)

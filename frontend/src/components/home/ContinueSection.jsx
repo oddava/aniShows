@@ -97,14 +97,15 @@ const ContinueRow = memo(function ContinueRow({ entry, now, onLive }) {
  * time order. One that already aired reads "15:04 · Episode 9 is out".
  */
 function Tonight({ items, now, timezone }) {
-    // Only when something from the list airs today; Continue and Your week
-    // already say what comes next.
-    if (!items.today.length) return null;
+    // Only episodes still to come today: what is already out is in Continue
+    // and Your week, so each show is named once.
+    const upcoming = items.today.filter((item) => !item.aired);
+    if (!upcoming.length) return null;
     return (
         <div className="mt-10 md:max-w-sm">
             <h2 className="text-[15px] font-semibold text-[var(--text-2)]">Tonight</h2>
             <ul className="mt-2">
-                {items.today.map(({ anime, at, episode, aired }) => {
+                {upcoming.map(({ anime, at, episode, aired }) => {
                     const ep = episode ? `Episode ${episode}` : 'New episode';
                     return (
                         <li key={anime.id}>
@@ -202,7 +203,7 @@ export default function ContinueSection() {
                 </div>
 
                 <div className="panel">
-                    <h2 id="continue-heading" className="section-title mb-2">Continue watching</h2>
+                    <h2 id="continue-heading" className="section-title mb-2">{!isPending && rows.length === 0 ? 'Start watching' : 'Continue watching'}</h2>
                     {isPending ? (
                         <ul aria-hidden="true">
                             {Array.from({ length: 3 }, (_, i) => (

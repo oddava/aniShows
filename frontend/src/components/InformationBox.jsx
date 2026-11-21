@@ -133,7 +133,7 @@ export default function InformationBox({ anime, className = '', showNextEpisode 
                 <h2 id={`info-${anime.id}`} className="section-title mb-3">Details</h2>
                 <dl>
                     {anime.anime_type && <InfoRow label="Type" value={anime.anime_type} />}
-                    <InfoRow label="Episodes" value={anime.episode_count || 'Unknown'} />
+                    <InfoRow label="Episodes" value={anime.episode_count || (Number(anime.next_airing_episode) > 1 ? `Ongoing · ${Number(anime.next_airing_episode) - 1} aired` : 'Unknown')} />
                     {anime.duration_minutes > 0 && (
                         <InfoRow label="Duration" value={`${anime.duration_minutes} min`} />
                     )}

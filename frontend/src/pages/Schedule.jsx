@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ChevronDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import AnimeCard from '../components/AnimeCard';
@@ -202,7 +203,7 @@ const WeekAside = ({ isAuthenticated, isLoading, items, startOfToday, selectedOf
         <ul className="-mx-2 mt-2">
           {items.map(({ offset, anime }) => {
             const date = addDays(startOfToday, offset);
-            const day = offset === 0 ? 'Today' : DAY_SHORT[date.getUTCDay()];
+            const day = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : DAY_SHORT[date.getUTCDay()];
             const time = hasAiringDate(anime)
               ? formatDate(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preferredTimezone)
               : null;
@@ -214,7 +215,7 @@ const WeekAside = ({ isAuthenticated, isLoading, items, startOfToday, selectedOf
                   onClick={() => onSelectDay(offset)}
                   className={`flex min-h-11 w-full items-baseline gap-3 rounded-lg px-2 py-2 text-left transition-colors duration-150 ${active ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
                 >
-                  <span className={`w-12 shrink-0 text-sm tabular ${offset === 0 ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>{day}</span>
+                  <span className={`w-[4.5rem] shrink-0 text-sm tabular ${offset === 0 ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>{day}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-[var(--text-1)]">{anime.title}</span>
                     <span className="block text-xs text-[var(--text-3)] tabular">
@@ -376,7 +377,20 @@ export default function Schedule() {
             <ScheduleGridSkeleton count={10} />
           ) : selectedDayAnime.length > 0 ? (
             <div className="flex flex-col gap-4">
-              {agendaGroups(selectedDayAnime, isAuthenticated).map((group) => (
+              {agendaGroups(selectedDayAnime, isAuthenticated).map((group, _index, groups) => (
+                group.untimed && groups.length > 1 ? (
+                  <details key={group.title} className="panel group/untimed">
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[15px] text-[var(--text-2)] [&::-webkit-details-marker]:hidden">
+                      <span>{group.items.length} more · time not announced</span>
+                      <ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-open/untimed:rotate-180" />
+                    </summary>
+                    <div className="mt-1">
+                      {group.items.map((anime, index) => (
+                        <AnimeCard key={anime.id} variant="row" anime={anime} index={index} showAiringCountdown metaText={null} />
+                      ))}
+                    </div>
+                  </details>
+                ) : (
                 <section key={group.title} aria-label={group.title} className="panel">
                   {group.showTitle && (
                     <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-semibold text-[var(--text-2)]">
@@ -398,6 +412,7 @@ export default function Schedule() {
                     ))}
                   </div>
                 </section>
+                )
               ))}
             </div>
           ) : (
@@ -416,7 +431,7 @@ export default function Schedule() {
           )}
           </div>
 
-          <aside aria-label="Your week" className="lg:pt-[3.75rem]">
+          <aside aria-label="Your week" className="hidden lg:block lg:pt-[3rem]">
             <WeekAside
               isAuthenticated={isAuthenticated}
               isLoading={isLoading}

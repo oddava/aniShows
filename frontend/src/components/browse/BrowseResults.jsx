@@ -94,7 +94,7 @@ export default function BrowseResults({
   // List View
   if (viewMode === 'list') {
     return (
-      <div className="space-y-3">
+      <div className="panel !px-2 !py-2 sm:!px-3">
         {isError ? (
           errorState
         ) : isLoading ? (

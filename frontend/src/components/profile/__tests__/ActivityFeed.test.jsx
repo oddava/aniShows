@@ -37,7 +37,7 @@ describe('ActivityFeed filters', () => {
         activityApi.getFeed.mockResolvedValueOnce({ data: { next: null, results: [activity(1, { activity_type: 'added', new_status: 'Watching', activity_description: 'Added Show 1 to Watching' })] } });
         renderFeed();
         await screen.findByText('Show 1');
-        expect(activityApi.getFeed).toHaveBeenLastCalledWith({ username: 'kiyo', page: 1, page_size: 16 });
+        expect(activityApi.getFeed).toHaveBeenLastCalledWith({ username: 'kiyo', page: 1, page_size: 50 });
 
         // The server already filtered: rows are shown as returned (no client-side refilter).
         activityApi.getFeed.mockResolvedValueOnce({ data: { next: null, results: [activity(2), activity(3, { new_status: null, old_status: 'Completed', activity_type: 'removed', activity_description: 'Removed Show 3 from list' })] } });
@@ -45,7 +45,7 @@ describe('ActivityFeed filters', () => {
         fireEvent.click(completed);
 
         await waitFor(() => expect(activityApi.getFeed).toHaveBeenLastCalledWith({
-            username: 'kiyo', page: 1, page_size: 16, status: 'Completed',
+            username: 'kiyo', page: 1, page_size: 50, status: 'Completed',
         }));
         expect(await screen.findByText('Show 2')).toBeInTheDocument();
         // Show 3 was removed and is no longer on the list: visitors don't see it.

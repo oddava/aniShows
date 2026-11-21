@@ -27,7 +27,7 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
     const href = `/anime/${anime.slug}`;
 
     return (
-        <div className="group relative flex items-center gap-3 sm:gap-5 rounded-[var(--radius-lg)] bg-[var(--ink-1)] p-2.5 sm:p-3 transition-colors hover:bg-[var(--ink-2)]">
+        <div className="group relative flex items-center gap-3 sm:gap-5 rounded-[var(--radius-md)] p-2 sm:p-3 transition-colors hover:bg-white/[0.03]">
             <Link to={href} tabIndex={-1} aria-hidden="true" className="relative shrink-0">
                 <img
                     src={imageUrl}
@@ -78,7 +78,8 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                     onSelect={(value) => setStatus(value)}
                     onScore={(value) => setScore(value)}
                     onRemove={() => remove()}
-                    className="relative flex min-w-[8.25rem] shrink-0 justify-end self-center"
+                    className="relative flex shrink-0 justify-end self-center sm:min-w-[8.25rem]"
+                    labelFrom="sm"
                     variant="chip"
                 />
             )}

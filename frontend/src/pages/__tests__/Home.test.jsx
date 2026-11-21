@@ -257,7 +257,7 @@ describe('Home - Continue and the airing ribbon (members)', () => {
             authState.user = { username: 'megumin' };
         });
 
-        it('says the episode is out in Continue, Tonight and Your week', async () => {
+        it('says the episode is out in Continue and Your week; Tonight lists what is still to come', async () => {
             listApi.getAll.mockResolvedValue({
                 data: {
                     results: [
@@ -274,7 +274,8 @@ describe('Home - Continue and the airing ribbon (members)', () => {
             expect(await within(section).findByText('Episode 9 is out')).toBeInTheDocument();
             expect(within(section).getByText('1 of your shows has a new episode waiting.')).toBeInTheDocument();
             // Tonight: in time order, the aired one included.
-            expect(within(section).getByText('10:04 · Episode 9 is out')).toBeInTheDocument();
+            // Already out: named in Continue, not again under Tonight.
+            expect(within(section).queryByText('10:04 · Episode 9 is out')).not.toBeInTheDocument();
             expect(within(section).getByText('12:43 · Episode 4 · in 2h 8m')).toBeInTheDocument();
             expect(within(section).queryByText(/Nothing from your list airs today/)).not.toBeInTheDocument();
 
@@ -300,7 +301,7 @@ describe('Home - Continue and the airing ribbon (members)', () => {
             expect(within(section).queryByRole('heading', { name: 'Tonight' })).not.toBeInTheDocument();
         });
 
-        it('fills the guest panel with upcoming episodes, aired ones labelled', async () => {
+        it('fills the guest panel with upcoming episodes and leaves out aired ones', async () => {
             authState.isAuthenticated = false;
             window.localStorage.setItem('AniShows.userTimezonePreference', 'UTC');
             animeApi.getSchedule.mockResolvedValue({
@@ -317,8 +318,8 @@ describe('Home - Continue and the airing ribbon (members)', () => {
 
             render(<Home />, { wrapper: createWrapper() });
 
-            expect(await screen.findByText('Aired 10:04')).toBeInTheDocument();
-            expect(screen.getByText('Tomorrow 09:43')).toBeInTheDocument();
+            expect(await screen.findByText('Tomorrow 09:43')).toBeInTheDocument();
+            expect(screen.queryByText('Aired 10:04')).not.toBeInTheDocument();
             expect(screen.queryByText('Time TBA')).not.toBeInTheDocument();
             window.localStorage.removeItem('AniShows.userTimezonePreference');
         });

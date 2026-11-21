@@ -233,6 +233,14 @@
 }
 
 /* Card quick-add: hidden until hover/focus with a pointer, always shown on touch (T1). */
+/* Dense grids on touch screens: no + stamped on every poster (the status
+   dot stays; adding happens from the poster's page). */
+@media (hover: none), (pointer: coarse) {
+  .hover-reveal:not(:has([aria-expanded="true"])) {
+    display: none;
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .card-reveal {
     opacity: 0;
@@ -257,12 +265,6 @@
     opacity: 1;
   }
 
-  /* Touch screens have no hover: the status chip and + are always there. */
-  @media (hover: none) {
-    .card-reveal {
-      opacity: 1;
-    }
-  }
 }
 
 /* A value that just changed (stepper count, score) settles in. */
