@@ -1,87 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Play, Pause, Star, ChevronRight, Plus, Check, Loader2, X } from 'lucide-react';
+import { ChevronRight, Download, X } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
-import { listApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import logger from '../utils/logger';
-import { formatRelativeTime } from '../utils/dateUtils';
 import SEO from '../components/SEO';
 import SectionHeader from '../components/common/SectionHeader';
 import ErrorState from '../components/common/ErrorState';
 import HeroSearch from '../components/home/HeroSearch';
-import AnimeMediaImage from '../components/common/AnimeMediaImage';
-import { animeQueries, patchAnimeListStatus, scheduleQueries } from '../api/queries/anime';
-import { listKeys, userQueries } from '../api/queries/user';
+import ContinueSection from '../components/home/ContinueSection';
+import AiringRibbon from '../components/home/AiringRibbon';
+import { animeQueries } from '../api/queries/anime';
 import { recommendationMutations, recommendationQueries } from '../api/queries/recommendations';
-
-const UP_NEXT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-const UP_NEXT_LIMIT = 6;
-
-/**
- * Watching entries from the (already cached, per-user enriched) schedule
- * payload whose next episode airs within the next 7 days, soonest first.
- */
-function selectUpNext(scheduleDays, now = Date.now()) {
-    const seen = new Set();
-    return Object.values(scheduleDays || {})
-        .flatMap((items) => (Array.isArray(items) ? items : []))
-        .filter((anime) => {
-            if (!anime || seen.has(anime.id)) return false;
-            if (anime.user_list_status?.status !== 'Watching') return false;
-            const airsAt = Date.parse(anime.next_airing_date);
-            if (!Number.isFinite(airsAt) || airsAt < now || airsAt > now + UP_NEXT_WINDOW_MS) return false;
-            seen.add(anime.id);
-            return true;
-        })
-        .sort((a, b) => Date.parse(a.next_airing_date) - Date.parse(b.next_airing_date))
-        .slice(0, UP_NEXT_LIMIT);
-}
 
 export default function Home() {
     const { isAuthenticated } = useAuth();
-    const queryClient = useQueryClient();
-    const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
-    const [heroListLoading, setHeroListLoading] = useState(false);
-    const [locallyAddedIds, setLocallyAddedIds] = useState(new Set());
-    const [heroPaused, setHeroPaused] = useState(false);
-    const [heroStopped, setHeroStopped] = useState(false);
     const revealRefs = useRef([]);
     const observer = useRef(null);
 
-    // Hero carousel data is fetched only for authenticated users
     const {
-        data: memberTrending,
-        isLoading: memberTrendingLoading,
-        isError: memberTrendingError,
-        refetch: refetchMemberTrending,
+        data: trending,
+        isLoading: trendingLoading,
+        isError: trendingError,
+        refetch: refetchTrending,
     } = useQuery({
-        ...animeQueries.trending('member-home'),
-        staleTime: 1000 * 60 * 15, // 15 minutes
-        gcTime: 1000 * 60 * 30,
-        priority: 'high', // Load this first
-        enabled: isAuthenticated,
-    });
-
-    // Guests still get sections data even though the hero is static
-    const {
-        data: guestTrending,
-        isLoading: guestTrendingLoading,
-        isError: guestTrendingError,
-        refetch: refetchGuestTrending,
-    } = useQuery({
-        ...animeQueries.trending('guest-home'),
+        ...animeQueries.trending(isAuthenticated ? 'member-home' : 'guest-home'),
         staleTime: 1000 * 60 * 15,
         gcTime: 1000 * 60 * 30,
-        enabled: !isAuthenticated,
     });
-
-    const trending = isAuthenticated ? memberTrending : guestTrending;
-    const trendingLoading = isAuthenticated ? memberTrendingLoading : guestTrendingLoading;
-    const trendingError = isAuthenticated ? memberTrendingError : guestTrendingError;
-    const refetchTrending = isAuthenticated ? refetchMemberTrending : refetchGuestTrending;
-    const heroCarousel = memberTrending?.slice(0, 5) || [];
 
     const { data: topRated, isLoading: topRatedLoading } = useQuery({
         ...animeQueries.topRated(),
@@ -89,54 +36,6 @@ export default function Home() {
         gcTime: 1000 * 60 * 60,
         retry: false,
     });
-
-    // Hero Carousel Logic - optimized with useCallback
-    // Auto-advance, paused while the hero is hovered/focused, and off entirely
-    // for people who ask for reduced motion.
-    useEffect(() => {
-        if (!isAuthenticated || heroCarousel.length === 0 || heroPaused || heroStopped) return;
-        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-        const interval = setInterval(() => {
-            setCurrentHeroIndex((prev) => (prev + 1) % heroCarousel.length);
-        }, 8000);
-        return () => clearInterval(interval);
-    }, [isAuthenticated, heroCarousel.length, heroPaused, heroStopped]);
-
-    useEffect(() => {
-        if (!isAuthenticated) return;
-        if (heroCarousel.length === 0 || currentHeroIndex < heroCarousel.length) return;
-        setCurrentHeroIndex(0);
-    }, [isAuthenticated, heroCarousel.length, currentHeroIndex]);
-
-    const heroAnime = heroCarousel.length > 0 ? heroCarousel[currentHeroIndex] : null;
-
-    const isHeroInList = heroAnime && (
-        !!heroAnime.user_list_status?.status ||
-        locallyAddedIds.has(heroAnime.id)
-    );
-
-    const handleAddToList = useCallback(async () => {
-        if (!isAuthenticated || !heroAnime || heroListLoading || isHeroInList) return;
-
-        setHeroListLoading(true);
-        try {
-            const response = await listApi.add({ anime_id: heroAnime.id, status: 'Plan to Watch' });
-            setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
-            patchAnimeListStatus(queryClient, heroAnime.id, {
-                id: response?.data?.id ?? null,
-                status: 'Plan to Watch',
-                episodes_watched: 0,
-            });
-            queryClient.invalidateQueries({ queryKey: listKeys.all });
-        } catch (error) {
-            if (error.response?.status === 400 || error.response?.status === 409) {
-                setLocallyAddedIds(prev => new Set(prev).add(heroAnime.id));
-            }
-            logger.error('Error adding to list:', error);
-        } finally {
-            setHeroListLoading(false);
-        }
-    }, [heroAnime, isAuthenticated, heroListLoading, isHeroInList, queryClient]);
 
     // Optimized IntersectionObserver with refs
     useEffect(() => {
@@ -182,27 +81,19 @@ export default function Home() {
         <>
             <SEO page="home" />
             <div className="min-h-screen home-page">
-                {isAuthenticated && (memberTrendingLoading || heroCarousel.length > 0) ? (
-                    <MemberCarouselHero
-                        heroCarousel={heroCarousel}
-                        currentHeroIndex={currentHeroIndex}
-                        onSelectHero={setCurrentHeroIndex}
-                        onPauseChange={setHeroPaused}
-                        isStopped={heroStopped}
-                        onToggleStopped={() => setHeroStopped((prev) => !prev)}
-                        heroAnime={heroAnime}
-                        heroListLoading={heroListLoading}
-                        isHeroInList={isHeroInList}
-                        onAddToList={handleAddToList}
-                    />
+                {isAuthenticated ? (
+                    <MemberHeader />
                 ) : (
-                    <GuestIntroHero showAuthLinks={!isAuthenticated} />
+                    <GuestIntroHero showAuthLinks />
                 )}
 
                 {/* Main Content Area */}
-                <div className="relative space-y-12 md:space-y-16 pt-6 pb-10 md:py-14">
-                    {isAuthenticated && <UpNextSection />}
-                    {isAuthenticated && <CurrentlyWatchingSection />}
+                <div className={`relative space-y-12 md:space-y-16 pb-10 md:pb-14 ${isAuthenticated ? 'pt-2' : 'pt-6 md:pt-14'}`}>
+                    {isAuthenticated && <ContinueSection />}
+                    {isAuthenticated && <AiringRibbon />}
+
+                    {/* Recommended For You Section */}
+                    <RecommendedForYouSection revealRef={setRevealRef} />
 
                     <AnimeShelf
                         revealRef={setRevealRef}
@@ -214,9 +105,6 @@ export default function Home() {
                         onRetry={refetchTrending}
                         emptyText="No trending anime right now."
                     />
-
-                    {/* Recommended For You Section */}
-                    <RecommendedForYouSection revealRef={setRevealRef} />
 
                     <AnimeShelf
                         revealRef={setRevealRef}
@@ -292,6 +180,25 @@ function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, i
     );
 }
 
+/** Signed in: today's date and the promise; the page is about tonight. */
+function MemberHeader() {
+    const { user } = useAuth();
+    const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    return (
+        <header className="px-4 md:px-6 pt-20 md:pt-28 pb-6">
+            <div className="max-w-7xl mx-auto">
+                <p className="flex items-center gap-2 text-sm text-gray-400">
+                    <span aria-hidden="true" className="h-2 w-2 rounded-[2px] bg-[var(--signature)]" />
+                    {today}
+                </p>
+                <h1 className="page-title mt-2">
+                    {user?.username ? `Welcome back, ${user.username}` : 'Welcome back'}
+                </h1>
+            </div>
+        </header>
+    );
+}
+
 function GuestIntroHero({ showAuthLinks = true }) {
     const formRef = useRef(null);
 
@@ -353,235 +260,6 @@ function GuestIntroHero({ showAuthLinks = true }) {
         </section>
     );
 }
-
-function MemberCarouselHero({
-    heroCarousel,
-    currentHeroIndex,
-    onSelectHero,
-    onPauseChange,
-    isStopped,
-    onToggleStopped,
-    heroAnime,
-    heroListLoading,
-    isHeroInList,
-    onAddToList,
-}) {
-    const year = heroAnime && (heroAnime.start_date || heroAnime.release_date)
-        ? new Date(heroAnime.start_date || heroAnime.release_date).getFullYear()
-        : null;
-
-    return (
-        <section
-            aria-roledescription="carousel"
-            aria-label="Trending now"
-            className="relative h-[50vh] min-h-[380px] sm:h-[62vh] sm:min-h-[460px] max-h-[680px] flex items-end pb-6 sm:pb-14 overflow-hidden"
-            onMouseEnter={() => onPauseChange(true)}
-            onMouseLeave={() => onPauseChange(false)}
-            onFocus={() => onPauseChange(true)}
-            onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) onPauseChange(false);
-            }}
-        >
-            <div aria-hidden="true" className="absolute inset-0 bg-dark">
-                {heroCarousel.map((anime, index) => (
-                    <div
-                        key={anime.id}
-                        className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentHeroIndex ? 'opacity-100' : 'opacity-0'}`}
-                    >
-                        <AnimeMediaImage
-                            anime={anime}
-                            kind="banner"
-                            size="large"
-                            alt=""
-                            responsive
-                            sizes="100vw"
-                            loading={index === 0 ? 'eager' : 'lazy'}
-                            fetchPriority={index === 0 ? 'high' : 'auto'}
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
-                ))}
-                <div className="absolute inset-0 bg-dark/60" />
-                <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/75 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-r from-dark/80 via-dark/20 to-transparent" />
-            </div>
-
-            <div className="relative z-10 w-full px-4 md:px-6">
-                <div className="max-w-7xl mx-auto">
-                {heroAnime && (
-                    <div key={heroAnime.id} className="max-w-2xl page-enter" aria-live={isStopped ? 'polite' : 'off'}>
-                        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-[1.05] mb-3 line-clamp-2">
-                            {heroAnime.title}
-                        </h1>
-
-                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm font-medium text-gray-300 mb-4 sm:mb-5 tabular">
-                            {heroAnime.rating && (
-                                <span className="flex items-center gap-1.5 text-yellow-400 font-bold">
-                                    <Star aria-hidden="true" className="w-4 h-4 fill-current" />
-                                    <span className="sr-only">Rating </span>{heroAnime.rating}
-                                </span>
-                            )}
-                            {heroAnime.anime_type && (
-                                <>
-                                    {heroAnime.rating && <span aria-hidden="true" className="text-gray-600">•</span>}
-                                    <span className="text-gray-100 uppercase tracking-widest text-[11px] sm:text-xs font-bold">{heroAnime.anime_type}</span>
-                                </>
-                            )}
-                            {year && (
-                                <>
-                                    <span aria-hidden="true" className="text-gray-600">•</span>
-                                    <span className="text-gray-200">{year}</span>
-                                </>
-                            )}
-                            {heroAnime.genres?.length > 0 && (
-                                <>
-                                    <span aria-hidden="true" className="hidden sm:inline text-gray-600">•</span>
-                                    <span className="w-full sm:w-auto text-gray-400 line-clamp-1">{heroAnime.genres.slice(0, 3).map(g => g.name).join(', ')}</span>
-                                </>
-                            )}
-                        </div>
-
-                        <p className="text-sm sm:text-base md:text-lg text-gray-300 mb-6 sm:mb-8 max-w-2xl line-clamp-2 md:line-clamp-3 leading-relaxed">
-                            {heroAnime.synopsis}
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-3">
-                            <Link
-                                to={`/anime/${heroAnime.slug}`}
-                                className="btn-primary min-w-[140px] px-6 py-2.5 sm:px-7 sm:py-3"
-                            >
-                                <Play aria-hidden="true" className="w-4 h-4 fill-current" />
-                                View Details
-                            </Link>
-                            {isHeroInList ? (
-                                <span className="inline-flex items-center gap-2 px-2 text-sm font-semibold text-gray-300">
-                                    <Check aria-hidden="true" className="w-4 h-4 text-emerald-400" />
-                                    In your list
-                                </span>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={onAddToList}
-                                    disabled={heroListLoading}
-                                    aria-busy={heroListLoading}
-                                    className="btn-secondary min-w-[140px] px-6 py-2.5 sm:px-7 sm:py-3"
-                                >
-                                    {heroListLoading
-                                        ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />
-                                        : <Plus aria-hidden="true" className="w-4 h-4" />}
-                                    Add to List
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {heroCarousel.length > 1 && (
-                    <div className="mt-7 sm:mt-9 flex items-center gap-1.5" role="group" aria-label="Choose slide">
-                        <button
-                            type="button"
-                            onClick={onToggleStopped}
-                            aria-label={isStopped ? 'Resume slideshow' : 'Pause slideshow'}
-                            aria-pressed={isStopped}
-                            className="mr-1.5 w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                        >
-                            {isStopped
-                                ? <Play aria-hidden="true" className="w-3 h-3 fill-current" />
-                                : <Pause aria-hidden="true" className="w-3 h-3 fill-current" />}
-                        </button>
-                        {heroCarousel.map((anime, index) => (
-                            <button
-                                key={anime.id}
-                                type="button"
-                                onClick={() => {
-                                    onSelectHero(index);
-                                    if (!isStopped) onToggleStopped();
-                                }}
-                                aria-label={`Show ${anime.title}`}
-                                aria-current={index === currentHeroIndex}
-                                className="group py-2 px-0.5"
-                            >
-                                <span
-                                    className={`block h-1 rounded-full transition-[width,background-color] duration-300 ${index === currentHeroIndex ? 'w-6 bg-white/80' : 'w-3 bg-white/25 group-hover:bg-white/45'}`}
-                                />
-                            </button>
-                        ))}
-                    </div>
-                )}
-                </div>
-            </div>
-        </section>
-    );
-}
-
-// Members: what airs next from the shows they're watching. Reuses the
-// schedule query (same key as the Schedule page), so it costs no new request
-// once either page has loaded. Hidden while loading and when empty.
-function UpNextSection() {
-    const { isAuthenticated, user } = useAuth();
-    const adultContentEnabled = Boolean(user?.show_adult_content);
-    const preferredTimezone = user?.preferred_timezone;
-
-    const { data: scheduleDays, isLoading } = useQuery({
-        ...scheduleQueries.week(isAuthenticated, adultContentEnabled),
-        staleTime: 5 * 60 * 1000,
-        enabled: isAuthenticated,
-    });
-
-    const upNext = useMemo(() => selectUpNext(scheduleDays), [scheduleDays]);
-
-    if (isLoading || upNext.length === 0) return null;
-
-    return (
-        <AnimeShelf
-            title="Up next"
-            viewAllTo="/schedule?mine=1"
-            items={upNext}
-            renderItem={(anime, index) => {
-                const when = formatRelativeTime(anime.next_airing_date, preferredTimezone);
-                return (
-                    <AnimeCard
-                        anime={anime}
-                        index={index}
-                        metaText={anime.next_airing_episode ? `EP ${anime.next_airing_episode} · ${when}` : when}
-                    />
-                );
-            }}
-        />
-    );
-}
-
-function CurrentlyWatchingSection() {
-    const { isAuthenticated } = useAuth();
-
-    const { data: watching, isLoading } = useQuery({
-        ...userQueries.watching(),
-        staleTime: 1000 * 60 * 2,
-        retry: false,
-        enabled: isAuthenticated, // Only fetch if authenticated
-    });
-
-    if (isLoading || !watching || watching.length === 0) return null;
-
-    return (
-        <AnimeShelf
-            title="Currently Watching"
-            viewAllTo="/profile/anime_list"
-            items={watching}
-            renderItem={(entry) => (
-                <AnimeCard
-                    anime={entry.anime}
-                    userListEntry={entry}
-                    showProgress
-                    metaText={entry.anime?.episode_count
-                        ? `Ep ${entry.episodes_watched || 0} / ${entry.anime.episode_count}`
-                        : `Ep ${entry.episodes_watched || 0}`}
-                />
-            )}
-        />
-    );
-}
-
 function getRecommendationsSubtitle(recommendations) {
     // Users without personal picks yet get generic trending items from the
     // backend; those say nothing about the user's taste.
@@ -643,7 +321,7 @@ function RecommendedForYouSection({ revealRef }) {
             revealRef={revealRef}
             title="Recommended for You"
             subtitle={subtitle}
-            items={recommendations}
+            items={recommendations?.slice(0, 6)}
             isLoading={isLoading}
             renderItem={(rec, index) => (
                 <div className="relative h-full group/rec">

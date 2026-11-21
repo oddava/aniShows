@@ -7,8 +7,8 @@
 }
 
 .reveal {
-  opacity: 0;
-  transition: opacity 220ms ease-out;
+  /* Content is never hidden waiting for a scroll position. */
+  opacity: 1;
 }
 
 .reveal.active {

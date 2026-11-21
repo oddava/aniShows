@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import Home from '../Home';
-import { animeApi, recommendationsApi } from '../../api/client';
+import { animeApi, listApi, recommendationsApi } from '../../api/client';
 
 const authState = {
     isAuthenticated: false,
@@ -108,19 +108,17 @@ describe('Home', () => {
         });
     });
 
-    it('renders member carousel hero for authenticated users', async () => {
+    it('opens on Continue for members, not a trending carousel (L2)', async () => {
         authState.isAuthenticated = true;
+        authState.user = { username: 'megumin' };
+        listApi.getAll.mockResolvedValue({ data: { results: [] } });
 
         render(<Home />, { wrapper: createWrapper() });
 
-        await waitFor(() => {
-            expect(screen.getByText('View Details')).toBeInTheDocument();
-        });
-
-        expect(screen.getByText('Add to List')).toBeInTheDocument();
-        // The banner is decorative (the title is the heading), so it has empty alt text.
-        expect(screen.getAllByTestId('anime-media-image').length).toBeGreaterThan(0);
-        expect(screen.getByRole('heading', { level: 1, name: 'Demon Slayer' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1, name: 'Welcome back, megumin' })).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Continue' })).toBeInTheDocument();
+        expect(await screen.findByText('Nothing in progress')).toBeInTheDocument();
+        expect(screen.queryByText('View Details')).not.toBeInTheDocument();
     });
 
     it('shows guest intro hero while auth is loading', () => {
@@ -145,7 +143,7 @@ describe('Home', () => {
     });
 });
 
-describe('Home - Up next (members)', () => {
+describe('Home - Continue and the airing ribbon (members)', () => {
     const HOUR = 60 * 60 * 1000;
     const inFuture = (ms) => new Date(Date.now() + ms).toISOString();
     const entry = (id, title, nextAiringDate, status = 'Watching', episode = 5) => ({
@@ -169,18 +167,38 @@ describe('Home - Up next (members)', () => {
         authState.isAuthenticated = false;
     });
 
-    it('lists Watching shows airing within 7 days, soonest first', async () => {
+    it('puts shows with a new episode first, then what airs soonest, with +1 on each', async () => {
+        listApi.getAll.mockResolvedValue({
+            data: {
+                results: [
+                    { id: 11, status: 'Watching', episodes_watched: 3, score: 0, updated_at: '2026-11-20T10:00:00Z', anime: { id: 1, slug: 'soon', title: 'Up To Date', episode_count: 12, next_airing_episode: 4, next_airing_date: inFuture(2 * HOUR + 21 * 60 * 1000) } },
+                    { id: 12, status: 'Watching', episodes_watched: 7, score: 0, updated_at: '2026-11-19T10:00:00Z', anime: { id: 2, slug: 'ready', title: 'Behind By One', episode_count: 12, next_airing_episode: 9, next_airing_date: inFuture(26 * HOUR) } },
+                    { id: 13, status: 'Watching', episodes_watched: 12, score: 0, updated_at: '2026-11-18T10:00:00Z', anime: { id: 3, slug: 'done', title: 'All Watched', episode_count: 12 } },
+                ],
+            },
+        });
+
+        render(<Home />, { wrapper: createWrapper() });
+
+        const section = await screen.findByRole('region', { name: 'Continue' });
+        await within(section).findByText('Behind By One');
+        const titles = within(section).getAllByRole('link').map((link) => link.textContent).filter((text) => text && text !== 'My List');
+        expect(titles).toEqual(['Behind By One', 'All Watched', 'Up To Date']);
+        expect(within(section).getByText('EP 8 is out')).toBeInTheDocument();
+        expect(within(section).getByText(/^2h 2[01]m$/)).toBeInTheDocument();
+        expect(within(section).getByText('1 show has a new episode waiting.')).toBeInTheDocument();
+        expect(within(section).getByRole('button', { name: 'One episode more of Behind By One' })).toBeInTheDocument();
+        // A finished show asks for a score instead of +1.
+        expect(within(section).getByRole('radiogroup', { name: 'Score All Watched' })).toBeInTheDocument();
+    });
+
+    it('shows your listed shows across the week in the airing ribbon', async () => {
+        listApi.getAll.mockResolvedValue({ data: { results: [] } });
         animeApi.getSchedule.mockResolvedValue({
             data: {
                 days: {
                     monday: [
-                        entry(1, 'Two Days Away', inFuture(2 * 24 * HOUR + 5 * 60 * 1000), 'Watching', 8),
-                        entry(2, 'Planned Show', inFuture(HOUR), 'Plan to Watch'),
-                        entry(3, 'Ten Days Away', inFuture(10 * 24 * HOUR)),
-                    ],
-                    tuesday: [
-                        entry(4, 'Three Hours Away', inFuture(3 * HOUR + 5 * 60 * 1000), 'Watching', 5),
-                        entry(5, 'Already Aired', new Date(Date.now() - HOUR).toISOString()),
+                        entry(4, 'Three Hours Away', inFuture(3 * HOUR), 'Watching', 5),
                         entry(6, 'Not Listed', inFuture(HOUR), null),
                     ],
                 },
@@ -189,27 +207,22 @@ describe('Home - Up next (members)', () => {
 
         render(<Home />, { wrapper: createWrapper() });
 
-        const shelf = await screen.findByRole('region', { name: 'Up next' });
-        const cards = within(shelf).getAllByTestId('anime-card');
-        expect(cards.map((card) => card.firstChild.textContent)).toEqual(['Three Hours Away', 'Two Days Away']);
-        expect(within(shelf).getByText('EP 5 · in 3h')).toBeInTheDocument();
-        expect(within(shelf).getByText('EP 8 · in 2 days')).toBeInTheDocument();
-
-        // Above Currently Watching / Trending in the page order.
-        const trending = screen.getByRole('region', { name: 'Trending Now' });
-        expect(shelf.compareDocumentPosition(trending) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        const ribbon = await screen.findByRole('region', { name: 'Your week' });
+        expect(await within(ribbon).findByText('Three Hours Away')).toBeInTheDocument();
+        expect(within(ribbon).queryByText('Not Listed')).not.toBeInTheDocument();
     });
 
-    it('is hidden when nothing on the list airs soon', async () => {
+    it('hides the ribbon when nothing on the list airs this week', async () => {
+        listApi.getAll.mockResolvedValue({ data: { results: [] } });
         animeApi.getSchedule.mockResolvedValue({
-            data: { days: { monday: [entry(2, 'Planned Show', inFuture(HOUR), 'Plan to Watch')] } },
+            data: { days: { monday: [entry(6, 'Not Listed', inFuture(HOUR), null)] } },
         });
 
         render(<Home />, { wrapper: createWrapper() });
 
         await waitFor(() => expect(animeApi.getSchedule).toHaveBeenCalledTimes(1));
         await screen.findByText('Trending Now');
-        expect(screen.queryByRole('region', { name: 'Up next' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'Your week' })).not.toBeInTheDocument();
     });
 
     it('is not requested for guests', async () => {
@@ -219,7 +232,7 @@ describe('Home - Up next (members)', () => {
 
         await screen.findByText('Trending Now');
         expect(animeApi.getSchedule).not.toHaveBeenCalled();
-        expect(screen.queryByRole('region', { name: 'Up next' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'Your week' })).not.toBeInTheDocument();
     });
 });
 
