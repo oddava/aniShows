@@ -3,6 +3,7 @@ import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { Loader } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getPortraitSrcSet, getPortraitUrl } from './portraits';
+import Portrait from '../ui/Portrait';
 
 const CHARACTER_VIRTUALIZE_THRESHOLD = 80;
 const CHARACTER_GRID_ROW_ESTIMATE = 84;
@@ -84,16 +85,14 @@ function useElementOffsetTop(ref, itemCount, columns) {
     return offsetTop;
 }
 
-const PortraitImage = memo(function PortraitImage({ entity, alt, className }) {
+const PortraitImage = memo(function PortraitImage({ entity, alt }) {
     return (
-        <img
+        <Portrait
             src={getPortraitUrl(entity)}
             srcSet={getPortraitSrcSet(entity)}
             sizes="64px"
             alt={alt}
-            loading="lazy"
-            decoding="async"
-            className={className}
+            className="h-full w-full"
         />
     );
 });

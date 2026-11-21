@@ -5,6 +5,7 @@ import MusicSection from './MusicSection';
 import { getUniqueCharacterRoles } from '../utils/characterRoles';
 import { getPortraitSrcSet, getPortraitUrl } from './detailTabs/portraits';
 import { CharacterGrid, RelationLoadMoreButton } from './detailTabs/CharacterGrid';
+import Portrait from './ui/Portrait';
 
 // The Overview tab lives in its own file; it is re-exported so the anime page
 // keeps importing every tab from here.
@@ -143,15 +144,7 @@ export function StaffTab({
                         className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 hover:border-gray-700 transition-colors"
                     >
                         <div className="w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0">
-                            <img
-                                src={getPortraitUrl(staffRole.staff)}
-                                srcSet={getPortraitSrcSet(staffRole.staff)}
-                                sizes="96px"
-                                alt={staffRole.staff.name}
-                                loading="lazy"
-                                decoding="async"
-                                className="w-full h-full object-cover saturate-[0.85]"
-                            />
+                            <Portrait src={getPortraitUrl(staffRole.staff)} srcSet={getPortraitSrcSet(staffRole.staff)} sizes="96px" alt={staffRole.staff.name} className="h-full w-full" />
                         </div>
                         <div className="flex flex-col min-w-0 pr-4">
                             <h4 className="font-medium text-gray-300 text-[13px] truncate">

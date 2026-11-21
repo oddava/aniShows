@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import ActivityFeed from './ActivityFeed';
 import ActivityHeatmap from '../ActivityHeatmap';
+import Portrait from '../ui/Portrait';
 import AnimeMediaImage from '../common/AnimeMediaImage';
 import { activityQueries, characterFavoriteQueries, favoriteQueries, insightsQueries, listQueries, staffFavoriteQueries } from '../../api/queries/user';
 
@@ -235,12 +236,7 @@ function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, na
                                     to={hrefBuilder(item)}
                                     className="block relative aspect-[2/3] bg-dark-200 rounded-lg overflow-hidden"
                                 >
-                                    <img
-                                        src={item?.image || '/placeholder-avatar.png'}
-                                        alt={item?.[nameKey]}
-                                        loading="lazy"
-                                        className="w-full h-full object-cover"
-                                    />
+                                    <Portrait src={item?.image} alt={item?.[nameKey]} sizes="120px" className="h-full w-full" />
                                 </Link>
 
                                 <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">

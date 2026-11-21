@@ -1,9 +1,8 @@
 // Portrait image helpers shared by the detail tabs.
 
-export const PROFILE_PLACEHOLDER = '/placeholder-avatar.png';
-
+/** The best small picture for a person or character, or '' (ui/Portrait draws a silhouette). */
 export const getPortraitUrl = (entity) => (
-    entity?.image_small || entity?.image_medium || entity?.image || PROFILE_PLACEHOLDER
+    entity?.image_small || entity?.image_medium || entity?.image || ''
 );
 
 export const getPortraitSrcSet = (entity) => {

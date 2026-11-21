@@ -6,6 +6,7 @@ import LazyYouTube from '../LazyYouTube';
 import StatusDistribution from '../StatusDistribution';
 import { getUniqueCharacterRoles } from '../../utils/characterRoles';
 import { getPortraitSrcSet, getPortraitUrl } from './portraits';
+import Portrait from '../ui/Portrait';
 
 export default function OverviewTab({ anime, accentColor, characters, staff, episodes }) {
     // Extract YouTube video ID
@@ -62,15 +63,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
                                 className="flex bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 min-h-[64px]"
                             >
                                 <Link to={`/character/${role.character.id}`} className="w-14 sm:w-16 flex-shrink-0">
-                                    <img
-                                        src={getPortraitUrl(role.character)}
-                                        srcSet={getPortraitSrcSet(role.character)}
-                                        sizes="64px"
-                                        alt={role.character.name}
-                                        loading="lazy"
-                                        decoding="async"
-                                        className="w-full h-full object-cover saturate-[0.85]"
-                                    />
+                                    <Portrait src={getPortraitUrl(role.character)} srcSet={getPortraitSrcSet(role.character)} sizes="64px" alt={role.character.name} className="h-full w-full" />
                                 </Link>
 
                                 <div className="flex-1 grid grid-cols-2 gap-2 p-2 sm:px-3 sm:py-2 min-w-0">
@@ -99,15 +92,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
 
                                 {role.voice_actor && (
                                     <Link to={`/staff/${role.voice_actor.id}`} className="w-14 sm:w-16 flex-shrink-0 border-l border-white/5">
-                                        <img
-                                            src={getPortraitUrl(role.voice_actor)}
-                                            srcSet={getPortraitSrcSet(role.voice_actor)}
-                                            sizes="64px"
-                                            alt={role.voice_actor.name}
-                                            loading="lazy"
-                                            decoding="async"
-                                            className="w-full h-full object-cover saturate-[0.85]"
-                                        />
+                                        <Portrait src={getPortraitUrl(role.voice_actor)} srcSet={getPortraitSrcSet(role.voice_actor)} sizes="64px" alt={role.voice_actor.name} className="h-full w-full" />
                                     </Link>
                                 )}
                             </div>
@@ -129,15 +114,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
                                 className="flex items-center gap-4 bg-dark-200/40 rounded-xl overflow-hidden border border-white/5 hover:border-gray-700 transition-colors"
                             >
                                 <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
-                                    <img
-                                        src={getPortraitUrl(staffRole.staff)}
-                                        srcSet={getPortraitSrcSet(staffRole.staff)}
-                                        sizes="80px"
-                                        alt={staffRole.staff.name}
-                                        loading="lazy"
-                                        decoding="async"
-                                        className="w-full h-full object-cover saturate-[0.85]"
-                                    />
+                                    <Portrait src={getPortraitUrl(staffRole.staff)} srcSet={getPortraitSrcSet(staffRole.staff)} sizes="80px" alt={staffRole.staff.name} className="h-full w-full" />
                                 </div>
                                 <div className="flex flex-col min-w-0 pr-4">
                                     <span className="font-medium text-gray-300 text-[13px] truncate">

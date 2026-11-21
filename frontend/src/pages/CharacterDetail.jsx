@@ -10,6 +10,7 @@ import { characterKeys, characterQueries } from '../api/queries/anime';
 import { characterFavoriteKeys } from '../api/queries/user';
 import { groupRolesByAnime, markupToPlainText, toSafeHttpUrl } from '../utils/characterRoles';
 import { SITE_ORIGIN, absoluteMediaUrl } from '../utils/imageUtils';
+import Portrait from '../components/ui/Portrait';
 
 // Prolific characters can have hundreds of appearances; show this many first.
 const INITIAL_APPEARANCES = 60;
@@ -219,11 +220,7 @@ export default function CharacterDetail() {
                     <div className="mb-8 grid grid-cols-[112px_1fr] sm:grid-cols-[176px_1fr] gap-x-4 sm:gap-x-8 gap-y-6 sm:mb-10">
                         <div className="col-start-1 row-start-1 sm:row-span-2 mx-auto sm:mx-0">
                             <div className="h-40 w-28 sm:h-60 sm:w-44 overflow-hidden rounded-lg bg-dark-200">
-                                <img
-                                    src={character.image || '/placeholder-avatar.png'}
-                                    alt={character.name}
-                                    className="h-full w-full object-cover"
-                                />
+                                <Portrait src={character.image} alt={character.name} sizes="176px" loading="eager" className="h-full w-full" />
                             </div>
                         </div>
 
