@@ -58,7 +58,7 @@ export default function NotificationPreferences() {
         body = (
             <>
                 <p className="text-sm leading-relaxed text-gray-400">
-                    Stop the emails aniShows sends when a new episode of a show you’re watching airs.
+                    Stop the emails AniShows sends when a new episode of a show you’re watching airs.
                 </p>
                 <button
                     type="button"

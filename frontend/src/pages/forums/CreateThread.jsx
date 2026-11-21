@@ -115,7 +115,7 @@ const CreateThread = () => {
     return (
         <div className="min-h-screen">
             <Helmet>
-                <title>Create Thread | aniShows Forums</title>
+                <title>Create Thread | AniShows Forums</title>
             </Helmet>
 
             <div className="max-w-[1440px] w-full mx-auto px-4 md:px-8 py-8">

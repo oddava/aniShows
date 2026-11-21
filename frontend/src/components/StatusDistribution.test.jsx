@@ -70,18 +70,18 @@ describe('StatusDistribution sources (D-3)', () => {
             <StatusDistribution
                 anime={{ status_distribution: { watching: 999 } }}
                 distribution={{ watching: 3, completed: 1 }}
-                sourceLabel="On aniShows"
+                sourceLabel="On AniShows"
             />
         );
 
-        expect(screen.getByText('On aniShows')).toBeInTheDocument();
+        expect(screen.getByText('On AniShows')).toBeInTheDocument();
         expect(screen.getByText('3')).toBeInTheDocument();
         expect(screen.queryByText('999')).not.toBeInTheDocument();
     });
 });
 
 describe('StatsTab', () => {
-    it('shows aniShows members next to AniList members when the payload has them', () => {
+    it('shows AniShows members next to AniList members when the payload has them', () => {
         render(
             <StatsTab
                 accentColor="#fff"
@@ -93,14 +93,14 @@ describe('StatsTab', () => {
         );
 
         expect(screen.getByText('On AniList')).toBeInTheDocument();
-        expect(screen.getByText('On aniShows')).toBeInTheDocument();
+        expect(screen.getByText('On AniShows')).toBeInTheDocument();
     });
 
     it('shows only the AniList card while site counts are absent', () => {
         render(<StatsTab accentColor="#fff" anime={{ status_distribution: { watching: 1 } }} />);
 
         expect(screen.getByText('On AniList')).toBeInTheDocument();
-        expect(screen.queryByText('On aniShows')).not.toBeInTheDocument();
+        expect(screen.queryByText('On AniShows')).not.toBeInTheDocument();
     });
 
     it('computes total members from site status distribution values only', () => {

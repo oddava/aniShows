@@ -241,7 +241,7 @@ const ForumThreadDetail = () => {
     return (
         <>
             <Helmet>
-                <title>{thread.title} | aniShows Forums</title>
+                <title>{thread.title} | AniShows Forums</title>
                 <meta name="description" content={(thread.content || thread.excerpt || '').substring(0, 150)} />
             </Helmet>
             <div className="container mx-auto px-4 pt-8 pb-24 max-w-6xl min-h-screen">

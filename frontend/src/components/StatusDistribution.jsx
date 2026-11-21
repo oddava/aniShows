@@ -11,7 +11,7 @@ const STATUSES = [
 /**
  * Members per list status. By default it shows AniList's counts
  * (`anime.status_distribution`, decision D-3) labelled "On AniList"; pass
- * `distribution` and `sourceLabel` for another source (aniShows' own
+ * `distribution` and `sourceLabel` for another source (AniShows' own
  * `site_status_distribution`).
  */
 export default function StatusDistribution({

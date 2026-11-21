@@ -47,7 +47,7 @@ export default function StatsTab({
     isEpisodeRatingsLoading = false,
 }) {
     // D-3: `status_distribution` is AniList's; `site_status_distribution` (when the
-    // payload has it) is aniShows' own lists.
+    // payload has it) is AniShows' own lists.
     const totalPlatformMembers = getStatusDistributionTotal(
         normalizeStatusDistribution(anime?.status_distribution)
     );
@@ -208,7 +208,7 @@ export default function StatsTab({
                 {siteDistribution ? (
                     <StatusDistribution
                         distribution={siteDistribution}
-                        sourceLabel="On aniShows"
+                        sourceLabel="On AniShows"
                     />
                 ) : null}
 

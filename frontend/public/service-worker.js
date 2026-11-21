@@ -1,4 +1,4 @@
-// aniShows service worker: web push only.
+// AniShows service worker: web push only.
 //
 // Caching is intentionally absent. There is no fetch handler, so every request
 // goes to the network exactly as without a service worker, and nothing
@@ -8,7 +8,7 @@
 //   {v: 1, title, body, url, tag, notification_id, unread_count}
 // `url` is a same-origin path; anything else opens the home page.
 
-const DEFAULT_TITLE = 'aniShows';
+const DEFAULT_TITLE = 'AniShows';
 const ICON = '/favicon.png';
 
 self.addEventListener('install', () => {

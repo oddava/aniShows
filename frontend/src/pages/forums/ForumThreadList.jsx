@@ -257,7 +257,7 @@ const ForumThreadList = () => {
     return (
         <div className="forums-page">
             <Helmet>
-                <title>{category ? `${category.name}` : 'Category'} | aniShows Forums</title>
+                <title>{category ? `${category.name}` : 'Category'} | AniShows Forums</title>
             </Helmet>
 
             <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">

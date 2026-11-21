@@ -1,5 +1,5 @@
 const AUTO_TIMEZONE_VALUE = 'auto';
-const TIMEZONE_STORAGE_KEY = 'aniShows.userTimezonePreference';
+const TIMEZONE_STORAGE_KEY = 'AniShows.userTimezonePreference';
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_INDEX_BY_NAME = Object.fromEntries(DAY_NAMES.map((day, index) => [day, index]));
 const FALLBACK_TIMEZONES = [

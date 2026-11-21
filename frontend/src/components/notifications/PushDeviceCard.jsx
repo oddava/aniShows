@@ -11,7 +11,7 @@ function DeviceStatus({ push }) {
     if (push.support === 'ios-needs-install') {
         return (
             <p className="text-sm leading-relaxed text-gray-400">
-                Add aniShows to your Home Screen to get push notifications. Then open it from the Home Screen
+                Add AniShows to your Home Screen to get push notifications. Then open it from the Home Screen
                 and turn push on here.
             </p>
         );
@@ -33,7 +33,7 @@ function DeviceStatus({ push }) {
             <p className="text-sm leading-relaxed text-gray-400">
                 {push.subscribed
                     ? 'Push is on for this device.'
-                    : 'Get alerts on this device, even when aniShows is closed.'}
+                    : 'Get alerts on this device, even when AniShows is closed.'}
             </p>
             {push.subscribed ? (
                 <button type="button" onClick={push.disable} disabled={push.isBusy} className="btn-secondary text-sm shrink-0">
