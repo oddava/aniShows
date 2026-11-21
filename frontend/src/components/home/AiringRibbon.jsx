@@ -3,18 +3,19 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { scheduleQueries } from '../../api/queries/anime';
-import { bucketScheduleByDate, formatDateTime, getZonedCalendarToday, SCHEDULE_DAYS } from '../../utils/dateUtils';
-import { statusMeta } from '../../utils/listStatus';
 import Skeleton from '../ui/Skeleton';
+import { clockTime, useMinuteClock, weekAgenda } from './airingModel';
 
-const LISTED = new Set(['Watching', 'Plan to Watch', 'On Hold']);
+const PER_DAY = 5;
 
 /**
- * The airing ribbon: your shows across the next seven days, in your time
- * zone, today first. AniShows' signature strip (schedule + your list), reused
- * from the Schedule page's data, so it costs no extra request.
+ * Your week: the shows on your list airing in the next seven days, as a
+ * short agenda of only the days that have one, in your time zone. What
+ * already aired today stays, dimmed and marked "out". Same request as the
+ * Schedule page, so it costs nothing extra.
  */
 export default function AiringRibbon() {
+    const now = useMinuteClock();
     const { isAuthenticated, user } = useAuth();
     const timezone = user?.preferred_timezone;
     const { data: scheduleDays, isPending } = useQuery({
@@ -23,77 +24,64 @@ export default function AiringRibbon() {
         enabled: isAuthenticated,
     });
 
-    const days = useMemo(() => {
-        const { days: buckets } = bucketScheduleByDate(scheduleDays || {}, timezone);
-        const today = getZonedCalendarToday(timezone);
-        return Array.from({ length: SCHEDULE_DAYS }, (_, offset) => {
-            const date = new Date(today.getTime() + offset * 86400000);
-            const shows = (buckets[offset] || []).filter((anime) => LISTED.has(anime.user_list_status?.status));
-            return {
-                offset,
-                weekday: offset === 0 ? 'Today' : date.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }),
-                day: date.getUTCDate(),
-                shows,
-            };
-        });
-    }, [scheduleDays, timezone]);
+    const days = useMemo(() => weekAgenda(scheduleDays, timezone, now), [scheduleDays, timezone, now]);
 
-    const total = days.reduce((sum, day) => sum + day.shows.length, 0);
-    if (!isPending && total === 0) return null;
+    if (!isPending && days.length === 0) return null;
 
     return (
         <section aria-labelledby="ribbon-heading" className="page-container">
             <div className="panel">
-            <div className="mb-5 flex items-end justify-between gap-4">
-                <h2 id="ribbon-heading" className="section-title">Your week</h2>
-                <Link to="/schedule?mine=1" className="text-link shrink-0 text-[15px]">Full schedule</Link>
-            </div>
-            <ol className="scroll-fade -mx-2 flex gap-1 overflow-x-auto px-2 scrollbar-hide md:mx-0 md:grid md:grid-cols-7 md:overflow-visible md:px-0">
-                {days.map((day) => (
-                    <li
-                        key={day.offset}
-                        aria-label={`${day.weekday}${day.offset ? ` ${day.day}` : ''}: ${day.shows.length} of your shows`}
-                        className={`w-[9.5rem] shrink-0 rounded-[var(--radius-md)] p-3 md:w-auto ${day.offset === 0 ? 'bg-white/[0.05]' : ''}`}
-                    >
-                        <p className="flex items-baseline gap-1.5 text-[15px]">
-                            <span className={`font-semibold ${day.offset === 0 ? 'text-[var(--signature)]' : 'text-[var(--text-1)]'}`}>
-                                {day.weekday}
-                            </span>
-                            {day.offset > 0 && <span className="text-[var(--text-3)] tabular">{day.day}</span>}
-                        </p>
-                        <ul className="mt-2 space-y-2">
-                            {isPending ? (
-                                <li><Skeleton className="h-9 w-full" /></li>
-                            ) : day.shows.length === 0 ? (
-                                <li className="text-sm text-[var(--text-3)]">—</li>
-                            ) : (
-                                day.shows.slice(0, 4).map((anime) => {
-                                    const meta = statusMeta(anime.user_list_status?.status);
-                                    const time = anime.next_airing_date
-                                        ? formatDateTime(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, timezone)
-                                        : 'Time TBA';
-                                    return (
+                <div className="mb-4 flex items-baseline justify-between gap-4">
+                    <h2 id="ribbon-heading" className="section-title">Your week</h2>
+                    <Link to="/schedule?mine=1" className="text-link shrink-0 text-[15px]">Full schedule</Link>
+                </div>
+                {isPending ? (
+                    <div aria-hidden="true" className="grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                        {Array.from({ length: 2 }, (_, i) => (
+                            <div key={i}>
+                                <Skeleton className="h-4 w-20" />
+                                <Skeleton className="mt-3 h-10 w-full" />
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                        {days.map((day) => (
+                            <section key={day.offset} aria-labelledby={`week-day-${day.offset}`} className="min-w-0">
+                                <h3 id={`week-day-${day.offset}`} className="flex items-baseline gap-2 text-[15px]">
+                                    <span className={`font-semibold ${day.offset === 0 ? 'text-[var(--signature)]' : 'text-[var(--text-1)]'}`}>{day.label}</span>
+                                    <span className="text-sm text-[var(--text-3)] tabular">{day.date}</span>
+                                </h3>
+                                <ul className="-mx-2 mt-1">
+                                    {day.shows.slice(0, PER_DAY).map(({ anime, at, aired }) => (
                                         <li key={anime.id}>
-                                            <Link to={`/anime/${anime.slug}`} className="group block min-h-9">
-                                                <span className="flex items-center gap-1.5">
-                                                    <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: meta?.color }} />
-                                                    <span className="truncate text-sm text-[var(--text-1)] group-hover:text-[var(--signature)]">{anime.title}</span>
+                                            <Link
+                                                to={`/anime/${anime.slug}`}
+                                                className={`group flex min-h-11 items-baseline gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/[0.04] ${aired ? 'opacity-60 hover:opacity-100' : ''}`}
+                                            >
+                                                <span className="w-11 shrink-0 text-sm text-[var(--text-2)] tabular">
+                                                    {at ? clockTime(at, timezone) : 'TBA'}
                                                 </span>
-                                                <span className="block pl-3 text-[13px] text-[var(--text-3)] tabular">
-                                                    {anime.next_airing_episode ? `Ep ${anime.next_airing_episode} · ` : ''}{time}
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="line-clamp-2 text-[15px] leading-snug text-[var(--text-1)] group-hover:text-[var(--signature)]">{anime.title}</span>
+                                                    <span className="block text-[13px] text-[var(--text-3)] tabular">
+                                                        {anime.next_airing_episode ? `Episode ${anime.next_airing_episode}` : 'New episode'}
+                                                        {aired && ' · out'}
+                                                    </span>
                                                 </span>
                                             </Link>
                                         </li>
-                                    );
-                                })
-                            )}
-                            {day.shows.length > 4 && (
-                                <li className="pl-3 text-[13px] text-[var(--text-3)]">+{day.shows.length - 4} more</li>
-                            )}
-                        </ul>
-                    </li>
-                ))}
-            </ol>
+                                    ))}
+                                </ul>
+                                {day.shows.length > PER_DAY && (
+                                    <Link to="/schedule?mine=1" className="text-link min-h-9 text-sm">
+                                        {day.shows.length - PER_DAY} more
+                                    </Link>
+                                )}
+                            </section>
+                        ))}
+                    </div>
+                )}
             </div>
         </section>
     );

@@ -23,6 +23,15 @@ export function profileScore(user, summary) {
 }
 
 /**
+ * The score in words: "average 7.7 from 3 scores" (one score: "from 1 score").
+ * Null when nothing is scored.
+ */
+export function scoreLine({ mean, rated }) {
+    if (!rated || mean == null) return null;
+    return `average ${mean} from ${rated.toLocaleString()} ${rated === 1 ? 'score' : 'scores'}`;
+}
+
+/**
  * Taste in one sentence-case line from the summary's top genres:
  * "Mostly fantasy, romance and action". Null when there is nothing to say.
  */

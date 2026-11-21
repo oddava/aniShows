@@ -11,6 +11,7 @@ import {
     normalizeStatusDistribution,
 } from '../utils/statusDistribution';
 import { capsToSentence } from './detailTabs/format';
+import { airingState } from '../utils/episodes';
 
 /**
  * A fact as a row: label left, value right; whitespace, no rules. A long
@@ -66,17 +67,32 @@ export function getAiredValue(anime) {
 /**
  * The next episode and when it airs. Its own export so the page can lift it
  * near the tracking controls on phones; hidden when nothing is scheduled.
+ * Once the listed episode's time has passed it is out (the API moves on to
+ * the following one at its next sync), and the panel says so.
  */
 export function NextEpisodePanel({ anime, className = '' }) {
     if (!anime || anime.status === 'Finished' || !anime.next_airing_date) return null;
+    const { justAired } = airingState(anime);
+    const episode = anime.next_airing_episode;
+    if (justAired) {
+        return (
+            <div className={`panel ${className}`}>
+                <p className="text-sm text-[var(--signature)]">Latest episode</p>
+                <p className="mt-1 text-[17px] font-semibold text-[var(--text-1)]">
+                    {episode ? `Episode ${episode} is out` : 'A new episode is out'}
+                </p>
+                <p className="mt-0.5 text-sm text-[var(--text-3)] tabular">Aired {formatAiringTime(anime.next_airing_date)}</p>
+            </div>
+        );
+    }
     return (
         <div className={`panel ${className}`}>
             <p className="text-sm text-[var(--signature)]">Next episode</p>
             <p className="mt-1 text-[17px] font-semibold text-[var(--text-1)]">
-                Episode {anime.next_airing_episode ?? 'TBA'}
+                Episode {episode ?? 'TBA'}
                 <span className="font-normal text-[var(--text-2)]"> · {formatRelativeTime(anime.next_airing_date)}</span>
             </p>
-            <p className="mt-0.5 text-sm text-[var(--text-3)]">{formatAiringTime(anime.next_airing_date)}</p>
+            <p className="mt-0.5 text-sm text-[var(--text-3)] tabular">{formatAiringTime(anime.next_airing_date)}</p>
         </div>
     );
 }

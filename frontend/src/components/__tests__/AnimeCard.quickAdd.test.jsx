@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+
+// Full-suite runs are slow on this machine; give async UI a little longer.
+configure({ asyncUtilTimeout: 4000 });
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';

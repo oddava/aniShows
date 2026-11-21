@@ -1,4 +1,4 @@
-import { airedEpisodeCount, knownEpisodeTotal } from '../../utils/episodes';
+import { airingState, knownEpisodeTotal } from '../../utils/episodes';
 
 /**
  * Where a Watching entry stands tonight, for the Continue row (L2):
@@ -11,16 +11,18 @@ export function continueState(entry, now = Date.now()) {
     const anime = entry?.anime || {};
     const watched = Number(entry?.episodes_watched) || 0;
     const total = knownEpisodeTotal(anime);
-    const nextAt = Date.parse(anime.next_airing_date);
-    const hasNext = Number.isFinite(nextAt) && nextAt > now;
-    let aired = airedEpisodeCount(anime);
+    // An episode whose airing time has passed is out, even before the API's
+    // sync moves next_airing_* on to the following one.
+    const airing = airingState(anime, now);
+    const nextAt = airing.nextAt;
+    const hasNext = nextAt !== null && nextAt > now;
+    let aired = airing.aired;
     if (aired === null && anime.status === 'Finished' && total) aired = total;
-    if (aired !== null && total) aired = Math.min(aired, total);
 
     if (total && watched >= total) return { kind: 'finished', watched, total };
     const behind = aired !== null ? Math.max(0, aired - watched) : 0;
     if (behind > 0) return { kind: 'ready', watched, total, behind, nextEpisode: watched + 1, nextAt: hasNext ? nextAt : null };
-    if (hasNext) return { kind: 'soon', watched, total, nextEpisode: anime.next_airing_episode || watched + 1, nextAt };
+    if (hasNext) return { kind: 'soon', watched, total, nextEpisode: airing.nextEpisode || watched + 1, nextAt };
     return { kind: 'idle', watched, total };
 }
 

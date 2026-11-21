@@ -4,22 +4,15 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import useListEntryMutation from '../../hooks/useListEntryMutation';
 import { listQueries, userQueries } from '../../api/queries/lists';
+import { scheduleQueries } from '../../api/queries/anime';
 import { airedEpisodeCount, knownEpisodeTotal } from '../../utils/episodes';
 import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
 import ProgressStepper from '../ui/ProgressStepper';
 import ScorePicker from '../ui/ScorePicker';
 import Skeleton from '../ui/Skeleton';
 import { continueState, countdown, sortForContinue } from './continueModel';
-
-/** Re-render once a minute so countdowns stay true without a refetch. */
-function useMinuteClock() {
-    const [now, setNow] = useState(() => Date.now());
-    useEffect(() => {
-        const timer = setInterval(() => setNow(Date.now()), 60 * 1000);
-        return () => clearInterval(timer);
-    }, []);
-    return now;
-}
+import { clockTime, listedAirings, tonightFrom, useMinuteClock } from './airingModel';
+import { formatDate } from '../../utils/dateUtils';
 
 function stateText(state, now) {
     if (state.kind === 'ready') {
@@ -90,7 +83,7 @@ const ContinueRow = memo(function ContinueRow({ entry, now, onLive }) {
                     className="col-start-2 justify-self-start sm:col-start-auto sm:justify-self-end"
                     value={current.episodes_watched || 0}
                     total={knownEpisodeTotal(anime)}
-                    aired={airedEpisodeCount(anime)}
+                    aired={airedEpisodeCount(anime, now)}
                     title={anime.title}
                     onCommit={(next) => setProgress(next)}
                     onDraft={setDraft}
@@ -100,52 +93,39 @@ const ContinueRow = memo(function ContinueRow({ entry, now, onLive }) {
     );
 });
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const timeOf = (at) => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-const dayOf = (at) => new Date(at).toLocaleDateString([], { weekday: 'short' });
-
-/** Shows on your list airing before the end of today, by time; else the next one. */
-function tonightFrom(entries, now) {
-    const upcoming = (entries || [])
-        .map((entry) => ({ entry, at: Date.parse(entry.anime?.next_airing_date) }))
-        .filter((row) => Number.isFinite(row.at) && row.at > now)
-        .sort((a, b) => a.at - b.at);
-    const endOfToday = new Date(now);
-    endOfToday.setHours(23, 59, 59, 999);
-    const today = upcoming.filter((row) => row.at <= endOfToday.getTime());
-    return { today, next: today.length ? null : upcoming.find((row) => row.at - now < 7 * DAY_MS) || null };
-}
-
-/** The left column under the headline: what airs tonight, as a timetable. */
-function Tonight({ items, now }) {
+/**
+ * The left column under the headline: today's episodes from your list, in
+ * time order. One that already aired reads "15:04 · Episode 9 is out".
+ */
+function Tonight({ items, now, timezone }) {
     if (!items.today.length && !items.next) return null;
     return (
         <div className="mt-10 md:max-w-sm">
             <h2 className="text-[15px] font-semibold text-[var(--text-2)]">Tonight</h2>
             {items.today.length ? (
                 <ul className="mt-2">
-                    {items.today.map(({ entry, at }) => (
-                        <li key={entry.id}>
-                            <Link
-                                to={`/anime/${entry.anime.slug}`}
-                                className="-mx-2 flex min-h-11 items-baseline gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
-                            >
-                                <span className="w-12 shrink-0 text-[15px] font-semibold text-[var(--signature)] tabular">{timeOf(at)}</span>
-                                <span className="min-w-0">
-                                    <span className="block truncate text-[15px] text-[var(--text-1)]">{entry.anime.title}</span>
-                                    <span className="block text-sm text-[var(--text-3)] tabular">
-                                        Episode {entry.anime.next_airing_episode} · in {countdown(at, now)}
+                    {items.today.map(({ anime, at, episode, aired }) => {
+                        const ep = episode ? `Episode ${episode}` : 'New episode';
+                        return (
+                            <li key={anime.id}>
+                                <Link
+                                    to={`/anime/${anime.slug}`}
+                                    className="-mx-2 block min-h-11 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
+                                >
+                                    <span className="block truncate text-[15px] text-[var(--text-1)]">{anime.title}</span>
+                                    <span className={`block text-sm tabular ${aired ? 'text-[var(--signature)]' : 'text-[var(--text-3)]'}`}>
+                                        {clockTime(at, timezone)} · {aired ? `${ep} is out` : `${ep} · in ${countdown(at, now)}`}
                                     </span>
-                                </span>
-                            </Link>
-                        </li>
-                    ))}
+                                </Link>
+                            </li>
+                        );
+                    })}
                 </ul>
             ) : (
                 <p className="mt-2 text-[15px] leading-relaxed text-[var(--text-2)]">
-                    Nothing more from your list airs today. Next:{' '}
-                    <Link to={`/anime/${items.next.entry.anime.slug}`} className="text-link">{items.next.entry.anime.title}</Link>
-                    , {dayOf(items.next.at)} {timeOf(items.next.at)}.
+                    Nothing from your list airs today. Next up:{' '}
+                    <Link to={`/anime/${items.next.anime.slug}`} className="text-link min-h-0">{items.next.anime.title}</Link>
+                    , <span className="tabular">{formatDate(items.next.at, { weekday: 'short' }, timezone)} {clockTime(items.next.at, timezone)}</span>
                 </p>
             )}
         </div>
@@ -159,7 +139,8 @@ function Tonight({ items, now }) {
  */
 export default function ContinueSection() {
     const now = useMinuteClock();
-    const { user } = useAuth();
+    const { user, isAuthenticated } = useAuth();
+    const timezone = user?.preferred_timezone;
     const { data: watching, isPending } = useQuery({
         ...userQueries.watching(),
         staleTime: 60 * 1000,
@@ -168,6 +149,13 @@ export default function ContinueSection() {
         ...listQueries.summary(user?.username),
         enabled: Boolean(user?.username),
         staleTime: 60 * 1000,
+    });
+    // The same request as "Your week" below (shared cache), so Tonight and
+    // the week never disagree about what airs today.
+    const { data: scheduleDays } = useQuery({
+        ...scheduleQueries.week(isAuthenticated, Boolean(user?.show_adult_content)),
+        staleTime: 5 * 60 * 1000,
+        enabled: isAuthenticated,
     });
 
     // The order is set once per visit: a row never jumps away under the
@@ -194,7 +182,10 @@ export default function ContinueSection() {
     }, []);
     const readyCount = rows.filter((row) => (live[row.entry.id]?.kind ?? row.state.kind) === 'ready').length;
     const episodeDelta = rows.reduce((sum, row) => sum + (live[row.entry.id]?.delta || 0), 0);
-    const tonight = useMemo(() => tonightFrom(watching, now), [watching, now]);
+    const tonight = useMemo(
+        () => tonightFrom(listedAirings(watching, scheduleDays), now, timezone),
+        [watching, scheduleDays, now, timezone],
+    );
     const summaryLine = isPending
         ? ''
         : rows.length === 0
@@ -214,7 +205,7 @@ export default function ContinueSection() {
                             {summary.total} on your list · {(summary.episodes_watched || 0) + episodeDelta} episodes watched
                         </p>
                     )}
-                    <Tonight items={tonight} now={now} />
+                    <Tonight items={tonight} now={now} timezone={timezone} />
                 </div>
 
                 <div className="panel">
@@ -232,10 +223,9 @@ export default function ContinueSection() {
                             ))}
                         </ul>
                     ) : rows.length === 0 ? (
-                        <div className="pt-2 text-[17px] text-[var(--text-2)]">
-                            <Link to="/browse?sort=trending" className="text-link">Find something to watch</Link>
-                            <span className="mx-2 text-[var(--text-3)]">or</span>
-                            <Link to="/import" className="text-link">Import your list from MAL or AniList</Link>
+                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px]">
+                            <Link to="/browse?sort=trending" className="btn-primary px-4">Find something to watch</Link>
+                            <Link to="/import" className="text-link">Import a list</Link>
                         </div>
                     ) : (
                         <>

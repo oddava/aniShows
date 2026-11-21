@@ -2,9 +2,9 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { scheduleQueries } from '../../api/queries/anime';
-import { bucketScheduleByDate, formatDateTime } from '../../utils/dateUtils';
 import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
 import Skeleton from '../ui/Skeleton';
+import { airingPreview, previewWhen, useMinuteClock } from './airingModel';
 
 const PREVIEW_ROWS = 5;
 
@@ -14,17 +14,16 @@ const PREVIEW_ROWS = 5;
  * today, in the visitor's own time. No mock-ups, no marketing card.
  */
 export default function GuestLanding() {
+    const now = useMinuteClock();
     const { data: scheduleDays, isPending } = useQuery({
         ...scheduleQueries.week(false, false),
         staleTime: 5 * 60 * 1000,
     });
 
-    const today = useMemo(() => {
-        const { days } = bucketScheduleByDate(scheduleDays || {});
-        return [...(days[0] || [])]
-            .sort((a, b) => (Date.parse(a.next_airing_date) || Infinity) - (Date.parse(b.next_airing_date) || Infinity))
-            .slice(0, PREVIEW_ROWS);
-    }, [scheduleDays]);
+    // Today's episodes by time (aired ones say so), topped up with the next
+    // ones tomorrow and after rather than "Time TBA" rows.
+    const rows = useMemo(() => airingPreview(scheduleDays, undefined, now, PREVIEW_ROWS), [scheduleDays, now]);
+    const anyToday = rows.some((row) => row.offset === 0);
 
     return (
         <section aria-labelledby="landing-heading" className="page-container pt-24 pb-4 md:pt-36">
@@ -47,7 +46,7 @@ export default function GuestLanding() {
                 </div>
 
                 <div className="panel">
-                    <h2 className="section-title">Airing today</h2>
+                    <h2 className="section-title">{isPending || anyToday || rows.length === 0 ? 'Airing today' : 'Airing next'}</h2>
                     <p className="mt-1 text-[15px] text-[var(--text-2)]">In your time zone.</p>
                     <ul className="mt-3">
                         {isPending
@@ -57,7 +56,7 @@ export default function GuestLanding() {
                                     <Skeleton className="h-4 w-1/2" />
                                 </li>
                             ))
-                            : today.map((anime) => (
+                            : rows.map(({ anime, ...row }) => (
                                 <li key={anime.id}>
                                     <Link to={`/anime/${anime.slug}`} className="group -mx-3 flex items-center gap-4 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03]">
                                         <img
@@ -68,22 +67,22 @@ export default function GuestLanding() {
                                             className="h-16 w-11 shrink-0 rounded-md bg-[var(--ink-2)] object-cover"
                                         />
                                         <span className="min-w-0 flex-1">
-                                            <span className="line-clamp-1 font-semibold text-[var(--text-1)] group-hover:text-[var(--signature)]">{anime.title}</span>
-                                            {anime.next_airing_episode && (
-                                                <span className="block text-sm text-[var(--text-2)]">Episode {anime.next_airing_episode}</span>
-                                            )}
+                                            <span className="line-clamp-2 font-semibold leading-snug text-[var(--text-1)] group-hover:text-[var(--signature)] sm:line-clamp-1">{anime.title}</span>
+                                            {/* Phones: when it airs sits under the title, so the title keeps the width. */}
+                                            <span className="block text-sm text-[var(--text-2)] tabular">
+                                                {anime.next_airing_episode ? `Episode ${anime.next_airing_episode}` : 'New episode'}
+                                                <span className="sm:hidden"> · {previewWhen({ anime, ...row })}</span>
+                                            </span>
                                         </span>
-                                        <span className="shrink-0 text-sm text-[var(--text-2)] tabular">
-                                            {anime.next_airing_date
-                                                ? formatDateTime(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-                                                : 'Time TBA'}
+                                        <span className={`hidden shrink-0 text-right text-sm tabular sm:block ${row.aired ? 'text-[var(--text-3)]' : 'text-[var(--text-2)]'}`}>
+                                            {previewWhen({ anime, ...row })}
                                         </span>
                                     </Link>
                                 </li>
                             ))}
                     </ul>
-                    {!isPending && today.length === 0 && (
-                        <p className="pt-2 text-[15px] text-[var(--text-2)]">Nothing airs today.</p>
+                    {!isPending && rows.length === 0 && (
+                        <p className="pt-2 text-[15px] text-[var(--text-2)]">Nothing scheduled this week.</p>
                     )}
                     <Link to="/schedule" className="text-link mt-2">See the week</Link>
                 </div>

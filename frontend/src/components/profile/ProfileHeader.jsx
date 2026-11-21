@@ -4,13 +4,13 @@ import FollowButton from '../FollowButton';
 import ProfileAvatar from './ProfileAvatar';
 import UserBadges from './UserBadges';
 import { listQueries } from '../../api/queries/lists';
-import { genreLine, profileScore } from './profileStats';
+import { genreLine, profileScore, scoreLine } from './profileStats';
 
 const plural = (count, one, many = `${one}s`) => `${count.toLocaleString()} ${count === 1 ? one : many}`;
 
 /**
  * The one line under the name: only the numbers that are not zero, each with
- * what it counts. Mean score and its "of N rated" come from the same source.
+ * what it counts. The average score and its "from N scores" come from the same source.
  */
 function statsLine(user, summary) {
     const parts = [];
@@ -18,14 +18,14 @@ function statsLine(user, summary) {
     const anime = Number(summary?.total ?? user.anime_count) || 0;
     const episodes = Number(summary?.episodes_watched ?? user.episodes_watched) || 0;
     const days = Number(user.days_watched) || 0;
-    const { mean, rated } = profileScore(user, summary);
+    const score = scoreLine(profileScore(user, summary));
     const favorites = Number(user.favorites_count) || 0;
     const resonance = Number(user.resonance_count) || 0;
 
     if (anime) parts.push(`${anime.toLocaleString()} on the list`);
     if (episodes) parts.push(`${plural(episodes, 'episode')} watched`);
     if (days) parts.push(`${days} ${Number(days) === 1 ? 'day' : 'days'} of watching`);
-    if (rated && mean != null) parts.push(`mean score ${mean} of ${rated} rated`);
+    if (score) parts.push(score);
     if (favorites) parts.push(plural(favorites, 'favorite'));
     if (resonance) parts.push(`${plural(resonance, 'helpful vote')} on reviews`);
     return parts;

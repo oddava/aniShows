@@ -59,8 +59,8 @@ describe('OverviewTab with an empty list', () => {
         expect(await screen.findByRole('heading', { name: 'Start your list' })).toBeInTheDocument();
         expect(screen.queryByTestId('heatmap')).not.toBeInTheDocument();
         expect(screen.queryByText(/episodes logged this year/)).not.toBeInTheDocument();
-        // What happened stays, under a heading that doesn't promise a year of it.
-        expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument();
+        // No feed of adds and removals under "Start your list" either.
+        expect(screen.queryByTestId('activity-feed')).not.toBeInTheDocument();
     });
 
     it('offers both ways to start as two actions, with no dangling "or"', async () => {
@@ -80,6 +80,7 @@ describe('OverviewTab with an empty list', () => {
         expect(await screen.findByText('Nothing on kiyo’s list yet.')).toBeInTheDocument();
         expect(screen.queryByRole('link', { name: 'Import a list' })).not.toBeInTheDocument();
         expect(screen.queryByTestId('heatmap')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('activity-feed')).not.toBeInTheDocument();
     });
 });
 

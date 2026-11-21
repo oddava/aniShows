@@ -6,6 +6,17 @@ import AnimeMediaImage from '../common/AnimeMediaImage';
 import { formatDateInUserTimezone } from '../../utils/dateUtils';
 import { activityKeys } from '../../api/queries/user';
 import { LIST_STATUSES, statusLabel } from '../../utils/listStatus';
+import { tidyActivities } from './activityTidy';
+
+// The overview shows a handful of rows; it asks for more than that because
+// tidying (dropped churn, merged runs) can leave fewer rows than events.
+const COMPACT_ROWS = 6;
+const COMPACT_FETCH = 20;
+const PAGE_SIZE = 16;
+// When a page tidies down to a few rows, fetch on by itself (up to this many
+// pages) until there are enough rows to read.
+const AUTO_PAGES = 4;
+const MIN_ROWS = 8;
 
 // `value` is the list status the server filters on (`?status=`): the entry's new
 // status, or the old one for removals. Labels and colours: utils/listStatus.
@@ -207,13 +218,14 @@ function ActivityRow({ activity }) {
 }
 
 /**
- * A profile's list activity, newest first, in hairline rows grouped by day.
+ * A profile's list activity, newest first, in rows grouped by day, tidied
+ * (see activityTidy): no add/remove churn, one row per burst of changes.
  * `compact` (the overview) drops the filters, shows a handful of rows, and
  * renders nothing at all (header included) when there is no activity.
  */
-export default function ActivityFeed({ username, isPrivate, compact = false, header = null }) {
+export default function ActivityFeed({ username, isPrivate, isOwner = false, compact = false, header = null }) {
     const [filterType, setFilterType] = useState('all');
-    const pageSize = compact ? 6 : 16;
+    const pageSize = compact ? COMPACT_FETCH : PAGE_SIZE;
 
     const {
         data,
@@ -240,10 +252,20 @@ export default function ActivityFeed({ username, isPrivate, compact = false, hea
         staleTime: 2 * 60 * 1000,
     });
 
+    const rawCount = data?.pages?.reduce((total, page) => total + (page?.results?.length || 0), 0) || 0;
     const activities = useMemo(
-        () => data?.pages?.flatMap(page => page?.results || []) || [],
-        [data]
+        () => tidyActivities(data?.pages?.flatMap(page => page?.results || []) || [], { isOwner }),
+        [data, isOwner]
     );
+    const pagesLoaded = data?.pages?.length || 0;
+
+    // Most of what loaded was churn: look further back before showing a short
+    // feed (or "nothing yet").
+    const wantedRows = compact ? COMPACT_ROWS : MIN_ROWS;
+    useEffect(() => {
+        if (isFetching || !hasNextPage || rawCount === 0) return;
+        if (activities.length < wantedRows && pagesLoaded < AUTO_PAGES) fetchNextPage();
+    }, [activities.length, fetchNextPage, hasNextPage, isFetching, pagesLoaded, rawCount, wantedRows]);
 
     const dateGroups = useMemo(
         () => groupActivitiesByDate(activities),
@@ -278,7 +300,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false, hea
             <section>
                 {header}
                 <ul>
-                    {activities.slice(0, pageSize).map((activity) => (
+                    {activities.slice(0, COMPACT_ROWS).map((activity) => (
                         <ActivityRow key={activity.id} activity={activity} />
                     ))}
                 </ul>
@@ -332,7 +354,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false, hea
                 </p>
             )}
 
-            {!isLoading && !isError && !isFilterUpdating && visibleActivityCount === 0 && (
+            {!isLoading && !isError && !isFilterUpdating && !isFetchingNextPage && visibleActivityCount === 0 && (
                 <EmptyState filterType={filterType} />
             )}
 

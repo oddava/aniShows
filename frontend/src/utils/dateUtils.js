@@ -296,21 +296,14 @@ export function formatRelativeTime(date, preference) {
 }
 
 /**
- * Format a date as a full airing time string in the selected timezone.
+ * A full airing time in the selected timezone, 24-hour, no zone name:
+ * "Tue, Nov 24 · 17:43". Empty for no date.
  */
 export function formatAiringTime(date, preference) {
-    return formatDateTime(
-        date,
-        {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            timeZoneName: 'short',
-        },
-        preference
-    );
+    const day = formatDateTime(date, { weekday: 'short', month: 'short', day: 'numeric' }, preference);
+    if (!day) return '';
+    const time = formatDateTime(date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preference);
+    return `${day} · ${time}`;
 }
 
 export function formatDateTimeInUserTimezone(value, options = {}) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { genreLine, profileScore } from '../profileStats';
+import { genreLine, profileScore, scoreLine } from '../profileStats';
 
 describe('profileScore', () => {
     it('uses the profile payload when it carries rated_count', () => {
@@ -44,5 +44,17 @@ describe('genreLine', () => {
         expect(genreLine([])).toBeNull();
         expect(genreLine(undefined)).toBeNull();
         expect(genreLine([{ name: 'Action', count: 0 }])).toBeNull();
+    });
+});
+
+describe('scoreLine', () => {
+    it('reads as an average from a number of scores', () => {
+        expect(scoreLine({ mean: '7.7', rated: 3 })).toBe('average 7.7 from 3 scores');
+        expect(scoreLine({ mean: '9.0', rated: 1 })).toBe('average 9.0 from 1 score');
+    });
+
+    it('says nothing when nothing is scored', () => {
+        expect(scoreLine({ mean: null, rated: 0 })).toBeNull();
+        expect(scoreLine({ mean: '7.0', rated: 0 })).toBeNull();
     });
 });

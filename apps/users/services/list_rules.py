@@ -86,14 +86,18 @@ def _known_total(anime: Anime | None) -> int | None:
 def _aired_so_far(anime: Anime | None) -> int | None:
     """Episodes out so far for a show still airing (``None`` when not known).
 
-    Known only while the next episode has a date in the future: everything before it
-    has aired. A past or missing date says nothing reliable.
+    Everything before ``next_airing_episode`` has aired. The airing fields stay on an
+    episode until the background sync advances them, so once ``next_airing_date`` has
+    passed that episode is out too. Without a date nothing reliable is known. The
+    frontend reads the same rule (``airingState`` in ``frontend/src/utils/episodes.js``).
     """
     next_episode = getattr(anime, "next_airing_episode", None)
     next_date = getattr(anime, "next_airing_date", None)
-    if not next_episode or next_date is None or next_date <= timezone.now():
+    if not next_episode or next_date is None:
         return None
-    return max(int(next_episode) - 1, 0)
+    next_episode = int(next_episode)
+    aired = next_episode if next_date <= timezone.now() else next_episode - 1
+    return max(aired, 0)
 
 
 def _completion_target(total: int | None, aired: int | None) -> int | None:

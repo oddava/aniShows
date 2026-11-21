@@ -120,7 +120,10 @@ describe('Home', () => {
         expect(screen.getByRole('heading', { level: 1, name: 'megumin' })).toBeInTheDocument();
         expect(await screen.findByRole('region', { name: 'Continue watching' })).toBeInTheDocument();
         expect(await screen.findByText(/Nothing in progress/)).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /Import your list/ })).toHaveAttribute('href', '/import');
+        // One primary action and one plain link, no "or" between them.
+        expect(screen.getByRole('link', { name: 'Find something to watch' })).toHaveClass('btn-primary');
+        expect(screen.getByRole('link', { name: 'Import a list' })).toHaveAttribute('href', '/import');
+        expect(screen.queryByText('or')).not.toBeInTheDocument();
         expect(screen.queryByText('View Details')).not.toBeInTheDocument();
     });
 
@@ -228,6 +231,96 @@ describe('Home - Continue and the airing ribbon (members)', () => {
         await waitFor(() => expect(animeApi.getSchedule).toHaveBeenCalledTimes(1));
         await screen.findByText('Trending now');
         expect(screen.queryByRole('region', { name: 'Your week' })).not.toBeInTheDocument();
+    });
+
+    describe('after an episode aired but before the API synced it', () => {
+        // Saturday 2026-11-21 10:35 UTC; Apothecary Diaries ep 9 aired at 10:04.
+        const NOW = new Date('2026-11-21T10:35:00Z');
+        const apothecary = {
+            id: 21, slug: 'apothecary', title: 'The Apothecary Diaries', episode_count: 24,
+            next_airing_episode: 9, next_airing_date: '2026-11-21T10:04:00Z',
+            user_list_status: { status: 'Watching' },
+        };
+        const later = {
+            id: 22, slug: 'later', title: 'Later Today', episode_count: 12,
+            next_airing_episode: 4, next_airing_date: '2026-11-21T12:43:00Z',
+            user_list_status: { status: 'Watching' },
+        };
+
+        beforeEach(() => {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(NOW);
+            authState.user = { username: 'megumin', preferred_timezone: 'UTC' };
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+            authState.user = { username: 'megumin' };
+        });
+
+        it('says the episode is out in Continue, Tonight and Your week', async () => {
+            listApi.getAll.mockResolvedValue({
+                data: {
+                    results: [
+                        { id: 31, status: 'Watching', episodes_watched: 8, score: 0, updated_at: '2026-11-20T10:00:00Z', anime: apothecary },
+                        { id: 32, status: 'Watching', episodes_watched: 3, score: 0, updated_at: '2026-11-20T09:00:00Z', anime: later },
+                    ],
+                },
+            });
+            animeApi.getSchedule.mockResolvedValue({ data: { days: { saturday: [apothecary, later] } } });
+
+            render(<Home />, { wrapper: createWrapper() });
+
+            const section = await screen.findByRole('region', { name: 'Continue watching' });
+            expect(await within(section).findByText('Episode 9 is out')).toBeInTheDocument();
+            expect(within(section).getByText('1 of your shows has a new episode waiting.')).toBeInTheDocument();
+            // Tonight: in time order, the aired one included.
+            expect(within(section).getByText('10:04 · Episode 9 is out')).toBeInTheDocument();
+            expect(within(section).getByText('12:43 · Episode 4 · in 2h 8m')).toBeInTheDocument();
+            expect(within(section).queryByText(/Nothing from your list airs today/)).not.toBeInTheDocument();
+
+            const week = await screen.findByRole('region', { name: 'Your week' });
+            const today = await within(week).findByRole('region', { name: /Today/ });
+            expect(within(today).getByText('The Apothecary Diaries')).toBeInTheDocument();
+            expect(within(today).getByText('Episode 9 · out')).toBeInTheDocument();
+            expect(within(today).getByText('Episode 4')).toBeInTheDocument();
+        });
+
+        it('names the next show when nothing from the list airs today', async () => {
+            const sunday = { ...later, next_airing_date: '2026-11-22T15:43:00Z' };
+            listApi.getAll.mockResolvedValue({
+                data: { results: [{ id: 32, status: 'Watching', episodes_watched: 3, score: 0, updated_at: '2026-11-20T09:00:00Z', anime: sunday }] },
+            });
+            animeApi.getSchedule.mockResolvedValue({ data: { days: {} } });
+
+            render(<Home />, { wrapper: createWrapper() });
+
+            const section = await screen.findByRole('region', { name: 'Continue watching' });
+            const line = await within(section).findByText(/Nothing from your list airs today/);
+            expect(line).toHaveTextContent('Nothing from your list airs today. Next up: Later Today, Sun 15:43');
+        });
+
+        it('fills the guest panel with upcoming episodes, aired ones labelled', async () => {
+            authState.isAuthenticated = false;
+            window.localStorage.setItem('AniShows.userTimezonePreference', 'UTC');
+            animeApi.getSchedule.mockResolvedValue({
+                data: {
+                    days: {
+                        saturday: [
+                            { ...apothecary, user_list_status: null },
+                            { id: 40, slug: 'tba', title: 'No Time Yet', broadcast_day: 'Saturday', next_airing_date: null },
+                        ],
+                        sunday: [{ ...later, id: 41, title: 'Sunday Show', next_airing_date: '2026-11-22T09:43:00Z', user_list_status: null }],
+                    },
+                },
+            });
+
+            render(<Home />, { wrapper: createWrapper() });
+
+            expect(await screen.findByText('Aired 10:04')).toBeInTheDocument();
+            expect(screen.getByText('Tomorrow 09:43')).toBeInTheDocument();
+            expect(screen.queryByText('Time TBA')).not.toBeInTheDocument();
+            window.localStorage.removeItem('AniShows.userTimezonePreference');
+        });
     });
 
     it('is not requested for guests', async () => {

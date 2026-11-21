@@ -5,6 +5,7 @@ import {
     formatCalendarDate,
     getZonedCalendarToday,
     bucketScheduleByDate,
+    formatAiringTime,
     formatDate,
     getWeekdayIndex,
     hasAiringDate,
@@ -126,5 +127,17 @@ describe('bucketScheduleByDate', () => {
 
         expect(offsetOf(days, 1)).toBe(2);
         expect(hasAiringDate(item)).toBe(false);
+    });
+});
+
+describe('formatAiringTime', () => {
+    it('reads 24-hour with no zone name', () => {
+        // 12:43 UTC is 17:43 in Tashkent (UTC+5).
+        expect(formatAiringTime('2026-11-24T12:43:00Z', 'Asia/Tashkent')).toBe('Tue, Nov 24 · 17:43');
+        expect(formatAiringTime('2026-11-24T00:05:00Z', 'UTC')).toBe('Tue, Nov 24 · 00:05');
+    });
+
+    it('is empty without a date', () => {
+        expect(formatAiringTime(null, 'UTC')).toBe('');
     });
 });

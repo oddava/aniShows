@@ -242,17 +242,19 @@ export default function OverviewTab({
         );
     }
     // One "Activity" section: the year at a glance, then the latest rows.
-    // With an empty list the rows stay (they are what happened), the year doesn't.
-    sections.push(
+    // An empty list has no activity section at all: what is left of its
+    // history is adds and removals, not something to read under "Start your list".
+    if (!listIsEmpty && !summaryPending) sections.push(
         <ActivityFeed
             key="activity"
             username={targetUsername}
             isPrivate={isPrivate}
+            isOwner={isOwnProfile}
             compact
             header={(
                 <>
                     <SectionHead
-                        title={listIsEmpty ? 'Recent activity' : 'Activity'}
+                        title="Activity"
                         onSeeAll={() => onTabChange?.('activity')}
                         seeAllLabel="See all activity"
                     />

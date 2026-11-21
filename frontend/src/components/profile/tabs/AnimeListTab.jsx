@@ -102,6 +102,9 @@ export default function AnimeListContent({
                     {STATUS_TABS.map((tab) => {
                         const isActive = listStatusFilter === tab.value;
                         const count = summary?.counts?.[tab.value];
+                        // Like My list: an empty status has no tab, except
+                        // Watching (where a list starts) and the one in view.
+                        if (count === 0 && !isActive && tab.value !== 'Watching') return null;
                         return (
                             <button
                                 key={tab.value}

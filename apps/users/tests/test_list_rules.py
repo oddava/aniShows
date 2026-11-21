@@ -132,12 +132,32 @@ class AiringCompletionRuleTests(SimpleTestCase):
         self.assertEqual(result["status"], Status.completed)
         self.assertEqual(result.get("episodes_watched", 8), 8)  # unchanged: not resent
 
-    def test_completed_with_a_past_airing_date_fills_to_total(self):
-        # A stale schedule says nothing about what has aired: today's rule applies.
-        show = airing(days_ahead=-1)
+    def test_completed_counts_an_episode_whose_airing_time_has_passed(self):
+        # Episode 7 aired an hour ago; the sync has not moved the marker on yet.
+        show = airing(days_ahead=-1 / 24)
+        result = self.run_rules(entry(episodes_watched=2), {"status": Status.completed}, show)
+
+        self.assertEqual((result["status"], result["episodes_watched"]), (Status.completed, 7))
+
+    def test_completed_with_the_last_episode_aired_fills_to_total(self):
+        show = airing(aired=11, days_ahead=-1 / 24)  # episode 12 of 12 aired
         result = self.run_rules(entry(episodes_watched=2), {"status": Status.completed}, show)
 
         self.assertEqual(result["episodes_watched"], 12)
+
+    def test_completed_without_an_airing_date_fills_to_total(self):
+        show = airing()
+        show.next_airing_date = None
+        result = self.run_rules(entry(episodes_watched=2), {"status": Status.completed}, show)
+
+        self.assertEqual(result["episodes_watched"], 12)
+
+    def test_completed_with_unknown_total_counts_the_episode_just_aired(self):
+        # ONE PIECE-style: episode 41 aired an hour ago, total not announced.
+        show = airing(total=0, aired=40, days_ahead=-1 / 24)
+        result = self.run_rules(entry(episodes_watched=10), {"status": Status.completed}, show)
+
+        self.assertEqual((result["status"], result["episodes_watched"]), (Status.completed, 41))
 
     def test_completed_on_a_finished_show_still_fills_to_total(self):
         show = airing(aired=12)  # every episode out (next marker past the end)

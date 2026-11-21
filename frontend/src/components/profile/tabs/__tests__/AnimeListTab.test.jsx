@@ -124,12 +124,28 @@ describe('AnimeListTab', () => {
         const watchingTab = screen.getByRole('button', { name: /^Watching/ });
         expect(watchingTab).toHaveAttribute('aria-pressed', 'true');
         await waitFor(() => expect(watchingTab).toHaveTextContent('Watching120'));
-        ['Completed', 'Planning', 'On hold', 'Dropped'].forEach((label) => {
+        // Statuses with nothing in them have no tab (like My list).
+        ['Planning', 'Dropped'].forEach((label) => {
+            expect(screen.queryByRole('button', { name: new RegExp(`^${label}`) })).not.toBeInTheDocument();
+        });
+        ['Completed', 'On hold'].forEach((label) => {
             const tab = screen.getByRole('button', { name: new RegExp(`^${label}`) });
             expect(tab).toHaveAttribute('aria-pressed', 'false');
             expect(tab.textContent).not.toMatch(EMOJI);
         });
         expect(watchingTab.textContent).not.toMatch(EMOJI);
+    });
+
+    it('keeps Watching and the status in view even when they are empty', async () => {
+        listApi.summary.mockResolvedValue({
+            data: { counts: { Watching: 0, Completed: 3, 'Plan to Watch': 0, 'On Hold': 0, Dropped: 0 }, total: 3 },
+        });
+        listApi.getAll.mockResolvedValue(page([], { count: 0 }));
+        renderTab({ isPublicView: true }, '/u/mio/anime_list');
+
+        await waitFor(() => expect(screen.getByRole('button', { name: /^Completed/ })).toHaveTextContent('Completed3'));
+        expect(screen.getByRole('button', { name: /^Watching/ })).toHaveTextContent('Watching0');
+        expect(screen.queryByRole('button', { name: /^On hold/ })).not.toBeInTheDocument();
     });
 
     it('switching status refetches that status', async () => {

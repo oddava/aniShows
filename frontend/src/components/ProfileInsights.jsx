@@ -3,7 +3,7 @@ import { Cell, BarChart, Bar, LabelList, XAxis, YAxis, Tooltip, ResponsiveContai
 import { Link } from 'react-router-dom';
 import { getProfileAccentTheme, normalizeProfilePrimaryColor } from '../utils/profileAccent';
 import { LIST_STATUSES } from '../utils/listStatus';
-import { profileScore } from './profile/profileStats';
+import { profileScore, scoreLine } from './profile/profileStats';
 import { listQueries } from '../api/queries/lists';
 
 function toRgba(hex, alpha) {
@@ -81,7 +81,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
     if (summaryLoading) {
         return (
             <div className="space-y-4" aria-hidden="true">
-                <div className="h-28 rounded-[var(--radius-lg)] bg-[var(--ink-1)] animate-pulse" />
+                <div className="h-36 rounded-[var(--radius-lg)] bg-[var(--ink-1)] animate-pulse" />
                 <div className="grid gap-4 lg:grid-cols-2">
                     <div className="h-72 rounded-[var(--radius-lg)] bg-[var(--ink-1)] animate-pulse" />
                     <div className="h-72 rounded-[var(--radius-lg)] bg-[var(--ink-1)] animate-pulse" />
@@ -106,7 +106,6 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
     }
 
     const totalAnime = summary?.total || 0;
-    const totalEpisodes = summary?.episodes_watched || 0;
 
     const genreData = (summary?.top_genres || [])
         .slice(0, 8)
@@ -130,18 +129,14 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
     // The tallest bar fills the chart: the scale tops out at the largest
     // count, and each bar carries its own number instead of a y-axis.
     const maxScoreCount = Math.max(...scoreData.map((entry) => entry.count), 1);
-    // Same source as the overview's line: the summary's own rated_count.
-    const { mean, rated: ratedCount } = profileScore(null, summary);
+    // Same source as the header's line: the summary's own rated_count.
+    const score = profileScore(null, summary);
+    const ratedCount = score.rated;
+    const scoreNote = scoreLine(score);
 
     const statusCounts = LIST_STATUSES
         .map((status) => ({ ...status, count: Number(summary?.counts?.[status.value]) || 0 }))
         .filter((status) => status.count > 0);
-
-    const numbers = [
-        { label: 'on the list', value: totalAnime },
-        { label: 'episodes watched', value: totalEpisodes },
-        { label: mean != null ? `mean score of ${ratedCount} rated` : null, value: mean },
-    ].filter((entry) => entry.label && entry.value);
 
     if (totalAnime === 0) {
         return (
@@ -154,17 +149,8 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
 
     return (
         <div className="w-full space-y-4 pb-8">
-            <dl className="panel flex flex-wrap gap-x-12 gap-y-5">
-                {numbers.map((entry) => (
-                    <div key={entry.label} className="flex flex-col-reverse">
-                        <dt className="mt-2 text-[15px] text-[var(--text-2)]">{entry.label}</dt>
-                        <dd className="text-[2rem] font-semibold leading-none tracking-[-0.02em] text-[var(--text-1)] tabular">
-                            {typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value}
-                        </dd>
-                    </div>
-                ))}
-            </dl>
-
+            {/* The totals (on the list, episodes, average) are the header's line,
+                right above this tab: no second copy of them here. */}
             {statusCounts.length > 0 && (
                 <Section title="By status">
                     <div className="flex h-2 w-full gap-1 overflow-hidden rounded-full" aria-hidden="true">
@@ -197,7 +183,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                     )}
 
                     {ratedCount > 0 && (
-                        <Section title="Scores" note={`Mean ${mean} from ${ratedCount} rated`}>
+                        <Section title="Scores" note={scoreNote && `${scoreNote.charAt(0).toUpperCase()}${scoreNote.slice(1)}`}>
                             <div className="h-56">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={scoreData} margin={{ top: 24, right: 0, left: 0, bottom: 0 }}>

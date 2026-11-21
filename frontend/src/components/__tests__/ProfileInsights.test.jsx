@@ -64,3 +64,23 @@ describe('ProfileInsights score histogram', () => {
         expect(plotHeight).toBeGreaterThan(100);
     });
 });
+
+describe('ProfileInsights numbers', () => {
+    it('does not repeat the header totals and words the score as an average', async () => {
+        renderInsights({
+            total: 7,
+            episodes_watched: 64,
+            mean_score: 7.8,
+            rated_count: 3,
+            counts: { Watching: 3, Completed: 4 },
+            score_histogram: { 6: 1, 8: 1, 9: 1 },
+        });
+
+        await screen.findByRole('heading', { name: 'Scores' });
+        expect(screen.getByText('Average 7.8 from 3 scores')).toBeInTheDocument();
+        expect(screen.queryByText('episodes watched')).not.toBeInTheDocument();
+        expect(screen.queryByText('on the list')).not.toBeInTheDocument();
+        expect(screen.queryByText(/mean score|rated$/i)).not.toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'By status' })).toBeInTheDocument();
+    });
+});

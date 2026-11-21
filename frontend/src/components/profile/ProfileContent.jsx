@@ -104,7 +104,7 @@ export default function ProfileContent({
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Activity">
                     <Suspense fallback={<div className="py-12 text-[15px] text-[var(--text-3)]">Loading…</div>}>
-                        <ActivityTab username={targetUsername} isPrivate={isPrivate} />
+                        <ActivityTab username={targetUsername} isPrivate={isPrivate} isOwner={isOwnProfile} />
                     </Suspense>
                 </ProfileErrorBoundary>
             );
