@@ -492,15 +492,17 @@ const ForumCategoryList = () => {
     return (
         <div className="forums-page">
             <Helmet>
-                <title>Forums | aniShows</title>
+                <title>Forums | AniShows</title>
                 <meta name="description" content="Join the discussion! Talk about your favorite anime, share recommendations, and meet other fans." />
             </Helmet>
 
-            <div className="mx-auto max-w-[1280px] px-4 py-8 md:px-6">
+            <div className="page-container py-8">
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[170px_minmax(0,1fr)_280px]">
                     {renderCategorySidebar()}
 
-                    <section className="min-w-0">
+                    {/* Pinned to its track: with no category list the main
+                        column used to fall into the 170 px sidebar (C1). */}
+                    <section className="min-w-0 xl:col-start-2">
                         <div className="mb-4 border-b border-[var(--forums-border)] pb-3">
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                                 <div className="relative min-w-0 flex-1">

@@ -17,7 +17,7 @@
     min-height: 100vh;
     background: var(--forums-bg);
     color: var(--forums-text);
-    font-family: "Inter", "Plus Jakarta Sans", system-ui, sans-serif;
+    font-family: var(--font-text);
   }
 
   .forums-surface {
@@ -31,9 +31,10 @@
   }
 
   .forums-heading {
-    font-size: clamp(1.875rem, 2.8vw, 2.375rem);
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-family: var(--font-display);
+    font-size: clamp(2rem, 3vw, 2.75rem);
+    font-weight: 800;
+    letter-spacing: 0.005em;
     color: var(--forums-text);
   }
 
@@ -184,37 +185,5 @@
     border-color: var(--forums-accent-weak);
   }
 
-  html[data-theme="light"] .forums-page {
-    --forums-bg: #f8f9fa;
-    --forums-surface: #ffffff;
-    --forums-surface-soft: #f1f3f5;
-    --forums-thread-bg: var(--forums-surface);
-    --forums-border: #d8dee4;
-    --forums-text: #111827;
-    --forums-text-muted: #374151;
-    --forums-meta: #6b7280;
-    --forums-accent: var(--color-accent);
-    --forums-accent-text: var(--color-accent-text);
-    --forums-accent-weak: color-mix(in srgb, var(--color-accent) 26%, transparent);
-    --forums-accent-hover: var(--color-accent-dark);
-    --forums-accent-text-hover: var(--color-accent-text-hover);
-  }
-
-  @media (prefers-color-scheme: light) {
-    .forums-page {
-      --forums-bg: #f8f9fa;
-      --forums-surface: #ffffff;
-      --forums-surface-soft: #f1f3f5;
-      --forums-thread-bg: var(--forums-surface);
-      --forums-border: #d8dee4;
-      --forums-text: #111827;
-      --forums-text-muted: #374151;
-      --forums-meta: #6b7280;
-      --forums-accent: var(--color-accent);
-      --forums-accent-text: var(--color-accent-text);
-      --forums-accent-weak: color-mix(in srgb, var(--color-accent) 26%, transparent);
-      --forums-accent-hover: var(--color-accent-dark);
-      --forums-accent-text-hover: var(--color-accent-text-hover);
-    }
-  }
+  /* AniShows is dark-only: no light-scheme overrides here (C1). */
 }
