@@ -70,3 +70,14 @@ Later, if time allows: 15 landing + identity (L1, V2, V3) · 16 share previews /
 Local stack only (isolated compose project, DB cloned from the dev volume, no Celery so nothing syncs
 from AniList). Screens at 1440×900 and 390×844, guest and signed in, in `docs/ux-overhaul/screens/`.
 Tests: `npm run test:run`, `npm run lint`, backend `pytest` for touched apps.
+
+## Outcome
+
+Reviewed by a two-member council (Claude Opus 5.5 and GPT 6.1 Sol, high effort) over 11 rounds against the
+running app at 1440×900 and 390×844, signed in and out. Final scores: **Opus 9.1, Sol 9.0** (from 6.0 / 6.8
+in round 1). Owner rulings added along the way: the oddava.me look (DM Sans, slate, periwinkle, sentence
+case); no lines, no underlined links, no ornaments; sections on soft panels; focus is a lighter fill, never a
+ring or glow; the 18+ preference lives only in Settings; Browse filters are one row of compact menus plus a
+calm "More filters" panel; no transform hover on posters (a slight brighten only); loading fades in
+(blur-up posters, sweeping skeletons, staggered cards, panels). Screens: `docs/ux-overhaul/screens/before/`
+and `docs/ux-overhaul/screens/after/`.

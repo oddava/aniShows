@@ -73,15 +73,14 @@ function AnimeCard({
     }, [imageUrl]);
 
     // A missing optimised cover swaps to the original; the skeleton stays and
-    // the fallback fades in on its own load. Only if that fails too does the
-    // card stop waiting.
+    // the fallback fades in on its own load.
     const handleImageError = useCallback((event) => {
-        const img = event.currentTarget;
-        if (img.dataset.fallbackTried === 'true') {
+        // applyImageFallback retries in steps (cache-bust, then the original);
+        // stop waiting only once its last step has failed too.
+        if (event.currentTarget.dataset.fallbackApplied === '1') {
             setImageLoaded(true);
             return;
         }
-        img.dataset.fallbackTried = 'true';
         applyImageFallback(event, fallbackImageUrl);
     }, [fallbackImageUrl]);
 
