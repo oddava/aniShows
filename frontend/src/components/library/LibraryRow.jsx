@@ -127,6 +127,7 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en' }) {
                     score={entry.score}
                     watched={entry.episodes_watched || 0}
                     total={Number(anime.episode_count) > 0 ? Number(anime.episode_count) : null}
+                    aired={airedEpisodeCount(anime)}
                     title={title}
                     pending={isPending}
                     onSelect={(value) => setStatus(value)}

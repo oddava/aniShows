@@ -108,9 +108,9 @@ export default function AnimeListContent({
                                 type="button"
                                 aria-pressed={isActive}
                                 onClick={() => setListStatusFilter(tab.value)}
-                                className={`inline-flex min-h-[2.75rem] shrink-0 items-center gap-2 rounded-full border px-4 text-[15px] transition-colors ${isActive
-                                    ? 'border-[var(--line-4)] bg-white/[0.06] text-[var(--text-1)]'
-                                    : 'border-white/[0.06] text-[var(--text-2)] hover:text-[var(--text-1)]'
+                                className={`inline-flex min-h-[2.75rem] shrink-0 items-center gap-2 rounded-full px-4 text-[15px] transition-colors ${isActive
+                                    ? 'bg-white/[0.07] text-[var(--text-1)]'
+                                    : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
                                     }`}
                             >
                                 <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: tab.color }} />
@@ -142,11 +142,11 @@ export default function AnimeListContent({
                         value={ordering}
                         onChange={setOrdering}
                         options={LIST_ORDERINGS}
-                        triggerClassName="min-h-[2.75rem] rounded-lg border-white/[0.08] bg-transparent px-3 py-2 text-[15px] text-[var(--text-2)]"
+                        triggerClassName="min-h-[2.75rem] rounded-lg !border-transparent bg-white/[0.04] px-3 py-2 text-[15px] text-[var(--text-2)]"
                         menuClassName="z-[320]"
                         ariaLabel="Sort list"
                     />
-                    <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] p-1">
+                    <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-1">
                         <button
                             type="button"
                             onClick={() => setViewMode('grid')}
@@ -299,7 +299,7 @@ function EditableListRow({ item }) {
                 onClick={() => increment()}
                 disabled={isPending || atEnd}
                 aria-label={`Add one episode to ${item.anime?.title || 'this anime'}`}
-                className="min-h-[2.75rem] min-w-[2.75rem] shrink-0 rounded-lg border border-white/[0.08] px-2.5 text-sm font-medium text-[var(--text-1)] transition-colors hover:border-[var(--line-4)] disabled:cursor-not-allowed disabled:opacity-40"
+                className="min-h-[2.75rem] min-w-[2.75rem] shrink-0 rounded-lg bg-white/[0.05] px-2.5 text-sm font-medium text-[var(--text-1)] transition-colors hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-40"
             >
                 +1
             </button>

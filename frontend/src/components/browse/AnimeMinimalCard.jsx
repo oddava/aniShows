@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import useListEntryMutation from '../../hooks/useListEntryMutation';
 import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
 import { statusMeta } from '../../utils/listStatus';
+import { airedEpisodeCount } from '../../utils/episodes';
 import QuickAdd from '../ui/QuickAdd';
 
 /** Browse compact view: a poster tile with your status and the same quick add (B4). */
@@ -40,6 +41,7 @@ function AnimeMinimalCard({ anime, titleLanguage = 'en' }) {
                     score={entry.score}
                     watched={entry.episodes_watched || 0}
                     total={Number(anime.episode_count) > 0 ? Number(anime.episode_count) : null}
+                    aired={airedEpisodeCount(anime)}
                     title={displayTitle}
                     pending={isPending}
                     onSelect={(value) => setStatus(value)}

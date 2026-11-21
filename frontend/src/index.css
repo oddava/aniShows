@@ -82,7 +82,7 @@
   --radius-lg: 14px;
   --radius-pill: 999px;
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.35);
-  --shadow-pop: 0 12px 32px -12px rgb(0 0 0 / 0.6), 0 0 0 1px var(--line-2);
+  --shadow-pop: 0 12px 32px -12px rgb(0 0 0 / 0.6);
 
   /* Touch */
   --tap: 44px;

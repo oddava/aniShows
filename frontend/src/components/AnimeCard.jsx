@@ -136,6 +136,7 @@ function AnimeCard({
                         score={entry.score}
                         watched={watched}
                         total={total}
+                        aired={aired}
                         title={displayTitle}
                         pending={isPending}
                         onSelect={(value) => setStatus(value)}
@@ -218,6 +219,7 @@ function AnimeCard({
                         score={entry.score}
                         watched={watched}
                         total={total}
+                        aired={aired}
                         title={displayTitle}
                         pending={isPending}
                         onSelect={(value) => setStatus(value)}

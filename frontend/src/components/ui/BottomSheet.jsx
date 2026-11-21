@@ -49,7 +49,7 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
     }, [open]);
 
     const handleEscape = useCallback(() => onClose?.(), [onClose]);
-    const trapRef = useFocusTrap(open, handleEscape);
+    const trapRef = useFocusTrap(open && mounted, handleEscape);
 
     if (!mounted || typeof document === 'undefined') return null;
 

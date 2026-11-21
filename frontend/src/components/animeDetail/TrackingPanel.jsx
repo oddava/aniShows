@@ -83,6 +83,7 @@ export default function TrackingPanel({
                     score={entry.score}
                     watched={entry.episodes_watched || 0}
                     total={Number(anime.episode_count) > 0 ? Number(anime.episode_count) : null}
+                    aired={airedEpisodeCount(anime)}
                     title={anime.title}
                     pending={isPending}
                     onSelect={handleStatus}

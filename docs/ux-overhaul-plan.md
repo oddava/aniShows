@@ -25,16 +25,23 @@ Promise: *Never lose your place. Know what's on tonight.*
 
 ## Design system (step 1)
 
-* **Colour.** Neutral ink surfaces (no violet tint). One signature colour, *Highlighter* (`#D4F65A`
-  family), used sparingly: primary actions, focus, "tonight" markers, the airing ribbon. Dark ink text
-  on it. It is the TV-guide highlighter you mark tonight's shows with.
-* **Fixed status colours** (dots, buttons, tabs, charts; never cover-derived): Watching mint,
-  Completed blue, On hold amber, Dropped coral-red, Planning slate. Cover colour only tints backdrops.
+> Revised after owner feedback: the first direction (lime "Highlighter" + Big Shoulders display face)
+> read as generic. The site now takes its look from oddava.me. The rules below are the shipped ones.
+
+* **Colour.** Slate ink surfaces (`#15181d` page, `#1b1f25` panels, up to `#2f3640`; no violet tint).
+  Text `#e6e9ee` / `#a3abb6` / `#7d8591` (AA on every surface). One accent, periwinkle `#8db1ff`, for
+  primary actions, links, focus and "tonight"; slate text on accent fills.
+* **No lines.** No hairline dividers, borders, rules, underline indicators or outlined controls.
+  Sections sit on soft raised panels (`.panel`); active tabs, days and segments use a soft fill
+  (`bg-white/[0.07]`); inputs use a soft fill. Links are plain accent text, never underlined. No
+  decorative marks. Empty states are a sentence and an action, no icon art.
+* **Fixed status colours** (dots, chips, tabs, charts; never cover-derived): Watching `#86cc90`,
+  Completed `#b8a5ff`, Planning `#a3abb6`, On hold `#e9c46a`, Dropped `#f391ba`. Cover colour only
+  tints backdrops. In rows the status shows as a soft chip with its word ("Watching").
 * **One label per status**: Watching, Completed, On hold, Dropped, **Planning** (API value stays
-  `Plan to Watch`).
-* **Type.** Display: *Big Shoulders Display* (condensed signage face: long anime titles fit, numbers
-  and countdowns read like a timetable), self-hosted via `@fontsource-variable/big-shoulders-display`
-  (~30 KB woff2, no third-party request). Text: Inter (unchanged). Scale tokens `--text-*`.
+  `Plan to Watch`). Sentence case everywhere ("My list", "Most popular").
+* **Type.** DM Sans everywhere (as on oddava.me), self-hosted via `@fontsource-variable/dm-sans`
+  (no third-party request; replaced Google-hosted Inter). Page titles 650 weight, tight tracking.
 * **Space / radii / elevation / motion** tokens: 4 px spacing grid; radii 6/10/14; two shadows;
   `--dur-fast 150ms`, `--dur-base 200ms`, `--dur-slow 250ms`, one ease-out curve; everything off under
   `prefers-reduced-motion`.
