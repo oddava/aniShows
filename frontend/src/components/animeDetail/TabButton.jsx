@@ -2,18 +2,15 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
 // Memoized tab button component
-const TabButton = memo(({ tab, isActive, to, accentColor, count }) => {
+const TabButton = memo(({ tab, isActive, to, count }) => {
     return (
         <Link
             to={to}
             aria-current={isActive ? 'page' : undefined}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 lg:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap flex-shrink-0 min-h-[40px] sm:min-h-0
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 lg:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap flex-shrink-0 min-h-11
                 ${isActive
-                    ? 'text-white '
+                    ? 'bg-white/[0.1] text-white'
                     : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-            style={isActive ? {
-                backgroundColor: accentColor || '#75698d'
-            } : {}}
         >
             {tab.label}
             {count > 0 && (

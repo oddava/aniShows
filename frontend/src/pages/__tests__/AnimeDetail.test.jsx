@@ -41,9 +41,9 @@ vi.mock('../../context/ThemeContext', () => ({
     }),
 }));
 
-vi.mock('../../components/StatusSelector', () => ({
-    default: ({ onUpdate }) => (
-        <button data-testid="status-update-trigger" onClick={() => onUpdate?.({ id: 1, status: 'Watching' })}>
+vi.mock('../../components/animeDetail/TrackingPanel', () => ({
+    default: ({ onListUpdate }) => (
+        <button data-testid="status-update-trigger" onClick={() => onListUpdate?.({ id: 1, status: 'Watching' })}>
             Update Status
         </button>
     ),

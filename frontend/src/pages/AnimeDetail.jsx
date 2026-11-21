@@ -14,7 +14,6 @@ import {
     getImageSrcSet,
     getOptimizedImageUrl,
 } from '../utils/imageUtils';
-import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import logger from '../utils/logger';
 import { animeKeys, animeQueries, patchAnimeListStatus } from '../api/queries/anime';
 import { favoriteKeys, listKeys, profileKeys, userKeys } from '../api/queries/user';
@@ -42,7 +41,6 @@ export default function AnimeDetail() {
     const isRetro = theme && theme.startsWith('retro-');
     const queryClient = useQueryClient();
     const [isFavorite, setIsFavorite] = useState(false);
-    const [editTriggerKey, setEditTriggerKey] = useState(0);
     const [isLargeViewport, setIsLargeViewport] = useState(() => (
         typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false
     ));
@@ -78,7 +76,8 @@ export default function AnimeDetail() {
     const reviews = useAnimeReviews({ slug, anime, user, isAuthenticated, queryClient, animeDetailQueryKey });
 
     // Derived state
-    const accentColor = useAnimeAccentColor(anime?.cover_image, anime?.banner_image);
+    // V1: controls use fixed colours; cover art only colours the backdrop.
+    const accentColor = null;
 
     // Effects
     useEffect(() => {
@@ -104,9 +103,6 @@ export default function AnimeDetail() {
         }
     }, [isAuthenticated, anime?.id, user, queryClient]);
 
-    const handleOpenListEdit = useCallback(() => {
-        setEditTriggerKey((current) => current + 1);
-    }, []);
 
     useEffect(() => {
         if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -213,7 +209,7 @@ export default function AnimeDetail() {
             tab.id === 'staff' ? staffTotal : 0
     }));
 
-    const mappedAccent = isRetro ? 'var(--color-accent-fill)' : (accentColor || 'var(--color-accent-fill)');
+    const mappedAccent = 'var(--color-accent-fill)';
 
     // Shared by the large-screen poster column and the small-screen header
     const trackingProps = {
@@ -227,9 +223,7 @@ export default function AnimeDetail() {
         setIsCoverLoaded,
         isFavorite,
         isLargeViewport,
-        editTriggerKey,
         handleListUpdate,
-        handleOpenListEdit,
         handleFavorite,
     };
 

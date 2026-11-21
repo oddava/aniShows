@@ -92,9 +92,9 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
                         <span 
                             className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
                             style={{ 
-                                color: accentColor || '#75698d',
-                                borderColor: accentColor ? `${accentColor}30` : 'rgba(117,105,141,0.2)',
-                                backgroundColor: accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)'
+                                color: '#c3cad4',
+                                borderColor: 'rgba(255,255,255,0.1)',
+                                backgroundColor: 'rgba(255,255,255,0.05)'
                             }}
                         >
                             {relations.length}

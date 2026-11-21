@@ -36,8 +36,8 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
                         className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
                         style={{ 
                             color: mappedAccent,
-                            borderColor: mappedAccent ? `${mappedAccent}30` : 'rgba(117,105,141,0.2)',
-                            backgroundColor: mappedAccent ? `${mappedAccent}10` : 'rgba(117,105,141,0.05)'
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            backgroundColor: 'rgba(255,255,255,0.05)'
                         }}
                     >
                         {reviewCount}
@@ -64,7 +64,7 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
                                 onClick={() => setIsWritingReview(true)}
                                 className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl  text-white font-bold bg-accent-dark"
                                 style={{
-                                    backgroundColor: accentColor || '#75698d'
+                                    backgroundColor: '#c3cad4'
                                 }}
                             >
                                 Write a Review

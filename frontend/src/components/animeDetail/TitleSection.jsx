@@ -1,6 +1,5 @@
-import { Link } from 'react-router-dom';
-import { ChevronDown, Heart, Pencil, Plus } from 'lucide-react';
-import StatusSelector from '../StatusSelector';
+import { ChevronDown } from 'lucide-react';
+import TrackingPanel from './TrackingPanel';
 import { applyImageFallback } from '../../utils/imageUtils';
 
 /**
@@ -19,9 +18,7 @@ export default function TitleSection({
     setIsCoverLoaded,
     isFavorite,
     isLargeViewport,
-    editTriggerKey,
     handleListUpdate,
-    handleOpenListEdit,
     handleFavorite,
     synopsisExpanded,
     setSynopsisExpanded,
@@ -29,7 +26,7 @@ export default function TitleSection({
     return (
         <div className="text-left mb-8">
             <div className="lg:hidden mb-8">
-                <div className="flex max-w-[360px] md:max-w-[420px] items-end gap-4">
+                <div className="flex max-w-[460px] items-end gap-4">
                     <div className="w-[118px] md:w-40 flex-shrink-0">
                         <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-dark-200 shadow-xl shadow-black/40 ring-1 ring-white/10">
                             {!isCoverLoaded && (
@@ -54,52 +51,22 @@ export default function TitleSection({
                     </div>
 
                     <div className="min-w-0 flex-1">
-                        <div className="space-y-3" data-title="Mobile Tracking Actions">
-                            {isAuthenticated ? (
-                                <div className="flex items-center gap-3">
-                                    <div className="flex-1 min-w-0">
-                                        <StatusSelector
-                                            animeId={anime.id}
-                                            initialStatus={anime.user_list_status}
-                                            onUpdate={handleListUpdate}
-                                            totalEpisodes={anime.episode_count}
-                                            compactSidebar={true}
-                                            showEditInDropdown={false}
-                                            externalEditTrigger={isLargeViewport ? 0 : editTriggerKey}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={handleOpenListEdit}
-                                        title="Edit List Entry"
-                                        className="w-9 h-9 flex justify-center items-center rounded-lg transition-all duration-300 bg-dark-100 text-gray-400 hover:text-white"
-                                    >
-                                        <Pencil className="w-4.5 h-4.5" />
-                                    </button>
-                                    <button
-                                        onClick={handleFavorite}
-                                        title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
-                                        className={`w-9 h-9 flex justify-center items-center rounded-lg transition-all duration-300
-                                            ${isFavorite
-                                                ? 'bg-red-500/10 text-red-500'
-                                                : 'bg-dark-100 text-gray-400 hover:text-white'}`}
-                                    >
-                                        <Heart className={`w-4.5 h-4.5 ${isFavorite ? 'fill-current' : ''}`} />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="w-full">
-                                    <Link to="/login" className="btn-primary py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold w-full shadow-lg">
-                                        <Plus className="w-4 h-4" /> Sign In to Track
-                                    </Link>
-                                </div>
-                            )}
-                        </div>
+                        {!isLargeViewport && (
+                            <TrackingPanel
+                                anime={anime}
+                                isAuthenticated={isAuthenticated}
+                                isFavorite={isFavorite}
+                                onFavorite={handleFavorite}
+                                onListUpdate={handleListUpdate}
+                                compact
+                            />
+                        )}
                     </div>
                 </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-3 lg:mb-4 min-w-0">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight lg:leading-[1.05] text-left w-full lg:w-auto break-words">
+                <h1 className="font-display text-[2.25rem] sm:text-5xl lg:text-6xl font-extrabold text-white leading-[0.98] tracking-[0.005em] text-left w-full lg:w-auto break-words">
                     {anime.title}
                 </h1>
             </div>

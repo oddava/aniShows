@@ -32,11 +32,6 @@ const getBrowseFilterHref = (key, value) => {
     return `/browse?${params.toString()}`;
 };
 
-const getFilterPillStyles = (accentColor) => ({
-    color: accentColor || '#75698d',
-    borderColor: accentColor ? `${accentColor}80` : 'rgba(117,105,141,0.5)',
-    backgroundColor: accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)',
-});
 
 const TAG_PREVIEW_COUNT = 12;
 
@@ -58,7 +53,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                 <div className="flex flex-col items-end leading-tight">
                     <span>{startStr}</span>
                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest my-1">to</span>
-                    <span style={{ color: accentColor || '#75698d' }}>Present</span>
+                    <span className="text-gray-200">Present</span>
                 </div>
             );
         }
@@ -118,29 +113,21 @@ export default function InformationBox({ anime, className, accentColor }) {
                         <div
                             className="p-4 rounded-xl border"
                             style={{
-                                backgroundColor: isWithin24Hours(anime.next_airing_date)
-                                    ? 'rgba(34, 197, 94, 0.1)'
-                                    : (accentColor ? `${accentColor}15` : 'rgba(117, 105, 141, 0.1)'),
-                                borderColor: isWithin24Hours(anime.next_airing_date)
-                                    ? 'rgba(34, 197, 94, 0.3)'
-                                    : (accentColor ? `${accentColor}30` : 'rgba(117, 105, 141, 0.2)')
+                                backgroundColor: 'var(--signature-soft)',
+                                borderColor: 'var(--signature-line)'
                             }}
                         >
                             <div className="flex items-center gap-2 mb-3">
                                 <Bell
                                     className="w-4 h-4"
                                     style={{
-                                        color: isWithin24Hours(anime.next_airing_date)
-                                            ? '#22c55e'
-                                            : (accentColor || '#75698d')
+                                        color: 'var(--signature)'
                                     }}
                                 />
                                 <span
                                     className="text-[10px] font-black uppercase tracking-widest"
                                     style={{
-                                        color: isWithin24Hours(anime.next_airing_date)
-                                            ? '#22c55e'
-                                            : (accentColor || '#75698d')
+                                        color: 'var(--signature)'
                                     }}
                                 >
                                     Next Episode
@@ -153,9 +140,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                                 <p
                                     className="text-sm font-semibold"
                                     style={{
-                                        color: isWithin24Hours(anime.next_airing_date)
-                                            ? '#22c55e'
-                                            : (accentColor || '#75698d')
+                                        color: 'var(--signature)'
                                     }}
                                 >
                                     {formatRelativeTime(anime.next_airing_date)}
@@ -176,16 +161,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                                 <Link
                                     key={genre.id}
                                     to={getBrowseFilterHref('genre', genre.slug)}
-                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border"
-                                    style={getFilterPillStyles(accentColor)}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = accentColor || '#75698d';
-                                        e.currentTarget.style.color = 'white';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)';
-                                        e.currentTarget.style.color = accentColor || '#75698d';
-                                    }}
+                                    className="inline-flex min-h-9 items-center px-3 text-xs font-semibold rounded-lg transition-colors bg-white/[0.05] text-gray-200 hover:bg-white/[0.1] hover:text-white"
                                 >
                                     {genre.name}
                                 </Link>
@@ -203,16 +179,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                                     <Link
                                         key={tag}
                                         to={getBrowseFilterHref('tags', tag)}
-                                        className="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border"
-                                        style={getFilterPillStyles(accentColor)}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.backgroundColor = accentColor || '#75698d';
-                                            e.currentTarget.style.color = 'white';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.backgroundColor = accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)';
-                                            e.currentTarget.style.color = accentColor || '#75698d';
-                                        }}
+                                        className="inline-flex min-h-9 items-center px-3 text-xs font-semibold rounded-lg transition-colors bg-white/[0.05] text-gray-200 hover:bg-white/[0.1] hover:text-white"
                                     >
                                         {tag}
                                     </Link>
@@ -245,27 +212,11 @@ export default function InformationBox({ anime, className, accentColor }) {
                                         href={link.url}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`px-3 py-2 text-[11px] font-bold rounded-lg transition-all flex items-center justify-between gap-2 border ${
+                                        className={`min-h-10 px-3 text-xs font-semibold rounded-lg transition-colors flex items-center justify-between gap-2 ${
                                             isAccentLink
-                                                ? 'bg-transparent hover:text-white'
-                                                : 'bg-dark-200 hover:bg-white text-gray-400 hover:text-black border-gray-700/50 hover:border-white'
+                                                ? 'bg-white/[0.07] text-gray-100 hover:bg-white/[0.12]'
+                                                : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white'
                                         }`}
-                                        style={isAccentLink ? {
-                                            color: accentColor || '#75698d',
-                                            borderColor: accentColor ? `${accentColor}80` : 'rgba(117,105,141,0.5)'
-                                        } : {}}
-                                        onMouseEnter={(e) => {
-                                            if (isAccentLink) {
-                                                e.currentTarget.style.backgroundColor = accentColor || '#75698d';
-                                                e.currentTarget.style.color = 'white';
-                                            }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            if (isAccentLink) {
-                                                e.currentTarget.style.backgroundColor = 'transparent';
-                                                e.currentTarget.style.color = accentColor || '#75698d';
-                                            }
-                                        }}
                                     >
                                         <span className="truncate">{link.site}</span>
                                         <ExternalLink className="w-3 h-3 shrink-0 opacity-60" />

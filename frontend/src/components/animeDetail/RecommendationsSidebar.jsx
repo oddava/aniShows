@@ -35,9 +35,9 @@ export default function RecommendationsSidebar({ anime, recommendations, accentC
                             to={`/browse?genre=${anime.genres?.[0]?.slug || ''}`}
                             className="block text-center mt-4 sm:mt-6 text-xs font-bold hover:text-white transition-colors py-2 rounded-lg border"
                             style={{
-                                color: accentColor || '#75698d',
-                                backgroundColor: accentColor ? `${accentColor}10` : 'rgba(117,105,141,0.05)',
-                                borderColor: accentColor ? `${accentColor}1a` : 'rgba(117,105,141,0.1)'
+                                color: '#c3cad4',
+                                backgroundColor: 'rgba(255,255,255,0.05)',
+                                borderColor: 'rgba(255,255,255,0.08)'
                             }}
                         >
                             FIND MORE TITLES LIKE THIS

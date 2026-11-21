@@ -15,6 +15,7 @@ export default function ScorePicker({
     label = 'Your score',
     allowClear = true,
     size = 'md',
+    layout = 'row',
     className = '',
 }) {
     const refs = useRef([]);
@@ -40,7 +41,7 @@ export default function ScorePicker({
 
     return (
         <div className={`flex items-center gap-2 ${className}`}>
-            <div role="radiogroup" aria-label={label} className="flex flex-1 gap-1">
+            <div role="radiogroup" aria-label={label} className={layout === 'grid' ? 'grid flex-1 grid-cols-5 gap-1' : 'flex flex-1 gap-1'}>
                 {SCORES.map((score, index) => {
                     const checked = score === current;
                     const filled = current > 0 && score <= current;
