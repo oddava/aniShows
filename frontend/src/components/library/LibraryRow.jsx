@@ -49,7 +49,7 @@ function ScoreCell({ score, title, onChange, disabled }) {
                 )}
             </button>
             {open && (
-                <div className="popover-in absolute right-0 top-full z-30 mt-1 w-[19rem] rounded-[var(--radius-md)] bg-[var(--ink-3)] p-2 shadow-[var(--shadow-pop)]">
+                <div className="popover-in absolute right-0 top-full z-30 mt-1 w-64 rounded-[var(--radius-md)] bg-[var(--ink-3)] p-2 shadow-[var(--shadow-pop)]">
                     <ScorePicker
                         value={score}
                         size="sm"
@@ -123,6 +123,8 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en' }) {
                     className="relative w-11 sm:w-full [&>button]:px-2.5 [&>button>span:nth-child(2)]:hidden sm:[&>button>span:nth-child(2)]:inline [&>button>svg:last-child]:hidden sm:[&>button>svg:last-child]:block"
                     status={entry.status}
                     score={entry.score}
+                    watched={entry.episodes_watched || 0}
+                    total={Number(anime.episode_count) > 0 ? Number(anime.episode_count) : null}
                     title={title}
                     pending={isPending}
                     onSelect={(value) => setStatus(value)}

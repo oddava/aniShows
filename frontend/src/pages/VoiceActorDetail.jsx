@@ -32,7 +32,7 @@ function parseMarkdownLinks(text) {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 underline transition-colors"
+                    className="text-link"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {linkText}

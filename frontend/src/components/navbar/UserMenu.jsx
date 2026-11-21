@@ -170,11 +170,11 @@ export default function UserMenu({
                 </div>
             ) : isAuthFlowPath(pathname) ? null : (
                 <>
-                    <Link to="/login" className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
-                        Sign In
+                    <Link to="/login" className="flex min-h-11 items-center px-3 text-[15px] text-[var(--text-2)] transition-colors hover:text-[var(--text-1)]">
+                        Sign in
                     </Link>
-                    <Link to="/register" className="btn-primary text-sm py-2 px-4">
-                        Get Started
+                    <Link to="/register" className="btn-primary px-4 text-[15px]">
+                        Create account
                     </Link>
                 </>
             )}

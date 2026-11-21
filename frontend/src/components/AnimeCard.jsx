@@ -47,6 +47,7 @@ function AnimeCard({
     showMeta = false,
     metaText = null,
     showProgress = false,
+    variant = 'poster',
 }) {
     const { isAuthenticated } = useAuth();
     const listEntry = userListEntry || anime.user_list_status || null;
@@ -88,8 +89,8 @@ function AnimeCard({
         if (!showAiringCountdown) return null;
         const left = timeUntil(anime.next_airing_date);
         if (!left) return null;
-        const ep = anime.next_airing_episode ? `EP ${anime.next_airing_episode}` : 'Next EP';
-        return left === 'aired' ? `${ep} out now` : `${ep} in ${left}`;
+        const ep = anime.next_airing_episode ? `Ep ${anime.next_airing_episode}` : 'Next ep';
+        return left === 'aired' ? `${ep} is out` : `${ep} in ${left}`;
     }, [showAiringCountdown, anime.next_airing_date, anime.next_airing_episode]);
 
     const metaLine = useMemo(() => {
@@ -101,6 +102,53 @@ function AnimeCard({
 
     const loading = priority || index < 6 ? 'eager' : 'lazy';
     const href = `/anime/${anime.slug}`;
+
+    if (variant === 'row') {
+        // The agenda row (Schedule): same facts and quick add, laid out like
+        // oddava.me's list rows: thumb, title and what's next, action right.
+        return (
+            <article className="group grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-4 border-b border-white/[0.06] py-3 last:border-b-0" aria-label={displayTitle}>
+                <Link to={href} tabIndex={-1} aria-hidden="true" className="relative block h-[72px] w-12 overflow-hidden rounded-md bg-[var(--ink-2)]">
+                    <img
+                        ref={imageRef}
+                        src={getOptimizedImageUrl(anime, 'cover', 'small') || imageUrl}
+                        alt=""
+                        loading={loading}
+                        decoding="async"
+                        onLoad={() => setImageLoaded(true)}
+                        onError={handleImageError}
+                        data-loaded={imageLoaded}
+                        className="img-fade h-full w-full object-cover"
+                    />
+                </Link>
+                <div className="min-w-0">
+                    <Link to={href} className="flex items-start gap-1.5">
+                        {meta && <span aria-hidden="true" className="mt-[0.5rem] h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />}
+                        <span className="line-clamp-2 text-base font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] group-hover:text-[var(--signature)]">{displayTitle}</span>
+                    </Link>
+                    <p className="mt-0.5 text-sm text-[var(--text-2)] tabular">
+                        {[metaLine, countdown].filter(Boolean).join(' · ')}
+                    </p>
+                    {meta && <span className="sr-only">On your list: {meta.label}</span>}
+                </div>
+                {isAuthenticated ? (
+                    <QuickAdd
+                        status={status}
+                        score={entry.score}
+                        watched={watched}
+                        total={total}
+                        title={displayTitle}
+                        pending={isPending}
+                        onSelect={(value) => setStatus(value)}
+                        onScore={(value) => setScore(value)}
+                        onRemove={() => remove()}
+                        placement="down"
+                        className="relative"
+                    />
+                ) : <span />}
+            </article>
+        );
+    }
 
     if (lite) {
         return (
@@ -168,6 +216,8 @@ function AnimeCard({
                     <QuickAdd
                         status={status}
                         score={entry.score}
+                        watched={watched}
+                        total={total}
                         title={displayTitle}
                         pending={isPending}
                         onSelect={(value) => setStatus(value)}
@@ -178,17 +228,6 @@ function AnimeCard({
                 )}
             </div>
 
-            {isAuthenticated && showProgress && isWatching && (
-                <ProgressStepper
-                    size="sm"
-                    className="mt-2 self-start"
-                    value={watched}
-                    total={total}
-                    aired={aired}
-                    title={displayTitle}
-                    onCommit={(next) => setProgress(next)}
-                />
-            )}
 
             {/* The poster link is the tab stop; this one repeats it for pointers. */}
             <Link to={href} className="mt-2.5 block" tabIndex={-1} aria-hidden="true">
@@ -208,6 +247,17 @@ function AnimeCard({
                 )}
             </Link>
             {meta && <span className="sr-only">On your list: {meta.label}</span>}
+            {isAuthenticated && showProgress && isWatching && (
+                <ProgressStepper
+                    size="sm"
+                    className="mt-2 self-start"
+                    value={watched}
+                    total={total}
+                    aired={aired}
+                    title={displayTitle}
+                    onCommit={(next) => setProgress(next)}
+                />
+            )}
         </article>
     );
 }
@@ -222,6 +272,7 @@ const arePropsEqual = (prev, next) => {
     if (prev.showMeta !== next.showMeta) return false;
     if (prev.metaText !== next.metaText) return false;
     if (prev.showProgress !== next.showProgress) return false;
+    if (prev.variant !== next.variant) return false;
     if (prev.anime.episode_count !== next.anime.episode_count) return false;
     if (prev.anime.next_airing_date !== next.anime.next_airing_date) return false;
 

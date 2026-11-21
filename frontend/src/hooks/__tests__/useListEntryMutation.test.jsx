@@ -79,7 +79,8 @@ describe('useListEntryMutation', () => {
 
         expect(result.current.entry).toMatchObject({ id: 3, status: 'Watching', episodes_watched: 4 });
         expect(toastMock.notifyError).toHaveBeenCalledWith('Too many episodes.', { id: 'list-7' });
-        expect(toastMock.notify).not.toHaveBeenCalled();
+        // The toast showed at once (optimistic); the error replaces it under the same id.
+        expect(toastMock.notify).toHaveBeenCalledWith('Moved to Completed', expect.objectContaining({ id: 'list-7' }));
         expect(invalidate).not.toHaveBeenCalled();
         expect(result.current.isPending).toBe(false);
     });
@@ -102,8 +103,8 @@ describe('useListEntryMutation', () => {
         await act(() => result.current.increment());
         await act(() => result.current.setProgress(40));
 
-        expect(listApi.update).toHaveBeenCalledTimes(1);
-        expect(listApi.update).toHaveBeenCalledWith(3, { episodes_watched: 28 });
+        // Already at 28 of 28: nothing to write.
+        expect(listApi.update).not.toHaveBeenCalled();
     });
 
     it('does not cap when the episode count is unknown', async () => {
@@ -141,22 +142,54 @@ describe('useListEntryMutation', () => {
         expect(result.current.entry).toMatchObject({ id: 9, status: 'Completed' });
     });
 
-    it('ignores a second write while one is in flight', async () => {
-        const pending = deferred();
-        listApi.update.mockReturnValue(pending.promise);
+    it('queues a second write behind the first instead of dropping it', async () => {
+        const first = deferred();
+        listApi.update
+            .mockReturnValueOnce(first.promise)
+            .mockResolvedValueOnce({ data: { id: 3, status: 'Watching', episodes_watched: 6 } });
         const { result } = setup({ id: 3, status: 'Watching', episodes_watched: 4 });
 
-        let first;
-        act(() => { first = result.current.increment(); });
-        let second;
-        await act(async () => { second = await result.current.increment(); });
+        let a;
+        let b;
+        act(() => { a = result.current.increment(); });
+        act(() => { b = result.current.increment(); });
+        // Both taps show at once; only the first request is out.
+        expect(result.current.entry.episodes_watched).toBe(6);
+        await act(async () => {});
+        expect(listApi.update).toHaveBeenCalledTimes(1);
+
         await act(async () => {
-            pending.resolve({ data: { id: 3, status: 'Watching', episodes_watched: 5 } });
-            await first;
+            first.resolve({ data: { id: 3, status: 'Watching', episodes_watched: 5 } });
+            await a;
+            await b;
         });
 
-        expect(second).toBeNull();
-        expect(listApi.update).toHaveBeenCalledTimes(1);
+        expect(listApi.update).toHaveBeenNthCalledWith(1, 3, { episodes_watched: 5 });
+        expect(listApi.update).toHaveBeenNthCalledWith(2, 3, { episodes_watched: 6 });
+        expect(result.current.entry.episodes_watched).toBe(6);
+        expect(result.current.isPending).toBe(false);
+    });
+
+    it('a score picked right after an add waits for the new id (no lost score)', async () => {
+        const added = deferred();
+        listApi.add.mockReturnValueOnce(added.promise);
+        listApi.update.mockResolvedValueOnce({ data: { id: 50, status: 'Completed', episodes_watched: 28, score: 8 } });
+        const { result } = setup(null);
+
+        let status;
+        let score;
+        act(() => { status = result.current.setStatus('Completed'); });
+        act(() => { score = result.current.setScore(8); });
+        expect(result.current.entry).toMatchObject({ status: 'Completed', score: 8 });
+
+        await act(async () => {
+            added.resolve({ data: { id: 50, status: 'Completed', episodes_watched: 28, score: 0 } });
+            await status;
+            await score;
+        });
+
+        expect(listApi.update).toHaveBeenCalledWith(50, { score: 8 });
+        expect(result.current.entry).toMatchObject({ id: 50, status: 'Completed', score: 8 });
     });
 
     it('starts a rewatch through the server', async () => {
@@ -198,7 +231,9 @@ describe('toast with Undo after every write (T6)', () => {
         const { result } = setup({ id: 3, status: 'Watching', episodes_watched: 12, started_at: '2026-11-01' });
 
         await act(() => result.current.setStatus('Completed'));
-        const [message, options] = toastMock.notify.mock.calls[0];
+        expect(toastMock.notify.mock.calls[0][0]).toBe('Moved to Completed');
+        // Once the server filled the progress, the toast says so.
+        const [message, options] = toastMock.notify.mock.calls.at(-1);
         expect(message).toBe('Completed. Every episode marked watched');
 
         await act(async () => { await options.onUndo(); });

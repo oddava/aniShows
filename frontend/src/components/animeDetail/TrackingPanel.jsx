@@ -81,6 +81,8 @@ export default function TrackingPanel({
                     className="relative min-w-0 flex-1"
                     status={status}
                     score={entry.score}
+                    watched={entry.episodes_watched || 0}
+                    total={Number(anime.episode_count) > 0 ? Number(anime.episode_count) : null}
                     title={anime.title}
                     pending={isPending}
                     onSelect={handleStatus}
@@ -154,7 +156,6 @@ export default function TrackingPanel({
                                 value={entry.score}
                                 onChange={handleScore}
                                 size="sm"
-                                layout={compact ? 'grid' : 'row'}
                                 disabled={isPending}
                             />
                         </div>

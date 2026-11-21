@@ -56,6 +56,17 @@ describe('ProgressStepper (T3)', () => {
         expect(onCommit).not.toHaveBeenCalled();
     });
 
+    it('flushes acknowledged taps when the page goes away mid-burst', () => {
+        vi.useFakeTimers();
+        const onCommit = vi.fn();
+        const { unmount } = render(<ProgressStepper value={12} total={0} onCommit={onCommit} title="One Piece" />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'One episode more of One Piece' }));
+        unmount();
+
+        expect(onCommit).toHaveBeenCalledWith(13, 12);
+    });
+
     it('a net-zero burst writes nothing', async () => {
         vi.useFakeTimers();
         const onCommit = vi.fn();

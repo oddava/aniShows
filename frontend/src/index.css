@@ -149,7 +149,7 @@
   --color-gray-300: #c9ced6;
   --color-gray-400: #a3abb6;
   --color-gray-500: #8a929e;
-  --color-gray-600: #6b7380;
+  --color-gray-600: #7d8591;
   --color-gray-700: #3a414c;
   --color-gray-800: #2f3640;
   --color-gray-900: #1b1f25;
@@ -298,27 +298,20 @@
     }
   }
 
-  /* The underlined text link oddava.me uses for secondary actions. */
+  /* A secondary action as plain accent text: no underline, no box. */
   .text-link {
-    color: var(--text-1);
-    text-decoration: underline;
-    text-decoration-color: var(--signature);
-    text-decoration-thickness: 1.5px;
-    text-underline-offset: 4px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    color: var(--signature);
+    font-weight: 500;
     transition: color var(--dur-fast) ease;
   }
 
   .text-link:hover {
-    color: var(--signature);
+    color: var(--signature-hover);
   }
 
-  /* oddava.me's wave: the one decorative mark, under a page title. */
-  .wave {
-    display: block;
-    width: 56px;
-    height: 10px;
-    background: no-repeat left center / 56px 10px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 10'%3E%3Cpath d='M2 6c6-6 11-6 17 0s11 6 17 0 11-6 17 0' fill='none' stroke='%238db1ff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
-  }
 
   .tabular {
     font-variant-numeric: tabular-nums;

@@ -49,7 +49,7 @@ function parseInlineMarkdown(text, keyPrefix = '') {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 underline transition-colors"
+                    className="text-link"
                 >
                     {linkText}
                 </a>

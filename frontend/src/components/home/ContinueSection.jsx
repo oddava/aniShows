@@ -9,7 +9,7 @@ import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '.
 import ProgressStepper from '../ui/ProgressStepper';
 import ScorePicker from '../ui/ScorePicker';
 import Skeleton from '../ui/Skeleton';
-import { countdown, sortForContinue } from './continueModel';
+import { continueState, countdown, sortForContinue } from './continueModel';
 
 /** Re-render once a minute so countdowns stay true without a refetch. */
 function useMinuteClock() {
@@ -23,13 +23,13 @@ function useMinuteClock() {
 
 function stateText(state, now) {
     if (state.kind === 'ready') {
-        if (state.behind === 1) return { text: `episode ${state.nextEpisode} is out`, accent: true };
-        if (state.behind > 12) return { text: `catching up, episode ${state.nextEpisode} next`, accent: true };
+        if (state.behind === 1) return { text: `Episode ${state.nextEpisode} is out`, accent: true };
+        if (state.behind > 12) return { text: `Catching up, episode ${state.nextEpisode} next`, accent: true };
         return { text: `${state.behind} new episodes`, accent: true };
     }
-    if (state.kind === 'soon') return { text: `episode ${state.nextEpisode} in ${countdown(state.nextAt, now)}` };
-    if (state.kind === 'finished') return { text: `all ${state.total} watched. score it?` };
-    return { text: 'up to date' };
+    if (state.kind === 'soon') return { text: `Episode ${state.nextEpisode} in ${countdown(state.nextAt, now)}` };
+    if (state.kind === 'finished') return { text: `All ${state.total} watched. Score it?` };
+    return { text: 'Up to date' };
 }
 
 /**
@@ -37,18 +37,20 @@ function stateText(state, now) {
  * the episode stepper on the right. A finished show asks for a score and
  * completes in one tap.
  */
-const ContinueRow = memo(function ContinueRow({ entry, state, now }) {
+const ContinueRow = memo(function ContinueRow({ entry, now }) {
     const anime = entry.anime || {};
     const { entry: current, setProgress, save, isPending } = useListEntryMutation({
         anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
         entry,
     });
     const href = `/anime/${anime.slug}`;
+    // From the live entry, so "episode 8 is out" changes the moment you +1.
+    const state = continueState({ ...entry, episodes_watched: current.episodes_watched, score: current.score }, now);
     const line = stateText(state, now);
 
     return (
-        <li className="flex items-center gap-4 border-b border-white/[0.06] py-4 last:border-b-0">
-            <Link to={href} tabIndex={-1} aria-hidden="true" className="shrink-0">
+        <li className="grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 border-b border-white/[0.06] py-4 last:border-b-0 sm:grid-cols-[3rem_minmax(0,1fr)_auto]">
+            <Link to={href} tabIndex={-1} aria-hidden="true" className="row-span-2 self-start sm:row-span-1 sm:self-center">
                 <img
                     src={getOptimizedImageUrl(anime, 'cover', 'small')}
                     onError={(event) => applyImageFallback(event, getImageFallbackUrl(anime, 'cover'))}
@@ -58,7 +60,7 @@ const ContinueRow = memo(function ContinueRow({ entry, state, now }) {
                 />
             </Link>
             <div className="min-w-0 flex-1">
-                <Link to={href} className="line-clamp-1 text-[17px] font-semibold tracking-[-0.01em] text-[var(--text-1)] hover:text-[var(--signature)]">
+                <Link to={href} className="line-clamp-2 text-[17px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] hover:text-[var(--signature)]">
                     {anime.title}
                 </Link>
                 <p className={`mt-0.5 text-[15px] tabular ${line.accent ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>
@@ -79,7 +81,7 @@ const ContinueRow = memo(function ContinueRow({ entry, state, now }) {
             {state.kind !== 'finished' && (
                 <ProgressStepper
                     size="sm"
-                    className="shrink-0"
+                    className="col-start-2 justify-self-start sm:col-start-auto sm:justify-self-end"
                     value={current.episodes_watched || 0}
                     total={knownEpisodeTotal(anime)}
                     aired={airedEpisodeCount(anime)}
@@ -114,18 +116,17 @@ export default function ContinueSection() {
     const summaryLine = isPending
         ? ''
         : rows.length === 0
-            ? 'nothing in progress. mark a show as watching and it lands here with its next episode.'
+            ? 'Nothing in progress. Mark a show as Watching and it lands here with its next episode.'
             : readyCount > 0
                 ? `${readyCount} of your shows ${readyCount === 1 ? 'has' : 'have'} a new episode waiting.`
-                : 'you’re up to date. here’s what airs next.';
+                : 'You’re up to date. Here’s what airs next.';
 
     return (
-        <section aria-labelledby="continue-heading" className="page-container pt-24 md:pt-36">
-            <div className="grid gap-10 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)] md:gap-16">
+        <section aria-labelledby="continue-heading" className="page-container pt-20 md:pt-32">
+            <div className="grid gap-6 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)] md:gap-16">
                 <div>
-                    <h1 className="page-title break-words">{user?.username || 'welcome back'}</h1>
-                    <span aria-hidden="true" className="wave mt-3" />
-                    <p className="mt-5 max-w-sm text-[17px] leading-relaxed text-[var(--text-2)]">{summaryLine}</p>
+                    <h1 className="page-title break-words">{user?.username || 'Welcome back'}</h1>
+                    <p className="mt-3 max-w-sm text-[17px] leading-relaxed text-[var(--text-2)]">{summaryLine}</p>
                     {summary?.total > 0 && (
                         <p className="mt-3 text-[15px] text-[var(--text-3)] tabular">
                             {summary.total} on your list · {summary.episodes_watched} episodes watched
@@ -149,18 +150,18 @@ export default function ContinueSection() {
                         </ul>
                     ) : rows.length === 0 ? (
                         <div className="border-t border-white/[0.06] pt-6 text-[17px] text-[var(--text-2)]">
-                            <Link to="/browse?sort=trending" className="text-link">find something to watch</Link>
+                            <Link to="/browse?sort=trending" className="text-link">Find something to watch</Link>
                             <span className="mx-2 text-[var(--text-3)]">or</span>
-                            <Link to="/import" className="text-link">import your list from MAL or AniList</Link>
+                            <Link to="/import" className="text-link">Import your list from MAL or AniList</Link>
                         </div>
                     ) : (
                         <>
                             <ul>
-                                {rows.map(({ entry, state }) => (
-                                    <ContinueRow key={entry.id} entry={entry} state={state} now={now} />
+                                {rows.map(({ entry }) => (
+                                    <ContinueRow key={entry.id} entry={entry} now={now} />
                                 ))}
                             </ul>
-                            <Link to="/list" className="text-link mt-5 inline-block text-[15px]">all of my list</Link>
+                            <Link to="/list" className="text-link mt-5 inline-block text-[15px]">All of my list</Link>
                         </>
                     )}
                 </div>

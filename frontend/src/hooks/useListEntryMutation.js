@@ -85,7 +85,7 @@ const UNDO_FIELDS = ['status', 'score', 'episodes_watched', 'started_at', 'finis
  * The toast line for a write: what changed, in words (T6).
  */
 export function describeListChange(previous, saved) {
-    if (!saved?.id) return 'Removed from your list';
+    if (!saved?.status) return 'Removed from your list';
     if (previous.status !== saved.status) {
         if (saved.status === 'Completed' && previous.status && saved.episodes_watched > previous.episodes_watched) {
             return 'Completed. Every episode marked watched';
@@ -111,13 +111,16 @@ const knownTotal = (anime) => {
  * One list entry's writes, shared by every list control (G3 contract, overview section 5).
  *
  * `useListEntryMutation({ anime: { id, slug, episode_count }, entry })` returns
- * `{ entry, setStatus, setProgress, increment, save, remove, startRewatch, isPending }`.
- * `entry` is the `user_list_status` / list-row shape. Every write is optimistic, rolls
- * back with an error toast carrying the server's message, and then adopts the entry
- * the server returns (its normaliser may change status, progress or dates). Each
- * action resolves to the saved entry, or `null` when nothing was saved. One write
- * runs at a time: an action called while `isPending` is ignored (resolves `null`),
- * so callers should disable their controls while it is true.
+ * `{ entry, setStatus, setProgress, setScore, increment, save, remove, startRewatch, undo, isPending }`.
+ *
+ * Every change shows at once (optimistic) together with its toast and Undo; the
+ * requests then run one after another in the order they were made, so a quick
+ * "Completed" then "9", or five +1 taps, never lose a write, and a later write
+ * uses the id an earlier add returned. When an answer arrives the entry adopts
+ * what the server saved (its normaliser may move status, progress or dates)
+ * with any still-queued changes laid on top. A failed write rolls back to the
+ * last saved state and shows the server's reason. Each action resolves to the
+ * saved entry, or `null` when nothing was saved.
  *
  * Only the caches a list write can change are refreshed: lists (incl. the summary),
  * the watching shelf, the own profile, own activity, this anime's detail queries, and
@@ -126,9 +129,12 @@ const knownTotal = (anime) => {
 export default function useListEntryMutation({ anime, entry } = {}) {
     const queryClient = useQueryClient();
     const [current, setCurrentState] = useState(() => entryState(entry));
-    const [isPending, setIsPending] = useState(false);
+    const [pendingCount, setPendingCount] = useState(0);
     const currentRef = useRef(current);
-    const inFlight = useRef(false);
+    // What the server last confirmed, and the changes still waiting for it.
+    const confirmedRef = useRef(current);
+    const queuedRef = useRef([]);
+    const chainRef = useRef(Promise.resolve());
     const animeId = anime?.id;
     const slug = anime?.slug;
     const episodeCount = anime?.episode_count;
@@ -139,7 +145,10 @@ export default function useListEntryMutation({ anime, entry } = {}) {
     }, []);
 
     useEffect(() => {
-        if (!inFlight.current) setCurrent(entryState(entry));
+        if (queuedRef.current.length > 0) return;
+        const next = entryState(entry);
+        confirmedRef.current = next;
+        setCurrent(next);
     }, [ // eslint-disable-line react-hooks/exhaustive-deps
         entry?.id, entry?.status, entry?.score, entry?.episodes_watched, entry?.notes,
         entry?.started_at, entry?.finished_at, entry?.total_rewatches, entry?.is_rewatching,
@@ -156,43 +165,63 @@ export default function useListEntryMutation({ anime, entry } = {}) {
 
     const undoRef = useRef(null);
 
+    /** The still-queued optimistic changes, oldest first. */
+    const queuedOverlay = () => Object.assign({}, ...queuedRef.current.map((op) => op.optimistic));
+
     /**
-     * Apply `optimistic` now, send `request(previous)`, then adopt the server
-     * entry. Unless `silent`, a toast says what changed and offers Undo.
+     * Show `optimistic` now (with its toast unless `silent`), then queue
+     * `request(confirmed)`: it runs after every earlier write and receives the
+     * last server-confirmed entry (so it knows the id an earlier add returned).
      */
-    const run = useCallback(async (optimistic, request, { silent = false } = {}) => {
-        if (inFlight.current) return null;
-        inFlight.current = true;
-        const previous = currentRef.current;
-        setCurrent({ ...previous, ...optimistic });
-        setIsPending(true);
-        try {
-            const response = await request(previous);
-            const saved = response?.data?.id ? entryState(response.data) : entryState(null);
-            setCurrent(saved);
-            refreshCaches(saved);
-            if (!silent) {
-                notify(describeListChange(previous, saved), {
-                    id: `list-${animeId}`,
-                    onUndo: () => undoRef.current?.(previous),
-                });
+    const run = useCallback((optimistic, request, { silent = false } = {}) => {
+        const before = currentRef.current;
+        const op = { optimistic };
+        queuedRef.current = [...queuedRef.current, op];
+        setPendingCount((count) => count + 1);
+        setCurrent({ ...before, ...optimistic });
+
+        const toastId = `list-${animeId}`;
+        const onUndo = () => undoRef.current?.(before);
+        const shownMessage = silent ? null : describeListChange(before, { ...before, ...optimistic });
+        if (shownMessage) notify(shownMessage, { id: toastId, onUndo });
+
+        const finish = () => {
+            queuedRef.current = queuedRef.current.filter((queued) => queued !== op);
+            setPendingCount((count) => count - 1);
+        };
+
+        const execute = async () => {
+            try {
+                const response = await request(confirmedRef.current);
+                const saved = response?.data?.id ? entryState(response.data) : entryState(null);
+                finish();
+                confirmedRef.current = saved;
+                setCurrent({ ...saved, ...queuedOverlay() });
+                refreshCaches(saved);
+                if (shownMessage) {
+                    // The server may have done more (Completed fills progress): say so.
+                    const savedMessage = describeListChange(before, saved);
+                    if (savedMessage !== shownMessage) notify(savedMessage, { id: toastId, onUndo });
+                }
+                return { previous: before, saved };
+            } catch (error) {
+                logger.error('Error updating list:', error);
+                finish();
+                setCurrent({ ...confirmedRef.current, ...queuedOverlay() });
+                notifyError(listErrorMessage(error), { id: toastId });
+                return null;
             }
-            return { previous, saved };
-        } catch (error) {
-            logger.error('Error updating list:', error);
-            setCurrent(previous);
-            notifyError(listErrorMessage(error), { id: `list-${animeId}` });
-            return null;
-        } finally {
-            inFlight.current = false;
-            setIsPending(false);
-        }
+        };
+
+        const result = chainRef.current.then(execute, execute);
+        chainRef.current = result.catch(() => null);
+        return result;
     }, [animeId, refreshCaches, setCurrent]);
 
     const save = useCallback(async (fields, options) => {
-        const result = await run(fields, (previous) => (
-            previous.id
-                ? listApi.update(previous.id, fields)
+        const result = await run(fields, (confirmed) => (
+            confirmed.id
+                ? listApi.update(confirmed.id, fields)
                 : listApi.add({ anime_id: animeId, ...fields })
         ), options);
         return result?.saved ?? null;
@@ -208,6 +237,7 @@ export default function useListEntryMutation({ anime, entry } = {}) {
     const setProgress = useCallback((episodesWatched, options) => {
         const total = knownTotal({ episode_count: episodeCount });
         const capped = Math.max(0, total ? Math.min(episodesWatched, total) : episodesWatched);
+        if (capped === (currentRef.current.episodes_watched || 0)) return Promise.resolve(null);
         return save({ episodes_watched: capped }, options);
     }, [episodeCount, save]);
 
@@ -223,18 +253,20 @@ export default function useListEntryMutation({ anime, entry } = {}) {
     /**
      * Put the entry back the way it was before a write: re-add a removed
      * entry, remove a just-added one, or restore the fields a write changed.
+     * Queued like any write, so it lands after the write it undoes.
      */
     const undo = useCallback((previous) => {
-        const now = currentRef.current;
-        if (!previous.id) {
-            if (!now.id) return Promise.resolve(null);
-            return run(EMPTY_ENTRY, () => listApi.remove(now.id), { silent: true });
-        }
-        if (!now.id) {
-            return run(previous, () => listApi.add(restorePayload(animeId, previous)), { silent: true });
+        if (!previous.status) {
+            return run(EMPTY_ENTRY, (confirmed) => (
+                confirmed.id ? listApi.remove(confirmed.id) : Promise.resolve({})
+            ), { silent: true });
         }
         const fields = Object.fromEntries(UNDO_FIELDS.map((field) => [field, previous[field] ?? EMPTY_ENTRY[field]]));
-        return run(fields, () => listApi.update(now.id, fields), { silent: true });
+        return run(fields, (confirmed) => (
+            confirmed.id
+                ? listApi.update(confirmed.id, fields)
+                : listApi.add(restorePayload(animeId, previous))
+        ), { silent: true });
     }, [animeId, run]);
 
     useEffect(() => {
@@ -242,12 +274,23 @@ export default function useListEntryMutation({ anime, entry } = {}) {
     }, [undo]);
 
     const remove = useCallback(async () => {
-        if (!currentRef.current.id) return null;
-        const result = await run(EMPTY_ENTRY, (previous) => listApi.remove(previous.id));
+        if (!currentRef.current.status) return null;
+        const result = await run(EMPTY_ENTRY, (confirmed) => (
+            confirmed.id ? listApi.remove(confirmed.id) : Promise.resolve({})
+        ));
         return result ? result.saved : null;
     }, [run]);
 
     return {
-        entry: current, setStatus, setProgress, setScore, increment, save, remove, startRewatch, undo, isPending,
+        entry: current,
+        setStatus,
+        setProgress,
+        setScore,
+        increment,
+        save,
+        remove,
+        startRewatch,
+        undo,
+        isPending: pendingCount > 0,
     };
 }

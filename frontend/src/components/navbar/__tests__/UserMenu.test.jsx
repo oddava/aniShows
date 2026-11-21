@@ -106,11 +106,11 @@ describe('UserMenu (desktop account disclosure)', () => {
 });
 
 describe('UserMenu sign-in buttons', () => {
-    it('shows Sign In and Get Started to guests on ordinary pages', () => {
+    it('shows Sign in and Create account to guests on ordinary pages', () => {
         renderAt('/browse', { isAuthenticated: false });
 
-        expect(screen.getByRole('link', { name: 'Sign In' })).toHaveAttribute('href', '/login');
-        expect(screen.getByRole('link', { name: 'Get Started' })).toHaveAttribute('href', '/register');
+        expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
+        expect(screen.getByRole('link', { name: 'Create account' })).toHaveAttribute('href', '/register');
     });
 
     it.each([
@@ -124,7 +124,7 @@ describe('UserMenu sign-in buttons', () => {
     ])('hides them on the auth page %s', (path) => {
         renderAt(path, { isAuthenticated: false });
 
-        expect(screen.queryByRole('link', { name: 'Sign In' })).not.toBeInTheDocument();
-        expect(screen.queryByRole('link', { name: 'Get Started' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Create account' })).not.toBeInTheDocument();
     });
 });

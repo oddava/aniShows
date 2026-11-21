@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, Loader2, Plus } from 'lucide-react';
 import useMediaQuery from '../../hooks/useMediaQuery';
+import useDelayedLoading from '../../hooks/useDelayedLoading';
 import { statusMeta } from '../../utils/listStatus';
 import BottomSheet from './BottomSheet';
 import { ScoreStep, StatusOptions } from './StatusMenu';
@@ -26,6 +27,8 @@ export default function QuickAdd({
     className = 'relative',
     placement = 'up',
     variant = 'icon',
+    watched = 0,
+    total = null,
 }) {
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState('status');
@@ -34,6 +37,8 @@ export default function QuickAdd({
     const buttonRef = useRef(null);
     const menuId = useId();
     const meta = statusMeta(status);
+    // Writes are optimistic: only a slow one earns a spinner.
+    const showSpinner = useDelayedLoading(pending, 400);
 
     const close = ({ focus = true } = {}) => {
         setOpen(false);
@@ -86,7 +91,16 @@ export default function QuickAdd({
 
     const body = step === 'score'
         ? <ScoreStep value={score} onScore={handleScore} onSkip={() => close()} />
-        : <StatusOptions current={status} onSelect={handleSelect} onRemove={onRemove ? handleRemove : undefined} autoFocus />;
+        : (
+            <StatusOptions
+                current={status}
+                onSelect={handleSelect}
+                onRemove={onRemove ? handleRemove : undefined}
+                autoFocus
+                // Completed means every episode: say so before it happens.
+                completeHint={total && watched < total ? `marks all ${total} watched` : null}
+            />
+        );
 
     const label = meta ? `${meta.label}. Change list status for ${title}` : `Add ${title} to your list`;
 
@@ -120,7 +134,7 @@ export default function QuickAdd({
             >
                 {variant === 'button' ? (
                     <>
-                        {pending ? (
+                        {showSpinner ? (
                             <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
                         ) : meta ? (
                             <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />
@@ -130,7 +144,7 @@ export default function QuickAdd({
                         <span className="flex-1 text-left">{meta ? meta.label : 'Add to list'}</span>
                         <ChevronDown aria-hidden="true" className={`h-4 w-4 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                     </>
-                ) : pending ? (
+                ) : showSpinner ? (
                     <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
                 ) : meta ? (
                     <span aria-hidden="true" className="h-3 w-3 rounded-full ring-2 ring-[rgb(11_13_16/0.6)]" style={{ backgroundColor: meta.color }} />
@@ -144,6 +158,9 @@ export default function QuickAdd({
                     id={menuId}
                     className={`popover-in absolute ${variant === 'button' ? 'left-0 right-0 min-w-52' : 'right-0 w-52'} z-[300] rounded-[var(--radius-md)] bg-[var(--ink-3)] p-1 shadow-[var(--shadow-pop)] ${placement === 'down' ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                 >
+                    {variant === 'icon' && title && (
+                        <p className="truncate px-3 pt-1.5 pb-1 text-[13px] text-[var(--text-3)]">{title}</p>
+                    )}
                     {body}
                 </div>
             )}

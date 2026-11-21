@@ -77,7 +77,7 @@ const addDays = (date, days) => {
 // scrolling.
 const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday }) => {
   return (
-    <div className="grid grid-cols-7 gap-1.5 sm:gap-2" role="group" aria-label="Day">
+    <div className="grid grid-cols-7" role="group" aria-label="Day">
       {Array.from({ length: 7 }, (_, position) => (todayDay + position) % 7).map((index, position) => {
         const isSelected = selectedDay === index;
         const count = animeCounts[position] || 0;
@@ -93,21 +93,17 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
             aria-pressed={isSelected}
             aria-current={isToday ? 'date' : undefined}
             aria-label={`${DAY_NAMES[index]} ${dayOfMonth}, ${count} ${count === 1 ? 'episode' : 'episodes'}`}
-            className={`
-              relative flex flex-col items-center rounded-xl border py-2 sm:py-2.5 transition-colors duration-200
-              ${isSelected
-                ? 'bg-accent-dark border-transparent text-white'
-                : `bg-dark-100 text-gray-400 hover:text-white hover:border-gray-700 ${isToday ? 'border-accent/40' : 'border-gray-800'}`
-              }
-            `}
+            className={`relative flex min-h-16 flex-col items-start border-t-2 px-1 pt-2.5 pb-2 text-left transition-colors duration-200 sm:px-2 ${isSelected
+              ? 'border-[var(--signature)]'
+              : 'border-white/[0.08] hover:border-white/20'}`}
           >
-            <span className={`text-[10.5px] sm:text-[11px] font-semibold ${isSelected ? 'text-white/80' : isToday ? 'text-accent-light' : ''}`}>
-              {DAY_SHORT[index]}
+            <span className={`text-sm font-semibold ${isSelected || isToday ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>
+              {isToday ? 'Today' : DAY_SHORT[index]}
             </span>
-            <span className={`text-base sm:text-lg font-bold leading-tight tabular ${isSelected ? 'text-white' : 'text-gray-200'}`}>
+            <span className={`text-lg font-semibold leading-tight tabular ${isSelected ? 'text-[var(--text-1)]' : 'text-[var(--text-2)]'}`}>
               {dayOfMonth}
             </span>
-            <span aria-hidden="true" className={`mt-0.5 text-[11px] tabular ${isSelected ? 'text-white/80' : count > 0 ? 'text-gray-400' : 'text-gray-600'}`}>
+            <span aria-hidden="true" className={`text-xs tabular ${count > 0 ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}`}>
               <span>{count}</span> ep
             </span>
           </button>
@@ -123,10 +119,10 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle,
   const end = addDays(startOfToday, 6);
 
   return (
-    <div className="flex items-center justify-between gap-3 mb-4">
-      <div className="text-white font-semibold tabular">
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="whitespace-nowrap font-semibold text-[var(--text-1)] tabular">
         Next 7 days
-        <span className="ml-2 font-normal text-gray-500">
+        <span className="ml-2 font-normal text-[var(--text-2)]">
           {formatCalendarDate(startOfToday, { month: 'short', day: 'numeric' })}
           {' – '}
           {formatCalendarDate(end, { month: 'short', day: 'numeric' })}
@@ -139,7 +135,7 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle,
             type="button"
             onClick={onToggleMyList}
             aria-pressed={myListOnly}
-            className={`ui-pill-button h-9 py-0 ${myListOnly ? 'border-accent/40 text-white' : ''}`}
+            className={`btn-secondary min-h-11 whitespace-nowrap px-4 py-0 text-sm ${myListOnly ? '!border-[var(--signature)] !text-[var(--text-1)]' : ''}`}
           >
             My list
           </button>
@@ -148,13 +144,32 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle,
           type="button"
           onClick={onToday}
           disabled={isTodaySelected}
-          className="ui-pill-button h-9 py-0 disabled:opacity-40 disabled:cursor-default disabled:hover:text-gray-300"
+          className="btn-secondary min-h-11 whitespace-nowrap px-4 py-0 text-sm disabled:opacity-40 disabled:cursor-default"
         >
           Today
         </button>
       </div>
     </div>
   );
+};
+
+// The selected day as an agenda: in time order, shows without a time last;
+// members see their own shows first.
+const airingTime = (anime) => {
+  const time = Date.parse(anime?.next_airing_date);
+  return Number.isFinite(time) ? time : Infinity;
+};
+
+const agendaGroups = (items, isAuthenticated) => {
+  const sorted = [...items].sort((a, b) => airingTime(a) - airingTime(b));
+  if (!isAuthenticated) return [{ title: 'Airing', items: sorted, showTitle: false }];
+  const mine = sorted.filter(isOnMyList);
+  const rest = sorted.filter((anime) => !isOnMyList(anime));
+  if (mine.length === 0 || rest.length === 0) return [{ title: 'Airing', items: sorted, showTitle: false }];
+  return [
+    { title: 'On your list', items: mine, showTitle: true },
+    { title: 'Also airing', items: rest, showTitle: true },
+  ];
 };
 
 // Main Schedule Page Component
@@ -273,9 +288,9 @@ export default function Schedule() {
         {/* Main Content */}
         <div className="page-container py-6 sm:py-8">
           <header className="mb-6">
-            <h1 className="page-title">Airing Schedule</h1>
-            <p className="text-sm text-gray-500 mt-1.5">
-              Times are shown in your time zone ({timezoneLabel}).
+            <h1 className="page-title">Airing schedule</h1>
+            <p className="mt-2 text-[15px] text-[var(--text-2)]">
+              Times are in your time zone ({timezoneLabel}).
             </p>
           </header>
 
@@ -302,9 +317,9 @@ export default function Schedule() {
 
           {/* Selected Day Header */}
           <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6">
-            <h2 className="text-lg font-bold text-white/90">
+            <h2 className="section-title">
               {DAY_NAMES[selectedDay]}
-              <span className="text-gray-500 font-normal ml-2">
+              <span className="ml-2 font-normal text-[var(--text-2)]">
                 {formatCalendarDate(
                   addDays(startOfToday, selectedOffset),
                   { month: 'short', day: 'numeric' }
@@ -313,7 +328,7 @@ export default function Schedule() {
             </h2>
 
             <div className="flex items-center gap-3">
-              <div className="text-sm text-gray-400">
+              <div className="text-sm text-[var(--text-2)]">
                 {selectedDayAnime.length} {selectedDayAnime.length === 1 ? 'episode' : 'episodes'}
               </div>
               {/* Members only: guests would just see a disabled control. */}
@@ -322,10 +337,10 @@ export default function Schedule() {
                 onClick={handleToggleAdultContent}
                 type="button"
                 disabled={isUpdatingAdultContent}
-                className={`flex items-center justify-center w-[40px] h-[40px] rounded-xl transition-colors ${
+                className={`flex items-center justify-center w-11 h-11 rounded-lg transition-colors ${
                   adultContentEnabled
-                    ? 'bg-accent/20 text-accent'
-                    : 'bg-dark-200 text-gray-400 hover:text-white'
+                    ? 'bg-[var(--signature-soft)] text-[var(--signature)]'
+                    : 'text-[var(--text-2)] hover:bg-white/[0.06] hover:text-white'
                 } ${!isAuthenticated || isUpdatingAdultContent ? 'opacity-60 cursor-not-allowed' : ''}`}
                 aria-label="Show explicit content"
                 aria-pressed={adultContentEnabled}
@@ -347,16 +362,24 @@ export default function Schedule() {
           {isLoading ? (
             <ScheduleGridSkeleton count={10} />
           ) : selectedDayAnime.length > 0 ? (
-            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-6 anime-card-grid-gap">
-              {selectedDayAnime.map((anime, index) => (
-                <AnimeCard
-                  key={anime.id}
-                  anime={anime}
-                  priority={index < 6}
-                  index={index}
-                  showAiringCountdown
-                  metaText={formatAirTime(anime, preferredTimezone)}
-                />
+            <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
+              {agendaGroups(selectedDayAnime, isAuthenticated).map((group) => (
+                <section key={group.title} aria-label={group.title}>
+                  {group.showTitle && <h3 className="mb-1 text-[15px] font-semibold text-[var(--text-2)]">{group.title}</h3>}
+                  <div>
+                    {group.items.map((anime, index) => (
+                      <AnimeCard
+                        key={anime.id}
+                        variant="row"
+                        anime={anime}
+                        priority={index < 6}
+                        index={index}
+                        showAiringCountdown
+                        metaText={formatAirTime(anime, preferredTimezone)}
+                      />
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
           ) : (

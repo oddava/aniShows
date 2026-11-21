@@ -114,7 +114,7 @@ export default function ThreadReplies({
                                 setFocusedPostId(null);
                                 setSearchParams({});
                             }}
-                            className="mt-4 text-accent hover:underline"
+                            className="mt-4 text-link"
                         >
                             View full discussion
                         </button>

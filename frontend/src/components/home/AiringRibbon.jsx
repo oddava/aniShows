@@ -45,7 +45,7 @@ export default function AiringRibbon() {
         <section aria-labelledby="ribbon-heading" className="page-container">
             <div className="mb-5 flex items-end justify-between gap-4">
                 <h2 id="ribbon-heading" className="section-title">Your week</h2>
-                <Link to="/schedule?mine=1" className="text-link shrink-0 text-[15px]">full schedule</Link>
+                <Link to="/schedule?mine=1" className="text-link shrink-0 text-[15px]">Full schedule</Link>
             </div>
             <ol className="scroll-fade -mx-4 flex overflow-x-auto px-4 scrollbar-hide md:mx-0 md:grid md:grid-cols-7 md:overflow-visible md:px-0">
                 {days.map((day) => (
@@ -69,8 +69,8 @@ export default function AiringRibbon() {
                                 day.shows.slice(0, 4).map((anime) => {
                                     const meta = statusMeta(anime.user_list_status?.status);
                                     const time = anime.next_airing_date
-                                        ? formatDateTime(anime.next_airing_date, { hour: '2-digit', minute: '2-digit' }, timezone)
-                                        : 'time tba';
+                                        ? formatDateTime(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, timezone)
+                                        : 'Time TBA';
                                     return (
                                         <li key={anime.id}>
                                             <Link to={`/anime/${anime.slug}`} className="group block min-h-9">
@@ -79,7 +79,7 @@ export default function AiringRibbon() {
                                                     <span className="truncate text-sm text-[var(--text-1)] group-hover:text-[var(--signature)]">{anime.title}</span>
                                                 </span>
                                                 <span className="block pl-3 text-[13px] text-[var(--text-3)] tabular">
-                                                    {anime.next_airing_episode ? `ep ${anime.next_airing_episode} · ` : ''}{time}
+                                                    {anime.next_airing_episode ? `Ep ${anime.next_airing_episode} · ` : ''}{time}
                                                 </span>
                                             </Link>
                                         </li>

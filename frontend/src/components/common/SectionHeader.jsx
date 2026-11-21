@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 
 /**
  * The site's section header: a sentence-case heading and, optionally, a quiet
- * underlined "see all" link (oddava.me's link style). One definition so Home
+ * "See all" text link (accent text, no underline). One definition so Home
  * and Browse rows read the same.
  */
 export default function SectionHeader({
@@ -27,7 +27,7 @@ export default function SectionHeader({
                     className="text-link shrink-0 text-[15px]"
                     aria-label={`${viewAllLabel}: ${title}`}
                 >
-                    {viewAllLabel.toLowerCase()}
+                    {viewAllLabel}
                 </Link>
             )}
         </div>

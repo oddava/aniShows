@@ -10,10 +10,11 @@ const MIN_SEARCH_LENGTH = 2;
 const Pill = ({ active, label, onClick }) => (
     <button
         onClick={onClick}
-        className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-            active 
-            ? 'bg-accent-dark text-white' 
-            : 'bg-dark-200/50 text-gray-400 hover:bg-dark-200 hover:text-gray-300'
+        aria-pressed={Boolean(active)}
+        className={`min-h-10 px-3.5 rounded-lg text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
+            active
+            ? 'bg-[var(--signature-soft)] text-[var(--signature)]'
+            : 'text-[var(--text-2)] hover:bg-white/[0.05] hover:text-[var(--text-1)]'
         }`}
     >
         {label}
@@ -137,7 +138,11 @@ export default function TopFilterBar({
     };
 
     // Use a subset of genres for the quick bar to avoid overwhelming it
-    const quickGenres = !isGenresError && genres ? genres.slice(0, 8) : [];
+    // Every genre is one tap away; the 18+ ones come last.
+    const ADULT_GENRES = new Set(['ecchi', 'hentai']);
+    const quickGenres = !isGenresError && genres
+        ? [...genres].sort((a, b) => Number(ADULT_GENRES.has(String(a.slug).toLowerCase())) - Number(ADULT_GENRES.has(String(b.slug).toLowerCase())))
+        : [];
 
     return (
         <div className="w-full mb-8">
@@ -234,37 +239,37 @@ export default function TopFilterBar({
                 </button>
             </div>
 
-            {/* Quick Filters Pill Row */}
-            <div ref={chipRowRef} className="scroll-fade w-full overflow-x-auto custom-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
-                <div className="flex items-center gap-4 min-w-max">
-                    {/* Format Group */}
-                    <div className="flex items-center gap-1.5 pr-4 border-r border-gray-800/50">
-                        {typeOptions.map(type => (
-                            <Pill 
-                                key={type.value}
-                                active={currentType === type.value}
-                                label={type.label}
-                                onClick={() => handleSingleToggle('type', type.value)}
-                            />
-                        ))}
-                    </div>
+            {/* Format and season: two short rows that wrap, never scroll (B2). */}
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+                <div role="group" aria-label="Format" className="flex flex-wrap items-center gap-1">
+                    {typeOptions.map(type => (
+                        <Pill
+                            key={type.value}
+                            active={currentType === type.value}
+                            label={type.label}
+                            onClick={() => handleSingleToggle('type', type.value)}
+                        />
+                    ))}
+                </div>
+                <span aria-hidden="true" className="hidden h-5 w-px bg-white/[0.08] sm:block" />
+                <div role="group" aria-label="Season" className="flex flex-wrap items-center gap-1">
+                    {seasonOptions.map(season => (
+                        <Pill
+                            key={season.value}
+                            active={currentSeason === season.value}
+                            label={season.label}
+                            onClick={() => handleSingleToggle('season', season.value)}
+                        />
+                    ))}
+                </div>
+            </div>
 
-                    {/* Season Group */}
-                    <div className="flex items-center gap-1.5 pr-4 border-r border-gray-800/50">
-                        {seasonOptions.map(season => (
-                            <Pill 
-                                key={season.value}
-                                active={currentSeason === season.value}
-                                label={season.label}
-                                onClick={() => handleSingleToggle('season', season.value)}
-                            />
-                        ))}
-                    </div>
-
-                    {/* Genres Group */}
-                    <div className="flex items-center gap-1.5">
+            {/* Genres: one scrolling row with an edge fade where it continues. */}
+            {quickGenres.length > 0 && (
+                <div ref={chipRowRef} role="group" aria-label="Genres" className="scroll-fade mt-1 -mx-4 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:px-0">
+                    <div className="flex min-w-max items-center gap-1">
                         {quickGenres.map(genre => (
-                            <Pill 
+                            <Pill
                                 key={genre.slug}
                                 active={currentGenres.includes(genre.slug)}
                                 label={genre.name}
@@ -273,7 +278,7 @@ export default function TopFilterBar({
                         ))}
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

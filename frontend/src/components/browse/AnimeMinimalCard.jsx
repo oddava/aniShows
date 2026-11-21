@@ -32,25 +32,20 @@ function AnimeMinimalCard({ anime, titleLanguage = 'en' }) {
                     onError={(event) => applyImageFallback(event, fallbackImageUrl)}
                     className="h-full w-full object-cover"
                 />
-                {meta && (
-                    <span
-                        aria-hidden="true"
-                        className="absolute left-1.5 top-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-[rgb(11_13_16/0.7)]"
-                        style={{ backgroundColor: meta.color }}
-                    />
-                )}
                 {meta && <span className="sr-only">On your list: {meta.label}</span>}
             </Link>
             {isAuthenticated && (
                 <QuickAdd
                     status={entry.status}
                     score={entry.score}
+                    watched={entry.episodes_watched || 0}
+                    total={Number(anime.episode_count) > 0 ? Number(anime.episode_count) : null}
                     title={displayTitle}
                     pending={isPending}
                     onSelect={(value) => setStatus(value)}
                     onScore={(value) => setScore(value)}
                     onRemove={() => remove()}
-                    className="card-reveal absolute bottom-1 right-1 z-10"
+                    className={`absolute bottom-1 right-1 z-10 ${meta ? '' : 'card-reveal'}`}
                 />
             )}
         </div>

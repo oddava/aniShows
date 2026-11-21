@@ -297,13 +297,13 @@ export default function Browse() {
                       {/* Title Language Toggle */}
                       <button
                         onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
-                        className="flex items-center justify-center px-3 h-9 bg-dark-100 border border-gray-700 rounded-lg text-[11px] font-bold text-gray-300 hover:border-accent transition-colors"
+                        className="flex h-11 items-center justify-center rounded-lg bg-white/[0.04] px-3 text-sm text-[var(--text-2)] hover:text-[var(--text-1)] transition-colors"
                         type="button"
                         title="Toggle title language"
                         aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}
                       >
-                        <span className="font-semibold text-gray-500 mr-1">Titles</span>
-                        {titleLanguage === 'en' ? 'EN' : 'JP'}
+                        <span className="mr-1">Titles:</span>
+                        <span className="text-[var(--text-1)]">{titleLanguage === 'en' ? 'English' : 'Japanese'}</span>
                       </button>
                     </div>
                   </div>

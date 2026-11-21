@@ -13,24 +13,24 @@ export default function Footer({ className = '' }) {
             <div className="page-container">
                 <div className="flex flex-col gap-6 border-t border-white/[0.08] pt-6 md:flex-row md:items-center md:justify-between">
                     <nav aria-label="Footer" className="flex flex-wrap gap-x-6">
-                        <Link to="/browse" className={linkClass}>browse</Link>
-                        <Link to="/schedule" className={linkClass}>schedule</Link>
-                        <Link to="/import" className={linkClass}>import</Link>
-                        <Link to="/terms" className={linkClass}>terms</Link>
-                        <Link to="/privacy" className={linkClass}>privacy</Link>
+                        <Link to="/browse" className={linkClass}>Browse</Link>
+                        <Link to="/schedule" className={linkClass}>Schedule</Link>
+                        <Link to="/import" className={linkClass}>Import</Link>
+                        <Link to="/terms" className={linkClass}>Terms</Link>
+                        <Link to="/privacy" className={linkClass}>Privacy</Link>
                     </nav>
                     <div className="flex flex-wrap items-center gap-x-6">
                         <a href="https://github.com/oddava" target="_blank" rel="noopener noreferrer" className={linkClass}>
-                            <Github aria-hidden="true" className="h-4 w-4" />github
+                            <Github aria-hidden="true" className="h-4 w-4" />GitHub
                         </a>
                         <a href="https://twitter.com/oddava" target="_blank" rel="noopener noreferrer" className={linkClass}>
-                            <Twitter aria-hidden="true" className="h-4 w-4" />x
+                            <Twitter aria-hidden="true" className="h-4 w-4" />X
                         </a>
                         <a href="mailto:oddava@proton.me" className={linkClass}>
-                            <Mail aria-hidden="true" className="h-4 w-4" />email
+                            <Mail aria-hidden="true" className="h-4 w-4" />Email
                         </a>
                         <a href="https://oddava.me" className={`${linkClass} text-[var(--text-3)]`}>
-                            made by <span className="text-[var(--text-1)]">oddava</span>
+                            Made by <span className="text-[var(--text-1)]">oddava</span>
                         </a>
                     </div>
                 </div>

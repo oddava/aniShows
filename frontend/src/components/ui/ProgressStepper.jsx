@@ -37,11 +37,24 @@ export default function ProgressStepper({
     const burstStart = useRef(null);
     const timer = useRef(null);
     const pending = useRef(null);
+    const onCommitRef = useRef(onCommit);
 
     const shown = draft ?? value;
     const max = Number(total) > 0 ? Number(total) : null;
 
-    useEffect(() => () => clearTimeout(timer.current), []);
+    useEffect(() => {
+        onCommitRef.current = onCommit;
+    }, [onCommit]);
+
+    // Leaving the page mid-burst still saves the taps (they were acknowledged).
+    useEffect(() => () => {
+        if (timer.current === null) return;
+        clearTimeout(timer.current);
+        timer.current = null;
+        const next = draftRef.current;
+        const previous = burstStart.current;
+        if (next !== null && previous !== null && next !== previous) onCommitRef.current?.(next, previous);
+    }, []);
 
     // The saved value caught up with what was typed: drop the draft.
     useEffect(() => {
@@ -62,7 +75,7 @@ export default function ProgressStepper({
             return;
         }
         burstStart.current = null;
-        const run = Promise.resolve(onCommit?.(next, previous));
+        const run = Promise.resolve(onCommitRef.current?.(next, previous));
         pending.current = run;
         try {
             await run;
@@ -76,7 +89,7 @@ export default function ProgressStepper({
                 setDraft(null);
             }
         }
-    }, [commitDelay, onCommit]);
+    }, [commitDelay]);
 
     const step = (delta) => {
         const base = draftRef.current ?? value;

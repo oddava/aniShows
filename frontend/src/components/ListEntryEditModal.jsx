@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Minus, Plus, X } from 'lucide-react';
 import useFocusTrap from '../hooks/useFocusTrap';
 import CustomSelect from './common/CustomSelect';
@@ -188,9 +189,10 @@ export default function ListEntryEditModal({
         }
     };
 
-    return (
+    // Portalled above the header and tab bar (z 1000/1001), like BottomSheet.
+    return createPortal(
         <div
-            className="fixed inset-0 z-[120] flex items-end justify-center bg-black/75 p-2 backdrop-blur-sm sm:items-center sm:p-4"
+            className="fixed inset-0 z-[1100] flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
             onClick={handleBackdropClick}
             role="dialog"
             aria-modal="true"
@@ -198,21 +200,21 @@ export default function ListEntryEditModal({
         >
             <div
                 ref={modalRef}
-                className="flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-dark-100 shadow-[0_24px_120px_rgba(0,0,0,0.55)] sm:max-h-[90dvh] sm:rounded-3xl"
+                className="sheet-panel flex max-h-[calc(100dvh-env(safe-area-inset-top,0px)-0.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-[20px] bg-[var(--ink-1)] shadow-[var(--shadow-pop)] sm:max-h-[min(90dvh,48rem)] sm:rounded-[var(--radius-lg)]"
             >
-                <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-4 sm:px-6 sm:py-5">
+                <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-4 py-4 sm:px-6 sm:py-5">
                     <div className="min-w-0">
-                        <h2 id="list-entry-modal-title" className="mt-2 text-xl font-black text-white sm:text-2xl">
+                        <h2 id="list-entry-modal-title" className="text-xl font-semibold tracking-[-0.02em] text-[var(--text-1)] sm:text-2xl">
                             {animeTitle ? (
                                 <>
                                     <span className="sr-only">Edit list entry for </span>
                                     <span className="block truncate">{animeTitle}</span>
                                 </>
-                            ) : 'Edit List Entry'}
+                            ) : 'Edit list entry'}
                         </h2>
                         {animeTitle ? (
-                            <p className="mt-1 text-sm font-semibold text-gray-300" aria-hidden="true">
-                                Edit list entry
+                            <p className="mt-0.5 text-[15px] text-[var(--text-2)]" aria-hidden="true">
+                                Dates, notes and rewatches
                             </p>
                         ) : null}
                     </div>
@@ -220,15 +222,15 @@ export default function ListEntryEditModal({
                         type="button"
                         onClick={handleRequestClose}
                         disabled={isSaving}
-                        className="rounded-xl border border-white/10 bg-white/5 p-2 text-gray-400 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--text-2)] transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         aria-label="Close editor"
                     >
                         <X className="h-5 w-5" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} noValidate className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-                    <div className="grid gap-4 md:grid-cols-2">
+                <form onSubmit={handleSubmit} noValidate className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5">
+                    <div className="grid min-w-0 gap-5 md:grid-cols-2 [&>*]:min-w-0">
                         <Field label="Status" htmlFor="list-entry-status">
                             <CustomSelect
                                 id="list-entry-status"
@@ -236,12 +238,13 @@ export default function ListEntryEditModal({
                                 onChange={updateStatus}
                                 options={statusOptions}
                                 className="w-full"
-                                triggerClassName="rounded-2xl bg-dark-200 focus-visible:ring-accent/60"
+                                triggerClassName="min-h-11 rounded-xl bg-dark-200"
                             />
                         </Field>
 
                         <Field label="Score" error={fieldErrors.score} wide>
                             <ScorePicker
+                                layout="row"
                                 value={Number(form.score) || 0}
                                 onChange={(value) => updateField('score', value ? String(value) : '')}
                                 size="sm"
@@ -249,7 +252,7 @@ export default function ListEntryEditModal({
                         </Field>
 
                         <Field
-                            label="Episode Progress"
+                            label="Episode progress"
                             htmlFor="list-entry-progress"
                             hint={episodeCap != null ? `of ${episodeCap}` : 'Total unknown'}
                         >
@@ -288,7 +291,7 @@ export default function ListEntryEditModal({
                             )}
                         </Field>
 
-                        <Field label="Total Rewatches" htmlFor="list-entry-rewatches" error={fieldErrors.total_rewatches}>
+                        <Field label="Total rewatches" htmlFor="list-entry-rewatches" error={fieldErrors.total_rewatches}>
                             <InputShell>
                                 <input
                                     id="list-entry-rewatches"
@@ -303,7 +306,7 @@ export default function ListEntryEditModal({
                             </InputShell>
                         </Field>
 
-                        <Field label="Start Date" htmlFor="list-entry-start-date" hint={readableDate(form.started_at)}>
+                        <Field label="Start date" htmlFor="list-entry-start-date" hint={readableDate(form.started_at)}>
                             <InputShell>
                                 <input
                                     id="list-entry-start-date"
@@ -315,7 +318,7 @@ export default function ListEntryEditModal({
                             </InputShell>
                         </Field>
 
-                        <Field label="Finish Date" htmlFor="list-entry-finish-date" hint={readableDate(form.finished_at)} error={fieldErrors.finished_at}>
+                        <Field label="Finish date" htmlFor="list-entry-finish-date" hint={readableDate(form.finished_at)} error={fieldErrors.finished_at}>
                             <InputShell>
                                 <input
                                     id="list-entry-finish-date"
@@ -328,7 +331,7 @@ export default function ListEntryEditModal({
                         </Field>
                     </div>
 
-                    <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-dark-200 px-4 py-3">
+                    <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/[0.06] pt-4">
                         <div className="min-w-0">
                             <span id="list-entry-rewatching-label" className="text-sm font-semibold text-gray-300">
                                 Rewatching
@@ -371,7 +374,7 @@ export default function ListEntryEditModal({
                                 value={form.notes}
                                 onChange={(event) => updateField('notes', event.target.value)}
                                 placeholder=""
-                                className="w-full resize-y rounded-2xl border border-white/10 bg-dark-200 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-gray-500 focus:border-accent/60"
+                                className="w-full resize-y rounded-xl bg-dark-200 px-4 py-3 text-[15px] text-white outline-none placeholder:text-gray-500"
                             />
                         </Field>
                     </div>
@@ -387,21 +390,22 @@ export default function ListEntryEditModal({
                             type="button"
                             onClick={handleRequestClose}
                             disabled={isSaving}
-                            className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="btn-ghost"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={isSaving}
-                            className="inline-flex items-center justify-center rounded-2xl bg-accent-dark px-5 py-3 text-sm font-black text-white transition-colors hover:bg-accent-dark/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="btn-primary"
                         >
                             {isSaving ? 'Saving...' : 'Save'}
                         </button>
                     </div>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
 

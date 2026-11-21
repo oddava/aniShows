@@ -38,7 +38,7 @@ export function SearchNoMatches({ query, onSearchAll }) {
             <button
                 type="button"
                 onClick={onSearchAll}
-                className="mt-3 text-sm font-medium text-accent hover:underline"
+                className="mt-3 text-link text-sm"
             >
                 Search all anime
             </button>

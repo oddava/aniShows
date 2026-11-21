@@ -46,11 +46,10 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                     </h3>
                 </Link>
                 {meta && <span className="sr-only">On your list: {meta.label}</span>}
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-gray-400 tabular">
-                    {anime.anime_type && <span>{anime.anime_type}</span>}
-                    {anime.episode_count > 0 && <span>· {anime.episode_count} eps</span>}
-                    {year && <span>· {year}</span>}
-                    {anime.status && <span className="text-gray-500">· {anime.status}</span>}
+                <p className="mt-1 text-sm text-[var(--text-2)] tabular">
+                    {[anime.anime_type, anime.episode_count > 0 ? `${anime.episode_count} eps` : null, year, anime.status]
+                        .filter(Boolean)
+                        .join(' · ')}
                 </p>
                 {anime.genres?.length > 0 && (
                     <p className="mt-2 hidden truncate text-xs text-gray-500 xs:block">
@@ -71,6 +70,8 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                 <QuickAdd
                     status={entry.status}
                     score={entry.score}
+                    watched={entry.episodes_watched || 0}
+                    total={Number(anime.episode_count) > 0 ? Number(anime.episode_count) : null}
                     title={displayTitle}
                     pending={isPending}
                     onSelect={(value) => setStatus(value)}

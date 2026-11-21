@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, Download, X } from 'lucide-react';
 import AnimeCard, { AnimeCardSkeleton } from '../components/AnimeCard';
 import { useAuth } from '../context/AuthContext';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import logger from '../utils/logger';
 import SEO from '../components/SEO';
 import SectionHeader from '../components/common/SectionHeader';
 import ErrorState from '../components/common/ErrorState';
-import HeroSearch from '../components/home/HeroSearch';
+import GuestLanding from '../components/home/GuestLanding';
 import ContinueSection from '../components/home/ContinueSection';
 import AiringRibbon from '../components/home/AiringRibbon';
 import { animeQueries } from '../api/queries/anime';
@@ -36,6 +36,28 @@ export default function Home() {
         gcTime: 1000 * 60 * 60,
         retry: false,
     });
+
+    // Shelves never repeat each other: each skips what's already shown above
+    // it, and Trending stays away while "Recommended" is still the popularity
+    // fallback (it would be the same six shows).
+    const { data: recommendations } = useQuery({
+        ...recommendationQueries.all(12),
+        enabled: isAuthenticated,
+        staleTime: 1000 * 60 * 60,
+        retry: 1,
+    });
+    const shelves = useMemo(() => {
+        const shown = new Set((recommendations || []).slice(0, 6).map((rec) => rec.anime?.id));
+        const recsAreFallback = Boolean(recommendations?.length) && recommendations.every((rec) => rec.reason === 'trending');
+        const trendingItems = recsAreFallback ? [] : (trending || []).filter((anime) => !shown.has(anime.id)).slice(0, 6);
+        trendingItems.forEach((anime) => shown.add(anime.id));
+        const topRatedItems = (topRated || []).filter((anime) => !shown.has(anime.id)).slice(0, 6);
+        return {
+            trending: trendingItems,
+            hideTrending: isAuthenticated && recsAreFallback,
+            topRated: topRatedItems.length >= 4 ? topRatedItems : [],
+        };
+    }, [isAuthenticated, recommendations, trending, topRated]);
 
     // Optimized IntersectionObserver with refs
     useEffect(() => {
@@ -81,54 +103,39 @@ export default function Home() {
         <>
             <SEO page="home" />
             <div className="min-h-screen home-page">
-                {!isAuthenticated && <GuestIntroHero showAuthLinks />}
+                {!isAuthenticated && <GuestLanding />}
 
                 {/* Main Content Area */}
-                <div className={`relative space-y-16 md:space-y-20 pb-16 md:pb-24 ${isAuthenticated ? '' : 'pt-6 md:pt-14'}`}>
+                <div className="relative space-y-16 md:space-y-20 pb-16 md:pb-24">
                     {isAuthenticated && <ContinueSection />}
                     {isAuthenticated && <AiringRibbon />}
 
                     {/* Recommended For You Section */}
                     <RecommendedForYouSection revealRef={setRevealRef} />
 
-                    <AnimeShelf
-                        revealRef={setRevealRef}
-                        title="Trending now"
-                        viewAllTo="/browse?sort=trending"
-                        items={trending?.slice(0, 6)}
-                        isLoading={trendingLoading}
-                        isError={trendingError}
-                        onRetry={refetchTrending}
-                        emptyText="No trending anime right now."
-                    />
+                    {!shelves.hideTrending && (
+                        <AnimeShelf
+                            revealRef={setRevealRef}
+                            title="Trending now"
+                            viewAllTo="/browse?sort=trending"
+                            items={shelves.trending}
+                            isLoading={trendingLoading}
+                            isError={trendingError}
+                            onRetry={refetchTrending}
+                            emptyText="No trending anime right now."
+                        />
+                    )}
 
                     <AnimeShelf
                         revealRef={setRevealRef}
                         title="Top rated"
                         viewAllTo="/browse?sort=rating"
-                        items={topRated?.slice(0, 6)}
+                        items={shelves.topRated}
                         isLoading={topRatedLoading}
                         hideWhenEmpty
                     />
                 </div>
 
-                {/* CTA Section */}
-                {!isAuthenticated && (
-                    <section ref={setRevealRef} className="px-4 md:px-6 pb-16 sm:pb-24 reveal">
-                        <div className="max-w-3xl mx-auto text-center ui-surface py-10 sm:py-14 px-5 sm:px-10">
-                            <h2 className="section-title mb-4">
-                                Start Tracking Your Journey
-                            </h2>
-                            <p className="text-gray-400 mb-7 sm:mb-8 text-base sm:text-lg max-w-xl mx-auto">
-                                Keep a list of what you&rsquo;re watching, rate what you finish, and get picks based on what you actually like.
-                            </p>
-                            <Link to="/register" className="btn-primary px-6 sm:px-7 py-3 w-full sm:w-auto">
-                                Create Free Account
-                                <ChevronRight aria-hidden="true" className="w-4 h-4" />
-                            </Link>
-                        </div>
-                    </section>
-                )}
             </div>
         </>
     );
@@ -176,67 +183,6 @@ function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, i
     );
 }
 
-function GuestIntroHero({ showAuthLinks = true }) {
-    const formRef = useRef(null);
-
-    // While this search field is on screen, the navbar's search pill hides
-    // (see .nav-search-slot in index.css) so there is only one at a time.
-    useEffect(() => {
-        const root = document.documentElement;
-        const form = formRef.current;
-        if (!form || typeof IntersectionObserver === 'undefined') return undefined;
-        const io = new IntersectionObserver(([entry]) => {
-            if (entry.isIntersecting) root.dataset.heroSearch = 'visible';
-            else delete root.dataset.heroSearch;
-        }, { rootMargin: '-64px 0px 0px 0px' });
-        io.observe(form);
-        return () => {
-            io.disconnect();
-            delete root.dataset.heroSearch;
-        };
-    }, []);
-
-
-    return (
-        <section className="relative z-20 border-b border-gray-900 pt-24 pb-12 sm:pt-40 sm:pb-24">
-            {/* Only the decoration is clipped, so the search dropdown can extend
-                past the hero over the shelves below. */}
-            <div aria-hidden="true" className="absolute inset-0 overflow-hidden bg-dark">
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_60%_at_15%_10%,color-mix(in_srgb,var(--color-accent)_13%,transparent)_0%,transparent_65%)]" />
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-dark" />
-            </div>
-
-            <div className="relative z-10 w-full px-4 md:px-6">
-                <div className="max-w-7xl mx-auto">
-                <div className="max-w-2xl">
-                    <h1 className="text-[1.75rem] leading-[1.1] sm:text-4xl lg:text-5xl sm:leading-[1.04] font-extrabold text-white/90 tracking-tight mb-4 sm:mb-5">
-                        Discover, Track, and Share Your Anime Journey
-                    </h1>
-                    <p className="text-base sm:text-lg text-gray-400 mb-7 sm:mb-8 max-w-xl leading-relaxed">
-                        Build your watchlist, rate completed shows, and get personalized picks from what
-                        you already love.
-                    </p>
-
-                    <HeroSearch ref={formRef} />
-
-                    {showAuthLinks && (
-                    <p className="text-sm text-gray-500">
-                        <Link to="/register" className="font-semibold text-gray-200 hover:text-white underline decoration-white/20 underline-offset-4 hover:decoration-white/50 transition-colors">
-                            Create a free account
-                        </Link>
-                        <span aria-hidden="true" className="mx-2 text-gray-700">/</span>
-                        <Link to="/login" className="font-semibold text-gray-200 hover:text-white underline decoration-white/20 underline-offset-4 hover:decoration-white/50 transition-colors">
-                            Sign In
-                        </Link>
-                        <span className="hidden sm:inline"> to keep your list in sync.</span>
-                    </p>
-                    )}
-                </div>
-                </div>
-            </div>
-        </section>
-    );
-}
 function getRecommendationsSubtitle(recommendations) {
     // Users without personal picks yet get generic trending items from the
     // backend; those say nothing about the user's taste.

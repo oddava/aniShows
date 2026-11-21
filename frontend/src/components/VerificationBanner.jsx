@@ -39,7 +39,7 @@ export default function VerificationBanner() {
                         {' '}
                         <Link
                             to="/settings?tab=account"
-                            className="font-medium underline underline-offset-2 hover:text-yellow-400 transition-colors"
+                            className="font-semibold hover:text-yellow-400 transition-colors"
                         >
                             Change email
                         </Link>

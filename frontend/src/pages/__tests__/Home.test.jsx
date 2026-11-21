@@ -96,12 +96,14 @@ describe('Home', () => {
         render(<Home />, { wrapper: createWrapper() });
 
         expect(
-            screen.getByText('Discover, Track, and Share Your Anime Journey'),
+            screen.getByRole('heading', { level: 1, name: /Never lose your place/ }),
         ).toBeInTheDocument();
-        const registerLinks = screen.getAllByRole('link', { name: /create free account/i });
+        const registerLinks = screen.getAllByRole('link', { name: /create an account/i });
         expect(registerLinks.length).toBeGreaterThan(0);
         expect(registerLinks[0]).toHaveAttribute('href', '/register');
         expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
+        expect(screen.getByRole('link', { name: /import from mal or anilist/i })).toHaveAttribute('href', '/import');
+        expect(screen.getByRole('heading', { name: 'Airing today' })).toBeInTheDocument();
 
         await waitFor(() => {
             expect(screen.getAllByText('Demon Slayer').length).toBeGreaterThan(0);
@@ -117,8 +119,8 @@ describe('Home', () => {
 
         expect(screen.getByRole('heading', { level: 1, name: 'megumin' })).toBeInTheDocument();
         expect(await screen.findByRole('region', { name: 'Continue watching' })).toBeInTheDocument();
-        expect(await screen.findByText(/nothing in progress/)).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /import your list/ })).toHaveAttribute('href', '/import');
+        expect(await screen.findByText(/Nothing in progress/)).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Import your list/ })).toHaveAttribute('href', '/import');
         expect(screen.queryByText('View Details')).not.toBeInTheDocument();
     });
 
@@ -129,7 +131,7 @@ describe('Home', () => {
         render(<Home />, { wrapper: createWrapper() });
 
         expect(
-            screen.getByText('Discover, Track, and Share Your Anime Journey'),
+            screen.getByRole('heading', { level: 1, name: /Never lose your place/ }),
         ).toBeInTheDocument();
     });
 
@@ -183,10 +185,10 @@ describe('Home - Continue and the airing ribbon (members)', () => {
 
         const section = await screen.findByRole('region', { name: 'Continue watching' });
         await within(section).findByText('Behind By One');
-        const titles = within(section).getAllByRole('link').map((link) => link.textContent).filter((text) => text && text !== 'all of my list');
+        const titles = within(section).getAllByRole('link').map((link) => link.textContent).filter((text) => text && text !== 'All of my list');
         expect(titles).toEqual(['Behind By One', 'All Watched', 'Up To Date']);
-        expect(within(section).getByText('episode 8 is out')).toBeInTheDocument();
-        expect(within(section).getByText(/^episode 4 in 2h 2[01]m$/)).toBeInTheDocument();
+        expect(within(section).getByText('Episode 8 is out')).toBeInTheDocument();
+        expect(within(section).getByText(/^Episode 4 in 2h 2[01]m$/)).toBeInTheDocument();
         expect(within(section).getByText('1 of your shows has a new episode waiting.')).toBeInTheDocument();
         expect(within(section).getByRole('button', { name: 'One episode more of Behind By One' })).toBeInTheDocument();
         // A finished show asks for a score instead of +1.
@@ -232,7 +234,8 @@ describe('Home - Continue and the airing ribbon (members)', () => {
         render(<Home />, { wrapper: createWrapper() });
 
         await screen.findByText('Trending now');
-        expect(animeApi.getSchedule).not.toHaveBeenCalled();
+        // Guests see today's airings on the landing page, but no personal week.
+        expect(screen.queryByRole('region', { name: 'Your week' })).not.toBeInTheDocument();
         expect(screen.queryByRole('region', { name: 'Your week' })).not.toBeInTheDocument();
     });
 });

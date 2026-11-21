@@ -5,7 +5,7 @@ import { ChevronLeft, Search } from 'lucide-react';
 import Logo from '../Logo';
 
 // Sections reachable from the bottom bar; anywhere else gets a back button.
-const TOP_LEVEL_PATHS = ['/', '/browse', '/schedule', '/forums', '/notifications', '/settings', '/login', '/register'];
+const TOP_LEVEL_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/notifications', '/settings', '/login', '/register'];
 
 /**
  * Phone-only top bar: the wordmark (or Back on detail pages) and search.
@@ -38,7 +38,8 @@ export default function MobileTopBar() {
     }, [location.pathname]);
 
     const path = location.pathname.replace(/\/+$/, '') || '/';
-    const isTopLevel = TOP_LEVEL_PATHS.includes(path);
+    // Profiles are reached from the tab bar's account entry: no back arrow there either.
+    const isTopLevel = TOP_LEVEL_PATHS.includes(path) || /^\/u\/[^/]+(\/[^/]+)?$/.test(path);
     // Browse has its own search box at the top of the page.
     const showSearch = path !== '/browse';
     // Over artwork (top of the page) the icon buttons get a dark backing so
