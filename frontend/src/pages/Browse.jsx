@@ -265,6 +265,9 @@ export default function Browse() {
                 <AdvancedFiltersPanel
                   isOpen={showFilters}
                   onClose={() => setShowFilters(false)}
+                  adultContentEnabled={adultContentEnabled}
+                  hasActiveFilters={hasActiveFilters}
+                  onClearAll={clearAllFilters}
                   {...filterSidebarProps}
                 />
 

@@ -657,3 +657,39 @@
 html[data-sheet-open] .toast-container {
   bottom: calc(100dvh - 6rem - env(safe-area-inset-top, 0px)) !important;
 }
+
+/* Browse "More filters": two thumbs on one track (AdvancedFiltersPanel). */
+.range-field input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  margin: 0;
+  height: 1.25rem;
+}
+.range-field input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: all;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--text-1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
+  cursor: grab;
+}
+.range-field input[type="range"]::-moz-range-thumb {
+  pointer-events: all;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text-1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
+  cursor: grab;
+}
+.range-field input[type="range"]:focus-visible::-webkit-slider-thumb {
+  background: var(--signature);
+}
+.range-field input[type="range"]:focus-visible::-moz-range-thumb {
+  background: var(--signature);
+}
