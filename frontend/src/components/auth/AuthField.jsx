@@ -32,7 +32,7 @@ export default function AuthField({
             <label htmlFor={id} className="mb-2 block text-[15px] font-medium text-[var(--text-1)]">
                 {label}
             </label>
-            <div className={`relative rounded-lg ${message ? '[&>input]:!bg-[rgb(242_135_143/0.1)]' : ''}`}>
+            <div className="relative rounded-lg">
                 <input
                     id={id}
                     type={isPassword && visible ? 'text' : type}

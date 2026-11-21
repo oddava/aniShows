@@ -70,7 +70,7 @@ function ScoreCell({ score, title, onChange, disabled }) {
  * One row of the dense library table (T2): poster, title, progress stepper,
  * score, status, last update, all editable in place.
  */
-function LibraryRow({ entry: listEntry, titleLanguage = 'en' }) {
+function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = false }) {
     const anime = listEntry.anime || {};
     const { entry, setStatus, setScore, setProgress, remove, isPending } = useListEntryMutation({
         anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
@@ -121,6 +121,7 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en' }) {
             <div className="col-start-3 row-start-2 justify-self-end sm:col-start-auto sm:row-start-auto sm:justify-self-stretch">
                 <QuickAdd
                     variant="chip"
+                    quiet={quietStatus}
                     placement="down"
                     className="relative sm:[&>button]:w-full sm:[&>button]:justify-start"
                     status={entry.status}

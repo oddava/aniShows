@@ -244,6 +244,13 @@
   .card-reveal:has([aria-expanded="true"]) {
     opacity: 1;
   }
+
+  /* Touch screens have no hover: the status chip and + are always there. */
+  @media (hover: none) {
+    .card-reveal {
+      opacity: 1;
+    }
+  }
 }
 
 /* A value that just changed (stepper count, score) settles in. */

@@ -224,6 +224,22 @@ describe('toast with Undo after every write (T6)', () => {
         expect(toastMock.notify).toHaveBeenCalledTimes(1);
     });
 
+    it('offers Keep watching when Completed stops at the aired episode', async () => {
+        listApi.update
+            .mockResolvedValueOnce({ data: { id: 5, status: 'Completed', episodes_watched: 5, score: 0 } })
+            .mockResolvedValueOnce({ data: { id: 5, status: 'Watching', episodes_watched: 5, score: 0 } });
+        const { result } = setup({ id: 5, status: 'Watching', episodes_watched: 3 });
+
+        await act(() => result.current.setStatus('Completed'));
+        const [message, options] = toastMock.notify.mock.calls.at(-1);
+        expect(message).toBe('Completed. Caught up to episode 5');
+        expect(options.undoLabel).toBe('Keep watching');
+
+        await act(async () => { await options.onUndo(); });
+        expect(listApi.update).toHaveBeenLastCalledWith(5, { status: 'Watching' });
+        expect(result.current.entry).toMatchObject({ status: 'Watching', episodes_watched: 5 });
+    });
+
     it('undoes a status change by restoring every field the server moved', async () => {
         listApi.update
             .mockResolvedValueOnce({ data: { id: 3, status: 'Completed', episodes_watched: 28, finished_at: '2026-11-16', score: 0 } })

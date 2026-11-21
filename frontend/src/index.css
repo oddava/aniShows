@@ -250,8 +250,19 @@
   .input:focus-visible {
     /* Owner ruling: no rings or glow on fields. Focus lifts the fill. */
     box-shadow: none !important;
-    background-color: rgb(255 255 255 / 0.09) !important;
+    background-color: rgb(255 255 255 / 0.12) !important;
     caret-color: var(--signature);
+  }
+
+  /* A field with an error keeps its rose tint, lighter while focused. */
+  input[aria-invalid="true"]:not(:focus-visible),
+  textarea[aria-invalid="true"]:not(:focus-visible) {
+    background-color: rgb(242 135 143 / 0.1) !important;
+  }
+
+  input[aria-invalid="true"]:focus-visible,
+  textarea[aria-invalid="true"]:focus-visible {
+    background-color: rgb(242 135 143 / 0.16) !important;
   }
 
   .richtext-editor-textarea:focus-visible,

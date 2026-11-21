@@ -167,6 +167,7 @@ export default function useListEntryMutation({ anime, entry } = {}) {
     }, [queryClient, animeId, slug, episodeCount]);
 
     const undoRef = useRef(null);
+    const keepWatchingRef = useRef(null);
 
     /** The still-queued optimistic changes, oldest first. */
     const queuedOverlay = () => Object.assign({}, ...queuedRef.current.map((op) => op.optimistic));
@@ -203,8 +204,21 @@ export default function useListEntryMutation({ anime, entry } = {}) {
                 refreshCaches(saved);
                 if (shownMessage) {
                     // The server may have done more (Completed fills progress): say so.
-                    const savedMessage = describeListChange(before, saved, knownTotal({ episode_count: episodeCount }));
-                    if (savedMessage !== shownMessage) notify(savedMessage, { id: toastId, onUndo });
+                    const total = knownTotal({ episode_count: episodeCount });
+                    const savedMessage = describeListChange(before, saved, total);
+                    // Completed on a show still airing stopped at the aired
+                    // episode: offer to keep it in Watching instead (progress kept).
+                    const caughtUp = saved.status === 'Completed' && before.status !== 'Completed'
+                        && total && saved.episodes_watched < total;
+                    if (caughtUp) {
+                        notify(savedMessage, {
+                            id: toastId,
+                            onUndo: () => keepWatchingRef.current?.(),
+                            undoLabel: 'Keep watching',
+                        });
+                    } else if (savedMessage !== shownMessage) {
+                        notify(savedMessage, { id: toastId, onUndo });
+                    }
                 }
                 return { previous: before, saved };
             } catch (error) {
@@ -274,7 +288,8 @@ export default function useListEntryMutation({ anime, entry } = {}) {
 
     useEffect(() => {
         undoRef.current = undo;
-    }, [undo]);
+        keepWatchingRef.current = () => save({ status: 'Watching' });
+    }, [undo, save]);
 
     const remove = useCallback(async () => {
         if (!currentRef.current.status) return null;

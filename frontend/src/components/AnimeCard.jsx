@@ -237,7 +237,7 @@ function AnimeCard({
                 <span className="flex items-start gap-1.5">
                     {meta && showStatusDot && (
                         <span
-                            className="mt-[0.4rem] h-2 w-2 shrink-0 rounded-full"
+                            className="mt-[0.4rem] h-2 w-2 shrink-0 rounded-full [@media(hover:none)]:hidden"
                             style={{ backgroundColor: meta.color }}
                         />
                     )}

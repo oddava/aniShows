@@ -23,7 +23,7 @@ function buildFormState(entry) {
                 : '',
         started_at: entry?.started_at || '',
         finished_at: entry?.finished_at || '',
-        total_rewatches: entry?.total_rewatches > 0 ? String(entry.total_rewatches) : '',
+        total_rewatches: String(Number(entry?.total_rewatches) || 0),
         is_rewatching: Boolean(entry?.is_rewatching),
         notes: entry?.notes || '',
     };
@@ -243,16 +243,7 @@ export default function ListEntryEditModal({
                                 onChange={updateStatus}
                                 options={statusOptions}
                                 className="w-full"
-                                triggerClassName="min-h-11 rounded-xl bg-dark-200"
-                            />
-                        </Field>
-
-                        <Field label="Score" error={fieldErrors.score} wide>
-                            <ScorePicker
-                                layout="row"
-                                value={Number(form.score) || 0}
-                                onChange={(value) => updateField('score', value ? String(value) : '')}
-                                size="sm"
+                                triggerClassName="min-h-11 rounded-xl bg-white/[0.06]"
                             />
                         </Field>
 
@@ -296,6 +287,39 @@ export default function ListEntryEditModal({
                             )}
                         </Field>
 
+                        <Field label="Score" error={fieldErrors.score} wide>
+                            <ScorePicker
+                                layout="row"
+                                value={Number(form.score) || 0}
+                                onChange={(value) => updateField('score', value ? String(value) : '')}
+                                size="sm"
+                            />
+                        </Field>
+
+                        <Field label="Start date" htmlFor="list-entry-start-date" hint={readableDate(form.started_at)}>
+                            <InputShell>
+                                <input
+                                    id="list-entry-start-date"
+                                    type="date"
+                                    value={form.started_at}
+                                    onChange={(event) => updateField('started_at', event.target.value)}
+                                    className={`w-full bg-transparent text-sm outline-none [color-scheme:dark] ${form.started_at ? 'font-semibold text-white' : 'text-[var(--text-3)]'}`}
+                                />
+                            </InputShell>
+                        </Field>
+
+                        <Field label="Finish date" htmlFor="list-entry-finish-date" hint={readableDate(form.finished_at)} error={fieldErrors.finished_at}>
+                            <InputShell>
+                                <input
+                                    id="list-entry-finish-date"
+                                    type="date"
+                                    value={form.finished_at}
+                                    onChange={(event) => updateField('finished_at', event.target.value)}
+                                    className={`w-full bg-transparent text-sm outline-none [color-scheme:dark] ${form.finished_at ? 'font-semibold text-white' : 'text-[var(--text-3)]'}`}
+                                />
+                            </InputShell>
+                        </Field>
+
                         <Field label="Total rewatches" htmlFor="list-entry-rewatches" error={fieldErrors.total_rewatches}>
                             <InputShell>
                                 <input
@@ -311,53 +335,29 @@ export default function ListEntryEditModal({
                             </InputShell>
                         </Field>
 
-                        <Field label="Start date" htmlFor="list-entry-start-date" hint={readableDate(form.started_at)}>
-                            <InputShell>
-                                <input
-                                    id="list-entry-start-date"
-                                    type="date"
-                                    value={form.started_at}
-                                    onChange={(event) => updateField('started_at', event.target.value)}
-                                    className="w-full bg-transparent text-sm font-semibold text-white outline-none [color-scheme:dark]"
+                        <div className="flex items-center justify-between gap-4 self-end rounded-xl bg-white/[0.04] px-4 py-3">
+                            <div className="min-w-0">
+                                <span id="list-entry-rewatching-label" className="text-sm font-semibold text-gray-300">
+                                    Rewatching
+                                </span>
+                                <p className="mt-1 text-xs text-gray-500">
+                                    Finishing a rewatch adds one to total rewatches.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={form.is_rewatching}
+                                aria-labelledby="list-entry-rewatching-label"
+                                onClick={() => updateField('is_rewatching', !form.is_rewatching)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors motion-reduce:transition-none ${form.is_rewatching ? 'bg-[var(--signature)]' : 'bg-white/10'}`}
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className={`inline-block h-5 w-5 rounded-full bg-white transition-transform motion-reduce:transition-none ${form.is_rewatching ? 'translate-x-5' : 'translate-x-0.5'}`}
                                 />
-                            </InputShell>
-                        </Field>
-
-                        <Field label="Finish date" htmlFor="list-entry-finish-date" hint={readableDate(form.finished_at)} error={fieldErrors.finished_at}>
-                            <InputShell>
-                                <input
-                                    id="list-entry-finish-date"
-                                    type="date"
-                                    value={form.finished_at}
-                                    onChange={(event) => updateField('finished_at', event.target.value)}
-                                    className="w-full bg-transparent text-sm font-semibold text-white outline-none [color-scheme:dark]"
-                                />
-                            </InputShell>
-                        </Field>
-                    </div>
-
-                    <div className="mt-5 flex items-center justify-between gap-4 rounded-xl bg-dark-200 px-4 py-3">
-                        <div className="min-w-0">
-                            <span id="list-entry-rewatching-label" className="text-sm font-semibold text-gray-300">
-                                Rewatching
-                            </span>
-                            <p className="mt-1 text-xs text-gray-500">
-                                Finishing a rewatch adds one to total rewatches.
-                            </p>
+                            </button>
                         </div>
-                        <button
-                            type="button"
-                            role="switch"
-                            aria-checked={form.is_rewatching}
-                            aria-labelledby="list-entry-rewatching-label"
-                            onClick={() => updateField('is_rewatching', !form.is_rewatching)}
-                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors motion-reduce:transition-none ${form.is_rewatching ? 'bg-accent-dark' : 'bg-white/10'}`}
-                        >
-                            <span
-                                aria-hidden="true"
-                                className={`inline-block h-5 w-5 rounded-full bg-white transition-transform motion-reduce:transition-none ${form.is_rewatching ? 'translate-x-5' : 'translate-x-0.5'}`}
-                            />
-                        </button>
                     </div>
 
                     <div className="mt-4">

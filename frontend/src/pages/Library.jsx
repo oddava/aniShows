@@ -282,7 +282,7 @@ export default function Library() {
                                 Array.from({ length: 8 }, (_, i) => <RowSkeleton key={i} />)
                             ) : (
                                 <ul className={isPlaceholderData ? 'opacity-60' : ''}>
-                                    {entries.map((entry) => <LibraryRow key={entry.id} entry={entry} />)}
+                                    {entries.map((entry) => <LibraryRow key={entry.id} entry={entry} quietStatus={status !== ALL} />)}
                                 </ul>
                             )}
                         </div>
