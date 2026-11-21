@@ -24,6 +24,24 @@ describe('progressLabel (D2)', () => {
 });
 
 describe('ProgressStepper (T3)', () => {
+    it('shows an Undo at once, even while the +1 is still being written', async () => {
+        vi.useFakeTimers();
+        let resolveWrite;
+        const onCommit = vi.fn(() => new Promise((resolve) => { resolveWrite = resolve; }));
+        const { rerender } = render(<ProgressStepper value={3} total={12} onCommit={onCommit} title="Blue Box" />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'One episode more of Blue Box' }));
+        await act(async () => { vi.advanceTimersByTime(500); });
+        expect(onCommit).toHaveBeenCalledWith(4, 3);
+        // The entry moves to 4 (optimistic), then Undo puts it back to 3
+        // before the write has answered.
+        rerender(<ProgressStepper value={4} total={12} onCommit={onCommit} title="Blue Box" />);
+        rerender(<ProgressStepper value={3} total={12} onCommit={onCommit} title="Blue Box" />);
+        expect(screen.getByRole('group')).toHaveTextContent('3 / 12');
+        await act(async () => { resolveWrite(null); });
+        expect(screen.getByRole('group')).toHaveTextContent('3 / 12');
+    });
+
     it('batches quick taps into one write with the value before the burst', async () => {
         vi.useFakeTimers();
         const onCommit = vi.fn().mockResolvedValue(null);

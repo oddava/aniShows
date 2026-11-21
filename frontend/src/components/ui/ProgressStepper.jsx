@@ -67,9 +67,11 @@ export default function ProgressStepper({
         if (next !== null && previous !== null && next !== previous) onCommitRef.current?.(next, previous);
     }, []);
 
-    // The saved value caught up with what was typed: drop the draft.
+    // The saved value caught up with what was typed: drop the draft. A value
+    // that changes from outside between bursts (an Undo) wins at once.
     useEffect(() => {
-        if (draftRef.current !== null && !pending.current && timer.current === null && draftRef.current === value) {
+        if (draftRef.current === null || timer.current !== null) return;
+        if (draftRef.current === value ? !pending.current : burstStart.current === null) {
             draftRef.current = null;
             setDraft(null);
         }

@@ -194,6 +194,7 @@ export default function TrackingPanel({
                 }}
                 initialEntry={{ status: 'Plan to Watch', ...entry, episodes_watched: stepperDraft ?? entry.episodes_watched }}
                 totalEpisodes={anime.episode_count}
+                airedEpisodes={aired}
                 statusOptions={MODAL_STATUS_OPTIONS}
                 isSaving={isPending}
                 animeTitle={anime.title}

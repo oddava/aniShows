@@ -101,7 +101,8 @@ describe('Home', () => {
         const registerLinks = screen.getAllByRole('link', { name: /create an account/i });
         expect(registerLinks.length).toBeGreaterThan(0);
         expect(registerLinks[0]).toHaveAttribute('href', '/register');
-        expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/login');
+        // The header offers Sign in; the hero does not ask twice.
+        expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
         expect(screen.getByRole('link', { name: /import from mal or anilist/i })).toHaveAttribute('href', '/import');
         expect(screen.getByRole('heading', { name: 'Airing today' })).toBeInTheDocument();
 
@@ -286,7 +287,7 @@ describe('Home - Continue and the airing ribbon (members)', () => {
             expect(within(today).getByText('Episode 4')).toBeInTheDocument();
         });
 
-        it('says what is next up when nothing from the list airs today', async () => {
+        it('does not repeat a Continue show as Next up when nothing airs today', async () => {
             const sunday = { ...later, next_airing_date: '2026-11-22T15:43:00Z' };
             listApi.getAll.mockResolvedValue({
                 data: { results: [{ id: 32, status: 'Watching', episodes_watched: 3, score: 0, updated_at: '2026-11-20T09:00:00Z', anime: sunday }] },
@@ -296,10 +297,10 @@ describe('Home - Continue and the airing ribbon (members)', () => {
             render(<Home />, { wrapper: createWrapper() });
 
             const section = await screen.findByRole('region', { name: 'Continue watching' });
-            // No Tonight list, but one line on what comes next.
-            const next = await within(section).findByRole('link', { name: /^Next up/ });
-            expect(next).toHaveTextContent('Later Today');
-            expect(next).toHaveTextContent(/15:43 · Episode/);
+            // Its Continue row already says when the next episode comes, so
+            // neither Tonight nor a Next up line repeats it.
+            await within(section).findByText('Later Today');
+            expect(within(section).queryByRole('link', { name: /^Next up/ })).not.toBeInTheDocument();
             expect(within(section).queryByRole('heading', { name: 'Tonight' })).not.toBeInTheDocument();
         });
 

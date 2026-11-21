@@ -43,9 +43,6 @@ export default function GuestLanding() {
                         <Link to="/register" className="btn-primary">Create an account</Link>
                         <Link to="/import" className="text-link">Import from MAL or AniList</Link>
                     </div>
-                    <p className="mt-2 text-sm text-[var(--text-3)]">
-                        Already have an account? <Link to="/login" className="text-link min-h-0">Sign in</Link>
-                    </p>
                 </div>
 
                 <div className="panel">

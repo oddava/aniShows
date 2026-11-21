@@ -11,7 +11,7 @@ import ProgressStepper from '../ui/ProgressStepper';
 import ScorePicker from '../ui/ScorePicker';
 import Skeleton from '../ui/Skeleton';
 import { continueState, countdown, sortForContinue } from './continueModel';
-import { clockTime, dayOffset, listedAirings, tonightFrom, useMinuteClock } from './airingModel';
+import { airingPreview, clockTime, dayOffset, listedAirings, previewWhen, tonightFrom, useMinuteClock } from './airingModel';
 import { formatDate } from '../../utils/dateUtils';
 
 function stateText(state, now) {
@@ -196,9 +196,20 @@ export default function ContinueSection() {
     }, []);
     const readyCount = rows.filter((row) => (live[row.entry.id]?.kind ?? row.state.kind) === 'ready').length;
     const episodeDelta = rows.reduce((sum, row) => sum + (live[row.entry.id]?.delta || 0), 0);
-    const tonight = useMemo(
-        () => tonightFrom(listedAirings(watching, scheduleDays), now, timezone),
-        [watching, scheduleDays, now, timezone],
+    const tonight = useMemo(() => {
+        const airings = listedAirings(watching, scheduleDays);
+        const result = tonightFrom(airings, now, timezone);
+        // "Next up" is for a show Continue does not already list (its row
+        // says when the next episode comes), so each show is named once.
+        const inContinue = new Set((watching || []).map((entry) => entry.anime?.id));
+        const next = airings.find((row) => row.at > now && row.at - now < 7 * 24 * 60 * 60 * 1000 && !inContinue.has(row.anime.id)) || null;
+        return { ...result, next };
+    }, [watching, scheduleDays, now, timezone]);
+    // A fresh list: what airs soon, so the first screen still answers
+    // "what's on" (as it does for visitors).
+    const airingSoon = useMemo(
+        () => (rows.length === 0 ? airingPreview(scheduleDays, timezone, now, 8).filter((row) => !row.aired).slice(0, 4) : []),
+        [rows.length, scheduleDays, timezone, now],
     );
     const summaryLine = isPending
         ? ''
@@ -210,8 +221,8 @@ export default function ContinueSection() {
 
     return (
         <section aria-labelledby="continue-heading" className="page-container pt-20 md:pt-32">
-            <div className="grid gap-6 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)] md:gap-16">
-                <div>
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)] md:gap-16">
+                <div className="min-w-0">
                     <h1 className="page-title break-words">{user?.username || 'Welcome back'}</h1>
                     <p className="mt-3 max-w-sm text-[17px] leading-relaxed text-[var(--text-2)]">{summaryLine}</p>
                     {summary?.total > 0 && (
@@ -223,7 +234,7 @@ export default function ContinueSection() {
                 </div>
 
                 <div className="panel">
-                    <h2 id="continue-heading" className="section-title mb-2">{!isPending && rows.length === 0 ? 'Start watching' : 'Continue watching'}</h2>
+                    <h2 id="continue-heading" className="section-title mb-2">{!isPending && rows.length === 0 ? (airingSoon.length ? 'Airing soon' : 'Start watching') : 'Continue watching'}</h2>
                     {isPending ? (
                         <ul aria-hidden="true">
                             {Array.from({ length: 3 }, (_, i) => (
@@ -237,10 +248,35 @@ export default function ContinueSection() {
                             ))}
                         </ul>
                     ) : rows.length === 0 ? (
-                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px]">
-                            <Link to="/browse?sort=trending" className="btn-primary px-4">Find something to watch</Link>
-                            <Link to="/import" className="text-link">Import a list</Link>
-                        </div>
+                        <>
+                            {airingSoon.length > 0 && (
+                                <ul className="mb-4">
+                                    {airingSoon.map((row) => (
+                                        <li key={row.anime.id}>
+                                            <Link to={`/anime/${row.anime.slug}`} className="group -mx-3 flex items-center gap-4 rounded-[var(--radius-md)] px-3 py-2.5 transition-colors hover:bg-white/[0.03]">
+                                                <img
+                                                    src={getOptimizedImageUrl(row.anime, 'cover', 'small')}
+                                                    onError={(event) => applyImageFallback(event, getImageFallbackUrl(row.anime, 'cover'))}
+                                                    alt=""
+                                                    loading="lazy"
+                                                    className="h-14 w-10 shrink-0 rounded-md bg-[var(--ink-2)] object-cover"
+                                                />
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block truncate font-semibold text-[var(--text-1)] group-hover:text-[var(--signature)]">{row.anime.title}</span>
+                                                    <span className="block text-sm text-[var(--text-2)] tabular">
+                                                        {row.anime.next_airing_episode ? `Episode ${row.anime.next_airing_episode} · ` : ''}{previewWhen(row, timezone)}
+                                                    </span>
+                                                </span>
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[15px]">
+                                <Link to="/browse?sort=trending" className="btn-primary px-4">Find something to watch</Link>
+                                <Link to="/import" className="text-link">Import a list</Link>
+                            </div>
+                        </>
                     ) : (
                         <>
                             <ul>

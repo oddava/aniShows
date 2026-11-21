@@ -116,7 +116,7 @@ export default function BrowseResults({
               renderRow={(anime) => (
                 <AnimeListRow anime={anime} titleLanguage={titleLanguage} />
               )}
-              estimateSize={140}
+              estimateSize={112}
               overscan={5}
             />
             <div ref={loadMoreRef} className="h-10 flex justify-center items-center py-8">

@@ -63,6 +63,7 @@ export default function ListEntryEditModal({
     onSave,
     initialEntry,
     totalEpisodes,
+    airedEpisodes = null,
     statusOptions,
     isSaving,
     animeTitle,
@@ -250,7 +251,7 @@ export default function ListEntryEditModal({
                         <Field
                             label="Episode progress"
                             htmlFor="list-entry-progress"
-                            hint={episodeCap != null ? `of ${episodeCap}` : 'Total unknown'}
+                            hint={episodeCap != null ? `of ${episodeCap}` : airedEpisodes ? `of ${airedEpisodes} aired` : 'Total unknown'}
                         >
                             <InputShell invalid={Boolean(fieldErrors.episodes_watched)}>
                                 <button

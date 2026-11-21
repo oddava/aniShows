@@ -27,14 +27,14 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
     const href = `/anime/${anime.slug}`;
 
     return (
-        <div className="group relative flex items-center gap-3 sm:gap-5 rounded-[var(--radius-md)] p-2 sm:p-3 transition-colors hover:bg-white/[0.03]">
+        <div className="group relative flex items-center gap-3 sm:gap-5 rounded-[var(--radius-md)] p-2 transition-colors hover:bg-white/[0.03]">
             <Link to={href} tabIndex={-1} aria-hidden="true" className="relative shrink-0">
                 <img
                     src={imageUrl}
                     alt=""
                     loading="lazy"
                     onError={(event) => applyImageFallback(event, fallbackImageUrl)}
-                    className="h-[108px] w-[72px] sm:h-[120px] sm:w-[80px] rounded-[var(--radius-sm)] bg-[var(--ink-3)] object-cover"
+                    className="h-[108px] w-[72px] sm:h-24 sm:w-16 rounded-[var(--radius-sm)] bg-[var(--ink-3)] object-cover"
                 />
                 {entry.score > 0 && <ScoreBadge score={entry.score} className="absolute left-1 top-1 !h-5 !px-1 text-[11px]" />}
             </Link>
@@ -47,6 +47,7 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                 </Link>
                 {meta && <span className="sr-only">On your list: {meta.label}</span>}
                 <p className="mt-1 text-sm text-[var(--text-2)] tabular">
+                    {meta && <span className="sm:hidden" style={{ color: meta.color }}>{meta.label} · </span>}
                     {[anime.anime_type, anime.episode_count > 0 ? `${anime.episode_count} eps` : null, year, anime.status]
                         .filter(Boolean)
                         .join(' · ')}
