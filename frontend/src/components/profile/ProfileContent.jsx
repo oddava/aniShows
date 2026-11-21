@@ -15,6 +15,20 @@ import ReviewsTab from './tabs/ReviewsTab';
  * between those two tabs reuses one boundary instance, exactly as before the split.
  */
 
+/** The placeholder every lazy profile tab shows while its code loads. */
+function TabSkeleton() {
+    return (
+        <ul aria-hidden="true" className="panel">
+            {Array.from({ length: 5 }, (_, index) => (
+                <li key={index} className="flex items-center gap-4 py-3">
+                    <span className="h-14 w-10 rounded-md bg-[var(--ink-2)] animate-pulse" />
+                    <span className="h-4 w-1/2 rounded bg-[var(--ink-2)] animate-pulse" />
+                </li>
+            ))}
+        </ul>
+    );
+}
+
 export default function ProfileContent({
     activeTab,
     isPrivate,
@@ -103,7 +117,7 @@ export default function ProfileContent({
         case 'activity':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Activity">
-                    <Suspense fallback={<div className="py-12 text-[15px] text-[var(--text-3)]">Loading…</div>}>
+                    <Suspense fallback={<TabSkeleton />}>
                         <ActivityTab username={targetUsername} isPrivate={isPrivate} isOwner={isOwnProfile} />
                     </Suspense>
                 </ProfileErrorBoundary>
@@ -112,7 +126,7 @@ export default function ProfileContent({
         case 'insights':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Insights">
-                    <Suspense fallback={<div className="py-12 text-[15px] text-[var(--text-3)]">Loading…</div>}>
+                    <Suspense fallback={<TabSkeleton />}>
                         <InsightsTab
                             username={targetUsername}
                             isPrivate={isPrivate}

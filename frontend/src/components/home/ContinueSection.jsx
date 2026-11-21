@@ -11,7 +11,8 @@ import ProgressStepper from '../ui/ProgressStepper';
 import ScorePicker from '../ui/ScorePicker';
 import Skeleton from '../ui/Skeleton';
 import { continueState, countdown, sortForContinue } from './continueModel';
-import { clockTime, listedAirings, tonightFrom, useMinuteClock } from './airingModel';
+import { clockTime, dayOffset, listedAirings, tonightFrom, useMinuteClock } from './airingModel';
+import { formatDate } from '../../utils/dateUtils';
 
 function stateText(state, now) {
     if (state.kind === 'ready') {
@@ -100,7 +101,26 @@ function Tonight({ items, now, timezone }) {
     // Only episodes still to come today: what is already out is in Continue
     // and Your week, so each show is named once.
     const upcoming = items.today.filter((item) => !item.aired);
-    if (!upcoming.length) return null;
+    if (!upcoming.length) {
+        // Nothing left today: one line on what comes next, so the promise
+        // ("know what's on") holds every day.
+        const { next } = items;
+        if (!next) return null;
+        const offset = dayOffset(next.at, timezone, now);
+        const day = offset === 1 ? 'Tomorrow' : formatDate(next.at, { weekday: 'short' }, timezone);
+        return (
+            <Link
+                to={`/anime/${next.anime.slug}`}
+                className="-mx-2 mt-8 block rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04] md:max-w-sm"
+            >
+                <span className="block text-sm text-[var(--text-3)]">Next up</span>
+                <span className="block truncate text-[15px] text-[var(--text-1)]">{next.anime.title}</span>
+                <span className="block text-sm text-[var(--signature)] tabular">
+                    {day} {clockTime(next.at, timezone)}{next.episode ? ` · Episode ${next.episode}` : ''}
+                </span>
+            </Link>
+        );
+    }
     return (
         <div className="mt-10 md:max-w-sm">
             <h2 className="text-[15px] font-semibold text-[var(--text-2)]">Tonight</h2>

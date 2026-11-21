@@ -56,9 +56,8 @@ export function tonightFrom(airings, now = Date.now(), timezone) {
     const today = airings
         .filter((row) => dayOffset(row.at, timezone, now) === 0)
         .map((row) => ({ ...row, aired: row.at <= now }));
-    const next = today.length
-        ? null
-        : airings.find((row) => row.at > now && row.at - now < 7 * DAY_MS) || null;
+    // The next episode still to come (today or within a week).
+    const next = airings.find((row) => row.at > now && row.at - now < 7 * DAY_MS) || null;
     return { today, next };
 }
 

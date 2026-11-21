@@ -45,7 +45,7 @@ const formatAirTime = (anime, preferredTimezone) => {
   if (!hasAiringDate(anime)) return 'Time TBA';
   const time = formatDate(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preferredTimezone);
   if (!time) return null;
-  return new Date(anime.next_airing_date) < new Date() ? `Aired ${time}` : `Airs ${time}`;
+  return new Date(anime.next_airing_date) < new Date() ? time : `Airs ${time}`;
 };
 
 const getTimezoneLabel = (preferredTimezone) => {
@@ -71,7 +71,7 @@ const addDays = (date, days) => {
 // date today + position; its label and its count come from that same offset.
 // Seven equal columns, so the whole strip fits on a phone without sideways
 // scrolling.
-const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday }) => {
+const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday, quietEmpty = false }) => {
   return (
     <div className="grid grid-cols-7 gap-1" role="group" aria-label="Day">
       {Array.from({ length: 7 }, (_, position) => (todayDay + position) % 7).map((index, position) => {
@@ -100,7 +100,7 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
               {dayOfMonth}
             </span>
             <span aria-hidden="true" className={`text-xs tabular ${count > 0 ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}`}>
-              <span>{count}</span> ep
+              {count > 0 || !quietEmpty ? <><span>{count}</span> ep</> : 'Free'}
             </span>
           </button>
         );
@@ -343,6 +343,7 @@ export default function Schedule() {
           {/* Day Selector */}
           <div className="mb-8 sm:mb-10">
             <DaySelector
+              quietEmpty={myListOnly}
               selectedDay={selectedDay}
               onSelect={setSelectedDay}
               animeCounts={animeCounts}

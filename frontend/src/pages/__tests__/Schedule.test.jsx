@@ -531,7 +531,7 @@ describe('Schedule Component - calendar dates and My list', () => {
     await waitFor(() => {
       expect(screen.getByText('Aired This Morning')).toBeInTheDocument();
     });
-    expect(screen.getByText('Aired 09:00')).toBeInTheDocument();
+    expect(screen.getByText(/^09:00/)).toBeInTheDocument();
     expect(screen.queryByText('Stale Last Week')).not.toBeInTheDocument();
     expect(screen.getByText('1 more airs later')).toBeInTheDocument();
 

@@ -335,7 +335,7 @@ export default function ActivityFeed({ username, isPrivate, isOwner = false, com
     }
 
     return (
-        <section className="space-y-6">
+        <section className="space-y-6 max-w-3xl">
             <div className="scroll-fade -mx-4 flex items-center gap-2 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Filter by status">
                 {FILTER_OPTIONS.map((filter) => {
                     const isActive = filterType === filter.value;

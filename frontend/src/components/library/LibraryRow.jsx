@@ -80,7 +80,7 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = fals
     const href = `/anime/${anime.slug}`;
 
     return (
-        <li className="group -mx-2 grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-[var(--radius-md)] px-2 py-2.5 transition-colors hover:bg-white/[0.03] sm:grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] sm:gap-x-4">
+        <li className="group -mx-2 grid grid-cols-[2.75rem_minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-1 rounded-[var(--radius-md)] px-2 py-2.5 transition-colors hover:bg-white/[0.03] sm:grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] sm:gap-x-4">
             <Link to={href} tabIndex={-1} aria-hidden="true" className="row-span-2 sm:row-span-1">
                 <img
                     src={getOptimizedImageUrl(anime, 'cover', 'small')}
@@ -90,14 +90,14 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = fals
                     className="h-16 w-11 rounded-[var(--radius-sm)] bg-[var(--ink-3)] object-cover"
                 />
             </Link>
-            <div className="min-w-0">
+            <div className="col-span-2 min-w-0 sm:col-span-1">
                 <Link to={href} className="line-clamp-2 text-sm font-medium text-gray-100 hover:text-white">{title}</Link>
                 <p className="mt-0.5 text-xs text-gray-500 tabular sm:hidden">
                     {anime.anime_type}{entry.status === 'Watching' ? '' : ` · ${entry.episodes_watched || 0} eps`}
                 </p>
             </div>
 
-            <div className="col-start-2 row-start-2 sm:col-start-auto sm:row-start-auto">
+            <div className="col-span-2 col-start-2 row-start-2 min-w-0 sm:col-span-1 sm:col-start-auto sm:row-start-auto">
                 {entry.status === 'Completed' ? (
                     <span className="text-xs text-gray-400 tabular">{progressText(entry.episodes_watched, anime)}</span>
                 ) : entry.status !== 'Plan to Watch' ? (
@@ -114,11 +114,11 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = fals
                 )}
             </div>
 
-            <div className="col-start-3 row-start-1 justify-self-end sm:col-start-auto sm:row-start-auto sm:justify-self-start">
+            <div className="col-start-4 row-start-1 justify-self-end sm:col-start-auto sm:row-start-auto sm:justify-self-start">
                 <ScoreCell score={entry.score} title={title} disabled={isPending} onChange={(value) => setScore(value)} />
             </div>
 
-            <div className={`col-start-3 row-start-2 justify-self-end sm:col-start-auto sm:row-start-auto ${quietStatus ? 'sm:order-1 sm:justify-self-end' : 'sm:justify-self-stretch'}`}>
+            <div className={`col-start-4 row-start-2 justify-self-end sm:col-start-auto sm:row-start-auto ${quietStatus ? 'sm:order-1 sm:justify-self-end' : 'sm:justify-self-stretch'}`}>
                 <QuickAdd
                     variant="chip"
                     quiet={quietStatus}

@@ -19,7 +19,7 @@ export default function ProfileTabs({ activeTab, onTabChange }) {
 
     return (
         <nav aria-label="Profile sections" className="profile-tabs page-container mt-10 md:mt-12">
-            <div ref={fadeRef} className="scroll-fade overflow-x-auto scrollbar-hide ">
+            <div ref={fadeRef} className="scroll-fade -mx-4 overflow-x-auto scroll-px-4 px-4 scrollbar-hide sm:mx-0 sm:px-0">
                 <div className="flex w-max gap-1">
                     {TABS.map((tab) => {
                         const isActive = activeTab === tab.id;
@@ -27,6 +27,7 @@ export default function ProfileTabs({ activeTab, onTabChange }) {
                             <button
                                 key={tab.id}
                                 type="button"
+                                ref={isActive ? (node) => node?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) : undefined}
                                 onClick={() => onTabChange(tab.id)}
                                 aria-current={isActive ? 'page' : undefined}
                                 className={`min-h-[2.75rem] shrink-0 whitespace-nowrap rounded-lg px-3.5 text-[15px] font-medium transition-colors duration-150 ${isActive

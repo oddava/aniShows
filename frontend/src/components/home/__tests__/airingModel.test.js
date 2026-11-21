@@ -37,7 +37,8 @@ describe('tonightFrom', () => {
         );
         const { today, next } = tonightFrom(airings, NOW, 'UTC');
         expect(today.map((row) => [row.anime.id, row.aired])).toEqual([[1, true], [2, false]]);
-        expect(next).toBeNull();
+        // The next one still to come is today's later episode.
+        expect(next.anime.id).toBe(2);
     });
 
     it('names the next show when nothing airs today', () => {
