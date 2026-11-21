@@ -28,7 +28,7 @@ export function StatusOptions({ current, onSelect, onRemove, autoFocus = false, 
                         <span className="flex-1">
                             {status.label}
                             {status.value === 'Completed' && completeHint && !isCurrent && (
-                                <span id={hintId} aria-hidden="true" className="block text-xs font-normal text-[var(--text-3)]">{completeHint}</span>
+                                <span id={hintId} aria-hidden="true" className="block text-xs font-normal text-[var(--text-2)]">{completeHint}</span>
                             )}
                         </span>
                         {isCurrent && <Check aria-hidden="true" className="h-4 w-4 text-gray-300" />}

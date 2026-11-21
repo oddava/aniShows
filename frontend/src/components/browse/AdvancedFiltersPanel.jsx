@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
+import useMediaQuery from '../../hooks/useMediaQuery';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 const ADULT_GENRES = new Set(['ecchi', 'hentai']);
 
@@ -22,7 +24,7 @@ const Chip = ({ active, label, onClick }) => (
     type="button"
     onClick={onClick}
     aria-pressed={Boolean(active)}
-    className={`h-9 whitespace-nowrap rounded-lg px-3 text-sm transition-colors duration-150 ${active
+    className={`h-11 whitespace-nowrap rounded-lg px-3 text-sm transition-colors duration-150 sm:h-9 ${active
       ? 'bg-[var(--signature-soft)] font-medium text-[var(--signature)]'
       : 'bg-white/[0.04] text-[var(--text-2)] hover:bg-white/[0.08] hover:text-[var(--text-1)]'}`}
   >
@@ -73,7 +75,7 @@ function SelectField({ label, value, onChange, options, anyLabel = 'Any' }) {
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         aria-labelledby={labelId}
-        className={`flex h-10 w-full items-center justify-between gap-2 rounded-lg px-3 text-sm transition-colors duration-150 ${value
+        className={`flex h-11 w-full items-center justify-between gap-2 rounded-lg px-3 text-sm transition-colors duration-150 sm:h-10 ${value
           ? 'bg-[var(--signature-soft)] text-[var(--signature)]'
           : 'bg-white/[0.05] text-[var(--text-2)] hover:bg-white/[0.08] hover:text-[var(--text-1)]'}`}
       >
@@ -210,6 +212,17 @@ export default function AdvancedFiltersPanel({
   onClose = () => {},
 }) {
   const [tagQuery, setTagQuery] = useState('');
+  // Phones: a full-screen sheet, so it behaves as a dialog (focus inside,
+  // Escape closes, focus returns to Filters). Desktop: an inline panel.
+  const isSheet = useMediaQuery('(max-width: 639px)');
+  const trapRef = useFocusTrap(isOpen && isSheet, onClose);
+  // Closing the sheet hands focus back to whatever opened it.
+  const openerRef = useRef(null);
+  useEffect(() => {
+    if (!isOpen || !isSheet) return undefined;
+    openerRef.current = document.activeElement;
+    return () => openerRef.current?.focus?.();
+  }, [isOpen, isSheet]);
   const selectedTags = localFilters.tags || [];
   const query = tagQuery.trim().toLowerCase();
 
@@ -245,8 +258,10 @@ export default function AdvancedFiltersPanel({
   return (
     <div className="fixed inset-0 z-[1100] flex flex-col bg-[var(--ink-0)] sm:static sm:z-auto sm:mb-6 sm:block sm:bg-transparent">
       <div
-        role="region"
-        aria-label="More filters"
+        ref={trapRef}
+        role={isSheet ? 'dialog' : 'region'}
+        aria-modal={isSheet ? 'true' : undefined}
+        aria-label={isSheet ? 'Filters' : 'More filters'}
         className="popover-in flex min-h-0 flex-1 flex-col sm:block sm:rounded-[var(--radius-lg)] sm:bg-[var(--ink-1)]"
       >
         {/* Header */}
@@ -263,7 +278,7 @@ export default function AdvancedFiltersPanel({
               type="button"
               onClick={onClose}
               aria-label="Close filters"
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-[var(--text-2)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-1)]"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-2)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-1)]"
             >
               <X aria-hidden="true" className="h-5 w-5" />
             </button>

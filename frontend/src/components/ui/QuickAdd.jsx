@@ -230,7 +230,7 @@ export default function QuickAdd({
                     className={`popover-in absolute ${variant === 'button' ? 'left-0 right-0 min-w-52' : 'right-0 w-52'} z-[300] rounded-[var(--radius-md)] bg-[var(--ink-3)] p-1 shadow-[var(--shadow-pop)] ${placement === 'down' ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                 >
                     {variant === 'icon' && title && (
-                        <p className="truncate px-3 pt-1.5 pb-1 text-[13px] text-[var(--text-3)]">{title}</p>
+                        <p className="truncate px-3 pt-1.5 pb-1 text-[13px] text-[var(--text-2)]">{title}</p>
                     )}
                     {body}
                 </div>

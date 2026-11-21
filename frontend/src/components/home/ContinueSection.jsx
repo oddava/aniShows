@@ -169,7 +169,7 @@ function AiringSoonRow({ row, timezone }) {
                     className="h-14 w-10 shrink-0 rounded-md bg-[var(--ink-2)] object-cover"
                 />
                 <span className="min-w-0 flex-1">
-                    <span className="line-clamp-2 font-semibold leading-snug text-[var(--text-1)] group-hover:text-[var(--signature)] sm:line-clamp-1">{anime.title}</span>
+                    <span className="line-clamp-3 font-semibold leading-snug text-[var(--text-1)] group-hover:text-[var(--signature)] sm:line-clamp-1">{anime.title}</span>
                     <span className="block text-sm text-[var(--text-2)] tabular">
                         {anime.next_airing_episode ? `Episode ${anime.next_airing_episode} · ` : ''}{previewWhen(row, timezone)}
                     </span>
