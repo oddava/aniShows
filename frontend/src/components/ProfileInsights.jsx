@@ -23,7 +23,7 @@ const ChartTooltip = ({ active, payload, unit = 'anime' }) => {
     if (!active || !payload?.length) return null;
     const row = payload[0].payload;
     return (
-        <div className="rounded-[var(--radius-md)] border border-white/[0.08] bg-[var(--ink-3)] px-3.5 py-2.5 shadow-lg shadow-black/30">
+        <div className="rounded-[var(--radius-md)] bg-[var(--ink-3)] px-3.5 py-2.5 shadow-lg shadow-black/30">
             <p className="text-[13px] font-medium text-[var(--text-1)]">{row.name || `Scored ${row.score}`}</p>
             <p className="text-[13px] text-[var(--text-2)] tabular">{payload[0].value} {unit}</p>
         </div>
@@ -167,7 +167,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
     }
 
     return (
-        <div className="w-full space-y-10 pb-8 [&>*+*]:border-t [&>*+*]:border-white/[0.06] [&>*+*]:pt-8">
+        <div className="w-full space-y-4 pb-8 [&>*]:rounded-[var(--radius-lg)] [&>*]:bg-[var(--ink-1)] [&>*]:p-5 md:[&>*]:p-6">
             <dl className="flex flex-wrap gap-x-12 gap-y-5">
                 {numbers.map((entry) => (
                     <div key={entry.label} className="flex flex-col-reverse">

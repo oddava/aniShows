@@ -306,7 +306,8 @@ export default function OverviewTab({
     return (
         <div className="animate-tab-content overview-tab pb-8">
             <div className="grid gap-4 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
-                {left.length > 0 && <Column>{left}</Column>}
+                {/* Phones: what you're watching comes before genres and links. */}
+                {left.length > 0 && <div className="order-2 min-w-0 md:order-none"><Column>{left}</Column></div>}
                 <div className={left.length > 0 ? 'min-w-0' : 'min-w-0 md:col-span-2'}>
                     <Column>{right}</Column>
                 </div>

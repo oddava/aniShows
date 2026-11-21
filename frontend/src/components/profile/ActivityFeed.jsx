@@ -297,9 +297,9 @@ export default function ActivityFeed({ username, isPrivate, compact = false, hea
                             type="button"
                             onClick={() => setFilterType(filter.value)}
                             aria-pressed={isActive}
-                            className={`inline-flex min-h-[2.5rem] items-center gap-2 rounded-full border px-3.5 text-sm transition-colors ${isActive
-                                ? 'border-[var(--line-4)] bg-white/[0.06] text-[var(--text-1)]'
-                                : 'border-white/[0.06] text-[var(--text-2)] hover:text-[var(--text-1)]'
+                            className={`inline-flex min-h-[2.5rem] items-center gap-2 rounded-lg px-3.5 text-sm transition-colors ${isActive
+                                ? 'bg-white/[0.08] text-[var(--text-1)]'
+                                : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
                                 }`}
                         >
                             {filter.color && (

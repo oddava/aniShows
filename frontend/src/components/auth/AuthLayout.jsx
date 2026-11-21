@@ -22,9 +22,7 @@ export default function AuthLayout({ title, lead, children }) {
 export function AuthDivider({ children = 'Or with email' }) {
     return (
         <div className="my-8 flex items-center gap-4 text-sm text-[var(--text-2)]">
-            <span aria-hidden="true" className="h-px flex-1 bg-white/[0.08]" />
             {children}
-            <span aria-hidden="true" className="h-px flex-1 bg-white/[0.08]" />
         </div>
     );
 }
@@ -35,9 +33,9 @@ export function AuthNotice({ tone = 'error', children, className = '' }) {
     return (
         <div
             role={isError ? 'alert' : 'status'}
-            className={`rounded-[var(--radius-md)] border px-4 py-3 text-[15px] leading-relaxed ${isError
-                ? 'border-red-400/30 text-red-300'
-                : 'border-[var(--line-3)] text-[var(--text-1)]'} ${className}`}
+            className={`rounded-[var(--radius-md)] px-4 py-3 text-[15px] leading-relaxed ${isError
+                ? 'bg-[rgb(242_135_143/0.1)] text-red-300'
+                : 'bg-white/[0.05] text-[var(--text-1)]'} ${className}`}
         >
             {children}
         </div>

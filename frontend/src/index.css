@@ -643,3 +643,9 @@
     bottom: calc(var(--tabbar-h) + 0.75rem + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
+
+/* With a bottom sheet open, toasts show near the top instead (they would
+   cover the sheet's buttons). */
+html[data-sheet-open] .toast-container {
+  bottom: calc(100dvh - 6rem - env(safe-area-inset-top, 0px)) !important;
+}

@@ -380,7 +380,7 @@ export default function ListEntryEditModal({
                     </div>
 
                     {errorMessage && (
-                        <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                        <div className="mt-4 rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-300">
                             {errorMessage}
                         </div>
                     )}

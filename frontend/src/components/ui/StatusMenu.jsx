@@ -37,7 +37,7 @@ export function StatusOptions({ current, onSelect, onRemove, autoFocus = false, 
             })}
             {current && onRemove && (
                 <>
-                    <div aria-hidden="true" className="my-1 h-px bg-white/[0.07]" />
+                    <div aria-hidden="true" className="h-2" />
                     <button
                         type="button"
                         role="menuitem"

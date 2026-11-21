@@ -79,6 +79,23 @@ describe('/list library (P2)', () => {
         expect(await screen.findByRole('button', { name: 'Your score for Frieren: 9. Change' })).toBeInTheDocument();
     });
 
+    it('keeps a show that just moved to Completed in place, so its score prompt stays open', async () => {
+        const watching = { id: 3, status: 'Watching', episodes_watched: 11, score: 0, anime: frieren };
+        listApi.getAll
+            .mockResolvedValueOnce(page(watching))
+            .mockResolvedValue(page());
+        listApi.update.mockResolvedValue({ data: { id: 3, status: 'Completed', episodes_watched: 28, score: 0 } });
+        renderAt('/list');
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Watching. Change list status for Frieren' }));
+        fireEvent.click(screen.getByRole('menuitemradio', { name: 'Completed' }));
+
+        // The list refetches without it, but the card and its score row stay.
+        await waitFor(() => expect(listApi.getAll.mock.calls.length).toBeGreaterThan(1));
+        expect(await screen.findByRole('radiogroup', { name: 'Score this anime' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Completed\. Change list status for Frieren/ })).toBeInTheDocument();
+    });
+
     it('says what to do when a status is empty', async () => {
         listApi.getAll.mockResolvedValue(page());
         renderAt('/list?status=planning');

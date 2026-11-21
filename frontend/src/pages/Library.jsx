@@ -50,6 +50,29 @@ function useDebounced(value, delay) {
 }
 
 /**
+ * Entries that leave this tab (moved to Completed, removed) stay where they
+ * were, showing their new state, until the tab, search or sort changes: a
+ * card never vanishes under your finger, and the score prompt after
+ * Completed stays open.
+ */
+function useStickyEntries(fetched, viewKey) {
+    const shown = useRef({ key: viewKey, list: [] });
+    return useMemo(() => {
+        if (shown.current.key !== viewKey) {
+            shown.current = { key: viewKey, list: fetched };
+            return fetched;
+        }
+        const fetchedIds = new Set(fetched.map((entry) => entry.id));
+        const merged = [...fetched];
+        shown.current.list.forEach((entry, index) => {
+            if (!fetchedIds.has(entry.id)) merged.splice(Math.min(index, merged.length), 0, entry);
+        });
+        shown.current = { key: viewKey, list: merged };
+        return merged;
+    }, [fetched, viewKey]);
+}
+
+/**
  * My List (P2): the signed-in user's library at /list, opening on Watching.
  * Grid (cards with score, progress and a stepper) or a dense table with
  * inline progress, score and status. The profile stays the public page.
@@ -90,7 +113,8 @@ export default function Library() {
         staleTime: 60 * 1000,
     });
 
-    const entries = useMemo(() => data?.pages?.flatMap((page) => page?.results || []) || [], [data]);
+    const fetched = useMemo(() => data?.pages?.flatMap((page) => page?.results || []) || [], [data]);
+    const entries = useStickyEntries(fetched, `${status}|${search}|${ordering}`);
     const total = summary?.total ?? 0;
 
     useEffect(() => {

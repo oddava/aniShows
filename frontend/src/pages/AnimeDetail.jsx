@@ -258,7 +258,7 @@ export default function AnimeDetail() {
                 <div className="page-container">
                     {/* Two columns: poster + facts, then everything else. Recommendations
                         sit under the main column as a row of posters (D3). */}
-                    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)] gap-8 xl:gap-12 min-w-0">
+                    <div className="grid grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)] gap-8 xl:gap-12 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
                         <PosterColumn {...trackingProps} />
 

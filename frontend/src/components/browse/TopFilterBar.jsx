@@ -239,8 +239,9 @@ export default function TopFilterBar({
                 </button>
             </div>
 
-            {/* Format and season: two short rows that wrap, never scroll (B2). */}
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            {/* Format and season: two short rows that wrap, never scroll (B2).
+                On phones they live in the filters sheet so the posters come first. */}
+            <div className="hidden flex-wrap items-center gap-x-5 gap-y-1 sm:flex">
                 <div role="group" aria-label="Format" className="flex flex-wrap items-center gap-1">
                     {typeOptions.map(type => (
                         <Pill
@@ -266,7 +267,7 @@ export default function TopFilterBar({
 
             {/* Genres: one scrolling row with an edge fade where it continues. */}
             {quickGenres.length > 0 && (
-                <div ref={chipRowRef} role="group" aria-label="Genres" className="scroll-fade mt-1 -mx-4 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:px-0">
+                <div ref={chipRowRef} role="group" aria-label="Genres" className="scroll-fade mt-1 hidden overflow-x-auto scrollbar-hide sm:block">
                     <div className="flex min-w-max items-center gap-1">
                         {quickGenres.map(genre => (
                             <Pill

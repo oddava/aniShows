@@ -34,13 +34,17 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
         return () => clearTimeout(timer);
     }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // No page scroll behind an open sheet.
+    // No page scroll behind an open sheet, and toasts move to the top of the
+    // screen so they never sit on the sheet's controls (index.css).
     useEffect(() => {
         if (!open) return undefined;
+        const root = document.documentElement;
         const { overflow } = document.body.style;
         document.body.style.overflow = 'hidden';
+        root.dataset.sheetOpen = 'true';
         return () => {
             document.body.style.overflow = overflow;
+            delete root.dataset.sheetOpen;
         };
     }, [open]);
 

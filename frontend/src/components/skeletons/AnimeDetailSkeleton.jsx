@@ -38,7 +38,7 @@ export function AnimeDetailSkeleton() {
 
             <div className="relative -mt-32 pb-16">
                 <div className="page-container">
-                    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)] gap-8 xl:gap-12 min-w-0">
+                    <div className="grid grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)] gap-8 xl:gap-12 min-w-0">
                         <div className="hidden lg:flex lg:flex-col gap-6">
                             <SkeletonBlock className="w-full aspect-[2/3] !rounded-[var(--radius-lg)]" />
                             <div className="space-y-2">
