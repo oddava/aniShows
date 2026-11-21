@@ -161,6 +161,7 @@ def _transition_fields(before: _EntryState | None, after: _EntryState | None):
     if before is None and after is None:
         return None
     if before is None:
+        assert after is not None
         return {
             "activity_type": at.COMPLETED if after.status == completed else at.ADDED,
             "new_status": after.status,

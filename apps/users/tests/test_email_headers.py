@@ -150,16 +150,20 @@ class AccountEmailBrandingTests(TestCase):
                 assert isinstance(message, EmailMultiAlternatives)
                 html, mimetype = message.alternatives[0]
                 self.assertEqual(mimetype, "text/html")
-                link = re.search(
+                assert isinstance(html, str)
+                body = str(message.body)
+                match = re.search(
                     r"https?://\S+/(?:verify-email|reset-password|confirm-email-change)/\S+/",
-                    message.body,
-                ).group(0)
+                    body,
+                )
+                assert match is not None
+                link = match.group(0)
                 self.assertIn(f'href="{link}"', html)
                 self.assertIn(f">{label}</a>", html)
                 self.assertIn('name="color-scheme" content="light dark"', html)
                 self.assertIn("expires in 3 days", html)
                 # The plain-text part stays the full message.
-                self.assertIn(link, message.body)
+                self.assertIn(link, body)
                 # User-controlled text is escaped in the HTML part.
                 self.assertNotIn("reader<b>", html)
                 self.assertIn("reader&lt;b&gt;", html)

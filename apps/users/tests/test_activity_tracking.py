@@ -56,6 +56,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.ADDED,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.new_status, "Watching")
 
     def test_activity_created_on_add_completed(self):
@@ -72,6 +73,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.COMPLETED,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.new_status, "Completed")
 
     def test_activity_on_status_change(self):
@@ -94,6 +96,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.STATUS_CHANGE,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.old_status, "Watching")
         self.assertEqual(activity.new_status, "On Hold")
 
@@ -116,6 +119,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.PROGRESS,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.old_episodes, 3)
         self.assertEqual(activity.new_episodes, 6)
 
@@ -239,6 +243,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.COMPLETED,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.old_status, "Watching")
         self.assertEqual(activity.new_status, "Completed")
 
@@ -262,6 +267,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.REWATCHING,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
 
     def test_activity_on_delete(self):
         """Deleting anime list entry creates a REMOVED activity."""
@@ -281,6 +287,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.REMOVED,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.old_status, "Watching")
 
     def test_score_only_change_not_logged(self):
@@ -308,7 +315,7 @@ class ActivitySignalTests(TransactionTestCase):
             status=UserAnimeList.UserAnimeStatus.watching,
             episodes_watched=0,
         )
-        entry._skip_activity = True
+        entry._skip_activity = True  # type: ignore[attr-defined]
         entry.save()
 
         count = UserActivity.objects.filter(user=self.user, anime=self.anime).count()
