@@ -20,7 +20,7 @@ export default function ViewModeToggle({ viewMode, onChange, showLabels = false 
             onClick={() => onChange(mode.value)}
             title={mode.label}
             aria-label={`${mode.label} view`}
-            className={`flex h-9 min-w-10 items-center justify-center gap-1.5 px-2.5 rounded-md transition-colors duration-150
+            className={`relative flex h-9 min-w-10 items-center justify-center gap-1.5 px-2.5 rounded-md after:absolute after:-inset-1 after:content-[''] transition-colors duration-150
               ${isActive
                 ? 'bg-white/[0.1] text-[var(--text-1)]'
                 : 'text-[var(--text-2)] hover:text-[var(--text-1)]'

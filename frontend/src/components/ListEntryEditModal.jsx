@@ -90,10 +90,15 @@ export default function ListEntryEditModal({
 
     useEffect(() => {
         if (!isOpen) return;
+        const root = document.documentElement;
         const previousOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
+        // Toasts move to the top while the editor is open (index.css), so a
+        // "Scored 8 · Undo" never sits on the Save button.
+        root.dataset.sheetOpen = 'true';
         return () => {
             document.body.style.overflow = previousOverflow;
+            delete root.dataset.sheetOpen;
         };
     }, [isOpen]);
 

@@ -146,12 +146,12 @@ export default function AnimeListContent({
                         menuClassName="z-[320]"
                         ariaLabel="Sort list"
                     />
-                    <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-1">
+                    <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-0.5">
                         <button
                             type="button"
                             onClick={() => setViewMode('grid')}
                             aria-pressed={viewMode === 'grid'}
-                            className={`p-2 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-white/[0.08] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
+                            className={`relative flex h-9 w-10 items-center justify-center rounded-md transition-colors after:absolute after:-inset-1 after:content-[''] ${viewMode === 'grid' ? 'bg-white/[0.08] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
                             title="Grid view"
                             aria-label="Grid view"
                         >
@@ -161,7 +161,7 @@ export default function AnimeListContent({
                             type="button"
                             onClick={() => setViewMode('list')}
                             aria-pressed={viewMode === 'list'}
-                            className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white/[0.08] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
+                            className={`relative flex h-9 w-10 items-center justify-center rounded-md transition-colors after:absolute after:-inset-1 after:content-[''] ${viewMode === 'list' ? 'bg-white/[0.08] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
                             title="List view"
                             aria-label="List view"
                         >

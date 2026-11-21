@@ -143,7 +143,7 @@ function Tonight({ items, now }) {
                 </ul>
             ) : (
                 <p className="mt-2 text-[15px] leading-relaxed text-[var(--text-2)]">
-                    Nothing from your list airs today. Next:{' '}
+                    Nothing more from your list airs today. Next:{' '}
                     <Link to={`/anime/${items.next.entry.anime.slug}`} className="text-link">{items.next.entry.anime.title}</Link>
                     , {dayOf(items.next.at)} {timeOf(items.next.at)}.
                 </p>

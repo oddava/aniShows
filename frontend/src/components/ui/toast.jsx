@@ -29,7 +29,7 @@ function ToastCard({ t, message, tone, onUndo, undoLabel }) {
                         toast.dismiss(t.id);
                         onUndo();
                     }}
-                    className="ml-1 min-h-9 shrink-0 rounded-md px-3 font-semibold text-[var(--signature)] hover:bg-white/[0.06]"
+                    className="relative ml-1 min-h-9 shrink-0 rounded-md px-3 font-semibold text-[var(--signature)] hover:bg-white/[0.06] after:absolute after:-inset-1 after:content-['']"
                 >
                     {undoLabel}
                 </button>

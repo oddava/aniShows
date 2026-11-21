@@ -6,7 +6,7 @@ import { statusMeta } from '../../utils/listStatus';
 import BottomSheet from './BottomSheet';
 import { ScoreStep, StatusOptions } from './StatusMenu';
 
-const TOUCH_QUERY = '(hover: none), (pointer: coarse)';
+const TOUCH_QUERY = '(hover: none), (pointer: coarse), (max-width: 639px)';
 
 /**
  * The status button on every card (T1): "+" when the show is not on the

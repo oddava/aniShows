@@ -71,28 +71,32 @@ export default function ProfileHeader({
                 </div>
             )}
 
-            <div className={`page-container ${displayUser.banner ? 'pt-8 md:pt-10' : 'pt-24 md:pt-32'}`}>
-                {/* Phones: the action gets its own row under the name and numbers. */}
-                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-6">
+            <div className={`page-container ${displayUser.banner ? 'pt-8 md:pt-10' : 'pt-20 md:pt-32'}`}>
+                {/* Phones: avatar and name on one row, the numbers full width
+                    under them, then the action. From sm up the numbers sit under
+                    the name and the action on the right. */}
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start sm:gap-x-6 sm:gap-y-0">
                     <ProfileAvatar
                         avatar={displayUser.avatar}
                         username={username}
-                        className="h-16 w-16 text-2xl sm:h-24 sm:w-24 sm:text-4xl"
+                        className="h-14 w-14 text-xl sm:row-span-2 sm:h-24 sm:w-24 sm:text-4xl"
                     />
 
                     <div className="min-w-0">
                         <h1 className="page-title break-words">{username}</h1>
+                        <UserBadges user={displayUser} className="mt-2 sm:mt-3" />
+                    </div>
 
-                        <UserBadges user={displayUser} className="mt-3" />
+                    <div className="col-span-2 min-w-0 sm:col-span-1 sm:col-start-2 sm:row-start-2">
 
                         {parts.length > 0 && (
-                            <p className="mt-2.5 max-w-2xl text-[17px] leading-relaxed text-[var(--text-2)] tabular">
+                            <p className="max-w-2xl text-[15px] leading-relaxed text-[var(--text-2)] tabular sm:mt-2.5 sm:text-[17px]">
                                 {parts.join(' · ')}
                             </p>
                         )}
 
                         {taste && (
-                            <p className="mt-1 max-w-2xl text-[17px] leading-relaxed text-[var(--text-2)]">
+                            <p className="mt-1 max-w-2xl text-[15px] leading-relaxed text-[var(--text-2)] sm:text-[17px]">
                                 {taste}
                             </p>
                         )}
@@ -115,7 +119,7 @@ export default function ProfileHeader({
                             </button>
                         </p>
                     </div>
-                    <div className="col-span-2 sm:col-span-1">
+                    <div className="col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-1">
                         {!isPublicView ? (
                             <Link to="/settings" className="btn-secondary px-4 text-[15px]">
                                 Edit profile
