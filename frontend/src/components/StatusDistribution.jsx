@@ -31,11 +31,11 @@ export default function StatusDistribution({
         <div className={`bg-dark-100/50 rounded-2xl px-4 py-5 sm:px-5 border border-gray-800 ${className}`}>
             {showTitle && (
                 <div className="flex items-baseline justify-between gap-3 mb-4 sm:mb-6">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">
+                    <h3 className="text-sm font-semibold text-gray-300">
                         {title}
                     </h3>
                     {sourceLabel ? (
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-600">
+                        <span className="text-xs font-bold text-gray-600">
                             {sourceLabel}
                         </span>
                     ) : null}
@@ -51,7 +51,7 @@ export default function StatusDistribution({
                                 {formatCompactCount(count)}
                             </span>
                             <span 
-                                className="text-[10px] font-bold uppercase tracking-wide mt-1.5"
+                                className="text-xs font-bold mt-1.5"
                                 style={{ color: isActive ? color : '#374151' }}
                             >
                                 {label}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -21,6 +21,9 @@ const onePiece = {
     id: 51, slug: 'one-piece', title: 'One Piece', anime_type: 'TV', episode_count: 0, next_airing_episode: 1181,
 };
 const frieren = { id: 5, slug: 'frieren', title: 'Frieren', anime_type: 'TV', episode_count: 28 };
+
+// The route is lazy-loaded; under a full parallel run the first paint can take >1 s.
+configure({ asyncUtilTimeout: 4000 });
 
 const page = (...results) => ({ data: { count: results.length, next: null, results } });
 

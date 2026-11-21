@@ -208,7 +208,7 @@ function ReviewReportDialog({ reviewId, onClose }) {
                 ) : (
                     <form onSubmit={handleSubmit} className="p-4 space-y-4">
                         <div>
-                            <label htmlFor={reasonId} className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-2">
+                            <label htmlFor={reasonId} className="block text-xs font-bold text-gray-500 mb-2">
                                 Reason
                             </label>
                             <CustomSelect
@@ -221,7 +221,7 @@ function ReviewReportDialog({ reviewId, onClose }) {
                             />
                         </div>
                         <div>
-                            <label htmlFor={noteId} className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-2">
+                            <label htmlFor={noteId} className="block text-xs font-bold text-gray-500 mb-2">
                                 Note (optional)
                             </label>
                             <textarea

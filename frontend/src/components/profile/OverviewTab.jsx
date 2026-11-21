@@ -89,7 +89,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
     if (visibleWatchingItems.length === 0) {
         return (
             <div className="mb-10">
-                <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
+                <h3 className="mb-4 ml-4 text-sm font-semibold text-gray-300">Currently Watching</h3>
                 <div className="ui-surface-subtle p-5">
                     <div className="text-center py-6 text-gray-500">
                         <p className="text-sm">Not watching anything right now</p>
@@ -101,7 +101,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
 
     return (
         <div className="mb-10">
-            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
+            <h3 className="mb-4 ml-4 text-sm font-semibold text-gray-300">Currently Watching</h3>
             <div className="ui-surface-subtle p-5">
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
                     {visibleWatchingItems.map((item) => {
@@ -132,7 +132,7 @@ function CurrentlyWatchingGrid({ watchingItems }) {
 
                                 <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">
                                     <p className="text-[11px] font-bold text-white max-w-[180px] truncate">{item.anime?.title}</p>
-                                    <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-accent">
+                                    <p className="mt-0.5 text-xs font-bold text-accent">
                                         {item.anime?.anime_type} • {eps} / {total || '?'} eps
                                     </p>
                                     {/* Arrow */}
@@ -160,7 +160,7 @@ function AnimeFavoritesGrid({ favoritesData }) {
     if (!favorites || favorites.length === 0) {
         return (
             <div className="mb-10">
-                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
+                <h3 className="mb-4 text-sm font-semibold text-gray-300">Favorites</h3>
                 <div className="ui-surface-subtle p-5">
                     <div className="text-center py-6 text-gray-500">
                         <p className="text-sm">No favorites yet</p>
@@ -172,7 +172,7 @@ function AnimeFavoritesGrid({ favoritesData }) {
 
     return (
         <div className="mb-10">
-            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
+            <h3 className="mb-4 ml-4 text-sm font-semibold text-gray-300">Favorites</h3>
             <div className="ui-surface-subtle p-5">
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
                     {favorites.map((fav) => (
@@ -193,7 +193,7 @@ function AnimeFavoritesGrid({ favoritesData }) {
                             {/* Floating Tooltip */}
                             <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">
                                 <p className="text-[11px] font-bold text-white max-w-[180px] truncate">{fav.anime?.title}</p>
-                                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                <p className="mt-0.5 text-xs font-bold text-gray-400">
                                     {fav.anime?.anime_type}
                                 </p>
                                 {/* Arrow */}
@@ -213,7 +213,7 @@ function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, na
     if (visibleItems.length === 0) {
         return (
             <div className="mb-10">
-                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
+                <h3 className="mb-4 text-sm font-semibold text-gray-300">{title}</h3>
                 <div className="ui-surface-subtle p-5">
                     <div className="py-6 text-center text-gray-500">
                         <p className="text-sm">{emptyText}</p>
@@ -225,7 +225,7 @@ function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, na
 
     return (
         <div className="mb-10">
-            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
+            <h3 className="mb-4 ml-4 text-sm font-semibold text-gray-300">{title}</h3>
             <div className="ui-surface-subtle p-5">
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
                     {visibleItems.map((entry) => {
@@ -242,7 +242,7 @@ function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, na
                                 <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">
                                     <p className="max-w-[180px] truncate text-[11px] font-bold text-white">{item?.[nameKey]}</p>
                                     {item?.name_native && (
-                                        <p className="mt-0.5 max-w-[180px] truncate text-[9px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                                        <p className="mt-0.5 max-w-[180px] truncate text-xs font-bold text-gray-400">
                                             {item.name_native}
                                         </p>
                                     )}
@@ -288,7 +288,7 @@ function GenreOverviewSidebar({ username, isPrivate }) {
 
     return (
         <div className="mb-8">
-            <h3 className="mb-4 ml-4 text-[11px] font-semibold text-gray-500 uppercase tracking-[0.16em]">Top Genres</h3>
+            <h3 className="mb-4 ml-4 text-[11px] font-semibold text-gray-500">Top Genres</h3>
             <div className="ui-surface-subtle p-5">
                 <div className="mb-4 pb-4 border-b border-gray-800/30">
                     <div className="flex items-baseline justify-between mb-2">
@@ -398,7 +398,7 @@ export default function OverviewTab({
                 <div className="lg:col-span-6 space-y-8">
                     {displayUser?.bio ? (
                         <div className="mb-8">
-                            <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">About</h3>
+                            <h3 className="mb-4 ml-4 text-sm font-semibold text-gray-300">About</h3>
                             <div className="ui-surface-subtle p-5">
                                 <div className="overview-about-scroll overflow-y-auto custom-scrollbar pr-1">
                                     <MarkdownRenderer content={displayUser.bio} className="overview-about-markdown" />
@@ -409,7 +409,7 @@ export default function OverviewTab({
 
                     {displayUser?.social_links && displayUser.social_links.length > 0 ? (
                         <div className="mb-8">
-                            <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Links</h3>
+                            <h3 className="mb-4 ml-4 text-sm font-semibold text-gray-300">Links</h3>
                             <div className="ui-surface-subtle p-5">
                                 <div className="flex flex-wrap gap-2">
                                     {displayUser.social_links.map((link, i) => (
@@ -440,7 +440,7 @@ export default function OverviewTab({
 
                     <div className="mb-8">
                         <div className="mb-4 ml-4 flex items-center justify-between gap-4">
-                            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Activity</h3>
+                            <h3 className="text-[11px] font-semibold text-gray-500">Activity</h3>
                             <button
                                 type="button"
                                 onClick={() => onTabChange && onTabChange('activity')}

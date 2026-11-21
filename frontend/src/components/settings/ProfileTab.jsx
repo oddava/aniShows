@@ -336,7 +336,7 @@ export default function ProfileTab({ user, profile }) {
                                 type="text"
                                 value={pickedColor}
                                 readOnly
-                                className="input w-32 font-mono uppercase cursor-default"
+                                className="input w-32 font-mono cursor-default"
                                 aria-label="Selected profile color hex value"
                             />
                             <span

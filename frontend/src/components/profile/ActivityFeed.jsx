@@ -404,7 +404,7 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                     <div className={`space-y-5 transition-opacity duration-200 ${isFilterUpdating ? 'opacity-60' : 'opacity-100'}`}>
                         {visibleDateGroups.map((group) => (
                             <div key={group.key}>
-                                <h4 className={`mb-2 uppercase tracking-[0.14em] ${compact ? 'text-[10px] font-semibold text-gray-600' : 'text-[11px] font-bold text-gray-500'}`}>
+                                <h4 className={`mb-2 ${compact ? 'text-[10px] font-semibold text-gray-600' : 'text-[11px] font-bold text-gray-500'}`}>
                                     {group.label}
                                 </h4>
                                 <div className="space-y-2">

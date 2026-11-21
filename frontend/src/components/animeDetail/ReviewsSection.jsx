@@ -30,7 +30,7 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
     return (
         <div className="mt-16 mb-16">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-6 flex items-center gap-2 sm:gap-3">
+                <h2 className="text-sm font-semibold text-gray-300 mb-6 flex items-center gap-2 sm:gap-3">
                     Reviews
                     <span 
                         className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
@@ -123,7 +123,7 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
 
                         {ratingOnlyReviews.length > 0 && (
                             <div className="mt-8">
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">
+                                <p className="text-xs font-bold text-gray-500 mb-4">
                                     Rating-only reviews ({ratingOnlyReviews.length})
                                 </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

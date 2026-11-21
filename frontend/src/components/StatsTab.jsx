@@ -109,7 +109,7 @@ export default function StatsTab({
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2">
-                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">
+                            <h3 className="text-sm font-semibold text-gray-300">
                                 Episode Ratings
                             </h3>
                         </div>
@@ -215,7 +215,7 @@ export default function StatsTab({
                 <div className="bg-dark-100/50 rounded-2xl p-6 border border-gray-800">
                     <div className="flex items-center gap-2 mb-4">
                         <BarChart3 className="w-4 h-4 text-gray-500" />
-                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">
+                        <h3 className="text-sm font-semibold text-gray-300">
                             Rankings
                         </h3>
                     </div>
@@ -258,7 +258,7 @@ function StatCard({ icon: Icon, label, value, subtext, accentColor }) {
                 {value}
                 {subtext ? <span className="text-sm font-normal text-gray-400 ml-1">{subtext}</span> : ''}
             </p>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.12em]">{label}</p>
+            <p className="text-xs text-gray-500 font-bold">{label}</p>
         </div>
     );
 }

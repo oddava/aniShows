@@ -99,7 +99,7 @@ export default function NotificationPreferenceMatrix({
                         >
                             <span />
                             {channels.map((channel) => (
-                                <span key={channel.key} className="text-center text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                <span key={channel.key} className="text-center text-sm font-semibold text-gray-300">
                                     {channel.label}
                                 </span>
                             ))}

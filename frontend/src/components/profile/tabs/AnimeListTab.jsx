@@ -170,7 +170,7 @@ export default function AnimeListContent({
             </div>
 
             {items.length > 0 && (
-                <div className="flex items-center gap-3 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">
+                <div className="flex items-center gap-3 text-sm font-semibold text-gray-300">
                     {totalCount} Anime in {listStatusFilter}
                     {listsFetching && !listsLoading && (
                         <span className="inline-flex items-center gap-1.5 text-[10px] text-gray-400 opacity-60">

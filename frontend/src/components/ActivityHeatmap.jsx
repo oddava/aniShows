@@ -169,7 +169,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
     return (
         <div className="relative w-full max-w-full">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-4 ml-4 mr-4 gap-4">
-                <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">
+                <h3 className="text-sm font-semibold text-gray-300">
                     Activity
                 </h3>
 
@@ -177,7 +177,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                     <div className="flex items-center gap-6">
                         <div className="flex flex-col items-end">
                             <span className="text-white font-black text-sm">{stats.totalActivity}</span>
-                            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest" title="Episodes you logged here in the last 12 months. Imports and shows marked Completed in one go are not day-by-day activity.">Logged</span>
+                            <span className="text-xs text-gray-500 font-semibold " title="Episodes you logged here in the last 12 months. Imports and shows marked Completed in one go are not day-by-day activity.">Logged</span>
                         </div>
                         <div className="w-px h-6 bg-gray-700/30" />
                         <div className="flex flex-col items-end">
@@ -185,11 +185,11 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                                 <Flame size={14} className="text-accent" strokeWidth={2.5} fill="currentColor" fillOpacity={0.2} />
                                 <span className="text-accent font-black text-sm">{stats.currentStreak}</span>
                             </div>
-                            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest mt-0.5">Day Streak</span>
+                            <span className="text-xs text-gray-500 font-semibold mt-0.5">Day Streak</span>
                         </div>
                     </div>
                 ) : (
-                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 bg-dark-100/50 px-3 py-1 rounded-full border border-gray-700/30">No activity yet</span>
+                    <span className="text-xs font-semibold text-gray-500 bg-dark-100/50 px-3 py-1 rounded-full border border-gray-700/30">No activity yet</span>
                 )}
             </div>
 
@@ -199,7 +199,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                     <div className="py-1 min-w-full">
                         <div className="inline-block min-w-max">
                             {/* Month labels */}
-                            <div className="mb-1 flex h-6 gap-[4px] text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
+                            <div className="mb-1 flex h-6 gap-[4px] text-xs font-semibold tracking-[0.2em] text-gray-500">
                                 {weeks.map((week, i) => {
                                     const firstDay = new Date(week[0].date);
                                     const isNewMonth = firstDay.getDate() <= 7;
@@ -255,7 +255,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                 {/* Legend */}
                 <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 mt-4">
                     <div className="flex items-center gap-3">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Less</span>
+                        <span className="text-xs font-semibold text-gray-500">Less</span>
                         <div className="flex gap-1">
                             <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.2)' : toRgba(profileAccentColor, 0.2) }} />
                             <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.4)' : toRgba(profileAccentColor, 0.4) }} />
@@ -263,7 +263,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor }) {
                             <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgba(232, 90, 156, 0.8)' : toRgba(profileAccentColor, 0.8) }} />
                             <div className="w-[10px] h-[10px] rounded-[2px]" style={{ backgroundColor: isPastel ? 'rgb(232, 90, 156)' : profileAccentColor }} />
                         </div>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">More</span>
+                        <span className="text-xs font-semibold text-gray-500">More</span>
                     </div>
                 </div>
             </div>

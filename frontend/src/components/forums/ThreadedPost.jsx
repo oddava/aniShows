@@ -131,7 +131,7 @@ const ThreadedPost = ({
                         </>
                     )}
                     {isOP && !showPlaceholder && (
-                        <span className="text-[8px] font-extrabold uppercase text-accent bg-accent/10 px-1 py-0.5 rounded tracking-wider">OP</span>
+                        <span className="text-xs font-semibold text-accent bg-accent/10 px-1 py-0.5 rounded ">OP</span>
                     )}
                     <span className="text-xs text-gray-400">{timeAgo}</span>
                     {post.reply_count > 0 && (
@@ -212,7 +212,7 @@ const ThreadedPost = ({
                                             <DeletedAuthorName />
                                         )}
                                         {isOP && (
-                                            <span className="text-[9px] font-extrabold uppercase text-accent bg-accent/10 px-1.5 py-0.5 rounded tracking-wider">Author</span>
+                                            <span className="text-xs font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded ">Author</span>
                                         )}
                                     </div>
                                     <span className="flex items-center gap-1.5 text-[11px] text-gray-400 font-medium mt-0.5">

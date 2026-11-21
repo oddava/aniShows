@@ -1,21 +1,16 @@
 import { NavLink } from 'react-router-dom';
 
-// Navigation Item Component with Active State
+/** A header link set like oddava.me's: plain text; the current page gets an accent underline. */
 export default function NavItem({ to, label, end = false }) {
     return (
         <NavLink
             to={to}
             end={end}
-            title={label}
-            className={({ isActive }) => `
-                relative flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-300
-                ${isActive
-                    ? 'text-white bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }
-            `}
+            className={({ isActive }) => `relative flex min-h-11 items-center text-[15px] transition-colors ${isActive
+                ? 'text-[var(--text-1)] after:absolute after:inset-x-0 after:bottom-2 after:h-[1.5px] after:rounded-full after:bg-[var(--signature)]'
+                : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
         >
-            <span className="tracking-wide">{label}</span>
+            {label}
         </NavLink>
     );
 }

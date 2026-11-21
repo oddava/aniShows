@@ -81,14 +81,10 @@ export default function Home() {
         <>
             <SEO page="home" />
             <div className="min-h-screen home-page">
-                {isAuthenticated ? (
-                    <MemberHeader />
-                ) : (
-                    <GuestIntroHero showAuthLinks />
-                )}
+                {!isAuthenticated && <GuestIntroHero showAuthLinks />}
 
                 {/* Main Content Area */}
-                <div className={`relative space-y-12 md:space-y-16 pb-10 md:pb-14 ${isAuthenticated ? 'pt-2' : 'pt-6 md:pt-14'}`}>
+                <div className={`relative space-y-16 md:space-y-20 pb-16 md:pb-24 ${isAuthenticated ? '' : 'pt-6 md:pt-14'}`}>
                     {isAuthenticated && <ContinueSection />}
                     {isAuthenticated && <AiringRibbon />}
 
@@ -97,7 +93,7 @@ export default function Home() {
 
                     <AnimeShelf
                         revealRef={setRevealRef}
-                        title="Trending Now"
+                        title="Trending now"
                         viewAllTo="/browse?sort=trending"
                         items={trending?.slice(0, 6)}
                         isLoading={trendingLoading}
@@ -108,7 +104,7 @@ export default function Home() {
 
                     <AnimeShelf
                         revealRef={setRevealRef}
-                        title="Top Rated"
+                        title="Top rated"
                         viewAllTo="/browse?sort=rating"
                         items={topRated?.slice(0, 6)}
                         isLoading={topRatedLoading}
@@ -177,25 +173,6 @@ function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, i
                 )}
             </div>
         </section>
-    );
-}
-
-/** Signed in: today's date and the promise; the page is about tonight. */
-function MemberHeader() {
-    const { user } = useAuth();
-    const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-    return (
-        <header className="px-4 md:px-6 pt-20 md:pt-28 pb-6">
-            <div className="max-w-7xl mx-auto">
-                <p className="flex items-center gap-2 text-sm text-gray-400">
-                    <span aria-hidden="true" className="h-2 w-2 rounded-[2px] bg-[var(--signature)]" />
-                    {today}
-                </p>
-                <h1 className="page-title mt-2">
-                    {user?.username ? `Welcome back, ${user.username}` : 'Welcome back'}
-                </h1>
-            </div>
-        </header>
     );
 }
 
@@ -319,7 +296,7 @@ function RecommendedForYouSection({ revealRef }) {
     return (
         <AnimeShelf
             revealRef={revealRef}
-            title="Recommended for You"
+            title="Recommended for you"
             subtitle={subtitle}
             items={recommendations?.slice(0, 6)}
             isLoading={isLoading}

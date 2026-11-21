@@ -101,7 +101,7 @@ export default function ThreadOriginalPost({
                                 ) : (
                                     <DeletedAuthorName />
                                 )}
-                                <span className="text-[9px] font-extrabold uppercase text-accent bg-accent/10 px-1.5 py-0.5 rounded tracking-wider">Author</span>
+                                <span className="text-xs font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded ">Author</span>
                             </div>
                             <span className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium mt-0.5">
                                 <Clock size={10} className="opacity-70" /> {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}

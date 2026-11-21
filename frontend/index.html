@@ -12,26 +12,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
     content="AniShows - Discover your next anime adventure. Explore thousands of anime series, track your favorites, and join a community of passionate fans." />
-  <meta name="theme-color" content="#0b0d10" />
+  <meta name="theme-color" content="#15181d" />
 
-  <!-- Font: Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <!-- Plain stylesheet: the CSP (script-src 'self') blocks inline onload
-       handlers, so the async "preload + onload" trick never applies it. -->
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" />
+  <!-- Font: DM Sans, self-hosted (@fontsource-variable/dm-sans in main.jsx). -->
 
   <!-- Critical CSS - prevents white flash -->
   <style>
     html, body {
-      background-color: #0b0d10 !important;
+      background-color: #15181d !important;
       color: #e5e7eb;
       margin: 0;
       padding: 0;
       min-height: 100vh;
     }
     #root {
-      background-color: #0b0d10;
+      background-color: #15181d;
       min-height: 100vh;
     }
     /* Loading animation */
@@ -41,7 +36,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: #0b0d10;
+      background: #15181d;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -56,8 +51,8 @@
       content: '';
       width: 40px;
       height: 40px;
-      border: 3px solid rgba(212, 246, 90, 0.14);
-      border-top-color: #d4f65a;
+      border: 3px solid rgba(141, 177, 255, 0.16);
+      border-top-color: #8db1ff;
       border-radius: 50%;
       animation: initial-spin 0.8s linear infinite;
     }

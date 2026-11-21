@@ -53,7 +53,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
 
             {topCharacters.length > 0 && (
                 <div className="min-w-0">
-                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
+                    <h2 className="text-sm font-semibold text-gray-300 mb-4 sm:mb-6">
                         Characters
                     </h2>
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -71,7 +71,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
                                         <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
                                             {role.character.name}
                                         </Link>
-                                        <span className="text-[11px] text-gray-500 mt-0.5 uppercase">
+                                        <span className="text-[11px] text-gray-500 mt-0.5">
                                             {role.role}
                                         </span>
                                     </div>
@@ -103,7 +103,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
 
             {topStaff.length > 0 && (
                 <div className="min-w-0">
-                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
+                    <h2 className="text-sm font-semibold text-gray-300 mb-4 sm:mb-6">
                         Staff
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -132,7 +132,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
 
             {topEpisodes.length > 0 && (
                 <div className="min-w-0 space-y-3 sm:space-y-4">
-                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-3 sm:mb-6">
+                    <h2 className="text-sm font-semibold text-gray-300 mb-3 sm:mb-6">
                         Episodes
                     </h2>
                     <div className={topEpisodes.some(e => e.thumbnail) 
@@ -219,7 +219,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
                 {hasTrailer && (
                     <div className="min-w-0">
                         <div className="flex flex-col">
-                            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-6">
+                            <h2 className="text-sm font-semibold text-gray-300 mb-6">
                                 Trailer
                             </h2>
                             <div className="w-full">
@@ -237,7 +237,7 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
                     }`}
                 >
                     <div>
-                        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
+                        <h2 className="text-sm font-semibold text-gray-300 mb-4 sm:mb-6">
                             Average Score
                         </h2>
                         <div className="bg-dark-100/50 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition-colors">

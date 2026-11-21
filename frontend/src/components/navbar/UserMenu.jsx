@@ -86,7 +86,7 @@ export default function UserMenu({
                                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                             ) : (
                                 <div className="w-full h-full bg-accent-dark flex items-center justify-center">
-                                    <span className="text-sm font-bold text-white uppercase">{user?.username?.charAt(0)}</span>
+                                    <span className="text-sm font-bold text-white">{user?.username?.charAt(0)}</span>
                                 </div>
                             )}
                         </div>
@@ -110,7 +110,7 @@ export default function UserMenu({
                                             <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full bg-accent-dark flex items-center justify-center">
-                                                <span className="text-xl font-bold text-white uppercase">{user?.username?.charAt(0)}</span>
+                                                <span className="text-xl font-bold text-white">{user?.username?.charAt(0)}</span>
                                             </div>
                                         )}
                                     </div>

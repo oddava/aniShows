@@ -5,7 +5,6 @@ import {
     formatAiringTime,
     formatDate,
     formatRelativeTime,
-    isWithin24Hours,
 } from '../utils/dateUtils';
 import {
     formatCompactCount,
@@ -17,7 +16,7 @@ const InfoRow = ({ icon: Icon, label, value }) => (
     <div className="flex items-start justify-between gap-4 py-1 min-w-0">
         <div className="flex items-center gap-2 pt-1 shrink-0">
             <Icon className="w-3.5 h-3.5 text-gray-400" />
-            <p className="text-gray-300 text-[10px] font-black uppercase tracking-wider">
+            <p className="text-gray-300 text-xs font-semibold ">
                 {label}
             </p>
         </div>
@@ -52,7 +51,7 @@ export default function InformationBox({ anime, className, accentColor }) {
             return (
                 <div className="flex flex-col items-end leading-tight">
                     <span>{startStr}</span>
-                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest my-1">to</span>
+                    <span className="text-xs font-semibold text-gray-500 my-1">to</span>
                     <span className="text-gray-200">Present</span>
                 </div>
             );
@@ -64,7 +63,7 @@ export default function InformationBox({ anime, className, accentColor }) {
             return (
                 <div className="flex flex-col items-end leading-tight">
                     <span>{startStr}</span>
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest my-1">to</span>
+                    <span className="text-xs font-semibold text-gray-400 my-1">to</span>
                     <span>{endStr}</span>
                 </div>
             );
@@ -75,7 +74,7 @@ export default function InformationBox({ anime, className, accentColor }) {
 
     return (
         <div className={`flex flex-col gap-6 bg-dark-100/50 p-6 rounded-2xl border border-gray-800 min-w-0 overflow-hidden ${className}`}>
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em]">
+            <h3 className="text-sm font-semibold text-gray-300">
                 Information
             </h3>
             <div className="space-y-4">
@@ -125,7 +124,7 @@ export default function InformationBox({ anime, className, accentColor }) {
                                     }}
                                 />
                                 <span
-                                    className="text-[10px] font-black uppercase tracking-widest"
+                                    className="text-xs font-semibold "
                                     style={{
                                         color: 'var(--signature)'
                                     }}
@@ -155,7 +154,7 @@ export default function InformationBox({ anime, className, accentColor }) {
 
                 {anime.genres && anime.genres.length > 0 && (
                     <div className="pt-6 mt-8 border-t border-white/5">
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">Genres</p>
+                        <p className="text-sm font-semibold text-gray-300 mb-3">Genres</p>
                         <div className="flex flex-wrap gap-2">
                             {anime.genres.map((genre) => (
                                 <Link
@@ -172,7 +171,7 @@ export default function InformationBox({ anime, className, accentColor }) {
 
                 {anime.tags && anime.tags.length > 0 && (
                     <div className="pt-5 mt-5 border-t border-white/5">
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">Tags</p>
+                        <p className="text-sm font-semibold text-gray-300 mb-3">Tags</p>
                         <div>
                             <div id={`tags-${anime.id}`} className="flex flex-wrap gap-2">
                                 {visibleTags.map((tag) => (
@@ -202,7 +201,7 @@ export default function InformationBox({ anime, className, accentColor }) {
 
                 {anime.external_links && anime.external_links.length > 0 && (
                     <div className="pt-5 mt-5 border-t border-white/5">
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">External Links</p>
+                        <p className="text-sm font-semibold text-gray-300 mb-3">External Links</p>
                         <div className="grid grid-cols-2 gap-2">
                             {anime.external_links.map((link, i) => {
                                 const isAccentLink = ['Official Site', 'Netflix', 'Crunchyroll', 'Twitter'].includes(link.site);

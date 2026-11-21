@@ -101,7 +101,7 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
               }
             `}
           >
-            <span className={`text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-wider ${isSelected ? 'text-white/80' : isToday ? 'text-accent-light' : ''}`}>
+            <span className={`text-[10.5px] sm:text-[11px] font-semibold ${isSelected ? 'text-white/80' : isToday ? 'text-accent-light' : ''}`}>
               {DAY_SHORT[index]}
             </span>
             <span className={`text-base sm:text-lg font-bold leading-tight tabular ${isSelected ? 'text-white' : 'text-gray-200'}`}>

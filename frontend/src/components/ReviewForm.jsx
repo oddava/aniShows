@@ -24,7 +24,7 @@ const StarInput = ({ label, value, onChange, size = "md" }) => {
 
     return (
         <div className="flex flex-col gap-1">
-            {label && <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">{label}</label>}
+            {label && <label className="text-xs font-medium text-gray-400 ">{label}</label>}
             <div className="flex items-center gap-4">
                 <div className="flex items-center">
                     {[0, 1, 2, 3, 4].map((index) => {
@@ -225,7 +225,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
             <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Main Rating */}
                 <div>
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">Overall Rating</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-4">Overall Rating</label>
                     <StarInput
                         value={rating}
                         onChange={setRating}
@@ -272,7 +272,7 @@ export default function ReviewForm({ initialData, onSubmit, onCancel, animeTitle
 
                 {/* Text Input */}
                 <div className="space-y-2">
-                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-3">
+                    <label className="block text-xs font-bold text-gray-500 mb-3">
                         Your Review
                     </label>
                     <div className="relative">

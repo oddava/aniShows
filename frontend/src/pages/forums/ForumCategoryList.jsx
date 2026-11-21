@@ -388,7 +388,7 @@ const ForumCategoryList = () => {
                     </Link>
                 )}
                 <div className="forums-left-strip">
-                    <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--forums-meta)]">
+                    <p className="mb-2 px-2 text-[11px] font-semibold text-[var(--forums-meta)]">
                         Categories
                     </p>
                     <div className="space-y-1">
@@ -459,7 +459,7 @@ const ForumCategoryList = () => {
                 {mostRepliedThreads.length > 0 && (
                     <section className="forums-rail-card">
                         <div className="mb-3 flex items-center gap-2">
-                            <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--forums-meta)]">
+                            <h3 className="text-sm font-semibold text-[var(--forums-meta)]">
                                 Most replies
                             </h3>
                         </div>
@@ -474,7 +474,7 @@ const ForumCategoryList = () => {
                 {latestActivityThreads.length > 0 && (
                     <section className="forums-rail-card">
                         <div className="mb-3 flex items-center gap-2">
-                            <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--forums-meta)]">
+                            <h3 className="text-sm font-semibold text-[var(--forums-meta)]">
                                 Latest Activity
                             </h3>
                         </div>
@@ -538,7 +538,7 @@ const ForumCategoryList = () => {
                             <div className="mb-4">
                                 <div className="mb-2 flex items-center gap-3">
                                     <span className="h-px flex-1 bg-[var(--forums-border)]" />
-                                    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--forums-meta)]">
+                                    <span className="text-[11px] font-semibold text-[var(--forums-meta)]">
                                         Pinned
                                     </span>
                                     <span className="h-px flex-1 bg-[var(--forums-border)]" />

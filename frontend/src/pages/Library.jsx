@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Download, LayoutGrid, Loader2, Rows3, Search, Tv } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -240,7 +240,7 @@ export default function Library() {
                         </div>
                     ) : (
                         <div className="rounded-[var(--radius-lg)] bg-white/[0.02] px-3 sm:px-4">
-                            <div aria-hidden="true" className="hidden grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] gap-x-4 border-b border-white/[0.06] py-2.5 text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 sm:grid">
+                            <div aria-hidden="true" className="hidden grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] gap-x-4 border-b border-white/[0.06] py-2.5 text-sm font-semibold text-gray-300 sm:grid">
                                 <span />
                                 <span>Title</span>
                                 <span>Progress</span>

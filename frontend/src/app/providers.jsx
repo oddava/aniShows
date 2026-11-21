@@ -48,8 +48,8 @@ export default function AppProviders({ children }) {
                                             fontSize: '14px',
                                             boxShadow: 'var(--shadow-pop)',
                                         },
-                                        success: { iconTheme: { primary: '#d4f65a', secondary: '#0f1208' } },
-                                        error: { iconTheme: { primary: '#f0645a', secondary: '#fff' } },
+                                        success: { iconTheme: { primary: '#86cc90', secondary: '#15181d' } },
+                                        error: { iconTheme: { primary: '#f2878f', secondary: '#15181d' } },
                                     }}
                                 />
                             </BrowserRouter>

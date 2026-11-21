@@ -19,7 +19,7 @@ export default function MusicSection({ anime, accentColor, isCompact = false, it
 
     return (
         <div className="animate-tab-content w-full">
-            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-6">
+            <h2 className="text-sm font-semibold text-gray-300 mb-6">
                 Themes
             </h2>
 
@@ -28,7 +28,7 @@ export default function MusicSection({ anime, accentColor, isCompact = false, it
                 {themes.openings.length > 0 && (
                     <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-5 border border-gray-800 min-w-0 flex flex-col h-full">
                         <div className="flex items-center gap-2 mb-4">
-                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.16em]">Opening Themes</h3>
+                            <h3 className="text-xs font-semibold text-gray-400">Opening Themes</h3>
                             <span 
                                 className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-dark-50 border border-gray-800/50"
                                 style={{ color: accentColor || '#75698d' }}
@@ -48,7 +48,7 @@ export default function MusicSection({ anime, accentColor, isCompact = false, it
                 {themes.endings.length > 0 && (
                     <div className="bg-dark-100/30 rounded-2xl p-4 sm:p-5 border border-gray-800 min-w-0 flex flex-col h-full">
                         <div className="flex items-center gap-2 mb-4">
-                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.16em]">Ending Themes</h3>
+                            <h3 className="text-xs font-semibold text-gray-400">Ending Themes</h3>
                             <span 
                                 className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-dark-50 border border-gray-800/50"
                                 style={{ color: accentColor || '#75698d' }}

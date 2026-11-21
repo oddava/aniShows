@@ -129,7 +129,7 @@ function AnimeCard({
                 <Link
                     to={href}
                     aria-label={displayTitle}
-                    className="block h-full w-full overflow-hidden rounded-[var(--radius-md)] focus-visible:!outline-none focus-visible:!shadow-none"
+                    className="absolute inset-0 block overflow-hidden rounded-[var(--radius-md)] focus-visible:!outline-none focus-visible:!shadow-none"
                 >
                     {!imageLoaded && <div aria-hidden="true" className="absolute inset-0 skeleton-shimmer rounded-[var(--radius-md)]" />}
                     <img
@@ -173,7 +173,7 @@ function AnimeCard({
                         onSelect={(value) => setStatus(value)}
                         onScore={(value) => setScore(value)}
                         onRemove={() => remove()}
-                        className={`absolute bottom-2 right-2 z-20 ${status ? '' : 'card-reveal'}`}
+                        className="card-reveal absolute bottom-2 right-2 z-20"
                     />
                 )}
             </div>

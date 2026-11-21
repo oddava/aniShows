@@ -34,7 +34,7 @@ const StatCard = ({ label, value, subtext }) => {
     return (
         <div className="rounded-xl border border-gray-800 bg-dark-100/50 p-3 sm:p-4 lg:p-6">
             <div className="flex flex-col gap-1">
-                <div className="mb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-gray-500 sm:mb-4 sm:text-xs">
+                <div className="mb-2 text-xs font-bold text-gray-500 sm:mb-4 sm:text-xs">
                     {label}
                 </div>
                 <div className="flex min-w-0 items-baseline gap-1.5 sm:gap-2">
@@ -42,7 +42,7 @@ const StatCard = ({ label, value, subtext }) => {
                         {value}
                     </div>
                     {subtext && (
-                        <span className="hidden text-xs font-bold uppercase tracking-[0.16em] text-gray-500 opacity-60 sm:inline">
+                        <span className="hidden text-sm font-semibold text-gray-300 opacity-60 sm:inline">
                             {subtext}
                         </span>
                     )}
@@ -57,12 +57,12 @@ const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-dark-100/95 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 shadow-2xl">
-                <p className="text-white text-sm font-black uppercase tracking-wider mb-1">
+                <p className="text-white text-sm font-semibold mb-1">
                     {payload[0].payload.name || `Score ${payload[0].payload.score}`}
                 </p>
                 <div className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: payload[0].payload.color || payload[0].fill }} />
-                    <p className="text-gray-400 text-xs font-bold">{payload[0].value} <span className="uppercase tracking-widest text-[10px] opacity-70">Anime</span></p>
+                    <p className="text-gray-400 text-xs font-bold">{payload[0].value} <span className=" text-xs opacity-70">Anime</span></p>
                 </div>
             </div>
         );
@@ -228,10 +228,10 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                 <div className="lg:col-span-5 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-1">
+                            <h3 className="text-sm font-semibold text-gray-300 mb-1">
                                 Genres
                             </h3>
-                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.16em] opacity-60 uppercase">Your unique taste profile</p>
+                            <p className="text-gray-500 text-xs font-bold opacity-60">Your unique taste profile</p>
                         </div>
                     </div>
                     {genreData.length > 0 ? (
@@ -263,7 +263,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                                 {genreData.slice(0, 6).map((genre) => (
                                     <div key={genre.name} className="flex cursor-default items-center gap-2">
                                         <div className="h-2 w-2 rounded-full ring-2 ring-white/5" style={{ backgroundColor: genre.color }} />
-                                        <span className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">{genre.name}</span>
+                                        <span className="text-xs font-semibold text-gray-400">{genre.name}</span>
                                         <span className="text-[10px] font-bold text-gray-600">({genre.value})</span>
                                     </div>
                                 ))}
@@ -271,7 +271,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                         </div>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-40">
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Build your list to see DNA</p>
+                            <p className="text-sm font-semibold text-gray-300">Build your list to see DNA</p>
                         </div>
                     )}
                 </div>
@@ -280,14 +280,14 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                 <div className="lg:col-span-7 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-w-0 overflow-hidden">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-1">
+                            <h3 className="text-sm font-semibold text-gray-300 mb-1">
                                 Ratings
                             </h3>
-                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.16em] opacity-60 uppercase">How you evaluate anime quality</p>
+                            <p className="text-gray-500 text-xs font-bold opacity-60">How you evaluate anime quality</p>
                         </div>
                         {ratedCount > 0 && (
                             <div className="rounded-full border border-accent/20 bg-accent/10 px-3 py-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-accent">
+                                <span className="text-xs font-semibold text-accent">
                                     {avgScore} Average
                                 </span>
                             </div>
@@ -331,7 +331,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                         </div>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center py-20 opacity-40">
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Score anime in your list to see distribution</p>
+                            <p className="text-sm font-semibold text-gray-300">Score anime in your list to see distribution</p>
                         </div>
                     )}
                 </div>
@@ -350,7 +350,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
 
                 {/* Watching Progress - 7 cols on desktop */}
                 <div className="lg:col-span-7 md:col-span-2 bg-dark-100/50 rounded-xl border border-gray-800 p-4 sm:p-6 flex flex-col min-h-[400px] min-w-0 overflow-hidden">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em] mb-6">
+                    <h3 className="text-sm font-semibold text-gray-300 mb-6">
                         Progress
                     </h3>
                     <div className="flex-1 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
@@ -378,7 +378,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                                                     {item.anime?.title}
                                                 </p>
                                                 <div className="space-y-1.5">
-                                                    <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-[0.1em]">
+                                                    <div className="flex items-center justify-between text-xs font-semibold">
                                                         <span className="text-gray-500">{progress.toFixed(0)}% <span className="text-[8px] opacity-70">Complete</span></span>
                                                         <span className="text-gray-300">{eps} <span className="text-gray-600">/</span> {total || '?'} <span className="text-[8px] opacity-70 font-bold ml-0.5">EPS</span></span>
                                                     </div>
@@ -396,7 +396,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                             })
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center py-12 text-center opacity-30">
-                                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">No active progress</p>
+                                <p className="text-xs font-semibold text-gray-500">No active progress</p>
                             </div>
                         )}
                     </div>

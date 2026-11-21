@@ -82,7 +82,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
             <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
                 <div className="flex items-center gap-2 mb-4">
                     <Users className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Friends Watching</h3>
+                    <h3 className="text-sm font-semibold text-gray-300">Friends Watching</h3>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-gray-800 animate-pulse"></div>
@@ -98,7 +98,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
             <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
                 <div className="flex items-center gap-2 mb-4">
                     <Users className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Friends Watching</h3>
+                    <h3 className="text-sm font-semibold text-gray-300">Friends Watching</h3>
                 </div>
                 <p className="text-gray-500 text-sm" role="alert">
                     Couldn't load friends watching.
@@ -119,7 +119,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
             <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
                 <div className="flex items-center gap-2 mb-4">
                     <Users className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Friends Watching</h3>
+                    <h3 className="text-sm font-semibold text-gray-300">Friends Watching</h3>
                 </div>
                 <p className="text-gray-500 text-sm">
                     Connect with friends to see who's watching this anime.
@@ -136,7 +136,7 @@ export default function FriendsWatching({ animeId, accentColor }) {
         <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
             <div className="flex items-center gap-2 mb-4">
                 <Users className="w-4 h-4 text-gray-500" />
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Friends Watching</h3>
+                <h3 className="text-sm font-semibold text-gray-300">Friends Watching</h3>
             </div>
 
             <div className="flex flex-wrap gap-3 items-center">

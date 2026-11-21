@@ -211,7 +211,7 @@ export default function ListEntryEditModal({
                             ) : 'Edit List Entry'}
                         </h2>
                         {animeTitle ? (
-                            <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-gray-500" aria-hidden="true">
+                            <p className="mt-1 text-sm font-semibold text-gray-300" aria-hidden="true">
                                 Edit list entry
                             </p>
                         ) : null}
@@ -330,7 +330,7 @@ export default function ListEntryEditModal({
 
                     <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-dark-200 px-4 py-3">
                         <div className="min-w-0">
-                            <span id="list-entry-rewatching-label" className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400">
+                            <span id="list-entry-rewatching-label" className="text-sm font-semibold text-gray-300">
                                 Rewatching
                             </span>
                             <p className="mt-1 text-xs text-gray-500">
@@ -410,7 +410,7 @@ function Field({ label, htmlFor, hint, error, wide = false, children }) {
     return (
         <div className={`block ${wide ? 'md:col-span-2' : ''}`}>
             <div className="mb-2 flex items-center justify-between gap-3">
-                <Label htmlFor={htmlFor} className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                <Label htmlFor={htmlFor} className="text-sm font-semibold text-gray-300">
                     {label}
                 </Label>
                 {hint ? <span className="text-xs text-gray-500 tabular">{hint}</span> : null}

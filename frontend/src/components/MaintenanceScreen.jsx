@@ -4,7 +4,7 @@ export default function MaintenanceScreen({ message, onRetry, checkingStatus }) 
     return (
         <main className="min-h-screen bg-[#050507] text-white flex items-center justify-center px-4 sm:px-6">
             <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-white/[0.03] p-8 md:p-12">
-                <p className="text-xs uppercase tracking-[0.24em] text-white/50 mb-4">
+                <p className="text-xs text-white/50 mb-4">
                     Scheduled Maintenance
                 </p>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">

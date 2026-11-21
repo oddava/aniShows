@@ -113,7 +113,7 @@ const CharacterRoleCard = memo(function CharacterRoleCard({ role }) {
                     <Link to={`/character/${role.character.id}`} className="text-[13px] font-medium text-gray-300 hover:text-accent transition-colors break-words line-clamp-2">
                         {role.character.name}
                     </Link>
-                    <span className="text-[11px] text-gray-500 mt-0.5 uppercase">
+                    <span className="text-[11px] text-gray-500 mt-0.5">
                         {role.role}
                     </span>
                 </div>

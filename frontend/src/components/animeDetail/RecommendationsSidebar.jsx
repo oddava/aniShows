@@ -11,7 +11,7 @@ export default function RecommendationsSidebar({ anime, recommendations, accentC
         <div ref={containerRef} className="space-y-6 lg:space-y-8 lg:col-start-2 xl:col-start-auto xl:pt-40">
             {recommendations && recommendations.length > 0 && (
                 <div>
-                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-4 sm:mb-6">
+                    <h2 className="text-sm font-semibold text-gray-300 mb-4 sm:mb-6">
                         Recommendations
                     </h2>
                     <div className="hidden lg:grid grid-cols-1 gap-4">

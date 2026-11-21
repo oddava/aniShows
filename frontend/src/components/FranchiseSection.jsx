@@ -87,7 +87,7 @@ export default function FranchiseSection({ relations, accentColor, sourceSlug })
 
             {!isRetro ? (
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
                         Franchise
                         <span 
                             className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
@@ -193,7 +193,7 @@ function FranchiseCard({ rel, label, onFetch }) {
 
                 {/* Relation type badge */}
                 <div className="absolute top-1.5 left-1.5">
-                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-black/60 text-white backdrop-blur-sm">
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-black/60 text-white backdrop-blur-sm">
                         {label}
                     </span>
                 </div>

@@ -21,7 +21,7 @@ function NotificationBell({ count = 0 }) {
             to="/notifications"
             aria-label={label}
             title={label}
-            className={({ isActive }) => `relative mr-2 flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${isActive ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
+            className={({ isActive }) => `relative mr-1 flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${isActive ? 'text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
         >
             <Bell aria-hidden="true" className="h-5 w-5" />
             {count > 0 && (
@@ -60,21 +60,18 @@ export default function Navbar() {
             <nav
                 aria-label="Main"
                 data-autohide-nav
-                className={`hidden md:block fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-[calc(100%-2rem)] max-w-[calc(var(--page-max)+3rem)] rounded-2xl border backdrop-blur-xl transition-[transform,opacity] duration-200 ease-out ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-8 opacity-0 pointer-events-none'}`}
-                style={{
-                    background: 'var(--color-navbar-bg)',
-                    borderColor: 'var(--color-navbar-border)',
-                }}
+                className={`hidden md:block fixed inset-x-0 top-0 z-[1000] border-b border-white/[0.06] backdrop-blur-md transition-[transform,opacity] duration-200 ease-out ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}
+                style={{ background: 'var(--color-navbar-bg)' }}
             >
-                <div className="px-4 sm:px-6">
-                    <div className="flex items-center justify-between h-14">
+                <div className="page-container">
+                    <div className="flex items-center justify-between h-16">
                         {/* Logo */}
                         <Link to="/" className="rounded-md" aria-label="AniShows home">
                             <Logo />
                         </Link>
 
                         {/* Desktop Nav */}
-                        <div className="hidden md:flex items-center gap-1.5 flex-1 ml-6 lg:ml-8">
+                        <div className="hidden md:flex items-center gap-6 flex-1 ml-10">
                             <NavItem to="/browse" label="Browse" />
                             <NavItem to="/schedule" label="Schedule" />
                             {(isAuthenticated || authLoading) && (

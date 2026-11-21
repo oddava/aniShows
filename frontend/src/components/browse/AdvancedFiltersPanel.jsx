@@ -22,7 +22,7 @@ Pill.propTypes = {
 };
 
 const SectionHeader = ({ children }) => (
-  <h3 className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.16em] mb-2">{children}</h3>
+  <h3 className="text-[11px] font-semibold text-gray-500 mb-2">{children}</h3>
 );
 
 SectionHeader.propTypes = {
@@ -469,7 +469,7 @@ export default function AdvancedFiltersPanel({
                   {!normalizedTagSearch && genres.length > 24 && (
                     <button
                       onClick={() => setShowAllGenres((prev) => !prev)}
-                      className="mt-3 text-xs font-semibold text-gray-500 hover:text-white uppercase tracking-wider"
+                      className="mt-3 text-sm font-semibold text-gray-300 hover:text-white "
                     >
                       {showAllGenres ? 'Show Less' : `Show All (${genres.length})`}
                     </button>
