@@ -275,7 +275,7 @@ export default function Library() {
                                 <span>Title</span>
                                 <span>Progress</span>
                                 <span>Score</span>
-                                <span>Status</span>
+                                <span>{status === ALL ? 'Status' : ''}</span>
                                 <span>Updated</span>
                             </div>
                             {showSkeleton ? (

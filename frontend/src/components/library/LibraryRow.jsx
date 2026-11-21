@@ -45,7 +45,7 @@ function ScoreCell({ score, title, onChange, disabled }) {
                         <span className="text-white">{score}</span>
                     </>
                 ) : (
-                    <span className="text-gray-500 font-medium">Rate</span>
+                    <span className="font-medium text-[var(--text-3)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">Rate</span>
                 )}
             </button>
             {open && (
@@ -73,14 +73,14 @@ function ScoreCell({ score, title, onChange, disabled }) {
 function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = false }) {
     const anime = listEntry.anime || {};
     const { entry, setStatus, setScore, setProgress, remove, isPending } = useListEntryMutation({
-        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
+        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count, next_airing_episode: anime.next_airing_episode, next_airing_date: anime.next_airing_date },
         entry: listEntry,
     });
     const title = titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title;
     const href = `/anime/${anime.slug}`;
 
     return (
-        <li className="-mx-2 grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-[var(--radius-md)] px-2 py-2.5 transition-colors hover:bg-white/[0.03] sm:grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] sm:gap-x-4">
+        <li className="group -mx-2 grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-[var(--radius-md)] px-2 py-2.5 transition-colors hover:bg-white/[0.03] sm:grid-cols-[2.75rem_minmax(0,1fr)_11rem_4.5rem_9rem_6.5rem] sm:gap-x-4">
             <Link to={href} tabIndex={-1} aria-hidden="true" className="row-span-2 sm:row-span-1">
                 <img
                     src={getOptimizedImageUrl(anime, 'cover', 'small')}
@@ -122,6 +122,7 @@ function LibraryRow({ entry: listEntry, titleLanguage = 'en', quietStatus = fals
                 <QuickAdd
                     variant="chip"
                     quiet={quietStatus}
+                    compact={quietStatus}
                     placement="down"
                     className="relative sm:[&>button]:w-full sm:[&>button]:justify-start"
                     status={entry.status}

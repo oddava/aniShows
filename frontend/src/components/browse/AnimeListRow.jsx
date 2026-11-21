@@ -16,7 +16,7 @@ import { ScoreBadge } from '../ui/Badge';
 function AnimeListRow({ anime, titleLanguage = 'en' }) {
     const { isAuthenticated } = useAuth();
     const { entry, setStatus, setScore, remove, isPending } = useListEntryMutation({
-        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
+        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count, next_airing_episode: anime.next_airing_episode, next_airing_date: anime.next_airing_date },
         entry: anime.user_list_status,
     });
     const displayTitle = titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title;
@@ -78,7 +78,7 @@ function AnimeListRow({ anime, titleLanguage = 'en' }) {
                     onSelect={(value) => setStatus(value)}
                     onScore={(value) => setScore(value)}
                     onRemove={() => remove()}
-                    className="relative shrink-0 self-center"
+                    className="relative flex min-w-[8.25rem] shrink-0 justify-end self-center"
                     variant="chip"
                 />
             )}

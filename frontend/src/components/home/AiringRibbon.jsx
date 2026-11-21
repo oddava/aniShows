@@ -36,7 +36,7 @@ export default function AiringRibbon() {
                     <Link to="/schedule?mine=1" className="text-link shrink-0 text-[15px]">Full schedule</Link>
                 </div>
                 {isPending ? (
-                    <div aria-hidden="true" className="grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                    <div aria-hidden="true" className="grid gap-x-10 gap-y-6 sm:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))]">
                         {Array.from({ length: 2 }, (_, i) => (
                             <div key={i}>
                                 <Skeleton className="h-4 w-20" />
@@ -45,7 +45,7 @@ export default function AiringRibbon() {
                         ))}
                     </div>
                 ) : (
-                    <div className="grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-x-10 gap-y-6 sm:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))]">
                         {days.map((day) => (
                             <section key={day.offset} aria-labelledby={`week-day-${day.offset}`} className="min-w-0">
                                 <h3 id={`week-day-${day.offset}`} className="flex items-baseline gap-2 text-[15px]">

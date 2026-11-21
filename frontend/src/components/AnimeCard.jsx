@@ -53,7 +53,7 @@ function AnimeCard({
     const { isAuthenticated } = useAuth();
     const listEntry = userListEntry || anime.user_list_status || null;
     const { entry, setStatus, setScore, setProgress, remove, isPending } = useListEntryMutation({
-        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
+        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count, next_airing_episode: anime.next_airing_episode, next_airing_date: anime.next_airing_date },
         entry: listEntry,
     });
 

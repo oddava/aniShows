@@ -70,6 +70,8 @@ describe('useListEntryMutation', () => {
         let call;
         act(() => { call = result.current.setStatus('Completed'); });
         expect(result.current.entry.status).toBe('Completed');
+        // Progress fills at once, as the server will (28 episodes).
+        expect(result.current.entry.episodes_watched).toBe(28);
         expect(result.current.isPending).toBe(true);
 
         await act(async () => {
@@ -80,7 +82,7 @@ describe('useListEntryMutation', () => {
         expect(result.current.entry).toMatchObject({ id: 3, status: 'Watching', episodes_watched: 4 });
         expect(toastMock.notifyError).toHaveBeenCalledWith('Too many episodes.', { id: 'list-7' });
         // The toast showed at once (optimistic); the error replaces it under the same id.
-        expect(toastMock.notify).toHaveBeenCalledWith('Moved to Completed', expect.objectContaining({ id: 'list-7' }));
+        expect(toastMock.notify).toHaveBeenCalledWith('Completed. All 28 episodes marked watched', expect.objectContaining({ id: 'list-7' }));
         expect(invalidate).not.toHaveBeenCalled();
         expect(result.current.isPending).toBe(false);
     });
@@ -247,7 +249,9 @@ describe('toast with Undo after every write (T6)', () => {
         const { result } = setup({ id: 3, status: 'Watching', episodes_watched: 12, started_at: '2026-11-01' });
 
         await act(() => result.current.setStatus('Completed'));
-        expect(toastMock.notify.mock.calls[0][0]).toBe('Moved to Completed');
+        // One toast: it already says where progress lands.
+        expect(toastMock.notify.mock.calls[0][0]).toBe('Completed. All 28 episodes marked watched');
+        expect(toastMock.notify).toHaveBeenCalledTimes(1);
         // Once the server filled the progress, the toast says so.
         const [message, options] = toastMock.notify.mock.calls.at(-1);
         expect(message).toBe('Completed. All 28 episodes marked watched');

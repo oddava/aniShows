@@ -11,7 +11,7 @@ import QuickAdd from '../ui/QuickAdd';
 function AnimeMinimalCard({ anime, titleLanguage = 'en' }) {
     const { isAuthenticated } = useAuth();
     const { entry, setStatus, setScore, remove, isPending } = useListEntryMutation({
-        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
+        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count, next_airing_episode: anime.next_airing_episode, next_airing_date: anime.next_airing_date },
         entry: anime.user_list_status,
     });
     const displayTitle = titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title;
@@ -47,7 +47,8 @@ function AnimeMinimalCard({ anime, titleLanguage = 'en' }) {
                     onSelect={(value) => setStatus(value)}
                     onScore={(value) => setScore(value)}
                     onRemove={() => remove()}
-                    className={`absolute bottom-1 right-1 z-10 ${meta ? '' : 'card-reveal'}`}
+                    compact
+                    className={`absolute bottom-1 right-1 z-10 ${meta ? '' : 'hover-reveal'}`}
                 />
             )}
         </div>

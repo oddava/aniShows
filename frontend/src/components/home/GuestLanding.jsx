@@ -23,7 +23,7 @@ export default function GuestLanding() {
     // Today's episodes by time (aired ones say so), topped up with the next
     // ones tomorrow and after rather than "Time TBA" rows.
     const rows = useMemo(() => airingPreview(scheduleDays, undefined, now, PREVIEW_ROWS), [scheduleDays, now]);
-    const anyToday = rows.some((row) => row.offset === 0);
+    const allToday = rows.length > 0 && rows.every((row) => row.offset === 0);
 
     return (
         <section aria-labelledby="landing-heading" className="page-container pt-24 pb-4 md:pt-36">
@@ -46,7 +46,7 @@ export default function GuestLanding() {
                 </div>
 
                 <div className="panel">
-                    <h2 className="section-title">{isPending || anyToday || rows.length === 0 ? 'Airing today' : 'Airing next'}</h2>
+                    <h2 className="section-title">{isPending || allToday || rows.length === 0 ? 'Airing today' : 'Airing soon'}</h2>
                     <p className="mt-1 text-[15px] text-[var(--text-2)]">In your time zone.</p>
                     <ul className="mt-3">
                         {isPending

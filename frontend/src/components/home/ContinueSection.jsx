@@ -12,7 +12,6 @@ import ScorePicker from '../ui/ScorePicker';
 import Skeleton from '../ui/Skeleton';
 import { continueState, countdown, sortForContinue } from './continueModel';
 import { clockTime, listedAirings, tonightFrom, useMinuteClock } from './airingModel';
-import { formatDate } from '../../utils/dateUtils';
 
 function stateText(state, now) {
     if (state.kind === 'ready') {
@@ -33,7 +32,7 @@ function stateText(state, now) {
 const ContinueRow = memo(function ContinueRow({ entry, now, onLive }) {
     const anime = entry.anime || {};
     const { entry: current, setProgress, save, isPending } = useListEntryMutation({
-        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
+        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count, next_airing_episode: anime.next_airing_episode, next_airing_date: anime.next_airing_date },
         entry,
     });
     const href = `/anime/${anime.slug}`;
@@ -98,36 +97,30 @@ const ContinueRow = memo(function ContinueRow({ entry, now, onLive }) {
  * time order. One that already aired reads "15:04 · Episode 9 is out".
  */
 function Tonight({ items, now, timezone }) {
-    if (!items.today.length && !items.next) return null;
+    // Only when something from the list airs today; Continue and Your week
+    // already say what comes next.
+    if (!items.today.length) return null;
     return (
         <div className="mt-10 md:max-w-sm">
             <h2 className="text-[15px] font-semibold text-[var(--text-2)]">Tonight</h2>
-            {items.today.length ? (
-                <ul className="mt-2">
-                    {items.today.map(({ anime, at, episode, aired }) => {
-                        const ep = episode ? `Episode ${episode}` : 'New episode';
-                        return (
-                            <li key={anime.id}>
-                                <Link
-                                    to={`/anime/${anime.slug}`}
-                                    className="-mx-2 block min-h-11 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
-                                >
-                                    <span className="block truncate text-[15px] text-[var(--text-1)]">{anime.title}</span>
-                                    <span className={`block text-sm tabular ${aired ? 'text-[var(--signature)]' : 'text-[var(--text-3)]'}`}>
-                                        {clockTime(at, timezone)} · {aired ? `${ep} is out` : `${ep} · in ${countdown(at, now)}`}
-                                    </span>
-                                </Link>
-                            </li>
-                        );
-                    })}
-                </ul>
-            ) : (
-                <p className="mt-2 text-[15px] leading-relaxed text-[var(--text-2)]">
-                    Nothing from your list airs today. Next up:{' '}
-                    <Link to={`/anime/${items.next.anime.slug}`} className="text-link min-h-0">{items.next.anime.title}</Link>
-                    , <span className="tabular">{formatDate(items.next.at, { weekday: 'short' }, timezone)} {clockTime(items.next.at, timezone)}</span>
-                </p>
-            )}
+            <ul className="mt-2">
+                {items.today.map(({ anime, at, episode, aired }) => {
+                    const ep = episode ? `Episode ${episode}` : 'New episode';
+                    return (
+                        <li key={anime.id}>
+                            <Link
+                                to={`/anime/${anime.slug}`}
+                                className="-mx-2 block min-h-11 rounded-lg px-2 py-2 transition-colors hover:bg-white/[0.04]"
+                            >
+                                <span className="block truncate text-[15px] text-[var(--text-1)]">{anime.title}</span>
+                                <span className={`block text-sm tabular ${aired ? 'text-[var(--signature)]' : 'text-[var(--text-3)]'}`}>
+                                    {clockTime(at, timezone)} · {aired ? `${ep} is out` : `${ep} · in ${countdown(at, now)}`}
+                                </span>
+                            </Link>
+                        </li>
+                    );
+                })}
+            </ul>
         </div>
     );
 }

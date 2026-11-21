@@ -8,6 +8,7 @@ import { profileKeys, userKeys } from '../api/queries/profile';
 import logger from '../utils/logger';
 import { notify, notifyError } from '../components/ui/toast';
 import { statusChangeMessage } from '../utils/listStatus';
+import { airedEpisodeCount } from '../utils/episodes';
 
 /** The writable fields of a list entry, as the API returns and accepts them. */
 const ENTRY_FIELDS = [
@@ -141,6 +142,10 @@ export default function useListEntryMutation({ anime, entry } = {}) {
     const animeId = anime?.id;
     const slug = anime?.slug;
     const episodeCount = anime?.episode_count;
+    // Airing data, so Completed can show where progress will land before the
+    // server answers (the server caps it at the aired episode the same way).
+    const airingRef = useRef(anime);
+    airingRef.current = anime;
 
     const setCurrent = useCallback((next) => {
         currentRef.current = next;
@@ -186,8 +191,17 @@ export default function useListEntryMutation({ anime, entry } = {}) {
 
         const toastId = `list-${animeId}`;
         const onUndo = () => undoRef.current?.(before);
-        const shownMessage = silent ? null : describeListChange(before, { ...before, ...optimistic }, knownTotal({ episode_count: episodeCount }));
-        if (shownMessage) notify(shownMessage, { id: toastId, onUndo });
+        const total = knownTotal({ episode_count: episodeCount });
+        // Completed on a show still airing stopped at the aired episode: the
+        // toast offers to keep it in Watching instead (progress kept).
+        const toastOptions = (after) => (
+            after.status === 'Completed' && before.status !== 'Completed' && total && after.episodes_watched < total
+                ? { id: toastId, onUndo: () => keepWatchingRef.current?.(), undoLabel: 'Keep watching' }
+                : { id: toastId, onUndo }
+        );
+        const optimisticEntry = { ...before, ...optimistic };
+        const shownMessage = silent ? null : describeListChange(before, optimisticEntry, total);
+        if (shownMessage) notify(shownMessage, toastOptions(optimisticEntry));
 
         const finish = () => {
             queuedRef.current = queuedRef.current.filter((queued) => queued !== op);
@@ -204,21 +218,8 @@ export default function useListEntryMutation({ anime, entry } = {}) {
                 refreshCaches(saved);
                 if (shownMessage) {
                     // The server may have done more (Completed fills progress): say so.
-                    const total = knownTotal({ episode_count: episodeCount });
                     const savedMessage = describeListChange(before, saved, total);
-                    // Completed on a show still airing stopped at the aired
-                    // episode: offer to keep it in Watching instead (progress kept).
-                    const caughtUp = saved.status === 'Completed' && before.status !== 'Completed'
-                        && total && saved.episodes_watched < total;
-                    if (caughtUp) {
-                        notify(savedMessage, {
-                            id: toastId,
-                            onUndo: () => keepWatchingRef.current?.(),
-                            undoLabel: 'Keep watching',
-                        });
-                    } else if (savedMessage !== shownMessage) {
-                        notify(savedMessage, { id: toastId, onUndo });
-                    }
+                    if (savedMessage !== shownMessage) notify(savedMessage, toastOptions(saved));
                 }
                 return { previous: before, saved };
             } catch (error) {
@@ -233,7 +234,7 @@ export default function useListEntryMutation({ anime, entry } = {}) {
         const result = chainRef.current.then(execute, execute);
         chainRef.current = result.catch(() => null);
         return result;
-    }, [animeId, refreshCaches, setCurrent]);
+    }, [animeId, episodeCount, refreshCaches, setCurrent]);
 
     const save = useCallback(async (fields, options) => {
         const result = await run(fields, (confirmed) => (
@@ -244,7 +245,22 @@ export default function useListEntryMutation({ anime, entry } = {}) {
         return result?.saved ?? null;
     }, [animeId, run]);
 
-    const setStatus = useCallback((status, options) => save({ status }, options), [save]);
+    // Completed fills progress on the server (to the total, or to the aired
+    // episode while airing): show that at once instead of after the answer.
+    const setStatus = useCallback(async (status, options) => {
+        if (status !== 'Completed') return save({ status }, options);
+        const total = knownTotal({ episode_count: episodeCount });
+        const aired = airedEpisodeCount(airingRef.current);
+        const target = aired !== null && total && aired < total ? aired : total;
+        const watched = currentRef.current.episodes_watched || 0;
+        const optimistic = target ? { status, episodes_watched: Math.max(watched, target) } : { status };
+        const result = await run(optimistic, (confirmed) => (
+            confirmed.id
+                ? listApi.update(confirmed.id, { status })
+                : listApi.add({ anime_id: animeId, status })
+        ), options);
+        return result?.saved ?? null;
+    }, [animeId, episodeCount, run, save]);
 
     const setScore = useCallback(
         (score, options) => save({ score: Math.max(0, Math.min(10, Math.trunc(Number(score) || 0))) }, options),

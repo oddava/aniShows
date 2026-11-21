@@ -27,7 +27,7 @@ export default function TrackingPanel({
     const {
         entry, setStatus, setScore, setProgress, save, remove, startRewatch, isPending,
     } = useListEntryMutation({
-        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
+        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count, next_airing_episode: anime.next_airing_episode, next_airing_date: anime.next_airing_date },
         entry: anime.user_list_status,
     });
     const [scoreOpen, setScoreOpen] = useState(false);
@@ -37,12 +37,15 @@ export default function TrackingPanel({
     const inList = Boolean(entry.id || status);
     const total = knownEpisodeTotal(anime);
     const aired = airedEpisodeCount(anime);
+    const stillAiring = Boolean(anime.next_airing_date) || anime.status === 'Airing';
+    const canRewatch = !stillAiring && (!total || (entry.episodes_watched || 0) >= total);
 
     // Right after Completed with no score: offer the score row (skippable).
     const [justCompleted, setJustCompleted] = useState(false);
     useEffect(() => {
-        if (entry.score > 0) setJustCompleted(false);
-    }, [entry.score]);
+        // Scored, or no longer Completed (Keep watching, Undo): the prompt goes.
+        if (entry.score > 0 || entry.status !== 'Completed') setJustCompleted(false);
+    }, [entry.score, entry.status]);
 
     if (!isAuthenticated) {
         return (
@@ -159,14 +162,14 @@ export default function TrackingPanel({
                                 value={entry.score}
                                 onChange={handleScore}
                                 size="sm"
-                                disabled={isPending}
                             />
                         </div>
                     )}
                 </div>
             )}
 
-            {status === 'Completed' && !entry.is_rewatching && (
+            {/* Rewatch only once every episode is out and watched. */}
+            {status === 'Completed' && !entry.is_rewatching && canRewatch && (
                 <button
                     type="button"
                     onClick={async () => report(await startRewatch())}
