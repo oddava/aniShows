@@ -1,12 +1,13 @@
-import { createElement, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
 
 import { listApi } from '../api/client';
 import { animeKeys, patchAnimeListStatus } from '../api/queries/anime';
 import { listKeys } from '../api/queries/lists';
 import { profileKeys, userKeys } from '../api/queries/profile';
 import logger from '../utils/logger';
+import { notify, notifyError } from '../components/ui/toast';
+import { statusChangeMessage } from '../utils/listStatus';
 
 /** The writable fields of a list entry, as the API returns and accepts them. */
 const ENTRY_FIELDS = [
@@ -77,6 +78,30 @@ export function listErrorMessage(error, fallback = 'Could not update your list.'
     return typeof first === 'string' ? first : fallback;
 }
 
+/** The fields an Undo puts back (the server's normaliser may have moved any of them). */
+const UNDO_FIELDS = ['status', 'score', 'episodes_watched', 'started_at', 'finished_at', 'is_rewatching', 'total_rewatches'];
+
+/**
+ * The toast line for a write: what changed, in words (T6).
+ */
+export function describeListChange(previous, saved) {
+    if (!saved?.id) return 'Removed from your list';
+    if (previous.status !== saved.status) {
+        if (saved.status === 'Completed' && previous.status && saved.episodes_watched > previous.episodes_watched) {
+            return 'Completed. Every episode marked watched';
+        }
+        return statusChangeMessage(previous.status, saved.status);
+    }
+    if (previous.episodes_watched !== saved.episodes_watched) {
+        const n = saved.episodes_watched;
+        return n === previous.episodes_watched + 1 ? `Episode ${n} watched` : `Progress set to ${n}`;
+    }
+    if (previous.score !== saved.score) {
+        return saved.score ? `Scored ${saved.score}` : 'Score cleared';
+    }
+    return 'Saved';
+}
+
 const knownTotal = (anime) => {
     const total = Number(anime?.episode_count);
     return Number.isFinite(total) && total > 0 ? total : null;
@@ -129,8 +154,13 @@ export default function useListEntryMutation({ anime, entry } = {}) {
         if (slug) queryClient.invalidateQueries({ queryKey: animeKeys.bySlug(slug) });
     }, [queryClient, animeId, slug, episodeCount]);
 
-    /** Apply `optimistic` now, send `request(previous)`, then adopt the server entry. */
-    const run = useCallback(async (optimistic, request) => {
+    const undoRef = useRef(null);
+
+    /**
+     * Apply `optimistic` now, send `request(previous)`, then adopt the server
+     * entry. Unless `silent`, a toast says what changed and offers Undo.
+     */
+    const run = useCallback(async (optimistic, request, { silent = false } = {}) => {
         if (inFlight.current) return null;
         inFlight.current = true;
         const previous = currentRef.current;
@@ -141,33 +171,44 @@ export default function useListEntryMutation({ anime, entry } = {}) {
             const saved = response?.data?.id ? entryState(response.data) : entryState(null);
             setCurrent(saved);
             refreshCaches(saved);
+            if (!silent) {
+                notify(describeListChange(previous, saved), {
+                    id: `list-${animeId}`,
+                    onUndo: () => undoRef.current?.(previous),
+                });
+            }
             return { previous, saved };
         } catch (error) {
             logger.error('Error updating list:', error);
             setCurrent(previous);
-            toast.error(listErrorMessage(error));
+            notifyError(listErrorMessage(error), { id: `list-${animeId}` });
             return null;
         } finally {
             inFlight.current = false;
             setIsPending(false);
         }
-    }, [refreshCaches, setCurrent]);
+    }, [animeId, refreshCaches, setCurrent]);
 
-    const save = useCallback(async (fields) => {
+    const save = useCallback(async (fields, options) => {
         const result = await run(fields, (previous) => (
             previous.id
                 ? listApi.update(previous.id, fields)
                 : listApi.add({ anime_id: animeId, ...fields })
-        ));
+        ), options);
         return result?.saved ?? null;
     }, [animeId, run]);
 
-    const setStatus = useCallback((status) => save({ status }), [save]);
+    const setStatus = useCallback((status, options) => save({ status }, options), [save]);
 
-    const setProgress = useCallback((episodesWatched) => {
+    const setScore = useCallback(
+        (score, options) => save({ score: Math.max(0, Math.min(10, Math.trunc(Number(score) || 0))) }, options),
+        [save],
+    );
+
+    const setProgress = useCallback((episodesWatched, options) => {
         const total = knownTotal({ episode_count: episodeCount });
         const capped = Math.max(0, total ? Math.min(episodesWatched, total) : episodesWatched);
-        return save({ episodes_watched: capped });
+        return save({ episodes_watched: capped }, options);
     }, [episodeCount, save]);
 
     const increment = useCallback(() => {
@@ -179,30 +220,34 @@ export default function useListEntryMutation({ anime, entry } = {}) {
 
     const startRewatch = useCallback(() => save({ is_rewatching: true }), [save]);
 
-    const undoRemove = useCallback((removed) => run(
-        removed,
-        () => listApi.add(restorePayload(animeId, removed)),
-    ), [animeId, run]);
+    /**
+     * Put the entry back the way it was before a write: re-add a removed
+     * entry, remove a just-added one, or restore the fields a write changed.
+     */
+    const undo = useCallback((previous) => {
+        const now = currentRef.current;
+        if (!previous.id) {
+            if (!now.id) return Promise.resolve(null);
+            return run(EMPTY_ENTRY, () => listApi.remove(now.id), { silent: true });
+        }
+        if (!now.id) {
+            return run(previous, () => listApi.add(restorePayload(animeId, previous)), { silent: true });
+        }
+        const fields = Object.fromEntries(UNDO_FIELDS.map((field) => [field, previous[field] ?? EMPTY_ENTRY[field]]));
+        return run(fields, () => listApi.update(now.id, fields), { silent: true });
+    }, [animeId, run]);
+
+    useEffect(() => {
+        undoRef.current = undo;
+    }, [undo]);
 
     const remove = useCallback(async () => {
         if (!currentRef.current.id) return null;
         const result = await run(EMPTY_ENTRY, (previous) => listApi.remove(previous.id));
-        if (!result) return null;
-        toast((toastInstance) => createElement(
-            'span',
-            { className: 'flex items-center gap-3' },
-            'Removed',
-            createElement('button', {
-                type: 'button',
-                className: 'font-bold text-accent hover:underline',
-                onClick: () => {
-                    toast.dismiss(toastInstance.id);
-                    undoRemove(result.previous);
-                },
-            }, 'Undo'),
-        ), { id: `list-removed-${animeId}` });
-        return result.saved;
-    }, [animeId, run, undoRemove]);
+        return result ? result.saved : null;
+    }, [run]);
 
-    return { entry: current, setStatus, setProgress, increment, save, remove, startRewatch, isPending };
+    return {
+        entry: current, setStatus, setProgress, setScore, increment, save, remove, startRewatch, undo, isPending,
+    };
 }

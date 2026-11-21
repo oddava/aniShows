@@ -1,58 +1,41 @@
 import { Link } from 'react-router-dom';
-import { Plus, Check, Eye, Clock, X, Loader2 } from 'lucide-react';
-import React, { useState, useCallback, useMemo, useEffect, useRef, useId } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { listApi } from '../api/client';
-import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
+import useListEntryMutation from '../hooks/useListEntryMutation';
 import {
     applyImageFallback,
     getImageFallbackUrl,
     getImageSrcSet,
-    getImageUrl,
     getOptimizedImageUrl,
-    isSameOriginImageUrl,
 } from '../utils/imageUtils';
-import logger from '../utils/logger';
-import { patchAnimeListStatus } from '../api/queries/anime';
-import { listKeys, profileKeys, userKeys } from '../api/queries/user';
+import { statusMeta } from '../utils/listStatus';
+import { airedEpisodeCount, knownEpisodeTotal, progressPercent } from '../utils/episodes';
+import QuickAdd from './ui/QuickAdd';
+import ProgressStepper from './ui/ProgressStepper';
+import { ScoreBadge } from './ui/Badge';
+import { CardSkeleton } from './ui/Skeleton';
 
-const STATUS_OPTIONS = [
-    { value: 'Watching', label: 'Watching', icon: Eye, color: 'text-emerald-400', dotColor: 'bg-emerald-400' },
-    { value: 'Completed', label: 'Completed', icon: Check, color: 'text-blue-400', dotColor: 'bg-blue-400' },
-    { value: 'Plan to Watch', label: 'Planning', icon: Clock, color: 'text-slate-300', dotColor: 'bg-slate-400' },
-];
-
-function getTimeRemainingLabel(dateString) {
+function timeUntil(dateString) {
     if (!dateString) return null;
-    const target = new Date(dateString);
-    if (isNaN(target.getTime())) return null;
-
-    const now = new Date();
-    const diff = target - now;
-    if (diff < 0) return 'Aired';
-
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
+    const diff = new Date(dateString).getTime() - Date.now();
+    if (!Number.isFinite(diff)) return null;
+    if (diff < 0) return 'aired';
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
     if (hours < 1) return `${minutes}m`;
-    if (hours < 24) return `${hours}h ${minutes}m`;
-
-    const days = Math.floor(hours / 24);
-    return `${days}d ${hours % 24}h`;
+    if (hours < 24) return `${hours}h ${minutes % 60}m`;
+    return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
-// The `user_list_status` fields a saved list entry (the list API's response) carries.
-const LIST_STATUS_FIELDS = [
-    'id', 'status', 'score', 'episodes_watched', 'notes', 'started_at',
-    'finished_at', 'total_rewatches', 'is_rewatching',
-];
-
-const savedListFields = (saved) => {
-    if (!saved || typeof saved !== 'object') return {};
-    return Object.fromEntries(LIST_STATUS_FIELDS.filter((key) => key in saved).map((key) => [key, saved[key]]));
-};
-
+/**
+ * The one anime card (B4): poster, your status dot, your score, progress and
+ * quick add, everywhere a show is listed (home, browse, search, schedule,
+ * library). Every list write goes through useListEntryMutation, so each
+ * change raises the same toast with Undo (T6).
+ *
+ * `showProgress`: Watching entries get a visible − n / total + stepper under
+ * the poster (T3); otherwise progress is a thin bar on the poster.
+ */
 function AnimeCard({
     anime,
     userListEntry,
@@ -60,79 +43,53 @@ function AnimeCard({
     lite = false,
     priority = false,
     index = 0,
-    useBannerAccentTitleHover = true,
     showAiringCountdown = false,
     showMeta = false,
     metaText = null,
-    // Touch screens have no hover, so the quick "+1 episode" pill would sit on
-    // every poster; only shelves built around progress opt in.
     showProgress = false,
 }) {
     const { isAuthenticated } = useAuth();
-    const queryClient = useQueryClient();
-
-    // Simple state - no debounced hover
-    const [isLoading, setIsLoading] = useState(false);
-    const [showStatusMenu, setShowStatusMenu] = useState(false);
-    const [listStatus, setListStatus] = useState(userListEntry?.status || anime.user_list_status?.status || null);
-    const [listId, setListId] = useState(userListEntry?.id || anime.user_list_status?.id || null);
-    const [localEpisodesWatched, setLocalEpisodesWatched] = useState(
-        userListEntry?.episodes_watched || anime.user_list_status?.episodes_watched || 0
-    );
+    const listEntry = userListEntry || anime.user_list_status || null;
+    const { entry, setStatus, setScore, setProgress, remove, isPending } = useListEntryMutation({
+        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count },
+        entry: listEntry,
+    });
 
     const [imageLoaded, setImageLoaded] = useState(false);
     const imageRef = useRef(null);
-    const statusMenuRef = useRef(null);
-    const statusButtonRef = useRef(null);
-    const statusMenuId = useId();
 
-    // Memoized computed values - use optimized images with srcset
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
     const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
     const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
-    // Blur-up: the small thumbnail (cheap, often already cached) sits blurred
-    // under the real poster until it arrives.
-    const placeholderUrl = useMemo(() => {
-        const small = anime.cover_image_small;
-        return small && small !== anime.cover_image_medium ? getImageUrl(small) : null;
-    }, [anime.cover_image_small, anime.cover_image_medium]);
-    const bannerAccentImageUrl = useMemo(() => {
-        if (!useBannerAccentTitleHover) return null;
 
-        const candidates = [
-            getOptimizedImageUrl(anime, 'banner', 'medium'),
-            getOptimizedImageUrl(anime, 'banner', 'original'),
-            anime.banner_image_external_url,
-        ].filter(Boolean);
+    useEffect(() => {
+        setImageLoaded(false);
+        const frame = requestAnimationFrame(() => {
+            if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) setImageLoaded(true);
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [imageUrl]);
 
-        const sameOriginCandidate = candidates.find(isSameOriginImageUrl);
-        return sameOriginCandidate || null;
-    }, [useBannerAccentTitleHover, anime]);
-    const coverAccentImageUrl = useBannerAccentTitleHover ? imageUrl : null;
-    const titleHoverAccentColor = useAnimeAccentColor(
-        coverAccentImageUrl,
-        useBannerAccentTitleHover ? getOptimizedImageUrl(anime, 'cover', 'large') : null,
-        useBannerAccentTitleHover ? anime.cover_image : null,
-        useBannerAccentTitleHover ? anime.cover_image_external_url : null,
-        bannerAccentImageUrl
-    );
-    const titleHoverColor = useMemo(
-        () => titleHoverAccentColor || 'var(--color-accent)',
-        [titleHoverAccentColor]
-    );
-    const displayTitle = useMemo(() =>
-        titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title,
-        [titleLanguage, anime.title_jp, anime.title]
-    );
-    const airingCountdown = useMemo(() => {
+    const handleImageError = useCallback((event) => {
+        applyImageFallback(event, fallbackImageUrl);
+        setImageLoaded(true);
+    }, [fallbackImageUrl]);
+
+    const displayTitle = titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title;
+    const status = entry.status;
+    const meta = statusMeta(status);
+    const isWatching = status === 'Watching';
+    const total = knownEpisodeTotal(anime);
+    const aired = airedEpisodeCount(anime);
+    const watched = entry.episodes_watched || 0;
+    const percent = isWatching ? progressPercent(watched, anime) : null;
+
+    const countdown = useMemo(() => {
         if (!showAiringCountdown) return null;
-        const timeRemaining = getTimeRemainingLabel(anime.next_airing_date);
-        if (!timeRemaining) return null;
-
-        const episodeLabel = anime.next_airing_episode ? `EP ${anime.next_airing_episode}` : 'Episode';
-        return timeRemaining === 'Aired'
-            ? `${episodeLabel} Aired`
-            : `${episodeLabel} in ${timeRemaining}`;
+        const left = timeUntil(anime.next_airing_date);
+        if (!left) return null;
+        const ep = anime.next_airing_episode ? `EP ${anime.next_airing_episode}` : 'Next EP';
+        return left === 'aired' ? `${ep} out now` : `${ep} in ${left}`;
     }, [showAiringCountdown, anime.next_airing_date, anime.next_airing_episode]);
 
     const metaLine = useMemo(() => {
@@ -142,195 +99,12 @@ function AnimeCard({
         return [anime.anime_type, Number.isFinite(year) ? year : null].filter(Boolean).join(' · ') || null;
     }, [metaText, showMeta, anime.anime_type, anime.release_date]);
 
-    // Everything that shows this entry. Anime grids, shelves, the detail page
-    // and Schedule get the new state patched in place (no refetch, B20); the
-    // user's lists and profile stats, and Home's "Currently Watching" shelf (its
-    // key is not under listKeys.all) are refetched.
-    // `userListStatus`: the changed fields, or null when the entry was removed.
-    // The server's saved entry wins over what was sent: its normaliser may move
-    // progress or stamp dates (e.g. Completed fills episodes_watched).
-    const syncAfterListChange = useCallback((userListStatus, saved) => {
-        patchAnimeListStatus(
-            queryClient,
-            anime.id,
-            userListStatus && { ...userListStatus, ...savedListFields(saved) },
-        );
-        queryClient.invalidateQueries({ queryKey: listKeys.all });
-        queryClient.invalidateQueries({ queryKey: userKeys.watching });
-        queryClient.invalidateQueries({ queryKey: profileKeys.own });
-    }, [queryClient, anime.id]);
-
-    useEffect(() => {
-        setImageLoaded(false);
-    }, [imageUrl]);
-
-    useEffect(() => {
-        const frame = requestAnimationFrame(() => {
-            const img = imageRef.current;
-            if (img?.complete) {
-                setImageLoaded(true);
-            }
-        });
-
-        return () => cancelAnimationFrame(frame);
-    }, [imageUrl]);
-
-    useEffect(() => {
-        setListStatus(userListEntry?.status || anime.user_list_status?.status || null);
-        setListId(userListEntry?.id || anime.user_list_status?.id || null);
-        setLocalEpisodesWatched(
-            userListEntry?.episodes_watched || anime.user_list_status?.episodes_watched || 0
-        );
-    }, [
-        anime.id,
-        userListEntry?.status,
-        userListEntry?.id,
-        userListEntry?.episodes_watched,
-        anime.user_list_status?.status,
-        anime.user_list_status?.id,
-        anime.user_list_status?.episodes_watched
-    ]);
-
-    useEffect(() => {
-        function handleClickOutside(event) {
-            if (statusMenuRef.current && !statusMenuRef.current.contains(event.target)) {
-                setShowStatusMenu(false);
-            }
-        }
-        function handleKeyDown(event) {
-            if (event.key === 'Escape') {
-                setShowStatusMenu(false);
-                statusButtonRef.current?.focus();
-            }
-        }
-        if (showStatusMenu) {
-            document.addEventListener('mousedown', handleClickOutside);
-            document.addEventListener('keydown', handleKeyDown);
-        }
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [showStatusMenu]);
-    const currentStatusOption = useMemo(() =>
-        STATUS_OPTIONS.find(s => s.value === listStatus),
-        [listStatus]
-    );
-
-    const episodesWatched = localEpisodesWatched;
-
-    // Determine loading strategy based on priority and index
-    const loadingStrategy = useMemo(() => {
-        if (priority || index < 6) {
-            return { loading: 'eager', decoding: 'async' };
-        }
-        return { loading: 'lazy', decoding: 'async' };
-    }, [priority, index]);
-
-    const handleStatusChange = useCallback(async (e, newStatus) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isAuthenticated || isLoading) return;
-
-        const previousStatus = listStatus;
-        const previousId = listId;
-
-        setListStatus(newStatus);
-        setShowStatusMenu(false);
-        statusButtonRef.current?.focus();
-
-        setIsLoading(true);
-        try {
-            if (listId) {
-                const response = await listApi.update(listId, { status: newStatus });
-                syncAfterListChange({ id: listId, status: newStatus }, response?.data);
-            } else {
-                const response = await listApi.add({ anime_id: anime.id, status: newStatus });
-                setListId(response.data.id);
-                syncAfterListChange({
-                    id: response.data.id,
-                    status: newStatus,
-                    episodes_watched: 0,
-                }, response.data);
-            }
-        } catch (error) {
-            logger.error('Error updating list:', error);
-            setListStatus(previousStatus);
-            setListId(previousId);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [anime.id, isAuthenticated, isLoading, listId, listStatus, syncAfterListChange]);
-
-    const handleRemoveFromList = useCallback(async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!listId || isLoading) return;
-
-        const previousStatus = listStatus;
-        const previousId = listId;
-
-        setListStatus(null);
-        setListId(null);
-        setShowStatusMenu(false);
-        statusButtonRef.current?.focus();
-
-        setIsLoading(true);
-        try {
-            await listApi.remove(previousId);
-            syncAfterListChange(null);
-        } catch (error) {
-            logger.error('Error removing from list:', error);
-            setListStatus(previousStatus);
-            setListId(previousId);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [listId, listStatus, isLoading, syncAfterListChange]);
-
-    const handleQuickProgress = useCallback(async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (isLoading) return;
-
-        const previousEpisodes = localEpisodesWatched;
-        const newEpisodes = previousEpisodes + 1;
-        setLocalEpisodesWatched(newEpisodes);
-        setIsLoading(true);
-
-        try {
-            const entryId = userListEntry?.id || listId;
-            const response = await listApi.update(entryId, { episodes_watched: newEpisodes });
-            syncAfterListChange({ id: entryId, episodes_watched: newEpisodes }, response?.data);
-        } catch (error) {
-            logger.error("Failed to update progress", error);
-            setLocalEpisodesWatched(previousEpisodes);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [localEpisodesWatched, userListEntry?.id, listId, isLoading, syncAfterListChange]);
-
-    const toggleStatusMenu = useCallback((e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isLoading) setShowStatusMenu(prev => !prev);
-    }, [isLoading]);
-
-    const handleImageError = useCallback((event) => {
-        applyImageFallback(event, fallbackImageUrl);
-        // Prevent permanent skeleton state if primary + fallback both fail.
-        setImageLoaded(true);
-    }, [fallbackImageUrl]);
+    const loading = priority || index < 6 ? 'eager' : 'lazy';
+    const href = `/anime/${anime.slug}`;
 
     if (lite) {
         return (
-            <Link
-                to={`/anime/${anime.slug}`}
-                className="block aspect-[2/3] rounded-lg overflow-hidden relative group"
-            >
-                {!imageLoaded && (
-                    <div className="absolute inset-0 skeleton-shimmer bg-dark-200 z-10 pointer-events-none" />
-                )}
+            <Link to={href} className="group relative block aspect-[2/3] overflow-hidden rounded-[var(--radius-md)] bg-[var(--ink-2)]">
                 <img
                     ref={imageRef}
                     src={imageUrl}
@@ -338,231 +112,131 @@ function AnimeCard({
                     sizes="(max-width: 767px) 160px, (max-width: 1023px) 33vw, 20vw"
                     alt={anime.title}
                     draggable={false}
-                    loading={loadingStrategy.loading}
-                    decoding={loadingStrategy.decoding}
+                    loading={loading}
+                    decoding="async"
                     onLoad={() => setImageLoaded(true)}
                     onError={handleImageError}
-                    className={`w-full h-full object-cover ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    data-loaded={imageLoaded}
+                    className="img-fade h-full w-full object-cover"
                 />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="absolute bottom-2 left-2 right-2">
-                        <h3 className="text-xs font-bold text-white line-clamp-2">{displayTitle}</h3>
-                    </div>
-                </div>
             </Link>
         );
     }
 
     return (
-        <div
-            className="group relative block h-full overflow-visible hover:z-[150]"
-            style={{ '--anime-title-hover-color': titleHoverColor }}
-        >
-            <div className="flex flex-col h-full">
-                {/* Image Container */}
-                <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-dark-100 flex-shrink-0 has-[a:focus-visible]:shadow-[0_0_0_2px_var(--color-focus-ring-strong)]">
-                    <Link
-                        to={`/anime/${anime.slug}`}
-                        className="block w-full h-full focus-visible:!outline-none focus-visible:!shadow-none"
-                        aria-label={displayTitle}
-                    >
-                        {!imageLoaded && (placeholderUrl ? (
-                            <img
-                                src={placeholderUrl}
-                                alt=""
-                                aria-hidden="true"
-                                draggable={false}
-                                decoding="async"
-                                className="absolute inset-0 w-full h-full object-cover scale-110 blur-md pointer-events-none"
-                            />
-                        ) : (
-                            <div className="absolute inset-0 skeleton-shimmer z-10 pointer-events-none" />
-                        ))}
-                        <img
-                            ref={imageRef}
-                            src={imageUrl}
-                            srcSet={imageSrcSet}
-                            sizes="(max-width: 767px) 160px, (max-width: 1023px) 33vw, 20vw"
-                            alt={anime.title}
-                            draggable={false}
-                            loading={loadingStrategy.loading}
-                            decoding={loadingStrategy.decoding}
-                            onLoad={() => setImageLoaded(true)}
-                            onError={handleImageError}
-                            className={`relative w-full h-full object-cover transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.03] ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-                        />
-                    </Link>
-
-
-
-                    {/* Status Button */}
-                    {isAuthenticated && (
-                        <div className={`absolute bottom-2 right-2 z-[200] transition-opacity duration-200 ${showStatusMenu ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100'}`}>
-                            <div
-                                className="relative"
-                                ref={statusMenuRef}
-                                onBlur={(event) => {
-                                    // Close when keyboard focus leaves the button and its options.
-                                    if (showStatusMenu && !statusMenuRef.current?.contains(event.relatedTarget)) {
-                                        setShowStatusMenu(false);
-                                    }
-                                }}
-                            >
-                                <button
-                                    onClick={toggleStatusMenu}
-                                    disabled={isLoading}
-                                    className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg shadow-none border transition-all duration-200 touch-manipulation
-                                        bg-black/50 border-white/20 hover:bg-black/70 hover:border-white/30
-                                        ${listStatus && currentStatusOption ? currentStatusOption.color : 'text-white'}`}
-                                    title={listStatus && currentStatusOption ? currentStatusOption.label : 'Add to List'}
-                                    aria-label={listStatus && currentStatusOption ? `List status: ${currentStatusOption.label}. Change` : `Add ${displayTitle} to list`}
-                                    aria-expanded={showStatusMenu}
-                                    aria-controls={showStatusMenu ? statusMenuId : undefined}
-                                    ref={statusButtonRef}
-                                >
-                                    {isLoading ? <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin" /> :
-                                        listStatus && currentStatusOption ? <currentStatusOption.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />}
-                                </button>
-
-                                {showStatusMenu && (
-                                    <div id={statusMenuId} role="group" aria-label="List status" className="absolute right-0 bottom-full mb-2 w-36 bg-dark-100 border border-gray-700 rounded-lg shadow-lg shadow-black/40 z-[210] animate-fade-in overflow-hidden">
-                                        <div className="p-1">
-                                            {STATUS_OPTIONS.map((option) => (
-                                                <button
-                                                    key={option.value}
-                                                    type="button"
-                                                    aria-pressed={listStatus === option.value}
-                                                    onClick={(e) => handleStatusChange(e, option.value)}
-                                                    className={`w-full px-2.5 py-2 flex items-center gap-2 text-xs font-semibold rounded-md transition-colors touch-manipulation
-                                                        ${listStatus === option.value ? 'bg-accent-dark text-white' : `text-gray-300 hover:bg-white/10 ${option.color}`}`}
-                                                >
-                                                    <option.icon className="w-3 h-3" />
-                                                    {option.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        {listStatus && (
-                                            <div className="p-1 border-t border-gray-800 bg-black/20">
-                                                <button type="button" onClick={handleRemoveFromList} className="w-full px-2.5 py-2 flex items-center gap-2 text-xs font-bold text-red-400 hover:bg-red-400/10 rounded-md touch-manipulation">
-                                                    <X className="w-3 h-3" /> Remove
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-
-                    {airingCountdown && (
-                        <div className={`absolute bottom-2 left-2 z-30 pointer-events-none transition-opacity duration-200 ${isAuthenticated ? 'right-11 sm:right-12' : 'right-2'} ${listStatus === 'Watching' && isAuthenticated ? 'group-hover:opacity-0 group-focus-within:opacity-0 [@media(hover:none)]:opacity-100' : ''}`}>
-                            <div className="h-7 px-2.5 rounded-md backdrop-blur-md flex items-center bg-black/65 text-gray-100">
-                                <span className="text-[11px] font-medium tracking-wide text-gray-100">
-                                    {airingCountdown}
-                                </span>
-                            </div>
-                        </div>
-                    )}
-                    {/* Watching Progress Overlay */}
-                    {isAuthenticated && listStatus === 'Watching' && (
-                        <div className={`absolute bottom-2 left-2 z-[150] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 flex ${showProgress ? '[@media(hover:none)]:opacity-100' : ''} ${showProgress && airingCountdown ? '[@media(hover:none)]:bottom-11' : ''}`}>
-                            <div className="h-6 sm:h-7 px-2.5 rounded-md flex items-center justify-between gap-2.5 bg-black/50 text-white border border-white/20 shadow-none pointer-events-auto">
-                                <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide">
-                                    {anime.episode_count 
-                                        ? `${Math.min(episodesWatched, anime.episode_count)} / ${anime.episode_count}`
-                                        : `${episodesWatched} / ?`}
-                                </span>
-                                {(!anime.episode_count || episodesWatched < anime.episode_count) && (
-                                    <button
-                                        onClick={handleQuickProgress}
-                                        disabled={isLoading}
-                                        type="button"
-                                        className="relative w-5 h-5 -mr-1 flex items-center justify-center rounded hover:bg-white/20 transition-colors cursor-pointer touch-manipulation after:absolute after:-inset-1.5 after:content-['']"
-                                        title={`Mark episode ${episodesWatched + 1} as watched`}
-                                        aria-label={`Mark episode ${episodesWatched + 1} of ${displayTitle} as watched`}
-                                    >
-                                        {isLoading ? (
-                                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                        ) : (
-                                            <Plus className="w-3 h-3 stroke-[3]" />
-                                        )}
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                </div>
-
-                {/* Title/Info Footer */}
-                {/* Same target as the poster link, so it stays out of the tab order, but
-                    it is not hidden: screen readers still get the title and meta. */}
-                <Link to={`/anime/${anime.slug}`} className="mt-3 block" tabIndex={-1}
+        <article className="group relative flex h-full flex-col" aria-label={displayTitle}>
+            <div className="relative aspect-[2/3] shrink-0 rounded-[var(--radius-md)] bg-[var(--ink-2)] has-[a:focus-visible]:shadow-[0_0_0_2px_var(--signature)]">
+                <Link
+                    to={href}
+                    aria-label={displayTitle}
+                    className="block h-full w-full overflow-hidden rounded-[var(--radius-md)] focus-visible:!outline-none focus-visible:!shadow-none"
                 >
-                    <div className="flex items-start gap-1.5">
-                        {listStatus && currentStatusOption && (
-                            <span
-                                aria-hidden="true"
-                                className={`mt-[0.28rem] h-2 w-2 shrink-0 rounded-full ${currentStatusOption.dotColor}`}
-                            />
-                        )}
-                        <h3 className="font-medium text-gray-300 text-[13px] sm:text-[13.5px] line-clamp-2 leading-[1.3] transition-colors group-hover:text-[var(--anime-title-hover-color)]"
-                        >
-                            {displayTitle}
-                        </h3>
-                    </div>
-                    {metaLine && (
-                        <p className={`mt-1 text-[11.5px] text-gray-500 tabular truncate ${showProgress && listStatus === 'Watching' ? '[@media(hover:none)]:hidden' : ''}`}>{metaLine}</p>
-                    )}
+                    {!imageLoaded && <div aria-hidden="true" className="absolute inset-0 skeleton-shimmer rounded-[var(--radius-md)]" />}
+                    <img
+                        ref={imageRef}
+                        src={imageUrl}
+                        srcSet={imageSrcSet}
+                        sizes="(max-width: 767px) 160px, (max-width: 1023px) 33vw, 20vw"
+                        alt=""
+                        draggable={false}
+                        loading={loading}
+                        decoding="async"
+                        onLoad={() => setImageLoaded(true)}
+                        onError={handleImageError}
+                        data-loaded={imageLoaded}
+                        className="img-fade relative h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02] motion-reduce:group-hover:scale-100"
+                    />
                 </Link>
+
+                {entry.score > 0 && (
+                    <ScoreBadge score={entry.score} className="pointer-events-none absolute left-2 top-2" />
+                )}
+
+                {countdown && (
+                    <span className="pointer-events-none absolute bottom-2 left-2 right-12 truncate rounded-[var(--radius-sm)] bg-[rgb(11_13_16/0.82)] px-2 py-1 text-[11px] font-semibold text-white backdrop-blur-sm tabular">
+                        {countdown}
+                    </span>
+                )}
+
+                {percent !== null && !showProgress && (
+                    <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-[var(--radius-md)] bg-black/50">
+                        <span className="block h-full bg-[var(--status-watching)]" style={{ width: `${percent}%` }} />
+                    </span>
+                )}
+
+                {isAuthenticated && (
+                    <QuickAdd
+                        status={status}
+                        score={entry.score}
+                        title={displayTitle}
+                        pending={isPending}
+                        onSelect={(value) => setStatus(value)}
+                        onScore={(value) => setScore(value)}
+                        onRemove={() => remove()}
+                        className={`absolute bottom-2 right-2 z-20 ${status ? '' : 'card-reveal'}`}
+                    />
+                )}
             </div>
-        </div>
+
+            {isAuthenticated && showProgress && isWatching && (
+                <ProgressStepper
+                    size="sm"
+                    className="mt-2 self-start"
+                    value={watched}
+                    total={total}
+                    aired={aired}
+                    title={displayTitle}
+                    onCommit={(next) => setProgress(next)}
+                />
+            )}
+
+            {/* The poster link is the tab stop; this one repeats it for pointers. */}
+            <Link to={href} className="mt-2.5 block" tabIndex={-1} aria-hidden="true">
+                <span className="flex items-start gap-1.5">
+                    {meta && (
+                        <span
+                            className="mt-[0.4rem] h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: meta.color }}
+                        />
+                    )}
+                    <span className="line-clamp-2 text-[13.5px] font-medium leading-[1.3] text-gray-200 transition-colors group-hover:text-white">
+                        {displayTitle}
+                    </span>
+                </span>
+                {metaLine && (
+                    <span className="mt-1 block truncate text-xs text-gray-500 tabular">{metaLine}</span>
+                )}
+            </Link>
+            {meta && <span className="sr-only">On your list: {meta.label}</span>}
+        </article>
     );
 }
 
-// Optimized prop comparison - shallow comparison is sufficient
-const arePropsEqual = (prevProps, nextProps) => {
-    if (prevProps.anime.id !== nextProps.anime.id) return false;
-    if (prevProps.titleLanguage !== nextProps.titleLanguage) return false;
-    if (prevProps.lite !== nextProps.lite) return false;
-    if (prevProps.priority !== nextProps.priority) return false;
-    if (prevProps.index !== nextProps.index) return false;
-    if (prevProps.useBannerAccentTitleHover !== nextProps.useBannerAccentTitleHover) return false;
-    if (prevProps.showAiringCountdown !== nextProps.showAiringCountdown) return false;
-    if (prevProps.showMeta !== nextProps.showMeta) return false;
-    if (prevProps.metaText !== nextProps.metaText) return false;
-    if (prevProps.showProgress !== nextProps.showProgress) return false;
+const arePropsEqual = (prev, next) => {
+    if (prev.anime !== next.anime && prev.anime.id !== next.anime.id) return false;
+    if (prev.titleLanguage !== next.titleLanguage) return false;
+    if (prev.lite !== next.lite) return false;
+    if (prev.priority !== next.priority) return false;
+    if (prev.index !== next.index) return false;
+    if (prev.showAiringCountdown !== next.showAiringCountdown) return false;
+    if (prev.showMeta !== next.showMeta) return false;
+    if (prev.metaText !== next.metaText) return false;
+    if (prev.showProgress !== next.showProgress) return false;
+    if (prev.anime.episode_count !== next.anime.episode_count) return false;
+    if (prev.anime.next_airing_date !== next.anime.next_airing_date) return false;
 
-    const prevEntry = prevProps.userListEntry || prevProps.anime.user_list_status;
-    const nextEntry = nextProps.userListEntry || nextProps.anime.user_list_status;
-    if (!!prevEntry !== !!nextEntry) return false;
-    if (prevEntry?.status !== nextEntry?.status) return false;
-    if (prevEntry?.episodes_watched !== nextEntry?.episodes_watched) return false;
-    return true;
+    const a = prev.userListEntry || prev.anime.user_list_status;
+    const b = next.userListEntry || next.anime.user_list_status;
+    if (!!a !== !!b) return false;
+    return a?.id === b?.id
+        && a?.status === b?.status
+        && a?.episodes_watched === b?.episodes_watched
+        && a?.score === b?.score;
 };
 
 export default React.memo(AnimeCard, arePropsEqual);
 
-// Skeleton loader with AniList-style shimmer effect
+/** Same geometry as AnimeCard, so nothing moves when data lands. */
 export function AnimeCardSkeleton() {
-    return (
-        <div className="relative h-full flex flex-col">
-            {/* Card image placeholder */}
-            <div className="aspect-[2/3] bg-dark-100 relative overflow-hidden rounded-lg">
-                <div className="absolute inset-0 skeleton-shimmer" />
-            </div>
-
-            {/* Card content placeholder */}
-            <div className="mt-3 space-y-2 block">
-                {/* Title line */}
-                <div className="h-3 bg-dark-200 rounded relative overflow-hidden">
-                    <div className="absolute inset-0 skeleton-shimmer" />
-                </div>
-                <div className="h-3 w-2/3 bg-dark-200 rounded relative overflow-hidden">
-                    <div className="absolute inset-0 skeleton-shimmer" />
-                </div>
-            </div>
-        </div>
-    );
+    return <CardSkeleton />;
 }

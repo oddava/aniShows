@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import useListEntryMutation, { listErrorMessage } from '../useListEntryMutation';
+import useListEntryMutation, { describeListChange, listErrorMessage } from '../useListEntryMutation';
 
 const listApi = vi.hoisted(() => ({ add: vi.fn(), update: vi.fn(), remove: vi.fn() }));
-const toastMock = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), dismiss: vi.fn() }));
+const toastMock = vi.hoisted(() => ({ notify: vi.fn(), notifyError: vi.fn() }));
 const patchAnimeListStatus = vi.hoisted(() => vi.fn());
 
 vi.mock('../../api/client', () => ({ listApi, animeApi: {}, authApi: {}, activityApi: {}, reviewApi: {} }));
@@ -13,7 +13,7 @@ vi.mock('../../api/queries/anime', () => ({
     animeKeys: { all: ['anime'], bySlug: (slug) => ['anime', slug] },
     patchAnimeListStatus,
 }));
-vi.mock('react-hot-toast', () => ({ default: toastMock }));
+vi.mock('../../components/ui/toast', () => toastMock);
 vi.mock('../../utils/logger', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() } }));
 
 const anime = { id: 7, slug: 'frieren', episode_count: 28 };
@@ -36,9 +36,8 @@ const deferred = () => {
 
 beforeEach(() => {
     Object.values(listApi).forEach((mock) => mock.mockReset());
-    toastMock.mockReset();
-    toastMock.error.mockReset();
-    toastMock.dismiss.mockReset();
+    toastMock.notify.mockReset();
+    toastMock.notifyError.mockReset();
     patchAnimeListStatus.mockReset();
 });
 
@@ -79,7 +78,8 @@ describe('useListEntryMutation', () => {
         });
 
         expect(result.current.entry).toMatchObject({ id: 3, status: 'Watching', episodes_watched: 4 });
-        expect(toastMock.error).toHaveBeenCalledWith('Too many episodes.');
+        expect(toastMock.notifyError).toHaveBeenCalledWith('Too many episodes.', { id: 'list-7' });
+        expect(toastMock.notify).not.toHaveBeenCalled();
         expect(invalidate).not.toHaveBeenCalled();
         expect(result.current.isPending).toBe(false);
     });
@@ -130,12 +130,10 @@ describe('useListEntryMutation', () => {
         expect(result.current.entry).toMatchObject({ id: null, status: null });
         expect(patchAnimeListStatus).toHaveBeenLastCalledWith(expect.anything(), 7, null);
 
-        const renderToast = toastMock.mock.calls[0][0];
-        const element = renderToast({ id: 't1' });
-        const undoButton = element.props.children.find((child) => child?.props?.onClick);
-        await act(async () => { await undoButton.props.onClick(); });
+        const [message, options] = toastMock.notify.mock.calls[0];
+        expect(message).toBe('Removed from your list');
+        await act(async () => { await options.onUndo(); });
 
-        expect(toastMock.dismiss).toHaveBeenCalledWith('t1');
         expect(listApi.add).toHaveBeenCalledWith({
             anime_id: 7, status: 'Completed', score: 8, episodes_watched: 28, notes: 'Great',
             started_at: '2026-01-01', finished_at: '2026-02-01', total_rewatches: 1,
@@ -169,6 +167,66 @@ describe('useListEntryMutation', () => {
 
         expect(listApi.update).toHaveBeenCalledWith(3, { is_rewatching: true });
         expect(result.current.entry).toMatchObject({ status: 'Watching', is_rewatching: true });
+    });
+});
+
+describe('toast with Undo after every write (T6)', () => {
+    it('says what changed and undoes a fresh add by removing it', async () => {
+        listApi.add.mockResolvedValue({ data: { id: 41, status: 'Watching', episodes_watched: 0 } });
+        listApi.remove.mockResolvedValue({});
+        const { result } = setup(null);
+
+        await act(() => result.current.setStatus('Watching'));
+
+        expect(toastMock.notify).toHaveBeenCalledTimes(1);
+        const [message, options] = toastMock.notify.mock.calls[0];
+        expect(message).toBe('Added to Watching');
+        expect(options.id).toBe('list-7');
+
+        await act(async () => { await options.onUndo(); });
+
+        expect(listApi.remove).toHaveBeenCalledWith(41);
+        expect(result.current.entry).toMatchObject({ id: null, status: null });
+        // The undo itself is silent: no second toast.
+        expect(toastMock.notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('undoes a status change by restoring every field the server moved', async () => {
+        listApi.update
+            .mockResolvedValueOnce({ data: { id: 3, status: 'Completed', episodes_watched: 28, finished_at: '2026-11-16', score: 0 } })
+            .mockResolvedValueOnce({ data: { id: 3, status: 'Watching', episodes_watched: 12, finished_at: null, score: 0 } });
+        const { result } = setup({ id: 3, status: 'Watching', episodes_watched: 12, started_at: '2026-11-01' });
+
+        await act(() => result.current.setStatus('Completed'));
+        const [message, options] = toastMock.notify.mock.calls[0];
+        expect(message).toBe('Completed. Every episode marked watched');
+
+        await act(async () => { await options.onUndo(); });
+
+        expect(listApi.update).toHaveBeenLastCalledWith(3, {
+            status: 'Watching', score: 0, episodes_watched: 12, started_at: '2026-11-01',
+            finished_at: null, is_rewatching: false, total_rewatches: 0,
+        });
+        expect(result.current.entry).toMatchObject({ status: 'Watching', episodes_watched: 12 });
+    });
+
+    it('scores through setScore, clamped to 0–10', async () => {
+        listApi.update.mockResolvedValue({ data: { id: 3, status: 'Completed', score: 10 } });
+        const { result } = setup({ id: 3, status: 'Completed', score: 0 });
+
+        await act(() => result.current.setScore(14));
+
+        expect(listApi.update).toHaveBeenCalledWith(3, { score: 10 });
+        expect(toastMock.notify.mock.calls[0][0]).toBe('Scored 10');
+    });
+
+    it('describes progress, score and status changes in words', () => {
+        const base = { id: 3, status: 'Watching', episodes_watched: 12, score: 0 };
+        expect(describeListChange(base, { ...base, episodes_watched: 13 })).toBe('Episode 13 watched');
+        expect(describeListChange(base, { ...base, episodes_watched: 20 })).toBe('Progress set to 20');
+        expect(describeListChange(base, { ...base, score: 9 })).toBe('Scored 9');
+        expect(describeListChange(base, { ...base, status: 'Plan to Watch' })).toBe('Moved to Planning');
+        expect(describeListChange({ id: null, status: null }, { ...base, status: 'On Hold' })).toBe('Added to On hold');
     });
 });
 
