@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { genreLine, profileScore, scoreLine } from '../profileStats';
+import { genreLine, profileScore, scoreLine, scoredShareLine } from '../profileStats';
 
 describe('profileScore', () => {
     it('uses the profile payload when it carries rated_count', () => {
@@ -56,5 +56,14 @@ describe('scoreLine', () => {
     it('says nothing when nothing is scored', () => {
         expect(scoreLine({ mean: null, rated: 0 })).toBeNull();
         expect(scoreLine({ mean: '7.0', rated: 0 })).toBeNull();
+    });
+});
+
+describe('scoredShareLine', () => {
+    it('says how much of the list carries a score', () => {
+        expect(scoredShareLine(3, 7)).toBe('3 of 7 scored');
+        expect(scoredShareLine(7, 7)).toBe('All 7 scored');
+        expect(scoredShareLine(1, 1)).toBe('1 of 1 scored');
+        expect(scoredShareLine(0, 7)).toBeNull();
     });
 });

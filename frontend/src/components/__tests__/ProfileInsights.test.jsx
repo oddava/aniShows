@@ -66,7 +66,7 @@ describe('ProfileInsights score histogram', () => {
 });
 
 describe('ProfileInsights numbers', () => {
-    it('does not repeat the header totals and words the score as an average', async () => {
+    it('does not repeat the header totals and says how much of the list is scored', async () => {
         renderInsights({
             total: 7,
             episodes_watched: 64,
@@ -77,7 +77,9 @@ describe('ProfileInsights numbers', () => {
         });
 
         await screen.findByRole('heading', { name: 'Scores' });
-        expect(screen.getByText('Average 7.8 from 3 scores')).toBeInTheDocument();
+        // The header has the average; the tab says how much of the list is scored.
+        expect(screen.getByText('3 of 7 scored')).toBeInTheDocument();
+        expect(screen.queryByText(/from 3 scores/i)).not.toBeInTheDocument();
         expect(screen.queryByText('episodes watched')).not.toBeInTheDocument();
         expect(screen.queryByText('on the list')).not.toBeInTheDocument();
         expect(screen.queryByText(/mean score|rated$/i)).not.toBeInTheDocument();

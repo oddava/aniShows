@@ -32,6 +32,10 @@ import ErrorState from '../components/common/ErrorState';
 import useScrollFade from '../hooks/useScrollFade';
 import InformationBox from '../components/InformationBox';
 
+// After this long on a loaded page, recommendations load even if their row
+// has not come near the viewport yet.
+const RECOMMENDATIONS_IDLE_MS = 1500;
+
 export default function AnimeDetail() {
     const { slug, '*': tabPath } = useParams();
     const navigate = useNavigate();
@@ -60,8 +64,17 @@ export default function AnimeDetail() {
         gcTime: 600000, // 10 minutes
     });
 
-    // Recommendations load once their row is about to show.
+    // Recommendations load once their row is about to show, or once the page
+    // has settled: on a phone the row sits far below the first screen, and a
+    // fast scroll (or a quick look) should still find it filled in.
     const [recommendationsRef, recommendationsNear] = useNearViewport({ resetKey: slug });
+    const [settledSlug, setSettledSlug] = useState(null);
+    const animeLoaded = Boolean(anime);
+    useEffect(() => {
+        if (!animeLoaded) return undefined;
+        const timer = setTimeout(() => setSettledSlug(slug), RECOMMENDATIONS_IDLE_MS);
+        return () => clearTimeout(timer);
+    }, [animeLoaded, slug]);
 
     // Tab data (characters, staff, episodes, ratings, recommendations) and reviews
     const tabData = useAnimeDetailTabData({
@@ -70,7 +83,7 @@ export default function AnimeDetail() {
         anime,
         activeTab,
         queryClient,
-        loadRecommendations: recommendationsNear,
+        loadRecommendations: recommendationsNear || settledSlug === slug,
     });
     const { watchEpisodesTotal, charactersTotal, staffTotal, recommendations } = tabData;
     const reviews = useAnimeReviews({ slug, anime, user, isAuthenticated, queryClient, animeDetailQueryKey });
@@ -271,11 +284,13 @@ export default function AnimeDetail() {
                                 setSynopsisExpanded={setSynopsisExpanded}
                             />
 
-                            {/* Tab Navigation */}
+                            {/* Tab Navigation. On phones it runs to the screen edge, so
+                                the next tab is cut under the edge fade and the strip
+                                reads as scrollable. */}
                             <nav
                                 ref={tabStripRef}
                                 aria-label="Sections"
-                                className={`scroll-fade mb-4 flex items-center gap-1 overflow-x-auto scrollbar-hide pr-6 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : ''}`}
+                                className={`scroll-fade -mx-4 mb-4 flex items-center gap-1 overflow-x-auto scrollbar-hide px-4 md:mx-0 md:pl-0 md:pr-6 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : ''}`}
                                 data-title="Navigation"
                             >
                                 {tabsWithCounts.map((tab) => (

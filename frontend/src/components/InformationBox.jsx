@@ -32,12 +32,12 @@ const InfoRow = ({ label, value, stacked = false }) => (
     )
 );
 
-const DATE_OPTIONS = { month: 'short', day: 'numeric', year: 'numeric' };
+const DATE_OPTIONS = { day: 'numeric', month: 'short', year: 'numeric' };
 
 /**
- * When it aired, short: "Since Oct 2, 2026" while it is still running,
- * "Jan 5 – Mar 30, 2026" inside one year, "Oct 20, 1999 – Dec 18, 2026"
- * across years (each date kept whole when the range wraps). `isRange` says
+ * When it aired, short, day before month: "Since 2 Oct 2026" while it is
+ * still running, "5 Jan – 30 Mar 2026" inside one year, "20 Oct 1999 –
+ * 18 Dec 2026" across years (each date kept whole when the range wraps). `isRange` says
  * whether the value is a two-date range, which reads best stacked.
  */
 export function getAiredValue(anime) {
@@ -52,7 +52,7 @@ export function getAiredValue(anime) {
     if (!end || end === start) return { value: start, isRange: false };
 
     const sameYear = start.slice(-4) === end.slice(-4);
-    const from = sameYear ? formatDate(anime.release_date, { month: 'short', day: 'numeric' }) : start;
+    const from = sameYear ? formatDate(anime.release_date, { day: 'numeric', month: 'short' }) : start;
     return {
         value: (
             <>

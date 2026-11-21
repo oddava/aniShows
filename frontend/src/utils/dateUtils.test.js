@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     AUTO_TIMEZONE_VALUE,
     formatCalendarDate,
+    formatCalendarRange,
     getZonedCalendarToday,
     bucketScheduleByDate,
     formatAiringTime,
@@ -51,8 +52,8 @@ describe('getZonedCalendarToday', () => {
         const late = new Date(Date.UTC(2026, 10, 16, 3, 0));
         const la = getZonedCalendarToday('America/Los_Angeles', late);
         const tashkent = getZonedCalendarToday('Asia/Tashkent', late);
-        expect(formatCalendarDate(la, { weekday: 'long', month: 'short', day: 'numeric' })).toBe('Sunday, Nov 15');
-        expect(formatCalendarDate(tashkent, { weekday: 'long', month: 'short', day: 'numeric' })).toBe('Monday, Nov 16');
+        expect(formatCalendarDate(la, { weekday: 'long', month: 'short', day: 'numeric' })).toBe('Sunday 15 Nov');
+        expect(formatCalendarDate(tashkent, { weekday: 'long', month: 'short', day: 'numeric' })).toBe('Monday 16 Nov');
         expect(la.getUTCDay()).toBe(0);
         expect(tashkent.getUTCDay()).toBe(1);
     });
@@ -133,11 +134,27 @@ describe('bucketScheduleByDate', () => {
 describe('formatAiringTime', () => {
     it('reads 24-hour with no zone name', () => {
         // 12:43 UTC is 17:43 in Tashkent (UTC+5).
-        expect(formatAiringTime('2026-11-24T12:43:00Z', 'Asia/Tashkent')).toBe('Tue, Nov 24 · 17:43');
-        expect(formatAiringTime('2026-11-24T00:05:00Z', 'UTC')).toBe('Tue, Nov 24 · 00:05');
+        expect(formatAiringTime('2026-11-24T12:43:00Z', 'Asia/Tashkent')).toBe('Tue 24 Nov · 17:43');
+        expect(formatAiringTime('2026-11-24T00:05:00Z', 'UTC')).toBe('Tue 24 Nov · 00:05');
     });
 
     it('is empty without a date', () => {
         expect(formatAiringTime(null, 'UTC')).toBe('');
+    });
+});
+
+describe('day-month dates', () => {
+    const day = (iso) => new Date(`${iso}T12:00:00Z`);
+
+    it('writes calendar ranges day first, sharing the month and year', () => {
+        expect(formatCalendarRange(day('2026-11-21'), day('2026-11-27'))).toBe('21–27 Nov');
+        expect(formatCalendarRange(day('2026-11-28'), day('2026-12-04'))).toBe('28 Nov – 4 Dec');
+        expect(formatCalendarRange(day('2026-12-28'), day('2027-01-03'))).toBe('28 Dec 2026 – 3 Jan 2027');
+        expect(formatCalendarRange(day('2026-11-21'), day('2026-11-21'))).toBe('21 Nov');
+    });
+
+    it('puts the day before the month and keeps 24-hour times', () => {
+        expect(formatDate('2026-10-02T12:00:00Z', { day: 'numeric', month: 'short', year: 'numeric' }, 'UTC')).toBe('2 Oct 2026');
+        expect(formatDate('2026-11-22T15:43:00Z', { hour: 'numeric', minute: '2-digit' }, 'UTC')).toBe('15:43');
     });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tidyActivities } from '../activityTidy';
+import { statusesFromEntries, tidyActivities } from '../activityTidy';
 
 const BASE = Date.parse('2026-11-21T09:00:00Z');
 let nextId = 1;
@@ -90,5 +90,26 @@ describe('tidyActivities', () => {
             ev(8, 40, 'added', { new_status: 'Watching' }),
         ];
         expect(tidyActivities(feed)).toHaveLength(4);
+    });
+});
+
+describe('tidyActivities with the current list', () => {
+    it('drops a newest status row the loaded entry contradicts, keeping older history', () => {
+        // Completed in the feed, but the entry is Watching 3/12 now (changed back elsewhere).
+        const completed = ev(5, 300, 'completed', { old_status: 'Watching', new_status: 'Completed' });
+        const started = ev(5, 10, 'status_change', { old_status: 'Plan to Watch', new_status: 'Watching' });
+        const other = ev(6, 200, 'status_change', { old_status: 'Watching', new_status: 'Completed' });
+        const currentStatus = statusesFromEntries([
+            { anime: { id: 5 }, status: 'Watching' },
+        ]);
+        expect(ids(tidyActivities([completed, other, started], { currentStatus }))).toEqual([other.id, started.id]);
+        expect(ids(tidyActivities([completed, other, started]))).toEqual([completed.id, other.id, started.id]);
+    });
+
+    it('keeps a status row that matches, and episode rows always', () => {
+        const progress = ev(7, 100, 'progress', { old_episodes: 2, new_episodes: 3 });
+        const watching = ev(7, 0, 'status_change', { old_status: 'Plan to Watch', new_status: 'Watching' });
+        const currentStatus = statusesFromEntries([{ anime: { id: 7 }, status: 'Watching' }]);
+        expect(ids(tidyActivities([progress, watching], { currentStatus }))).toEqual([progress.id, watching.id]);
     });
 });

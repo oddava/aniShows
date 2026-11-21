@@ -32,6 +32,17 @@ export function scoreLine({ mean, rated }) {
 }
 
 /**
+ * How much of the list carries a score: "3 of 7 scored", "All 7 scored".
+ * The Stats tab's note, so it adds to the header's average instead of
+ * repeating it. Null when nothing is scored or the total is unknown.
+ */
+export function scoredShareLine(rated, total) {
+    if (!rated || !total) return null;
+    if (rated >= total && total > 1) return `All ${total.toLocaleString()} scored`;
+    return `${rated.toLocaleString()} of ${total.toLocaleString()} scored`;
+}
+
+/**
  * Taste in one sentence-case line from the summary's top genres:
  * "Mostly fantasy, romance and action". Null when there is nothing to say.
  */

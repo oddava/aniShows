@@ -482,7 +482,7 @@ describe('Schedule Component - preferred time zone far from the browser', () => 
     const selected = screen.getByRole('button', { pressed: true });
     expect(selected).toHaveAccessibleName(/^Tuesday 17,/);
     const heading = screen.getByRole('heading', { level: 2, name: /Tuesday/ });
-    expect(heading).toHaveTextContent('Nov 17');
+    expect(heading).toHaveTextContent('17 Nov');
   });
 });
 
@@ -543,7 +543,7 @@ describe('Schedule Component - calendar dates and My list', () => {
 
     fireEvent.click(dayButton('Wednesday 18'));
     expect(screen.getByText('Two Days Out')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: /Wednesday/ })).toHaveTextContent('Nov 18');
+    expect(screen.getByRole('heading', { level: 2, name: /Wednesday/ })).toHaveTextContent('18 Nov');
 
     fireEvent.click(dayButton('Thursday 19'));
     expect(screen.getByText('No Date Yet')).toBeInTheDocument();

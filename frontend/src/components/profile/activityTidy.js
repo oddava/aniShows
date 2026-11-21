@@ -9,8 +9,14 @@
  * - other removals are churn (removed, then added back) and are dropped too,
  *   for visitors always, for the owner unless it is the only event there is;
  * - back-to-back events for one show within about an hour become one row with
- *   the final state; a run that ends where it started is dropped.
+ *   the final state; a run that ends where it started is dropped;
+ * - when the client already knows a show's current status (list entries it
+ *   has loaded anyway, passed as `currentStatus`), a show's newest status row
+ *   that ended somewhere else is stale (changed back outside the feed, e.g.
+ *   "Completed" while the entry is Watching 3/12) and is dropped.
  */
+
+import { normalizeStatus } from '../../utils/listStatus';
 
 const RUN_WINDOW_MS = 60 * 60 * 1000;
 const REMOVED = 'removed';
@@ -93,15 +99,51 @@ function collapseRun(run) {
     return newest;
 }
 
+/** The status a row leaves the show in, if it is a status row at all. */
+function resultingStatus(row) {
+    if (row.new_status) return normalizeStatus(row.new_status);
+    return row.activity_type === 'completed' ? 'Completed' : null;
+}
+
+/**
+ * Drops each show's newest status row when it contradicts the status the
+ * show is known to have now. Older rows are history and stay.
+ */
+function dropStale(rows, currentStatus) {
+    if (!currentStatus || currentStatus.size === 0) return rows;
+    const checked = new Set();
+    return rows.filter((row) => {
+        const key = animeKey(row);
+        const status = resultingStatus(row);
+        if (key == null || !status || checked.has(key)) return true;
+        checked.add(key);
+        const current = normalizeStatus(currentStatus.get(key));
+        return !current || current === status;
+    });
+}
+
+/**
+ * Current statuses from list entries the client already holds
+ * (`{ anime: { id, slug }, status }`), keyed like the feed's events.
+ */
+export function statusesFromEntries(entries) {
+    const map = new Map();
+    (entries || []).forEach((entry) => {
+        const key = entry?.anime?.id ?? entry?.anime?.slug ?? null;
+        if (key != null && entry?.status) map.set(key, entry.status);
+    });
+    return map;
+}
+
 /**
  * @param {Array} activities raw feed events, newest first
- * @param {{ isOwner?: boolean }} options
+ * @param {{ isOwner?: boolean, currentStatus?: Map }} options
  * @returns {Array} the events to show, newest first
  */
-export function tidyActivities(activities, { isOwner = false } = {}) {
+export function tidyActivities(activities, { isOwner = false, currentStatus = null } = {}) {
     const events = Array.isArray(activities) ? activities.filter(Boolean) : [];
     if (events.length === 0) return [];
-    if (isOwner && events.length === 1) return events;
+    if (isOwner && events.length === 1) return dropStale(events, currentStatus);
 
     // Shows that left the list: their newest event is a removal.
     const offList = new Set();
@@ -137,7 +179,7 @@ export function tidyActivities(activities, { isOwner = false } = {}) {
     });
     flush();
 
-    return rows;
+    return dropStale(rows, currentStatus);
 }
 
 export default tidyActivities;

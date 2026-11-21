@@ -72,20 +72,20 @@ describe('InformationBox', () => {
     it('writes an ongoing run as one short line', () => {
         renderBox({ status: 'Airing', release_date: '2026-10-02T12:00:00Z', end_date: null });
 
-        expect(screen.getByText('Since Oct 2, 2026')).toBeInTheDocument();
+        expect(screen.getByText('Since 2 Oct 2026')).toBeInTheDocument();
         expect(screen.queryByText(/to now/)).not.toBeInTheDocument();
     });
 
     it('stacks a multi-year range under its label and shortens a same-year one', () => {
         const { unmount } = renderBox({ status: 'Finished', release_date: '1999-10-20T12:00:00Z', end_date: '2026-12-18T12:00:00Z' });
-        const range = screen.getByText('Dec 18, 2026').closest('dd');
-        expect(range).toHaveTextContent('Oct 20, 1999 – Dec 18, 2026');
+        const range = screen.getByText('18 Dec 2026').closest('dd');
+        expect(range).toHaveTextContent('20 Oct 1999 – 18 Dec 2026');
         expect(range).not.toHaveClass('text-right');
         unmount();
 
         renderBox({ status: 'Finished', release_date: '2026-01-05T12:00:00Z', end_date: '2026-03-30T12:00:00Z' });
-        const sameYear = screen.getByText('Mar 30, 2026').closest('dd');
-        expect(sameYear).toHaveTextContent('Jan 5 – Mar 30, 2026');
+        const sameYear = screen.getByText('30 Mar 2026').closest('dd');
+        expect(sameYear).toHaveTextContent('5 Jan – 30 Mar 2026');
         expect(sameYear).toHaveClass('text-right');
     });
 

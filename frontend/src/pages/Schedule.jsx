@@ -12,6 +12,7 @@ import EmptyState from '../components/ui/EmptyState';
 import {
   bucketScheduleByDate,
   formatCalendarDate,
+  formatCalendarRange,
   formatDate,
   getZonedCalendarToday,
   hasAiringDate,
@@ -117,9 +118,7 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle,
       <div className="whitespace-nowrap font-semibold text-[var(--text-1)] tabular">
         Next 7 days
         <span className="ml-2 font-normal text-[var(--text-2)]">
-          {formatCalendarDate(startOfToday, { month: 'short', day: 'numeric' })}
-          {' – '}
-          {formatCalendarDate(end, { month: 'short', day: 'numeric' })}
+          {formatCalendarRange(startOfToday, end)}
         </span>
       </div>
 
@@ -360,7 +359,7 @@ export default function Schedule() {
               <span className="ml-2 font-normal text-[var(--text-2)]">
                 {formatCalendarDate(
                   addDays(startOfToday, selectedOffset),
-                  { month: 'short', day: 'numeric' }
+                  { day: 'numeric', month: 'short' }
                 )}
               </span>
             </h2>

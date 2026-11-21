@@ -1,12 +1,12 @@
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { activityApi } from '../../api/client';
 import { Link } from 'react-router-dom';
 import AnimeMediaImage from '../common/AnimeMediaImage';
 import { formatDateInUserTimezone } from '../../utils/dateUtils';
-import { activityKeys } from '../../api/queries/user';
+import { activityKeys, listKeys } from '../../api/queries/user';
 import { LIST_STATUSES, statusLabel } from '../../utils/listStatus';
-import { tidyActivities } from './activityTidy';
+import { statusesFromEntries, tidyActivities } from './activityTidy';
 
 // The overview shows a handful of rows; it asks for more than that because
 // tidying (dropped churn, merged runs) can leave fewer rows than events.
@@ -218,12 +218,32 @@ function ActivityRow({ activity }) {
 }
 
 /**
+ * List entries of this profile the client already holds (the overview's
+ * Watching rows, a list tab it opened), oldest fetch first so the freshest
+ * copy of an entry wins. No request of its own.
+ */
+function cachedListEntries(queryClient, username) {
+    const queries = queryClient.getQueryCache()
+        .findAll({ queryKey: [listKeys.all[0], username] })
+        .filter((query) => query.state.data)
+        .sort((a, b) => a.state.dataUpdatedAt - b.state.dataUpdatedAt);
+    return queries.flatMap(({ state: { data } }) => {
+        if (Array.isArray(data)) return data;
+        if (Array.isArray(data?.pages)) return data.pages.flatMap((page) => page?.results || []);
+        return Array.isArray(data?.results) ? data.results : [];
+    });
+}
+
+/**
  * A profile's list activity, newest first, in rows grouped by day, tidied
- * (see activityTidy): no add/remove churn, one row per burst of changes.
+ * (see activityTidy): no add/remove churn, one row per burst of changes, and
+ * no status row the show's loaded list entry has since contradicted.
  * `compact` (the overview) drops the filters, shows a handful of rows, and
  * renders nothing at all (header included) when there is no activity.
+ * `currentEntries`: list entries the caller has loaded (newest data).
  */
-export default function ActivityFeed({ username, isPrivate, isOwner = false, compact = false, header = null }) {
+export default function ActivityFeed({ username, isPrivate, isOwner = false, compact = false, header = null, currentEntries = null }) {
+    const queryClient = useQueryClient();
     const [filterType, setFilterType] = useState('all');
     const pageSize = compact ? COMPACT_FETCH : PAGE_SIZE;
 
@@ -253,10 +273,13 @@ export default function ActivityFeed({ username, isPrivate, isOwner = false, com
     });
 
     const rawCount = data?.pages?.reduce((total, page) => total + (page?.results?.length || 0), 0) || 0;
-    const activities = useMemo(
-        () => tidyActivities(data?.pages?.flatMap(page => page?.results || []) || [], { isOwner }),
-        [data, isOwner]
-    );
+    const activities = useMemo(() => {
+        const currentStatus = statusesFromEntries([
+            ...cachedListEntries(queryClient, username),
+            ...(currentEntries || []),
+        ]);
+        return tidyActivities(data?.pages?.flatMap(page => page?.results || []) || [], { isOwner, currentStatus });
+    }, [currentEntries, data, isOwner, queryClient, username]);
     const pagesLoaded = data?.pages?.length || 0;
 
     // Most of what loaded was churn: look further back before showing a short

@@ -126,11 +126,19 @@ export function formatTimeZoneLabel(value) {
         .join(' / ');
 }
 
+/**
+ * Every displayed date reads day before month ("Sun 22 Nov", "2 Oct 2026",
+ * "22 Nov 2026, 15:43"), and times are 24-hour, so all formatters share one
+ * day-month locale. Parsing helpers (getWeekdayIndex, getZonedCalendarToday)
+ * keep their own fixed locales.
+ */
+const DISPLAY_LOCALE = 'en-GB';
+
 export function formatDateTime(value, options = {}, preference) {
     const date = parseDate(value);
     if (!date) return '';
 
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(DISPLAY_LOCALE, {
         timeZone: resolveTimeZone(preference),
         ...options,
     }).format(date);
@@ -140,7 +148,7 @@ export function formatDate(value, options = {}, preference) {
     const date = parseDate(value);
     if (!date) return '';
 
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(DISPLAY_LOCALE, {
         timeZone: resolveTimeZone(preference),
         ...options,
     }).format(date);
@@ -177,7 +185,23 @@ export function getZonedCalendarToday(preference, now = new Date()) {
 
 /** Formats a calendar date produced by getZonedCalendarToday (UTC-anchored). */
 export function formatCalendarDate(date, options = {}) {
-    return new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'UTC' }).format(date);
+    return new Intl.DateTimeFormat(DISPLAY_LOCALE, { ...options, timeZone: 'UTC' }).format(date);
+}
+
+/**
+ * A span of calendar dates (UTC-anchored, as from getZonedCalendarToday),
+ * day before month, sharing what the ends share: "21–27 Nov",
+ * "28 Nov – 4 Dec", "28 Dec 2026 – 3 Jan 2027".
+ */
+export function formatCalendarRange(start, end) {
+    const dayMonth = { day: 'numeric', month: 'short' };
+    const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
+    if (sameYear && start.getUTCMonth() === end.getUTCMonth()) {
+        const tail = formatCalendarDate(end, dayMonth);
+        return start.getUTCDate() === end.getUTCDate() ? tail : `${start.getUTCDate()}–${tail}`;
+    }
+    const options = sameYear ? dayMonth : { ...dayMonth, year: 'numeric' };
+    return `${formatCalendarDate(start, options)} – ${formatCalendarDate(end, options)}`;
 }
 
 export function getCurrentWeekdayIndex(preference) {
@@ -297,7 +321,7 @@ export function formatRelativeTime(date, preference) {
 
 /**
  * A full airing time in the selected timezone, 24-hour, no zone name:
- * "Tue, Nov 24 · 17:43". Empty for no date.
+ * "Tue 24 Nov · 17:43". Empty for no date.
  */
 export function formatAiringTime(date, preference) {
     const day = formatDateTime(date, { weekday: 'short', month: 'short', day: 'numeric' }, preference);

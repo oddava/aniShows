@@ -17,13 +17,13 @@ describe('NextEpisodePanel', () => {
     it('shows the next airing in 24-hour time without a zone name', () => {
         render(<NextEpisodePanel anime={{ status: 'Airing', next_airing_episode: 4, next_airing_date: '2026-11-24T17:43:00Z' }} />);
         expect(screen.getByText('Next episode')).toBeInTheDocument();
-        expect(screen.getByText('Tue, Nov 24 · 17:43')).toBeInTheDocument();
+        expect(screen.getByText('Tue 24 Nov · 17:43')).toBeInTheDocument();
         expect(screen.queryByText(/GMT|PM|AM/)).not.toBeInTheDocument();
     });
 
     it('says the episode is out once its time has passed', () => {
         render(<NextEpisodePanel anime={{ status: 'Airing', next_airing_episode: 9, next_airing_date: '2026-11-21T10:04:00Z' }} />);
         expect(screen.getByText('Episode 9 is out')).toBeInTheDocument();
-        expect(screen.getByText('Aired Sat, Nov 21 · 10:04')).toBeInTheDocument();
+        expect(screen.getByText('Aired Sat 21 Nov · 10:04')).toBeInTheDocument();
     });
 });

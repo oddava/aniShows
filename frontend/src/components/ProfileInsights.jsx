@@ -3,7 +3,7 @@ import { Cell, BarChart, Bar, LabelList, XAxis, YAxis, Tooltip, ResponsiveContai
 import { Link } from 'react-router-dom';
 import { getProfileAccentTheme, normalizeProfilePrimaryColor } from '../utils/profileAccent';
 import { LIST_STATUSES } from '../utils/listStatus';
-import { profileScore, scoreLine } from './profile/profileStats';
+import { profileScore, scoredShareLine } from './profile/profileStats';
 import { listQueries } from '../api/queries/lists';
 
 function toRgba(hex, alpha) {
@@ -132,7 +132,8 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
     // Same source as the header's line: the summary's own rated_count.
     const score = profileScore(null, summary);
     const ratedCount = score.rated;
-    const scoreNote = scoreLine(score);
+    // The header already says the average; here, how much of the list it covers.
+    const scoreNote = scoredShareLine(ratedCount, totalAnime);
 
     const statusCounts = LIST_STATUSES
         .map((status) => ({ ...status, count: Number(summary?.counts?.[status.value]) || 0 }))
@@ -183,7 +184,7 @@ export default function ProfileInsights({ username, isPrivate, accentColor }) {
                     )}
 
                     {ratedCount > 0 && (
-                        <Section title="Scores" note={scoreNote && `${scoreNote.charAt(0).toUpperCase()}${scoreNote.slice(1)}`}>
+                        <Section title="Scores" note={scoreNote}>
                             <div className="h-56">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={scoreData} margin={{ top: 24, right: 0, left: 0, bottom: 0 }}>

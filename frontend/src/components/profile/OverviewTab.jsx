@@ -251,6 +251,7 @@ export default function OverviewTab({
             isPrivate={isPrivate}
             isOwner={isOwnProfile}
             compact
+            currentEntries={watching}
             header={(
                 <>
                     <SectionHead
@@ -259,8 +260,9 @@ export default function OverviewTab({
                         seeAllLabel="See all activity"
                     />
                     {hasHeatmap && (
-                        // As wide as the year, so the legend sits under the grid's edge.
-                        <div className="mb-6 w-fit max-w-full">
+                        // The year spans the panel (its columns share the width);
+                        // a sparse year is one sentence, no grid.
+                        <div className="mb-6">
                             <ActivityHeatmap activityData={heatmapData} accentColor={displayUser?.profile_primary_color} />
                         </div>
                     )}

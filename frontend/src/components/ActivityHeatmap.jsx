@@ -21,10 +21,17 @@ function toRgba(hex, alpha) {
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
-// One week column is 14 px wide with a 4 px gap; the scroller fades its
-// edges over 28 px (.scroll-fade in index.css).
-const WEEK_STRIDE_PX = 18;
+// Week columns share the width (at least 14 px each, 4 px apart), so the
+// year spans the panel; narrower than that it scrolls. The scroller fades
+// its edges over 28 px (.scroll-fade in index.css).
+const WEEKS = 52;
+const WEEK_COLUMNS = { gridTemplateColumns: `repeat(${WEEKS}, minmax(14px, 1fr))` };
 const EDGE_FADE_PX = 28;
+// Fewer active days than this and the year is a field of empty squares:
+// the sentence says it all.
+export const MIN_ACTIVE_DAYS_FOR_GRID = 14;
+
+const DAY_LABEL = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
 
 // Tooltip Portal component
 function TooltipPortal({ children }) {
@@ -70,7 +77,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
         const result = [];
 
         // Create 52 weeks of data in chronological order (oldest -> newest)
-        for (let week = 51; week >= 0; week--) {
+        for (let week = WEEKS - 1; week >= 0; week--) {
             const weekData = [];
             for (let day = 0; day < 7; day++) {
                 const date = new Date(today);
@@ -83,11 +90,6 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
                 weekData.push({
                     date: dateStr,
                     count: activity?.count || 0,
-                    displayDate: date.toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                    })
                 });
             }
             result.push(weekData);
@@ -95,27 +97,6 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
 
         return result;
     }, [activityData]);
-
-    // Keep the newest weeks visible by default when horizontal overflow exists.
-    useEffect(() => {
-        const el = scrollRef.current;
-        if (!el) return undefined;
-        const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
-        el.scrollLeft = maxScrollLeft;
-
-        const updateFirstVisible = () => {
-            const hidden = el.scrollLeft > 1 ? el.scrollLeft + EDGE_FADE_PX : 0;
-            setFirstVisibleWeek(hidden > 0 ? Math.ceil(hidden / WEEK_STRIDE_PX) : 0);
-        };
-        updateFirstVisible();
-        el.addEventListener('scroll', updateFirstVisible, { passive: true });
-        const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateFirstVisible) : null;
-        resizeObserver?.observe(el);
-        return () => {
-            el.removeEventListener('scroll', updateFirstVisible);
-            resizeObserver?.disconnect();
-        };
-    }, [weeks]);
 
     // Calculate stats
     const stats = useMemo(() => {
@@ -156,6 +137,29 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
 
         return { totalActivity, activeDays, currentStreak };
     }, [activityData]);
+    const showGrid = stats.activeDays >= MIN_ACTIVE_DAYS_FOR_GRID;
+
+    // Keep the newest weeks visible by default when horizontal overflow exists.
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (!el) return undefined;
+        const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+        el.scrollLeft = maxScrollLeft;
+
+        const updateFirstVisible = () => {
+            const stride = el.scrollWidth / WEEKS;
+            const hidden = el.scrollLeft > 1 ? el.scrollLeft + EDGE_FADE_PX : 0;
+            setFirstVisibleWeek(hidden > 0 && stride > 0 ? Math.ceil(hidden / stride) : 0);
+        };
+        updateFirstVisible();
+        el.addEventListener('scroll', updateFirstVisible, { passive: true });
+        const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateFirstVisible) : null;
+        resizeObserver?.observe(el);
+        return () => {
+            el.removeEventListener('scroll', updateFirstVisible);
+            resizeObserver?.disconnect();
+        };
+    }, [weeks, showGrid]);
 
     // Get color intensity based on count - using inline styles for better theme support
     const getColorStyle = (count) => {
@@ -197,25 +201,31 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
 
     if (hideWhenEmpty && stats.totalActivity === 0) return null;
 
+    const episodes = `${stats.totalActivity.toLocaleString()} ${stats.totalActivity === 1 ? 'episode' : 'episodes'}`;
+    const days = `${stats.activeDays} ${stats.activeDays === 1 ? 'day' : 'days'}`;
+
     return (
         <div className="relative w-full max-w-full">
-            <p className="mb-4 text-[15px] text-[var(--text-2)] tabular">
+            <p className={`${showGrid ? 'mb-4' : ''} text-[15px] text-[var(--text-2)] tabular`}>
                 {stats.totalActivity > 0 ? (
                     <>
-                        <span title="Episodes logged here in the last 12 months. Imports and shows marked completed in one go are not day-by-day activity.">
-                            {stats.totalActivity.toLocaleString()} {stats.totalActivity === 1 ? 'episode' : 'episodes'} logged this year
+                        {/* Day-by-day logging, not the lifetime "episodes watched" in the header. */}
+                        <span title="Episodes ticked off here, day by day, in the last 12 months. Imports and shows marked completed in one go are not counted.">
+                            Last 12 months: {episodes} logged on {days}
                         </span>
                         {stats.currentStreak > 0 && (
                             <> · {stats.currentStreak}-day streak</>
                         )}
                     </>
-                ) : 'Nothing logged this year yet.'}
+                ) : 'Nothing logged in the last 12 months.'}
             </p>
 
+            {showGrid && (
+            <>
             <div ref={setScrollEl} className="scroll-fade overflow-x-auto scrollbar-hide">
-                <div className="inline-block min-w-max py-1">
+                <div className="min-w-max py-1 sm:min-w-0">
                     {/* Month labels */}
-                    <div className="mb-1 flex h-5 gap-[4px] text-xs text-[var(--text-2)]">
+                    <div className="mb-1 grid h-5 gap-[4px] text-xs text-[var(--text-2)]" style={WEEK_COLUMNS}>
                         {weeks.map((week, i) => {
                             const firstDay = new Date(week[0].date);
                             // A label needs about two columns; one that starts
@@ -224,7 +234,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
                             const alignRight = i >= weeks.length - 2;
 
                             return (
-                                <div key={week[0].date} className="relative w-[14px]">
+                                <div key={week[0].date} className="relative">
                                     {isNewMonth && (
                                         <span className={`absolute top-0 whitespace-nowrap ${alignRight ? 'right-0 text-right' : 'left-0'}`}>
                                             {months[firstDay.getMonth()]}
@@ -236,7 +246,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
                     </div>
 
                     {/* Cells Grid */}
-                    <div className="flex gap-[4px]">
+                    <div className="grid gap-[4px]" style={WEEK_COLUMNS}>
                         {weeks.map((week, weekIndex) => (
                             <div key={weekIndex} className="flex flex-col gap-[4px]">
                                 {week.map((day) => (
@@ -253,7 +263,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
                                         onMouseLeave={() => {
                                             setHoveredDay(null);
                                         }}
-                                        className="h-[14px] w-[14px] cursor-pointer rounded-[3px] transition-colors duration-150"
+                                        className="aspect-square w-full cursor-pointer rounded-[3px] transition-colors duration-150"
                                         style={hoveredDay?.date === day.date ? getHoverStyle(day.count) : getColorStyle(day.count)}
                                     />
                                 ))}
@@ -273,6 +283,8 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
                 </div>
                 <span>More</span>
             </div>
+            </>
+            )}
 
             {/* Custom AniList-style Tooltip - Portal to body to avoid overflow clipping */}
             <TooltipPortal>
@@ -290,14 +302,9 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
                 >
                     {/* Inner wrapper to keep content during fade out */}
                     {persistedDay && (
-                        <div className="min-w-[150px] rounded-[var(--radius-md)] border border-white/[0.08] bg-[var(--ink-3)] px-3.5 py-2.5 shadow-lg shadow-black/30">
+                        <div className="min-w-[150px] rounded-[var(--radius-md)] bg-[var(--ink-3)] px-3.5 py-2.5 shadow-lg shadow-black/30">
                             <p className="mb-1 whitespace-nowrap text-[13px] font-medium text-[var(--text-1)]">
-                                {new Date(persistedDay.date).toLocaleDateString('en-US', {
-                                    weekday: 'long',
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                })}
+                                {new Date(`${persistedDay.date}T12:00:00Z`).toLocaleDateString('en-GB', { ...DAY_LABEL, timeZone: 'UTC' })}
                             </p>
                             <div className="flex items-center gap-2.5">
                                 <div 
