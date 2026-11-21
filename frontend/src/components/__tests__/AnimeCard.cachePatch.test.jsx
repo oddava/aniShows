@@ -14,9 +14,6 @@ vi.mock('../../context/AuthContext', () => ({
     useAuth: () => ({ isAuthenticated: true, user: { id: 7, username: 'kiyo' } }),
 }));
 
-vi.mock('../../hooks/useAnimeAccentColor', () => ({
-    default: () => null,
-}));
 
 const anime = {
     id: 1,
@@ -49,15 +46,16 @@ function renderCard(card = anime) {
 describe('AnimeCard patches cached anime instead of refetching them (B20)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        listApi.add.mockResolvedValue({ data: { id: 42 } });
+        // The API answers with the saved entry.
+        listApi.add.mockResolvedValue({ data: { id: 42, status: 'Watching', episodes_watched: 0 } });
         listApi.remove.mockResolvedValue({ data: {} });
     });
 
     it('adding to the list updates the grid and Schedule in place', async () => {
         const { client, invalidatedKeys } = renderCard();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Add Overgeared to list' }));
-        fireEvent.click(screen.getByRole('button', { name: /Watching/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add Overgeared to your list' }));
+        fireEvent.click(screen.getByRole('menuitemradio', { name: /Watching/ }));
 
         await waitFor(() => expect(listApi.add).toHaveBeenCalledWith({ anime_id: 1, status: 'Watching' }));
         await waitFor(() => {
@@ -86,13 +84,13 @@ describe('AnimeCard patches cached anime instead of refetching them (B20)', () =
         });
         const { client } = renderCard(listed);
 
-        fireEvent.click(screen.getByRole('button', { name: /^List status: Watching/ }));
-        fireEvent.click(screen.getByRole('button', { name: /^Completed/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Watching\. Change list status/ }));
+        fireEvent.click(screen.getByRole('menuitemradio', { name: /^Completed/ }));
 
         await waitFor(() => expect(listApi.update).toHaveBeenCalledWith(42, { status: 'Completed' }));
         await waitFor(() => {
             const card = client.getQueryData(GRID_KEY).pages[0].results[0];
-            expect(card.user_list_status).toEqual({
+            expect(card.user_list_status).toMatchObject({
                 id: 42, status: 'Completed', episodes_watched: 12, progress: 100, finished_at: '2026-11-16',
             });
         });

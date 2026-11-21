@@ -18,7 +18,7 @@ import { forumQueries } from '../../api/queries/forums';
 
 const CategorySelector = memo(({ allCategories, selectedCategoryId, onChange }) => (
     <div className="px-5 py-4">
-        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-3">Category</label>
+        <label className="text-[11px] font-bold text-gray-500 block mb-3">Category</label>
         <CustomSelect
             value={selectedCategoryId ? String(selectedCategoryId) : ''}
             onChange={(nextValue) => onChange(parseInt(nextValue, 10) || null)}
@@ -115,7 +115,7 @@ const CreateThread = () => {
     return (
         <div className="min-h-screen">
             <Helmet>
-                <title>Create Thread | aniShows Forums</title>
+                <title>Create Thread | AniShows Forums</title>
             </Helmet>
 
             <div className="max-w-[1440px] w-full mx-auto px-4 md:px-8 py-8">
@@ -143,7 +143,7 @@ const CreateThread = () => {
                             {/* Title Input */}
                             <div className="rounded-2xl bg-dark-100 border border-white/[0.06] overflow-hidden relative">
                                 <div className="flex items-center justify-between px-5 pt-4 pb-1">
-                                    <label htmlFor="thread-title" className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">
+                                    <label htmlFor="thread-title" className="text-[11px] font-bold text-gray-500 ">
                                         Thread Title
                                     </label>
                                     <span className={`text-[11px] font-semibold tabular-nums transition-colors ${title.length > 90 ? 'text-orange-400' : 'text-gray-600'}`}>
@@ -168,7 +168,7 @@ const CreateThread = () => {
                             {/* Rich Text Editor */}
                             <div className="rounded-2xl bg-dark-100 border border-white/[0.06] overflow-hidden">
                                 <div className="px-5 pt-4 pb-2">
-                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Body</span>
+                                    <span className="text-[11px] font-bold text-gray-500 ">Body</span>
                                 </div>
                                 <div className="px-2 pb-3">
                                     <RichTextEditor
@@ -181,7 +181,7 @@ const CreateThread = () => {
                             </div>
 
                             {/* Category + Tags */}
-                            <div className="rounded-2xl bg-dark-100 border border-white/[0.06] divide-y divide-white/[0.04]">
+                            <div className="rounded-2xl bg-dark-100 border border-white/[0.06] ">
                                 {/* Category */}
                                 {!slug && (
                                     <CategorySelector
@@ -194,7 +194,7 @@ const CreateThread = () => {
                                 {/* Tags */}
                                 {tagsData?.results?.length > 0 && (
                                     <div className="px-5 py-4">
-                                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1.5 mb-3">
+                                        <label className="text-[11px] font-bold text-gray-500 flex items-center gap-1.5 mb-3">
                                             <Hash size={12} /> Tags <span className="text-gray-700 font-normal normal-case tracking-normal">(optional)</span>
                                         </label>
                                         <div className="flex flex-wrap gap-2">
@@ -244,9 +244,9 @@ const CreateThread = () => {
                         <div className="hidden lg:block lg:w-[40%]">
                             <div className="rounded-2xl bg-dark-100 border border-white/[0.06] overflow-hidden">
                                 {/* Preview header */}
-                                <div className="flex items-center gap-2 px-5 py-3.5 border-b border-white/[0.04]">
+                                <div className="flex items-center gap-2 px-5 py-3.5 ">
                                     <Eye size={13} className="text-gray-500" />
-                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Preview</span>
+                                    <span className="text-[11px] font-bold text-gray-500 ">Preview</span>
                                 </div>
 
                                 {/* Preview body */}
@@ -263,7 +263,7 @@ const CreateThread = () => {
                                             )}
                                             {activeCategory && (
                                                 <div className="flex items-center gap-2 mb-5">
-                                                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider px-2.5 py-1 rounded-full bg-white/5">
+                                                    <span className="text-[11px] font-bold text-gray-500 px-2.5 py-1 rounded-full bg-white/5">
                                                         {activeCategory.name}
                                                     </span>
                                                     {selectedTags.map(tid => {

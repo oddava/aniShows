@@ -87,7 +87,7 @@ function FullPageErrorFallback({ error, onRetry }) {
                         className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-accent-dark text-white rounded-xl font-medium hover:bg-accent-dark/85 transition-colors"
                     >
                         <RefreshCw className="w-4 h-4" />
-                        Try Again
+                        Try again
                     </button>
                     <Link
                         to="/"

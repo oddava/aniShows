@@ -76,6 +76,31 @@ def get_materialized_user_stats_payload(
     )
 
 
+def list_stat_expressions() -> dict:
+    """The list aggregates every stat is built from (P1: one rule for every view).
+
+    Mean score: the mean of entries with a score (1-10), whatever their status.
+    Minutes: episodes watched x episode length (24 when unknown).
+    """
+    episode_minutes = Coalesce(
+        NullIf(F("anime__duration_minutes"), 0), Value(DEFAULT_EPISODE_MINUTES)
+    )
+    return {
+        "anime_count": Count("id"),
+        "episodes": Coalesce(Sum("episodes_watched"), 0),
+        "mean": Avg("score", filter=Q(score__gt=0)),
+        "rated": Count("id", filter=Q(score__gt=0)),
+        "minutes": Coalesce(
+            Sum(
+                ExpressionWrapper(
+                    F("episodes_watched") * episode_minutes, output_field=IntegerField()
+                )
+            ),
+            0,
+        ),
+    }
+
+
 def _counts_by(queryset, field: str) -> dict[int, int]:
     return {row[field]: row["total"] for row in queryset.values(field).annotate(total=Count("id"))}
 
@@ -94,25 +119,16 @@ def compute_user_stats(user_ids: Iterable[int]) -> dict[int, dict]:
         ReviewVote.objects.filter(review__user_id__in=ids, vote_type=ReviewVote.VoteType.HELPFUL),
         "review__user_id",
     )
-    episode_minutes = Coalesce(
-        NullIf(F("anime__duration_minutes"), 0), Value(DEFAULT_EPISODE_MINUTES)
-    )
+    shared = list_stat_expressions()
     lists = {
         row["user_id"]: row
         for row in UserAnimeList.objects.filter(user_id__in=ids)
         .values("user_id")
         .annotate(
-            anime_count=Count("id"),
-            episodes=Coalesce(Sum("episodes_watched"), 0),
-            mean=Avg("score", filter=Q(score__gt=0)),
-            minutes=Coalesce(
-                Sum(
-                    ExpressionWrapper(
-                        F("episodes_watched") * episode_minutes, output_field=IntegerField()
-                    )
-                ),
-                0,
-            ),
+            anime_count=shared["anime_count"],
+            episodes=shared["episodes"],
+            mean=shared["mean"],
+            minutes=shared["minutes"],
         )
     }
 

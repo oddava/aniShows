@@ -57,7 +57,7 @@ BUDGETS = {
     "schedule": 4,
     # +1 for G3's cached site_status_counts aggregate (site_status_distribution, D-3).
     "detail": 9,
-    "public_profile": 4,
+    "public_profile": 5,  # +1: live list totals, one stats calculation (UX P1)
     "detail_authenticated": 12,
     "search_signed_in": 8,
     "trending_signed_in": 7,
@@ -180,7 +180,7 @@ EXTRA_BUDGETS = {
     "character_detail_signed_in": 5,
     "staff_detail": 5,
     "staff_detail_signed_in": 6,
-    "user_recommendations": 5,
+    "user_recommendations": 6,  # +1: served titles checked against the list (UX L2)
     "genres": 2,
     "studios": 2,
 }
@@ -208,6 +208,11 @@ def _seed_extra_rows(count: int, *, start: int = 1):
         UserRecommendation.objects.create(
             user=viewer, anime=anime, score=50 + anime.pk % 40, reason="genre_match"
         )
+    # Recommendations never include listed shows (UX L2), so the recommended rows
+    # are taken off the viewer's list; the counts do not depend on row numbers.
+    from apps.users.models import UserAnimeList
+
+    UserAnimeList.objects.filter(user=viewer, anime__in=anime_list).delete()
     return viewer
 
 
@@ -260,7 +265,7 @@ WARM_BUDGETS = {
     "schedule_signed_in": 3,
     "character_detail_signed_in": 2,
     "staff_detail_signed_in": 2,
-    "user_recommendations": 1,
+    "user_recommendations": 2,  # +1: served titles checked against the list (UX L2)
 }
 
 

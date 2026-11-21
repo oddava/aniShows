@@ -2,7 +2,9 @@
 
 Query counts measured here, whole request with force_authenticate (a JWT request adds
 one user lookup). Every request also runs the admin-settings read (uncached in tests),
-and the first one the throttled ``last_activity`` UPDATE: "+2" below.
+and the first one the throttled ``last_activity`` UPDATE: "+2" below. Every GET also
+checks the served titles against the list (L2: never recommend a listed show): "+1"
+on top of the counts below.
 - GET with rows, cold: 4 + 2 = 6 (adult setting, rows + anime, genres, studios);
   warm: 1 + 1 = 2 (the adult setting the cached payload is checked against).
 - GET with stale rows, cold: 6, plus the debounced enqueue (no query).
@@ -135,6 +137,29 @@ class RecommendationsRefreshTests(RecommendationsViewTestBase):
 
 
 class RecommendationsReadTests(RecommendationsViewTestBase):
+    def test_a_show_added_to_the_list_is_no_longer_recommended(self):
+        """L2: Frieren (Completed) and ONE PIECE (Watching) were still "for you"."""
+        from ...users.models import UserAnimeList
+
+        frieren = self._anime("Frieren", genres=[self.genre_fantasy])
+        other = self._anime("Other Pick", genres=[self.genre_action])
+        self._row(frieren, score=90)
+        keep = self._row(other, score=80)
+
+        first, _ = self._get()
+        self.assertEqual(len(first.json()), 2)
+
+        # Listed after the rows were generated and the payload cached.
+        UserAnimeList.objects.create(user=self.user, anime=frieren, status="Completed")
+        self._login()
+        cached, _ = self._get()
+        cache.delete(recommendations_cache_key(self.user.id))
+        self._login()
+        cold, _ = self._get()
+
+        for response in (cached, cold):
+            self.assertEqual([item["id"] for item in response.json()], [keep.id])
+
     def test_fresh_rows_are_served_and_cached_without_enqueueing(self):
         anime = self._anime("Fresh Pick", genres=[self.genre_action])
         rec = self._row(anime)
@@ -145,8 +170,8 @@ class RecommendationsReadTests(RecommendationsViewTestBase):
 
         self.assertEqual([item["id"] for item in response.json()], [rec.id])
         self.assertEqual(cached.json(), response.json())
-        self.assertLessEqual(cold, 6)
-        self.assertEqual(warm, 2)
+        self.assertLessEqual(cold, 7)
+        self.assertEqual(warm, 3)
         self.enqueue.assert_not_called()
 
     def test_stale_rows_are_served_and_one_refresh_is_queued(self):
@@ -160,7 +185,7 @@ class RecommendationsReadTests(RecommendationsViewTestBase):
             self._get()
 
         self.assertEqual([item["id"] for item in response.json()], [rec.id])
-        self.assertLessEqual(cold, 6)
+        self.assertLessEqual(cold, 7)
         generate.assert_not_called()
         # The second read is debounced by reco_pending:{id}.
         self.enqueue.assert_called_once()
@@ -186,8 +211,8 @@ class RecommendationsReadTests(RecommendationsViewTestBase):
             self.assertEqual(item["reason_text"], "Trending now")
             self.assertEqual(item["reason_metadata"], {})
             self.assertNotIn("Because you liked", item["reason_text"])
-        self.assertLessEqual(cold, 8)
-        self.assertEqual(warm, 2)
+        self.assertLessEqual(cold, 9)
+        self.assertEqual(warm, 3)
         generate.assert_not_called()
         self.enqueue.assert_called_once()
 
@@ -200,7 +225,7 @@ class RecommendationsReadTests(RecommendationsViewTestBase):
         _, second_user_cold = self._get()
 
         self.assertIsNotNone(cache.get(fallback_cache_key(False)))
-        self.assertLessEqual(second_user_cold, 5)
+        self.assertLessEqual(second_user_cold, 6)
 
     def test_empty_result_is_cached_for_ten_minutes(self):
         with patch.object(cache, "set", wraps=cache.set) as cache_set:

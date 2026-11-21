@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import SettingsSwitch from '../settings/SettingsSwitch';
 
 // Desktop grid: the label column plus one column per channel. Literal class
 // strings so Tailwind sees them.
@@ -8,28 +9,6 @@ const GRID_COLUMNS = {
     3: 'sm:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_5.5rem]',
     4: 'sm:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_5.5rem_5.5rem]',
 };
-
-/** The Settings switch (same markup and classes as the rest of the tab). */
-function PreferenceSwitch({ checked, label, disabled, describedBy, onToggle }) {
-    return (
-        <button
-            type="button"
-            role="switch"
-            aria-checked={checked}
-            aria-label={label}
-            aria-describedby={describedBy}
-            onClick={onToggle}
-            disabled={disabled}
-            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border p-1 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-100
-            ${checked ? 'border-accent bg-accent-dark' : 'border-gray-700 bg-dark-50'}
-            ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-        >
-            <span
-                className={`h-5 w-5 rounded-full bg-white transition-transform duration-200 ${checked ? 'translate-x-5' : 'translate-x-0'}`}
-            />
-        </button>
-    );
-}
 
 /**
  * The preferences matrix: one row per category and one column per channel,
@@ -64,17 +43,17 @@ export default function NotificationPreferenceMatrix({
     const hasPushColumn = channels.some((channel) => channel.key === 'push');
 
     return (
-        <div className="rounded-2xl border border-gray-800 bg-dark-100 p-5 sm:p-6">
-            <h2 className="text-lg font-semibold text-gray-100 sm:text-xl">Notifications</h2>
-            <p className="mt-1 text-sm text-gray-400">Choose where each kind of notification reaches you.</p>
+        <section className="panel">
+            <h2 className="section-title">What reaches you</h2>
+            <p className="mt-1 text-sm text-[var(--text-2)]">Choose where each kind of notification reaches you.</p>
 
             {isLoading ? (
                 <div className="flex items-center justify-center py-8">
-                    <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                    <div className="w-8 h-8 border-2 border-[var(--signature)] border-t-transparent rounded-full animate-spin motion-reduce:animate-none" />
                 </div>
             ) : loadError || !schema ? (
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-gray-400">Your notification settings couldn’t be loaded.</p>
+                    <p className="text-sm text-[var(--text-2)]">Your notification settings couldn’t be loaded.</p>
                     {onRetry && (
                         <button type="button" onClick={() => onRetry()} className="btn-secondary text-sm shrink-0">
                             Retry
@@ -84,10 +63,10 @@ export default function NotificationPreferenceMatrix({
             ) : (
                 <>
                     {hasPushColumn && !push.ready && (
-                        <p id={pushHintId} className="mt-2 text-sm text-gray-400">Enable push on this device first</p>
+                        <p id={pushHintId} className="mt-2 text-sm text-[var(--text-2)]">Enable push on this device first</p>
                     )}
                     {!push.available && (
-                        <p className="mt-2 text-sm text-gray-400">Push isn’t available right now, so it isn’t listed.</p>
+                        <p className="mt-2 text-sm text-[var(--text-2)]">Push isn’t available right now, so it isn’t listed.</p>
                     )}
                     <span id={lockedHintId} className="sr-only">Always on</span>
                     <span id={inAppHintId} className="sr-only">Turn on In-app first</span>
@@ -95,17 +74,17 @@ export default function NotificationPreferenceMatrix({
                     <div className="mt-5">
                         <div
                             aria-hidden="true"
-                            className={`hidden sm:grid ${gridColumns} gap-x-4 border-b border-gray-800/80 pb-2`}
+                            className={`hidden sm:grid ${gridColumns} gap-x-4 pb-2`}
                         >
                             <span />
                             {channels.map((channel) => (
-                                <span key={channel.key} className="text-center text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                <span key={channel.key} className="text-center text-sm font-medium text-[var(--text-2)]">
                                     {channel.label}
                                 </span>
                             ))}
                         </div>
 
-                        <div className="divide-y divide-gray-800/80">
+                        <div>
                             {categories.map((category) => {
                                 const labelId = `${baseId}-${category.key}`;
                                 return (
@@ -113,18 +92,18 @@ export default function NotificationPreferenceMatrix({
                                         key={category.key}
                                         role="group"
                                         aria-labelledby={labelId}
-                                        className={`py-4 sm:grid ${gridColumns} sm:items-center sm:gap-x-4`}
+                                        className={`py-3 sm:grid ${gridColumns} sm:items-center sm:gap-x-4`}
                                     >
                                         <div className="pr-2">
-                                            <p id={labelId} className="text-sm font-semibold leading-5 text-gray-100 sm:text-[15px]">
+                                            <p id={labelId} className="text-[15px] font-medium leading-5 text-[var(--text-1)]">
                                                 {category.label}
                                             </p>
                                             {category.description && (
-                                                <p className="mt-1 text-sm leading-relaxed text-gray-400">{category.description}</p>
+                                                <p className="mt-1 text-sm leading-relaxed text-[var(--text-2)]">{category.description}</p>
                                             )}
                                         </div>
 
-                                        <div className="mt-3 space-y-3 sm:contents">
+                                        <div className="mt-2 space-y-1 sm:contents">
                                             {channels.map((channel) => {
                                                 if (!category.channels?.includes(channel.key)) {
                                                     return <div key={channel.key} aria-hidden="true" className="hidden sm:block" />;
@@ -140,12 +119,12 @@ export default function NotificationPreferenceMatrix({
                                                 return (
                                                     <div
                                                         key={channel.key}
-                                                        className="flex items-center justify-between gap-4 sm:justify-center"
+                                                        className="flex min-h-11 items-center justify-between gap-4 sm:justify-center"
                                                     >
-                                                        <span aria-hidden="true" className="text-sm text-gray-300 sm:hidden">
+                                                        <span aria-hidden="true" className="text-sm text-[var(--text-2)] sm:hidden">
                                                             {channel.label}
                                                         </span>
-                                                        <PreferenceSwitch
+                                                        <SettingsSwitch
                                                             checked={checked}
                                                             label={`${channel.label} for ${category.label}`}
                                                             disabled={locked || pushBlocked || needsInApp || saving}
@@ -154,7 +133,7 @@ export default function NotificationPreferenceMatrix({
                                                                     : needsInApp ? inAppHintId
                                                                         : pushBlocked ? pushHintId : undefined
                                                             }
-                                                            onToggle={() => onToggle(category.key, channel.key)}
+                                                            onClick={() => onToggle(category.key, channel.key)}
                                                         />
                                                     </div>
                                                 );
@@ -170,10 +149,10 @@ export default function NotificationPreferenceMatrix({
 
             <p
                 role="status"
-                className={`mt-2 text-sm ${status === 'error' ? 'text-red-400' : 'text-gray-400'}`}
+                className={`mt-2 text-sm ${status === 'error' ? 'text-[var(--danger)]' : 'text-[var(--text-2)]'}`}
             >
                 {statusMessage}
             </p>
-        </div>
+        </section>
     );
 }

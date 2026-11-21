@@ -1,120 +1,105 @@
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
-import useAnimeAccentColor from '../../hooks/useAnimeAccentColor';
+import { useAuth } from '../../context/AuthContext';
+import useListEntryMutation from '../../hooks/useListEntryMutation';
 import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
+import { statusMeta } from '../../utils/listStatus';
+import { airedEpisodeCount, airingState } from '../../utils/episodes';
+import { formatDate } from '../../utils/dateUtils';
+import QuickAdd from '../ui/QuickAdd';
+import { ScoreBadge } from '../ui/Badge';
 
+/**
+ * Browse list view: the same facts and the same quick add as the grid card
+ * (B4), laid out as a row.
+ */
 function AnimeListRow({ anime, titleLanguage = 'en' }) {
-    const displayTitle = titleLanguage === 'jp' && anime.title_jp
-        ? anime.title_jp
-        : anime.title;
+    const { isAuthenticated } = useAuth();
+    const { entry, setStatus, setScore, remove, isPending } = useListEntryMutation({
+        anime: { id: anime.id, slug: anime.slug, episode_count: anime.episode_count, next_airing_episode: anime.next_airing_episode, next_airing_date: anime.next_airing_date },
+        entry: anime.user_list_status,
+    });
+    const displayTitle = titleLanguage === 'jp' && anime.title_jp ? anime.title_jp : anime.title;
     const imageUrl = getOptimizedImageUrl(anime, 'cover', 'small');
     const fallbackImageUrl = getImageFallbackUrl(anime, 'cover');
-    const accentColor = useAnimeAccentColor(
-        imageUrl,
-        getOptimizedImageUrl(anime, 'cover', 'large'),
-        anime.cover_image,
-        anime.cover_image_external_url,
-        getOptimizedImageUrl(anime, 'banner', 'medium')
-    );
-
-    const getStatusStyle = (status) => {
-        if (status === 'Airing') {
-            return 'bg-green-500/20 text-green-400 border border-green-500/30';
-        }
-        if (status === 'Upcoming') {
-            return 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
-        }
-        return 'bg-gray-500/20 text-gray-400 border border-gray-500/30';
-    };
+    const meta = statusMeta(entry.status);
+    const year = anime.start_date || anime.release_date ? new Date(anime.start_date || anime.release_date).getFullYear() : null;
+    const href = `/anime/${anime.slug}`;
+    // Desktop: when the next episode airs, in the row's open middle.
+    const airing = airingState(anime);
+    const airingNote = airing.nextAt
+        ? `Ep ${airing.nextEpisode} · ${formatDate(airing.nextAt, { weekday: 'short' })} ${formatDate(airing.nextAt, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`
+        : airing.justAired ? `Ep ${airing.aired} out`
+            : anime.status === 'Finished' ? 'Finished airing'
+                : anime.status === 'Upcoming' ? 'Not yet aired'
+                    : anime.status === 'Airing' ? 'Airing weekly' : null;
 
     return (
-        <Link
-            to={`/anime/${anime.slug}`}
-            className="relative flex gap-3 sm:gap-5 p-2.5 sm:p-4 bg-dark-100 hover:bg-dark-100/80 rounded-2xl border border-gray-800/60 hover:border-accent/40   transition-all duration-300 group overflow-hidden"
-            style={{ '--anime-title-hover-color': accentColor || 'var(--color-accent)' }}
-        >
-            {/* Hover Glow Effect */}
-            <div className="absolute -inset-1 bg-dark-50 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
-            {/* Left: Image Container */}
-            <div className="relative flex-shrink-0 z-10">
+        <div className="card-enter group relative flex items-center gap-3 sm:gap-5 rounded-[var(--radius-md)] p-2 transition-colors hover:bg-white/[0.03] active:bg-white/[0.05]">
+            <Link to={href} tabIndex={-1} aria-hidden="true" className="relative shrink-0">
                 <img
                     src={imageUrl}
-                    alt={anime.title}
+                    alt=""
                     loading="lazy"
-                    onError={(event) => applyImageFallback(event, fallbackImageUrl)}
-                    className="w-[85px] sm:w-[100px] h-[120px] sm:h-[140px] object-cover rounded-xl  ring-1 ring-white/5 group-hover:ring-accent/20 transition-all duration-300"
+                    ref={(node) => { if (node?.complete && node.naturalWidth) node.dataset.loaded = 'true'; }}
+                    onLoad={(event) => { event.currentTarget.dataset.loaded = 'true'; }}
+                    onError={(event) => { event.currentTarget.dataset.loaded = 'true'; applyImageFallback(event, fallbackImageUrl); }}
+                    className="img-fade h-[108px] w-[72px] sm:h-24 sm:w-16 rounded-[var(--radius-sm)] bg-[var(--ink-3)] object-cover"
                 />
+                {entry.score > 0 && <ScoreBadge score={entry.score} className="absolute left-1 top-1 !h-5 !px-1 text-[11px]" />}
+            </Link>
 
-                {/* Mobile Rating Badge */}
-                {anime.rating && (
-                    <div className="sm:hidden absolute top-1.5 right-1.5 flex items-center gap-1 bg-dark-200/90  px-1.5 py-0.5 rounded-lg border border-white/10 ">
-                        <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                        <span className="text-[11px] font-bold text-white">{anime.rating}</span>
-                    </div>
+            <div className="min-w-0 flex-1">
+                <Link to={href} className="flex items-start gap-2 rounded-sm">
+                    <h3 className="line-clamp-2 text-[15px] sm:text-base font-semibold leading-snug text-gray-100 group-hover:text-white">
+                        {displayTitle}
+                    </h3>
+                </Link>
+                {meta && <span className="sr-only">On your list: {meta.label}</span>}
+                <p className="mt-1 text-sm text-[var(--text-2)] tabular">
+                    {meta && <span className="sm:hidden" style={{ color: meta.color }}>{meta.label} · </span>}
+                    {[anime.anime_type, anime.episode_count > 0 ? `${anime.episode_count} eps` : null, year, anime.status]
+                        .filter(Boolean)
+                        .join(' · ')}
+                </p>
+                {anime.genres?.length > 0 && (
+                    <p className="mt-2 hidden truncate text-xs text-gray-500 xs:block">
+                        {anime.genres.slice(0, 3).map((genre) => genre.name).join(' · ')}
+                        {(anime.studio_name || anime.studios?.[0]?.name) && ` — ${anime.studio_name || anime.studios?.[0]?.name}`}
+                    </p>
                 )}
             </div>
 
-            {/* Middle: Content Area */}
-            <div className="flex-1 min-w-0 flex flex-col justify-center py-1 z-10">
-                <div className="flex items-start justify-between gap-3 mb-1.5">
-                    <h3 className="text-base sm:text-xl font-black text-white group-hover:text-[var(--anime-title-hover-color)] transition-colors line-clamp-1 sm:line-clamp-2 leading-tight tracking-tight">
-                        {displayTitle}
-                    </h3>
-                </div>
-
-                {/* Metadata Row */}
-                <div className="flex items-center gap-x-2 gap-y-1 text-[11px] sm:text-sm text-gray-400 mb-3 flex-wrap">
-                    <span className="text-accent font-bold uppercase tracking-wider">{anime.anime_type}</span>
-                    <span className="w-1 h-1 rounded-full bg-gray-700" />
-                    <span className="text-gray-300 font-medium">{anime.episode_count || '?'} eps</span>
-                    {(anime.start_date || anime.release_date) && (
-                        <>
-                            <span className="w-1 h-1 rounded-full bg-gray-700" />
-                            <span className="text-gray-300">
-                                {new Date(anime.start_date || anime.release_date).getFullYear()}
-                            </span>
-                        </>
-                    )}
-                    {anime.status && (
-                        <span className={`ml-1 text-[9px] sm:text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-tighter ${getStatusStyle(anime.status)}`}>
-                            {anime.status}
-                        </span>
-                    )}
-                </div>
-
-                {/* Tags & Studio */}
-                <div className="mt-auto flex items-end justify-between gap-4">
-                    <div className="flex flex-wrap gap-1.5">
-                        {anime.genres?.slice(0, 3).map((genre) => (
-                            <span
-                                key={genre.id}
-                                className="px-2 py-0.5 bg-dark-50/50 text-[10px] sm:text-xs text-gray-400 rounded-lg border border-gray-800 "
-                            >
-                                {genre.name}
-                            </span>
-                        ))}
-                        {(anime.studio_name || anime.studios?.[0]?.name) && (
-                            <span className="hidden xs:inline-flex px-2 py-0.5 bg-accent/5 text-[10px] sm:text-xs text-accent/80 font-semibold rounded-lg border border-accent/10">
-                                {anime.studio_name || anime.studios?.[0]?.name}
-                            </span>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Right: Score (Desktop) */}
-            {anime.rating && (
-                <div className="hidden sm:flex flex-col items-end justify-center min-w-[80px] pr-2 z-10">
-                    <div className="flex items-center gap-1.5 text-yellow-500 mb-0.5">
-                        <Star className="w-5 h-5 fill-current" />
-                        <span className="text-2xl font-black italic tracking-tighter">{anime.rating}</span>
-                    </div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] mr-1">Rating</span>
-                </div>
+            {airingNote && (
+                <div className="hidden w-40 shrink-0 text-right text-sm text-[var(--text-2)] tabular md:block">{airingNote}</div>
             )}
-        </Link>
+
+            {anime.rating ? (
+                <div className="hidden sm:flex w-16 shrink-0 items-center justify-end gap-1 text-sm font-semibold text-gray-200 tabular" title="Average rating">
+                    <Star aria-hidden="true" className="h-4 w-4 fill-[var(--status-on-hold)] text-[var(--status-on-hold)]" />
+                    <span className="sr-only">Average rating </span>{anime.rating}
+                </div>
+            ) : null}
+
+            {isAuthenticated && (
+                <QuickAdd
+                    status={entry.status}
+                    score={entry.score}
+                    watched={entry.episodes_watched || 0}
+                    total={Number(anime.episode_count) > 0 ? Number(anime.episode_count) : null}
+                    aired={airedEpisodeCount(anime)}
+                    title={displayTitle}
+                    pending={isPending}
+                    onSelect={(value) => setStatus(value)}
+                    onScore={(value) => setScore(value)}
+                    onRemove={() => remove()}
+                    className="relative flex shrink-0 justify-end self-center sm:min-w-[8.25rem]"
+                    labelFrom="sm"
+                    variant="chip"
+                />
+            )}
+        </div>
     );
 }
 
@@ -124,29 +109,18 @@ AnimeListRow.propTypes = {
         slug: PropTypes.string.isRequired,
         title: PropTypes.string.isRequired,
         title_jp: PropTypes.string,
-        cover_image: PropTypes.string,
-        cover_image_small: PropTypes.string,
-        cover_image_medium: PropTypes.string,
-        cover_image_large: PropTypes.string,
-        cover_image_external_url: PropTypes.string,
-        banner_image_medium: PropTypes.string,
-        banner_image_external_url: PropTypes.string,
         status: PropTypes.string,
         anime_type: PropTypes.string,
         episode_count: PropTypes.number,
         start_date: PropTypes.string,
         release_date: PropTypes.string,
         studio_name: PropTypes.string,
-        studios: PropTypes.arrayOf(PropTypes.shape({
-            name: PropTypes.string
-        })),
+        studios: PropTypes.arrayOf(PropTypes.shape({ name: PropTypes.string })),
         rating: PropTypes.number,
-        genres: PropTypes.arrayOf(PropTypes.shape({
-            id: PropTypes.number.isRequired,
-            name: PropTypes.string.isRequired
-        }))
+        genres: PropTypes.arrayOf(PropTypes.shape({ id: PropTypes.number, name: PropTypes.string })),
+        user_list_status: PropTypes.object,
     }).isRequired,
-    titleLanguage: PropTypes.oneOf(['en', 'jp'])
+    titleLanguage: PropTypes.oneOf(['en', 'jp']),
 };
 
 export default AnimeListRow;

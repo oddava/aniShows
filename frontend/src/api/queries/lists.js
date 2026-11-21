@@ -59,10 +59,10 @@ export const insightsKeys = {
 };
 
 export const userQueries = {
-    /** Home "continue watching": the six most recently updated Watching entries. */
+    /** Home "Continue": the twelve most recently updated Watching entries. */
     watching: () => queryOptions({
         queryKey: userKeys.watching,
-        queryFn: () => listApi.getAll({ status: 'Watching', page_size: 6 }).then(resultsOrData),
+        queryFn: () => listApi.getAll({ status: 'Watching', page_size: 12 }).then(resultsOrData),
     }),
 };
 

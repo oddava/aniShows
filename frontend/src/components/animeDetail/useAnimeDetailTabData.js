@@ -21,6 +21,7 @@ export default function useAnimeDetailTabData({ slug, user, anime, activeTab, qu
     const watchEpisodesQueryKey = useMemo(() => animeKeys.watchEpisodes(slug, WATCH_TAB_PAGE_SIZE), [slug]);
     const shouldLoadWatchPreview = activeTab === 'overview';
     const shouldLoadWatchTab = activeTab === 'watch';
+    const hasStaff = (anime?.staff_count || 0) > 0 || (anime?.staff_preview?.length || 0) > 0;
 
     const {
         data: charactersData,
@@ -42,7 +43,9 @@ export default function useAnimeDetailTabData({ slug, user, anime, activeTab, qu
         isLoading: staffLoading,
     } = useInfiniteQuery({
         ...animeQueries.staff(slug, DETAIL_RELATION_PAGE_SIZE),
-        enabled: !!anime && activeTab === 'staff',
+        // Overview shows the key crew picked from the first page (the inline
+        // preview is just the first few credits, usually producers).
+        enabled: !!anime && (activeTab === 'staff' || (activeTab === 'overview' && hasStaff)),
         staleTime: Infinity, // Staff lists rarely change
     });
 

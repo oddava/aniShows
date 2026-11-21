@@ -14,7 +14,6 @@ import {
     getImageSrcSet,
     getOptimizedImageUrl,
 } from '../utils/imageUtils';
-import useAnimeAccentColor from '../hooks/useAnimeAccentColor';
 import logger from '../utils/logger';
 import { animeKeys, animeQueries, patchAnimeListStatus } from '../api/queries/anime';
 import { favoriteKeys, listKeys, profileKeys, userKeys } from '../api/queries/user';
@@ -33,6 +32,10 @@ import ErrorState from '../components/common/ErrorState';
 import useScrollFade from '../hooks/useScrollFade';
 import InformationBox from '../components/InformationBox';
 
+// After this long on a loaded page, recommendations load even if their row
+// has not come near the viewport yet.
+const RECOMMENDATIONS_IDLE_MS = 1500;
+
 export default function AnimeDetail() {
     const { slug, '*': tabPath } = useParams();
     const navigate = useNavigate();
@@ -42,7 +45,6 @@ export default function AnimeDetail() {
     const isRetro = theme && theme.startsWith('retro-');
     const queryClient = useQueryClient();
     const [isFavorite, setIsFavorite] = useState(false);
-    const [editTriggerKey, setEditTriggerKey] = useState(0);
     const [isLargeViewport, setIsLargeViewport] = useState(() => (
         typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false
     ));
@@ -56,14 +58,23 @@ export default function AnimeDetail() {
     const animeDetailQueryKey = useMemo(() => animeKeys.detail(slug, user?.id), [slug, user?.id]);
 
     // Queries
-    const { data: anime, isLoading, isError, error, refetch } = useQuery({
+    const { data: anime, isPending, isError, error, refetch } = useQuery({
         ...animeQueries.detail(slug, user?.id),
         staleTime: 300000, // 5 minutes
         gcTime: 600000, // 10 minutes
     });
 
-    // Sidebar recommendations load once their column is about to show.
+    // Recommendations load once their row is about to show, or once the page
+    // has settled: on a phone the row sits far below the first screen, and a
+    // fast scroll (or a quick look) should still find it filled in.
     const [recommendationsRef, recommendationsNear] = useNearViewport({ resetKey: slug });
+    const [settledSlug, setSettledSlug] = useState(null);
+    const animeLoaded = Boolean(anime);
+    useEffect(() => {
+        if (!animeLoaded) return undefined;
+        const timer = setTimeout(() => setSettledSlug(slug), RECOMMENDATIONS_IDLE_MS);
+        return () => clearTimeout(timer);
+    }, [animeLoaded, slug]);
 
     // Tab data (characters, staff, episodes, ratings, recommendations) and reviews
     const tabData = useAnimeDetailTabData({
@@ -72,13 +83,14 @@ export default function AnimeDetail() {
         anime,
         activeTab,
         queryClient,
-        loadRecommendations: recommendationsNear,
+        loadRecommendations: recommendationsNear || settledSlug === slug,
     });
     const { watchEpisodesTotal, charactersTotal, staffTotal, recommendations } = tabData;
     const reviews = useAnimeReviews({ slug, anime, user, isAuthenticated, queryClient, animeDetailQueryKey });
 
     // Derived state
-    const accentColor = useAnimeAccentColor(anime?.cover_image, anime?.banner_image);
+    // V1: controls use fixed colours; cover art only colours the backdrop.
+    const accentColor = null;
 
     // Effects
     useEffect(() => {
@@ -104,9 +116,6 @@ export default function AnimeDetail() {
         }
     }, [isAuthenticated, anime?.id, user, queryClient]);
 
-    const handleOpenListEdit = useCallback(() => {
-        setEditTriggerKey((current) => current + 1);
-    }, []);
 
     useEffect(() => {
         if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -157,24 +166,25 @@ export default function AnimeDetail() {
         }
     }, [activeTabConfig, navigate, slug, tabPath]);
 
-    // Loading & Error states
-    if (isLoading) return <AnimeDetailSkeleton />;
+    // Loading & error states. "Not found" only ever follows a failed request
+    // (F1): until the first answer arrives the page is a skeleton.
+    if (isPending) return <AnimeDetailSkeleton />;
 
     // An 18+ title for a viewer who has not opted in (D-2): an opt-in gate, not a 404.
     if (isError && isAdultGateError(error)) return <AdultContentGate onEnabled={() => refetch()} />;
 
-    const isNotFound = !isError || error?.response?.status === 404;
+    const isNotFound = error?.response?.status === 404 || (!isError && !anime);
     if (isError || !anime) {
         return (
             <div className="min-h-[70vh] flex items-center justify-center px-4 pt-24">
                 <SEO page="notFound" noIndex />
                 {isNotFound ? (
                     <div className="ui-empty-state w-full max-w-lg">
-                        <h1 className="text-lg font-semibold text-white mb-2">Anime not found</h1>
-                        <p className="text-sm text-gray-400 mb-6">
+                        <h1 className="text-lg font-semibold text-[var(--text-1)] mb-2">Anime not found</h1>
+                        <p className="text-sm text-[var(--text-2)] mb-6">
                             This page may have moved, or the title isn’t in the catalog yet.
                         </p>
-                        <Link to="/browse" className="btn-primary text-sm">Browse Anime</Link>
+                        <Link to="/browse" className="btn-primary text-sm">Browse anime</Link>
                     </div>
                 ) : (
                     <ErrorState
@@ -183,7 +193,7 @@ export default function AnimeDetail() {
                         message="The server didn’t respond. Try again in a moment."
                         onRetry={() => refetch()}
                     >
-                        <Link to="/browse" className="btn-secondary text-sm">Browse Anime</Link>
+                        <Link to="/browse" className="btn-secondary text-sm">Browse anime</Link>
                     </ErrorState>
                 )}
             </div>
@@ -212,7 +222,7 @@ export default function AnimeDetail() {
             tab.id === 'staff' ? staffTotal : 0
     }));
 
-    const mappedAccent = isRetro ? 'var(--color-accent-fill)' : (accentColor || 'var(--color-accent-fill)');
+    const mappedAccent = 'var(--color-accent-fill)';
 
     // Shared by the large-screen poster column and the small-screen header
     const trackingProps = {
@@ -226,9 +236,7 @@ export default function AnimeDetail() {
         setIsCoverLoaded,
         isFavorite,
         isLargeViewport,
-        editTriggerKey,
         handleListUpdate,
-        handleOpenListEdit,
         handleFavorite,
     };
 
@@ -241,13 +249,7 @@ export default function AnimeDetail() {
             <AnimeDetailSEO anime={anime} />
 
             {/* Banner */}
-            <div className="relative h-[40vh] min-h-[300px] overflow-hidden bg-dark-200">
-                {!isBannerLoaded && (
-                    <div
-                        aria-hidden="true"
-                        className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
-                    />
-                )}
+            <div className="relative h-[34vh] min-h-[260px] overflow-hidden bg-[var(--ink-1)] lg:h-[40vh] lg:min-h-[300px]">
                 <img
                     src={bannerUrl}
                     srcSet={bannerSrcSet}
@@ -267,9 +269,9 @@ export default function AnimeDetail() {
             {/* Content Container */}
             <div className="relative -mt-32 pb-16">
                 <div className="page-container">
-                    {/* Sidebar column only from xl; at lg, recommendations sit under the main
-                        column so the tabs and title get a usable width. */}
-                    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_300px] gap-8 min-w-0">
+                    {/* Two columns: poster + facts, then everything else. Recommendations
+                        sit under the main column as a row of posters (D3). */}
+                    <div className="grid grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)] gap-8 xl:gap-12 min-w-0">
                         {/* Column 1: Poster & Mobile Info */}
                         <PosterColumn {...trackingProps} />
 
@@ -282,8 +284,13 @@ export default function AnimeDetail() {
                                 setSynopsisExpanded={setSynopsisExpanded}
                             />
 
-                            {/* Tab Navigation */}
-                            <div ref={tabStripRef} className={`scroll-fade flex items-center gap-1.5 sm:gap-2 lg:gap-1 mb-6 sm:mb-10 p-1.5 rounded-xl sm:rounded-2xl border overflow-x-auto scrollbar-hide ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : 'bg-dark-100 border-dark-50'}`}
+                            {/* Tab Navigation. On phones it runs to the screen edge, so
+                                the next tab is cut under the edge fade and the strip
+                                reads as scrollable. */}
+                            <nav
+                                ref={tabStripRef}
+                                aria-label="Sections"
+                                className={`scroll-fade -mx-4 mb-4 flex items-center gap-1 overflow-x-auto scrollbar-hide px-4 md:mx-0 md:pl-0 md:pr-6 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : ''}`}
                                 data-title="Navigation"
                             >
                                 {tabsWithCounts.map((tab) => (
@@ -296,15 +303,7 @@ export default function AnimeDetail() {
                                         count={tab.count}
                                     />
                                 ))}
-                            </div>
-
-                            {/* Phones/tablets: key facts sit at the top of Overview, under
-                                the tabs, so the tabs stay near the title. */}
-                            {activeTab === DEFAULT_TAB_ID && (
-                                <div className="lg:hidden mb-8">
-                                    <InformationBox anime={anime} accentColor={accentColor} />
-                                </div>
-                            )}
+                            </nav>
 
                             {/* Tab Content */}
                             <AnimeDetailTabContent
@@ -313,6 +312,24 @@ export default function AnimeDetail() {
                                 accentColor={accentColor}
                                 isAuthenticated={isAuthenticated}
                                 tabData={tabData}
+                            />
+
+                            {/* Phones/tablets: the key facts are already in the title's
+                                meta line, so the full details follow the overview. The
+                                next episode is not repeated here: it sits under the
+                                tracking controls in TitleSection. */}
+                            {activeTab === DEFAULT_TAB_ID && (
+                                <div className="lg:hidden mt-4">
+                                    <InformationBox anime={anime} accentColor={accentColor} showNextEpisode={false} />
+                                </div>
+                            )}
+
+                            {/* Recommendations: loaded once this block nears the viewport */}
+                            <RecommendationsSidebar
+                                anime={anime}
+                                recommendations={recommendations}
+                                accentColor={accentColor}
+                                containerRef={recommendationsRef}
                             />
 
                             {/* Reviews Section */}
@@ -324,14 +341,6 @@ export default function AnimeDetail() {
                                 mappedAccent={mappedAccent}
                             />
                         </div>
-
-                        {/* Column 3: Sidebar - Recommendations */}
-                        <RecommendationsSidebar
-                            anime={anime}
-                            recommendations={recommendations}
-                            accentColor={accentColor}
-                            containerRef={recommendationsRef}
-                        />
                     </div>
                 </div>
             </div>

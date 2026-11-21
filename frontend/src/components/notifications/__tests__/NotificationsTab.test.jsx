@@ -233,7 +233,7 @@ describe('NotificationsTab (preferences matrix)', () => {
         push.getDeviceState.mockResolvedValue({ support: 'ios-needs-install', subscribed: false, endpoint: null, id: null });
         renderTab();
 
-        const card = (await screen.findByText(/Add aniShows to your Home Screen to get push notifications/)).closest('div');
+        const card = (await screen.findByText(/Add AniShows to your Home Screen to get push notifications/)).closest('div');
         expect(within(card).queryByRole('button')).not.toBeInTheDocument();
     });
 });

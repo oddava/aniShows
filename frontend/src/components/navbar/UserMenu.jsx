@@ -1,17 +1,21 @@
 import { useEffect, useId, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import usePresence from '../../hooks/usePresence';
+import { Link, useLocation } from 'react-router-dom';
 import { Bell, ChevronDown, LogOut, Settings, User } from 'lucide-react';
+import useSignOut from '../auth/useSignOut';
+import { isAuthFlowPath } from '../auth/authPaths';
 
 /**
  * The right side of the desktop navbar: a skeleton while auth loads, the
- * profile button and its dropdown when signed in, or the sign-in links.
+ * profile button and its dropdown when signed in, or the sign-in links
+ * (left out on the sign-in / sign-up pages themselves).
  * `isProfileOpen` is owned by Navbar (auto-hide and Escape need it).
+ * Sign out goes through useSignOut (toast + home), not a `logout` prop.
  */
 export default function UserMenu({
     user,
     isAuthenticated,
     authLoading,
-    logout,
     isProfileOpen,
     setIsProfileOpen,
     mobileUnreadCount,
@@ -20,8 +24,12 @@ export default function UserMenu({
     const profileRef = useRef(null);
     const profileButtonRef = useRef(null);
     const profileMenuId = useId();
+    const signOut = useSignOut();
+    const { pathname } = useLocation();
 
     // Escape closes the dropdown and returns focus to its button.
+    const menu = usePresence(isProfileOpen, 120);
+
     useEffect(() => {
         if (!isProfileOpen) return undefined;
         const onKeyDown = (event) => {
@@ -73,39 +81,39 @@ export default function UserMenu({
                         aria-expanded={isProfileOpen}
                         aria-controls={isProfileOpen ? profileMenuId : undefined}
                         aria-label={`Account menu for ${user?.username || 'you'}${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
-                        className="relative group flex items-center gap-3 rounded-full border border-white/5 bg-black/20 pl-1.5 pr-4 py-1 transition-all duration-300 hover:border-white/10 hover:bg-black/40"
+                        className="relative group flex h-10 items-center gap-2.5 rounded-lg pl-1.5 pr-2.5 transition-colors duration-150 hover:bg-white/[0.06]"
                     >
                         {/* Avatar or Placeholder */}
-                        <div className="w-7 h-7 rounded-full overflow-hidden border border-transparent group-hover:border-white/20 transition-all duration-300">
+                        <div className="w-7 h-7 rounded-full overflow-hidden ">
                             {user?.avatar ? (
                                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                             ) : (
-                                <div className="w-full h-full bg-accent-dark flex items-center justify-center">
-                                    <span className="text-sm font-bold text-white uppercase">{user?.username?.charAt(0)}</span>
+                                <div className="w-full h-full bg-[var(--signature-soft)] flex items-center justify-center">
+                                    <span className="text-sm font-semibold uppercase text-[var(--signature)]">{user?.username?.charAt(0)}</span>
                                 </div>
                             )}
                         </div>
                         {isAuthenticated && mobileUnreadCount > 0 && (
                             <span className="absolute top-1 left-7 w-2 h-2 bg-red-500 rounded-full ring-2 ring-dark shadow-sm z-10" />
                         )}
-                        <span className="text-sm font-semibold text-gray-200 group-hover:text-white transition-colors max-w-[100px] truncate">
+                        <span className="text-[15px] font-medium text-[var(--text-1)] max-w-[120px] truncate">
                             {user?.username}
                         </span>
-                        <ChevronDown className={`w-4 h-4 text-gray-400 group-hover:text-white transition-all duration-300 ${isProfileOpen ? 'rotate-180 text-white' : ''}`} />
+                        <ChevronDown aria-hidden="true" className={`w-4 h-4 text-[var(--text-3)] transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
                     </button>
 
                     {/* Enhanced Dropdown Menu */}
-                    {isProfileOpen && (
-                        <div id={profileMenuId} className="absolute right-0 top-full mt-3 w-64 py-1.5 rounded-xl border border-white/10 bg-dark-100 shadow-lg shadow-black/40 animate-fade-in z-[1001]">
+                    {menu.mounted && (
+                        <div id={profileMenuId} data-state={menu.closing ? 'closing' : 'open'} className="popover-in absolute right-0 top-full mt-3 w-64 py-1.5 rounded-xl bg-[var(--ink-3)] shadow-[var(--shadow-pop)] z-[1001]" style={{ transformOrigin: 'top right' }}>
                             {/* User Info Header */}
-                            <div className="px-4 py-3 border-b border-white/5 mb-1.5">
+                            <div className="px-4 py-3 mb-1.5">
                                 <div className="flex items-center gap-3">
                                     <div className="w-9 h-9 rounded-lg overflow-hidden">
                                         {user?.avatar ? (
                                             <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full bg-accent-dark flex items-center justify-center">
-                                                <span className="text-xl font-bold text-white uppercase">{user?.username?.charAt(0)}</span>
+                                                <span className="text-xl font-bold text-white">{user?.username?.charAt(0)}</span>
                                             </div>
                                         )}
                                     </div>
@@ -150,26 +158,26 @@ export default function UserMenu({
                                     <Settings aria-hidden="true" className="w-4 h-4" />
                                     <span className="text-sm font-medium">Settings</span>
                                 </Link>
-                                <div className="border-t border-white/5 my-1.5 mx-2" />
+                                <div className=" my-1.5 mx-2" />
                                 <button
                                     type="button"
-                                    onClick={() => { logout(); setIsProfileOpen(false); }}
+                                    onClick={() => { setIsProfileOpen(false); signOut(); }}
                                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-red-500/10 hover:text-red-400"
                                 >
                                     <LogOut aria-hidden="true" className="w-4 h-4" />
-                                    <span className="text-sm font-medium">Sign Out</span>
+                                    <span className="text-sm font-medium">Sign out</span>
                                 </button>
                             </div>
                         </div>
                     )}
                 </div>
-            ) : (
+            ) : isAuthFlowPath(pathname) ? null : (
                 <>
-                    <Link to="/login" className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
-                        Sign In
+                    <Link to="/login" className="flex min-h-11 items-center px-3 text-[15px] text-[var(--text-2)] transition-colors hover:text-[var(--text-1)]">
+                        Sign in
                     </Link>
-                    <Link to="/register" className="btn-primary text-sm py-2 px-4">
-                        Get Started
+                    <Link to="/register" className="btn-primary px-4 text-[15px]">
+                        Create account
                     </Link>
                 </>
             )}

@@ -1,72 +1,53 @@
-import { Link } from 'react-router-dom';
-import { Users, Eye } from 'lucide-react';
-import { useFriendsWatching } from '../hooks/useFriendsWatching';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useFriendsWatching } from '../hooks/useFriendsWatching';
+import { statusLabel } from '../utils/listStatus';
 
-function FriendAvatar({ friend, accentColor }) {
+const MAX_DISPLAYED = 6;
+
+function friendLine(friend) {
+    const { status, score, episodes_watched: episodesWatched, anime } = friend;
+    if (status === 'Completed' && score > 0) return `Scored ${score}/10`;
+    if (status === 'Watching') {
+        return anime?.episode_count
+            ? `Episode ${episodesWatched} of ${anime.episode_count}`
+            : `Episode ${episodesWatched}`;
+    }
+    return statusLabel(status) || status;
+}
+
+function FriendAvatar({ friend }) {
     const [showTooltip, setShowTooltip] = useState(false);
     const user = friend.user;
-    const status = friend.status;
-    const score = friend.score;
-    const episodesWatched = friend.episodes_watched;
-    const anime = friend.anime;
-
-    const getStatusText = () => {
-        switch (status) {
-            case 'Completed':
-                return score > 0 ? `Scored ${score}/10` : 'Completed';
-            case 'Watching':
-                return anime.episode_count 
-                    ? `Ep ${episodesWatched}/${anime.episode_count}`
-                    : `Ep ${episodesWatched}`;
-            case 'On Hold':
-                return 'On Hold';
-            case 'Dropped':
-                return 'Dropped';
-            case 'Plan to Watch':
-                return 'Plan to Watch';
-            default:
-                return status;
-        }
-    };
+    const line = friendLine(friend);
 
     return (
-        <div 
+        <div
             className="relative"
             onMouseEnter={() => setShowTooltip(true)}
             onMouseLeave={() => setShowTooltip(false)}
         >
             <Link
                 to={`/u/${user.username}`}
-                className="block w-10 h-10 rounded-full overflow-hidden bg-gray-700 ring-2 ring-transparent hover:ring-gray-600 transition-all"
+                aria-label={`${user.username}: ${line}`}
+                onFocus={() => setShowTooltip(true)}
+                onBlur={() => setShowTooltip(false)}
+                className="block h-10 w-10 overflow-hidden rounded-full bg-[var(--ink-3)] transition-opacity hover:opacity-80"
             >
                 {user.avatar ? (
-                    <img 
-                        src={user.avatar} 
-                        alt={user.username}
-                        className="w-full h-full object-cover" 
-                    />
+                    <img src={user.avatar} alt="" className="h-full w-full object-cover" />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm font-medium"
-                        style={{ backgroundColor: accentColor || '#374151' }}
-                    >
+                    <span className="flex h-full w-full items-center justify-center text-sm font-medium text-[var(--text-2)]">
                         {user.username[0].toUpperCase()}
-                    </div>
+                    </span>
                 )}
             </Link>
-            
-            {/* Tooltip */}
+
             {showTooltip && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50"
-                >
-                    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 shadow-lg whitespace-nowrap"
-                    >
-                        <p className="text-white font-medium text-sm">{user.username}</p>
-                        <p className="text-gray-400 text-xs mt-0.5">{getStatusText()}</p>
-                        {/* Arrow */}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
-                            <div className="w-2 h-2 bg-gray-900 border-r border-b border-gray-700 rotate-45"></div>
-                        </div>
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2" aria-hidden="true">
+                    <div className="whitespace-nowrap rounded-[var(--radius-md)] bg-[var(--ink-3)] px-3 py-2 shadow-lg shadow-black/30">
+                        <p className="text-[13px] font-medium text-[var(--text-1)]">{user.username}</p>
+                        <p className="mt-0.5 text-[13px] text-[var(--text-2)]">{line}</p>
                     </div>
                 </div>
             )}
@@ -74,85 +55,47 @@ function FriendAvatar({ friend, accentColor }) {
     );
 }
 
-export default function FriendsWatching({ animeId, accentColor }) {
+/**
+ * Mutual follows who have this anime on their list. Shown only when there is
+ * someone to show: no loading placeholder, no empty pitch.
+ */
+export default function FriendsWatching({ animeId }) {
     const { friends, total, loading, error, refetch } = useFriendsWatching(animeId);
 
-    if (loading) {
-        return (
-            <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
-                <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Friends Watching</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-gray-800 animate-pulse"></div>
-                    <div className="w-8 h-8 rounded-full bg-gray-800 animate-pulse"></div>
-                    <div className="w-8 h-8 rounded-full bg-gray-800 animate-pulse"></div>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return null;
 
     if (error) {
         return (
-            <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
-                <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Friends Watching</h3>
-                </div>
-                <p className="text-gray-500 text-sm" role="alert">
-                    Couldn't load friends watching.
+            <section className="panel" aria-labelledby="friends-watching-heading">
+                <h2 id="friends-watching-heading" className="section-title mb-2">Friends watching</h2>
+                <p className="text-sm text-[var(--text-2)]" role="alert">
+                    Couldn’t load friends watching.{' '}
+                    <button type="button" onClick={() => refetch()} className="text-link">
+                        Try again
+                    </button>
                 </p>
-                <button
-                    type="button"
-                    onClick={() => refetch()}
-                    className="mt-3 px-4 py-2 rounded-lg bg-dark-100 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-colors"
-                >
-                    Try Again
-                </button>
-            </div>
+            </section>
         );
     }
 
-    if (friends.length === 0) {
-        return (
-            <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
-                <div className="flex items-center gap-2 mb-4">
-                    <Users className="w-4 h-4 text-gray-500" />
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Friends Watching</h3>
-                </div>
-                <p className="text-gray-500 text-sm">
-                    Connect with friends to see who's watching this anime.
-                </p>
-            </div>
-        );
-    }
+    if (friends.length === 0) return null;
 
-    const MAX_DISPLAYED = 6;
     const displayedFriends = friends.slice(0, MAX_DISPLAYED);
     const remainingCount = Math.max(total, friends.length) - displayedFriends.length;
 
     return (
-        <div className="bg-dark-100/30 rounded-2xl p-6 border border-gray-800">
-            <div className="flex items-center gap-2 mb-4">
-                <Users className="w-4 h-4 text-gray-500" />
-                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Friends Watching</h3>
-            </div>
-
-            <div className="flex flex-wrap gap-3 items-center">
+        <section className="panel" aria-labelledby="friends-watching-heading">
+            <h2 id="friends-watching-heading" className="section-title mb-3">Friends watching</h2>
+            <div className="flex flex-wrap items-center gap-3">
                 {displayedFriends.map((friend) => (
-                    <FriendAvatar 
-                        key={friend.user.id} 
-                        friend={friend} 
-                        accentColor={accentColor}
-                    />
+                    <FriendAvatar key={friend.user.id} friend={friend} />
                 ))}
                 {remainingCount > 0 && (
-                    <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-sm font-medium text-gray-400">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.05] text-sm text-[var(--text-2)] tabular">
                         +{remainingCount}
-                    </div>
+                    </span>
                 )}
             </div>
-        </div>
+        </section>
     );
 }

@@ -33,7 +33,7 @@ export default function ThemeSwitcher() {
 
             {isOpen && (
                 <div className="absolute right-0 top-full mt-2 w-48 py-2 bg-dark-100/95 backdrop-blur-xl border border-gray-700/50 rounded-xl shadow-xl shadow-black/20 z-50 animate-fade-in">
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-800 mb-1">
+                    <div className="px-3 py-2 text-sm font-semibold text-gray-300 mb-1">
                         Select Theme
                     </div>
                     {themes.map((t) => {

@@ -3,442 +3,302 @@ import { Link } from 'react-router-dom';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import ActivityFeed from './ActivityFeed';
 import ActivityHeatmap from '../ActivityHeatmap';
+import Portrait from '../ui/Portrait';
 import AnimeMediaImage from '../common/AnimeMediaImage';
-import { activityQueries, characterFavoriteQueries, favoriteQueries, insightsQueries, listQueries, staffFavoriteQueries } from '../../api/queries/user';
+import { knownEpisodeTotal } from '../../utils/episodes';
+import {
+    activityQueries,
+    characterFavoriteQueries,
+    favoriteQueries,
+    listQueries,
+    staffFavoriteQueries,
+} from '../../api/queries/user';
 
-const OVERVIEW_GRID_MAX_ROWS = 6;
-const OVERVIEW_GRID_COLUMNS = 6;
-const OVERVIEW_GRID_MAX_ITEMS = OVERVIEW_GRID_MAX_ROWS * OVERVIEW_GRID_COLUMNS;
-
-function TopStatsRow({ user }) {
-    if (!user) return null;
-
-    const stats = [
-        { label: 'Total Anime', value: user.anime_count || 0 },
-        { label: 'Mean Score', value: user.mean_score || 0 },
-        { label: 'Favorites', value: user.favorites_count || 0 },
-        { label: 'Reviews', value: user.reviews_count || 0 },
-        { label: 'Resonance', value: user.resonance_count || 0 },
-    ];
-
-    return (
-        <div className="mb-8 border-b border-accent/30 py-4">
-            <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-center gap-x-5 gap-y-3 text-center sm:gap-x-8">
-                {stats.map((stat, i) => (
-                    <div key={i} className="min-w-[78px]">
-                        <span className="text-xl sm:text-2xl font-bold text-white">
-                            {stat.value}
-                        </span>
-                        <span className="mt-1 block text-[11px] uppercase tracking-wider text-gray-500">
-                            {stat.label}
-                        </span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function CurrentlyWatchingGrid({ watchingItems }) {
-    const visibleWatchingItems = (watchingItems || []).slice(0, OVERVIEW_GRID_MAX_ITEMS);
-
-    if (visibleWatchingItems.length === 0) {
-        return (
-            <div className="mb-10">
-                <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
-                <div className="ui-surface-subtle p-5">
-                    <div className="text-center py-6 text-gray-500">
-                        <p className="text-sm">Not watching anything right now</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="mb-10">
-            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Currently Watching</h3>
-            <div className="ui-surface-subtle p-5">
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
-                    {visibleWatchingItems.map((item) => {
-                        const eps = item.episodes_watched || 0;
-                        const total = item.anime?.episode_count || 0;
-                        const progress = total > 0 ? (eps / total) * 100 : 0;
-
-                        return (
-                            <div key={item.id} className="group relative">
-                                <Link
-                                    to={`/anime/${item.anime?.slug}`}
-                                    className="block relative aspect-[2/3] bg-dark-200 rounded-lg overflow-hidden"
-                                >
-                                    <AnimeMediaImage
-                                        anime={item.anime}
-                                        kind="cover"
-                                        size="small"
-                                        alt={item.anime?.title}
-                                        className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-dark-400/80 z-20">
-                                        <div
-                                            className="h-full bg-accent-dark transition-[width] duration-300"
-                                            style={{ width: `${progress}%` }}
-                                        />
-                                    </div>
-                                </Link>
-
-                                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">
-                                    <p className="text-[11px] font-bold text-white max-w-[180px] truncate">{item.anime?.title}</p>
-                                    <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-accent">
-                                        {item.anime?.anime_type} • {eps} / {total || '?'} eps
-                                    </p>
-                                    {/* Arrow */}
-                                    <div className="absolute -bottom-1 left-1/2 -ml-1 h-2 w-2 rotate-45 border-b border-r border-gray-700 bg-dark-100"></div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
-    );
-}
+const WATCHING_ROWS = 5;
+const GRID_ITEMS = 12;
 
 function getFavoritesItems(favoritesData) {
-    return favoritesData?.pages?.flatMap(page => {
+    return favoritesData?.pages?.flatMap((page) => {
         if (Array.isArray(page)) return page;
         return page.results || [];
-    }) || favoritesData?.results || favoritesData || [];
+    }) || favoritesData?.results || (Array.isArray(favoritesData) ? favoritesData : []);
 }
 
-function AnimeFavoritesGrid({ favoritesData }) {
-    const favorites = getFavoritesItems(favoritesData).slice(0, OVERVIEW_GRID_MAX_ITEMS);
-
-    if (!favorites || favorites.length === 0) {
-        return (
-            <div className="mb-10">
-                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
-                <div className="ui-surface-subtle p-5">
-                    <div className="text-center py-6 text-gray-500">
-                        <p className="text-sm">No favorites yet</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
+/** A section title with an optional quiet "see all" action. */
+function SectionHead({ title, onSeeAll, seeAllLabel }) {
     return (
-        <div className="mb-10">
-            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Favorites</h3>
-            <div className="ui-surface-subtle p-5">
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
-                    {favorites.map((fav) => (
-                        <div key={fav.id} className="group relative">
-                            <Link
-                                to={`/anime/${fav.anime?.slug}`}
-                                className="block relative aspect-[2/3] bg-dark-200 rounded-lg overflow-hidden"
-                            >
-                                <AnimeMediaImage
-                                    anime={fav.anime}
-                                    kind="cover"
-                                    size="small"
-                                    alt={fav.anime?.title}
-                                    className="w-full h-full object-cover"
-                                />
-                            </Link>
-
-                            {/* Floating Tooltip */}
-                            <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">
-                                <p className="text-[11px] font-bold text-white max-w-[180px] truncate">{fav.anime?.title}</p>
-                                <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-gray-400">
-                                    {fav.anime?.anime_type}
-                                </p>
-                                {/* Arrow */}
-                                <div className="absolute -bottom-1 left-1/2 -ml-1 h-2 w-2 rotate-45 border-b border-r border-gray-700 bg-dark-100"></div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
+        <div className="mb-3 flex items-baseline justify-between gap-4">
+            <h2 className="section-title">{title}</h2>
+            {onSeeAll && (
+                <button
+                    type="button"
+                    onClick={onSeeAll}
+                    aria-label={seeAllLabel || `See all: ${title}`}
+                    className="text-link shrink-0 text-[15px]"
+                >
+                    See all
+                </button>
+            )}
         </div>
     );
 }
 
-function PersonFavoritesGrid({ title, items, emptyText, itemKey, hrefBuilder, nameKey }) {
-    const visibleItems = (items || []).slice(0, OVERVIEW_GRID_MAX_ITEMS);
-
-    if (visibleItems.length === 0) {
-        return (
-            <div className="mb-10">
-                <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
-                <div className="ui-surface-subtle p-5">
-                    <div className="py-6 text-center text-gray-500">
-                        <p className="text-sm">{emptyText}</p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
+/**
+ * Each section sits on its own panel (the shared .panel surface), stacked
+ * with a small gap: no lines between them.
+ */
+function Column({ children }) {
     return (
-        <div className="mb-10">
-            <h3 className="mb-4 ml-4 text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{title}</h3>
-            <div className="ui-surface-subtle p-5">
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 gap-4">
-                    {visibleItems.map((entry) => {
-                        const item = entry[itemKey];
-                        return (
-                            <div key={entry.id} className="group relative">
-                                <Link
-                                    to={hrefBuilder(item)}
-                                    className="block relative aspect-[2/3] bg-dark-200 rounded-lg overflow-hidden"
-                                >
-                                    <img
-                                        src={item?.image || '/placeholder-avatar.png'}
-                                        alt={item?.[nameKey]}
-                                        loading="lazy"
-                                        className="w-full h-full object-cover"
-                                    />
-                                </Link>
-
-                                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-dark-100 border border-gray-700 px-3 py-2 text-center opacity-0 shadow-lg transition-all duration-200 group-hover:opacity-100 group-hover:-translate-y-1">
-                                    <p className="max-w-[180px] truncate text-[11px] font-bold text-white">{item?.[nameKey]}</p>
-                                    {item?.name_native && (
-                                        <p className="mt-0.5 max-w-[180px] truncate text-[9px] font-bold uppercase tracking-[0.1em] text-gray-400">
-                                            {item.name_native}
-                                        </p>
-                                    )}
-                                    <div className="absolute -bottom-1 left-1/2 -ml-1 h-2 w-2 rotate-45 border-b border-r border-gray-700 bg-dark-100"></div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+        <div className="min-w-0 [&>*]:rounded-[var(--radius-lg)] [&>*]:bg-[var(--ink-1)] [&>*]:p-5 md:[&>*]:p-6 [&>*+*]:mt-4">
+            {children}
         </div>
     );
 }
 
-
-
-function GenreOverviewSidebar({ username, isPrivate }) {
-    const { data: listsData, isLoading } = useQuery({
-        ...insightsQueries.overviewLists(username),
-        enabled: !isPrivate && !!username,
-        staleTime: 2 * 60 * 1000, // 2 minutes
-        refetchOnMount: true,
-    });
-
-    if (isPrivate || isLoading || !listsData || listsData.length === 0) return null;
-
-    const genreCounts = {};
-    listsData.forEach(item => {
-        item.anime?.genres?.forEach(genre => {
-            genreCounts[genre.name] = (genreCounts[genre.name] || 0) + 1;
-        });
-    });
-
-    const sortedGenres = Object.entries(genreCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([name, count]) => ({ name, count }));
-
-    if (sortedGenres.length === 0) return null;
-
-    const totalCount = sortedGenres.reduce((sum, g) => sum + g.count, 0);
-    const maxCount = sortedGenres[0].count;
-
+/** An own profile with an empty list: one line and two ways to start, side by side. */
+function GettingStarted() {
     return (
-        <div className="mb-8">
-            <h3 className="mb-4 ml-4 text-[11px] font-semibold text-gray-500 uppercase tracking-[0.16em]">Top Genres</h3>
-            <div className="ui-surface-subtle p-5">
-                <div className="mb-4 pb-4 border-b border-gray-800/30">
-                    <div className="flex items-baseline justify-between mb-2">
-                        <span className="text-sm font-semibold text-gray-300">{sortedGenres[0].name}</span>
-                        <span className="text-xs font-medium text-gray-400">{sortedGenres[0].count}</span>
-                    </div>
-                    <div className="h-2 bg-dark-400/50 rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-accent-dark rounded-full transition-all duration-500"
-                            style={{ width: '100%' }}
-                        />
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1.5">
-                        {Math.round((sortedGenres[0].count / totalCount) * 100)}% of watched anime
-                    </p>
-                </div>
+        <section>
+            <h2 className="section-title">Start your list</h2>
+            <p className="mt-3 max-w-xl text-[17px] leading-relaxed text-[var(--text-2)]">
+                Your profile fills in as you watch: shows, scores, favorites and a year of activity.
+                Coming from MAL or AniList? Bring your list with you.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <Link to="/browse?sort=trending" className="btn-primary px-4 text-[15px]">Find something to watch</Link>
+                <Link to="/import" className="text-link text-[15px]">Import a list</Link>
+            </div>
+        </section>
+    );
+}
 
-                <div className="space-y-2.5">
-                    {sortedGenres.slice(1).map((genre, index) => (
-                        <div
-                            key={genre.name}
-                            className="flex items-center gap-3 rounded-lg p-1.5 -mx-1.5"
+function WatchingRows({ items }) {
+    return (
+        <ul>
+            {items.map((item) => {
+                const anime = item.anime || {};
+                const watched = item.episodes_watched || 0;
+                const total = knownEpisodeTotal(anime);
+                return (
+                    <li key={item.id} className="flex items-center gap-4 py-3 ">
+                        <Link to={`/anime/${anime.slug}`} tabIndex={-1} aria-hidden="true" className="shrink-0">
+                            <AnimeMediaImage
+                                anime={anime}
+                                kind="cover"
+                                size="small"
+                                alt=""
+                                className="h-14 w-10 rounded-md bg-[var(--ink-2)] object-cover"
+                            />
+                        </Link>
+                        <Link
+                            to={`/anime/${anime.slug}`}
+                            className="line-clamp-2 min-w-0 flex-1 text-[17px] font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] hover:text-[var(--signature)]"
                         >
-                            <span className="text-[11px] text-gray-500 w-6 font-medium">{index + 2}</span>
-                            <div className="flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[11px] text-gray-400 font-medium">{genre.name}</span>
-                                    <span className="text-[10px] text-gray-500">{genre.count}</span>
-                                </div>
-                                <div className="h-1 bg-dark-400/30 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full rounded-full bg-gray-600 transition-[width] duration-300"
-                                        style={{ width: `${(genre.count / maxCount) * 100}%` }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
+                            {anime.title}
+                        </Link>
+                        <span className="shrink-0 text-[15px] text-[var(--text-2)] tabular">
+                            {total ? `${watched} of ${total}` : `${watched} watched`}
+                        </span>
+                    </li>
+                );
+            })}
+        </ul>
     );
 }
 
-function ActivityHistorySidebar({ username, isPrivate, accentColor }) {
-    const { data: heatmapData, isLoading, isError } = useQuery({
-        ...activityQueries.heatmap(username),
-        enabled: !isPrivate && !!username,
-        staleTime: 2 * 60 * 1000, // 2 minutes
-        refetchOnMount: true,
-    });
+function CoverGrid({ children }) {
+    return <ul className="grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-12">{children}</ul>;
+}
 
-    if (isPrivate || isLoading || isError || !heatmapData) return null;
-
+function AnimeCovers({ favorites }) {
     return (
-        <div className="mb-8">
-            <ActivityHeatmap activityData={heatmapData} accentColor={accentColor} />
-        </div>
+        <CoverGrid>
+            {favorites.map((fav) => (
+                <li key={fav.id}>
+                    <Link
+                        to={`/anime/${fav.anime?.slug}`}
+                        title={fav.anime?.title}
+                        className="block aspect-[2/3] overflow-hidden rounded-[var(--radius-sm)] bg-[var(--ink-2)]"
+                    >
+                        <AnimeMediaImage
+                            anime={fav.anime}
+                            kind="cover"
+                            size="small"
+                            alt={fav.anime?.title}
+                            className="h-full w-full object-cover"
+                        />
+                    </Link>
+                </li>
+            ))}
+        </CoverGrid>
     );
 }
 
+function PersonCovers({ items, itemKey, hrefBuilder }) {
+    return (
+        <CoverGrid>
+            {items.map((entry) => {
+                const item = entry[itemKey];
+                return (
+                    <li key={entry.id}>
+                        <Link
+                            to={hrefBuilder(item)}
+                            title={item?.name}
+                            className="block aspect-[2/3] overflow-hidden rounded-[var(--radius-sm)] bg-[var(--ink-2)]"
+                        >
+                            <Portrait src={item?.image} alt={item?.name} sizes="120px" className="h-full w-full" />
+                        </Link>
+                    </li>
+                );
+            })}
+        </CoverGrid>
+    );
+}
+
+/**
+ * The profile overview: one column of soft panels, what they are watching
+ * first. Taste (top genres) is a line in the header, so no half-empty side
+ * column. Sections with nothing to show are left out, not drawn empty.
+ */
 export default function OverviewTab({
     displayUser,
     targetUsername,
     isPrivate,
-    onTabChange
+    onTabChange,
+    isOwnProfile = false,
 }) {
-    const { data: watchingItemsData } = useQuery({
-        ...listQueries.overview(targetUsername, 'Watching', OVERVIEW_GRID_MAX_ITEMS),
-        enabled: !!displayUser && !isPrivate,
-        staleTime: 60 * 1000, // 1 minute
-        refetchOnMount: true,
-    });
+    const enabled = Boolean(displayUser) && !isPrivate && Boolean(targetUsername);
+    const query = { enabled, staleTime: 60 * 1000, refetchOnMount: true };
 
-    const { data: favsData } = useQuery({
-        ...favoriteQueries.overview(targetUsername, OVERVIEW_GRID_MAX_ITEMS),
-        enabled: !!displayUser && !isPrivate,
-        staleTime: 60 * 1000, // 1 minute
-        refetchOnMount: true,
-    });
+    const { data: watchingData } = useQuery({ ...listQueries.overview(targetUsername, 'Watching', WATCHING_ROWS), ...query });
+    const { data: favsData } = useQuery({ ...favoriteQueries.overview(targetUsername, GRID_ITEMS), ...query });
+    const { data: characterFavsData } = useQuery({ ...characterFavoriteQueries.overview(targetUsername, GRID_ITEMS), ...query });
+    const { data: staffFavsData } = useQuery({ ...staffFavoriteQueries.overview(targetUsername, GRID_ITEMS), ...query });
+    const { data: summary, isPending: summaryPending } = useQuery({ ...listQueries.summary(targetUsername), ...query });
+    const { data: heatmapData } = useQuery({ ...activityQueries.heatmap(targetUsername), ...query, staleTime: 2 * 60 * 1000 });
 
-    const { data: characterFavsData } = useQuery({
-        ...characterFavoriteQueries.overview(targetUsername, OVERVIEW_GRID_MAX_ITEMS),
-        enabled: !!displayUser && !isPrivate,
-        staleTime: 60 * 1000,
-        refetchOnMount: true,
-    });
+    if (isPrivate) {
+        return (
+            <p className="pb-8 text-[17px] text-[var(--text-2)]">
+                This profile is private. Only {displayUser?.username} can see their lists and activity.
+            </p>
+        );
+    }
 
-    const { data: staffFavsData } = useQuery({
-        ...staffFavoriteQueries.overview(targetUsername, OVERVIEW_GRID_MAX_ITEMS),
-        enabled: !!displayUser && !isPrivate,
-        staleTime: 60 * 1000,
-        refetchOnMount: true,
-    });
+    const watching = (Array.isArray(watchingData) ? watchingData : getFavoritesItems(watchingData)).slice(0, WATCHING_ROWS);
+    const favorites = getFavoritesItems(favsData).slice(0, GRID_ITEMS);
+    const characters = getFavoritesItems(characterFavsData).slice(0, GRID_ITEMS);
+    const staff = getFavoritesItems(staffFavsData).slice(0, GRID_ITEMS);
+    const links = displayUser?.social_links || [];
+    // The list summary is the source of truth for "is there a list": the
+    // profile's cached anime_count can lag behind a removal.
+    const listTotal = Number(summary?.total ?? displayUser?.anime_count);
+    const listIsEmpty = !summaryPending && !(listTotal > 0);
+    // A year of activity (and its streak) only means something next to a
+    // list; an emptied list must not claim "24 episodes logged this year".
+    const hasHeatmap = !summaryPending
+        && !listIsEmpty
+        && Array.isArray(heatmapData)
+        && heatmapData.some((day) => day.count > 0);
 
-    const watchingItems = watchingItemsData || [];
-    const favoritesData = favsData || [];
-    const characterFavorites = getFavoritesItems(characterFavsData);
-    const staffFavorites = getFavoritesItems(staffFavsData);
+    const sections = [];
+    if (listIsEmpty) {
+        sections.push(isOwnProfile ? <GettingStarted key="start" /> : (
+            <p key="empty" className="text-[17px] text-[var(--text-2)]">
+                Nothing on {displayUser?.username}’s list yet.
+            </p>
+        ));
+    }
+    if (watching.length > 0) {
+        sections.push(
+            <section key="watching">
+                <SectionHead title="Watching" onSeeAll={() => onTabChange?.('anime_list')} seeAllLabel="See the whole list" />
+                <WatchingRows items={watching} />
+            </section>,
+        );
+    }
+    if (favorites.length > 0) {
+        sections.push(
+            <section key="favorites">
+                <SectionHead title="Favorites" onSeeAll={() => onTabChange?.('favorites')} />
+                <AnimeCovers favorites={favorites} />
+            </section>,
+        );
+    }
+    if (characters.length > 0) {
+        sections.push(
+            <section key="characters">
+                <SectionHead title="Characters" />
+                <PersonCovers items={characters} itemKey="character" hrefBuilder={(c) => `/character/${c?.id}`} />
+            </section>,
+        );
+    }
+    if (staff.length > 0) {
+        sections.push(
+            <section key="staff">
+                <SectionHead title="Voice actors" />
+                <PersonCovers items={staff} itemKey="staff" hrefBuilder={(s) => `/staff/${s?.id}`} />
+            </section>,
+        );
+    }
+    // One "Activity" section: the year at a glance, then the latest rows.
+    // An empty list has no activity section at all: what is left of its
+    // history is adds and removals, not something to read under "Start your list".
+    if (!listIsEmpty && !summaryPending) sections.push(
+        <ActivityFeed
+            key="activity"
+            username={targetUsername}
+            isPrivate={isPrivate}
+            isOwner={isOwnProfile}
+            compact
+            currentEntries={watching}
+            header={(
+                <>
+                    <SectionHead
+                        title="Activity"
+                        onSeeAll={() => onTabChange?.('activity')}
+                        seeAllLabel="See all activity"
+                    />
+                    {hasHeatmap && (
+                        // The year spans the panel (its columns share the width);
+                        // a sparse year is one sentence, no grid.
+                        <div className="mb-6">
+                            <ActivityHeatmap activityData={heatmapData} accentColor={displayUser?.profile_primary_color} />
+                        </div>
+                    )}
+                </>
+            )}
+        />,
+    );
+    // Who this is (bio and links) closes the column: on phones and desktop
+    // alike the shows come first.
+    if (displayUser?.bio || links.length > 0) {
+        sections.push(
+            <section key="about">
+                <SectionHead title={displayUser?.bio ? 'About' : 'Links'} />
+                {displayUser?.bio && (
+                    <div className="overview-about-scroll max-w-3xl overflow-y-auto custom-scrollbar pr-1 text-[15px] text-[var(--text-2)]">
+                        <MarkdownRenderer content={displayUser.bio} className="overview-about-markdown" />
+                    </div>
+                )}
+                {links.length > 0 && (
+                    <ul className={`flex flex-wrap gap-x-5 gap-y-2 text-[15px] ${displayUser?.bio ? 'mt-3' : ''}`}>
+                        {links.map((link, index) => (
+                            <li key={`${link.platform}-${index}`}>
+                                <a href={link.value} target="_blank" rel="noreferrer" className="text-link">
+                                    {link.platform || 'Link'}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>,
+        );
+    }
 
     return (
-        <div className="animate-tab-content pb-8 overview-tab">
-            <TopStatsRow user={displayUser} />
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-                <div className="lg:col-span-6 space-y-8">
-                    {displayUser?.bio ? (
-                        <div className="mb-8">
-                            <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">About</h3>
-                            <div className="ui-surface-subtle p-5">
-                                <div className="overview-about-scroll overflow-y-auto custom-scrollbar pr-1">
-                                    <MarkdownRenderer content={displayUser.bio} className="overview-about-markdown" />
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-
-                    {displayUser?.social_links && displayUser.social_links.length > 0 ? (
-                        <div className="mb-8">
-                            <h3 className="mb-4 ml-4 text-xs font-bold text-gray-500 uppercase tracking-[0.16em]">Links</h3>
-                            <div className="ui-surface-subtle p-5">
-                                <div className="flex flex-wrap gap-2">
-                                    {displayUser.social_links.map((link, i) => (
-                                        <a
-                                            key={i}
-                                            href={link.value}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="px-4 py-2 bg-dark-100 hover:bg-dark-50 text-xs text-gray-300 hover:text-white rounded-lg border border-gray-800/60 transition-colors"
-                                        >
-                                            {link.platform}
-                                        </a>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-
-
-
-                    <ActivityHistorySidebar
-                        username={targetUsername}
-                        isPrivate={isPrivate}
-                        accentColor={displayUser?.profile_primary_color}
-                    />
-
-                    <GenreOverviewSidebar username={targetUsername} isPrivate={isPrivate} />
-
-                    <div className="mb-8">
-                        <div className="mb-4 ml-4 flex items-center justify-between gap-4">
-                            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">Activity</h3>
-                            <button
-                                type="button"
-                                onClick={() => onTabChange && onTabChange('activity')}
-                                className="rounded-lg bg-dark-100/80 px-3 py-1.5 text-[11px] font-medium text-gray-400 transition-colors hover:bg-dark-50 hover:text-gray-200"
-                            >
-                                View Full Feed
-                            </button>
-                        </div>
-                        <div className="ui-surface-subtle p-5">
-                            <ActivityFeed username={targetUsername} isPrivate={isPrivate} compact />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="lg:col-span-6 min-h-[400px]">
-                    <AnimeFavoritesGrid favoritesData={favoritesData} />
-
-                    <PersonFavoritesGrid
-                        title="Characters"
-                        items={characterFavorites}
-                        emptyText="No characters yet"
-                        itemKey="character"
-                        hrefBuilder={(character) => `/character/${character?.id}`}
-                        nameKey="name"
-                    />
-
-                    <PersonFavoritesGrid
-                        title="Voice Actors"
-                        items={staffFavorites}
-                        emptyText="No voice actors yet"
-                        itemKey="staff"
-                        hrefBuilder={(staff) => `/staff/${staff?.id}`}
-                        nameKey="name"
-                    />
-
-                    <CurrentlyWatchingGrid watchingItems={watchingItems} />
-                </div>
-            </div>
+        <div className="animate-tab-content overview-tab pb-8">
+            <Column>{sections}</Column>
         </div>
     );
 }

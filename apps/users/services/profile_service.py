@@ -65,7 +65,7 @@ def get_current_user_profile(user_id: int) -> ProfileResult:
         normalized = _normalize_profile_payload(cached_data)
         if normalized != cached_data:
             best_effort_set(cache_key, normalized, 300, source="own profile")
-        return ProfileResult(data=normalized, cache_hit=True)
+        return ProfileResult(data=with_live_list_stats(normalized), cache_hit=True)
 
     user = build_profile_user_queryset().get(pk=user_id)
     stats_data = _get_stats_snapshot(user)
@@ -76,7 +76,21 @@ def get_current_user_profile(user_id: int) -> ProfileResult:
     data["total_badges_count"] = total_badges_count
 
     best_effort_set(cache_key, data, 300, source="own profile")
-    return ProfileResult(data=data, cache_hit=False)
+    return ProfileResult(data=with_live_list_stats(data), cache_hit=False)
+
+
+def with_live_list_stats(data):
+    """Replace the materialised list numbers with the live summary's (P1).
+
+    ``UserStats`` is refreshed asynchronously, so right after a list write it
+    disagreed with the Stats tab. Every view now reads the list summary, which
+    is dropped on each write; follower/favourite/review counts are unchanged.
+    """
+    if not isinstance(data, dict) or not data.get("id"):
+        return data
+    from .list_service import live_list_stats
+
+    return {**data, **live_list_stats(data["id"])}
 
 
 def get_featured_badges(user):

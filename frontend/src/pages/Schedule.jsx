@@ -1,12 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Bell,
-  Eye,
-  EyeOff,
-} from 'lucide-react';
-import { authApi } from '../api/client';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ChevronDown } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import AnimeCard from '../components/AnimeCard';
 import { ScheduleGridSkeleton } from '../components/skeletons';
@@ -14,16 +9,17 @@ import { LoadingBar } from '../components/LoadingBar';
 import SEO from '../components/SEO';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorState from '../components/common/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
 import {
   bucketScheduleByDate,
   formatCalendarDate,
+  formatCalendarRange,
   formatDate,
   getZonedCalendarToday,
   hasAiringDate,
   resolveTimeZone,
 } from '../utils/dateUtils';
-import { animeKeys, scheduleKeys, scheduleQueries } from '../api/queries/anime';
-import { profileKeys } from '../api/queries/user';
+import { scheduleQueries } from '../api/queries/anime';
 
 // Day names for display
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -49,7 +45,7 @@ const formatAirTime = (anime, preferredTimezone) => {
   if (!hasAiringDate(anime)) return 'Time TBA';
   const time = formatDate(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preferredTimezone);
   if (!time) return null;
-  return new Date(anime.next_airing_date) < new Date() ? `Aired ${time}` : `Airs ${time}`;
+  return new Date(anime.next_airing_date) < new Date() ? time : `Airs ${time}`;
 };
 
 const getTimezoneLabel = (preferredTimezone) => {
@@ -75,9 +71,9 @@ const addDays = (date, days) => {
 // date today + position; its label and its count come from that same offset.
 // Seven equal columns, so the whole strip fits on a phone without sideways
 // scrolling.
-const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday }) => {
+const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday, quietEmpty = false }) => {
   return (
-    <div className="grid grid-cols-7 gap-1.5 sm:gap-2" role="group" aria-label="Day">
+    <div className="grid grid-cols-7 gap-1" role="group" aria-label="Day">
       {Array.from({ length: 7 }, (_, position) => (todayDay + position) % 7).map((index, position) => {
         const isSelected = selectedDay === index;
         const count = animeCounts[position] || 0;
@@ -93,22 +89,18 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
             aria-pressed={isSelected}
             aria-current={isToday ? 'date' : undefined}
             aria-label={`${DAY_NAMES[index]} ${dayOfMonth}, ${count} ${count === 1 ? 'episode' : 'episodes'}`}
-            className={`
-              relative flex flex-col items-center rounded-xl border py-2 sm:py-2.5 transition-colors duration-200
-              ${isSelected
-                ? 'bg-accent-dark border-transparent text-white'
-                : `bg-dark-100 text-gray-400 hover:text-white hover:border-gray-700 ${isToday ? 'border-accent/40' : 'border-gray-800'}`
-              }
-            `}
+            className={`relative flex min-h-16 flex-col items-start rounded-[var(--radius-md)] px-2 py-2.5 text-left transition-colors duration-200 sm:px-3 ${isSelected
+              ? 'bg-white/[0.08]'
+              : 'hover:bg-white/[0.04]'}`}
           >
-            <span className={`text-[10.5px] sm:text-[11px] font-semibold uppercase tracking-wider ${isSelected ? 'text-white/80' : isToday ? 'text-accent-light' : ''}`}>
-              {DAY_SHORT[index]}
+            <span className={`text-sm font-semibold ${isSelected || isToday ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>
+              {isToday ? 'Today' : DAY_SHORT[index]}
             </span>
-            <span className={`text-base sm:text-lg font-bold leading-tight tabular ${isSelected ? 'text-white' : 'text-gray-200'}`}>
+            <span className={`text-lg font-semibold leading-tight tabular ${isSelected ? 'text-[var(--text-1)]' : 'text-[var(--text-2)]'}`}>
               {dayOfMonth}
             </span>
-            <span aria-hidden="true" className={`mt-0.5 text-[11px] tabular ${isSelected ? 'text-white/80' : count > 0 ? 'text-gray-400' : 'text-gray-600'}`}>
-              <span>{count}</span> ep
+            <span aria-hidden="true" className={`text-xs tabular ${count > 0 ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}`}>
+              {count > 0 || !quietEmpty ? <><span>{count}</span> ep</> : 'Free'}
             </span>
           </button>
         );
@@ -123,36 +115,120 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle,
   const end = addDays(startOfToday, 6);
 
   return (
-    <div className="flex items-center justify-between gap-3 mb-4">
-      <div className="text-white font-semibold tabular">
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="whitespace-nowrap font-semibold text-[var(--text-1)] tabular">
         Next 7 days
-        <span className="ml-2 font-normal text-gray-500">
-          {formatCalendarDate(startOfToday, { month: 'short', day: 'numeric' })}
-          {' – '}
-          {formatCalendarDate(end, { month: 'short', day: 'numeric' })}
+        <span className="ml-2 font-normal text-[var(--text-2)]">
+          {formatCalendarRange(startOfToday, end)}
         </span>
       </div>
 
       <div className="flex items-center gap-2">
-        {showMyListToggle && (
+        {!isTodaySelected && (
           <button
             type="button"
-            onClick={onToggleMyList}
-            aria-pressed={myListOnly}
-            className={`ui-pill-button h-9 py-0 ${myListOnly ? 'border-accent/40 text-white' : ''}`}
+            onClick={onToday}
+            className="btn-ghost min-h-11 whitespace-nowrap px-4 py-0 text-sm"
           >
-            My list
+            Back to today
           </button>
         )}
-        <button
-          type="button"
-          onClick={onToday}
-          disabled={isTodaySelected}
-          className="ui-pill-button h-9 py-0 disabled:opacity-40 disabled:cursor-default disabled:hover:text-gray-300"
-        >
-          Today
-        </button>
+        {showMyListToggle && (
+          <div role="group" aria-label="Show" className="flex rounded-lg bg-white/[0.04] p-0.5">
+            {[
+              { id: 'all', label: 'All', active: !myListOnly },
+              { id: 'mine', label: 'My list', active: myListOnly },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={option.active}
+                onClick={() => { if (!option.active) onToggleMyList(); }}
+                className={`flex h-10 items-center whitespace-nowrap rounded-md px-4 text-sm font-medium transition-colors duration-150 ${option.active ? 'bg-white/[0.1] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+    </div>
+  );
+};
+
+// The selected day as an agenda: in time order, shows without a time last;
+// members see their own shows first.
+const airingTime = (anime) => {
+  const time = Date.parse(anime?.next_airing_date);
+  return Number.isFinite(time) ? time : Infinity;
+};
+
+const agendaGroups = (items, isAuthenticated) => {
+  const sorted = [...items].sort((a, b) => airingTime(a) - airingTime(b));
+  const mine = isAuthenticated ? sorted.filter(isOnMyList) : [];
+  const rest = isAuthenticated ? sorted.filter((anime) => !isOnMyList(anime)) : sorted;
+  const timed = rest.filter((anime) => airingTime(anime) !== Infinity);
+  const untimed = rest.filter((anime) => airingTime(anime) === Infinity);
+  const groups = [
+    { title: 'On your list', items: mine },
+    { title: mine.length ? 'Also airing' : 'Airing', items: timed },
+    { title: 'Time not announced', items: untimed, untimed: true },
+  ].filter((group) => group.items.length > 0);
+  return groups.map((group) => ({ ...group, showTitle: groups.length > 1 || group.untimed }));
+};
+
+// The side column: every show on your list that airs this week, by day.
+// A row selects its day. Guests get one line on why to sign in.
+const WeekAside = ({ isAuthenticated, isLoading, items, startOfToday, selectedOffset, preferredTimezone, onSelectDay }) => {
+  if (!isAuthenticated) {
+    return (
+      <div className="panel">
+        <h2 className="text-[15px] font-semibold text-[var(--text-1)]">Your shows, first</h2>
+        <p className="mt-2 text-sm leading-relaxed text-[var(--text-2)]">
+          Sign in and the shows on your list lead each day, with a reminder when a new episode is out.
+        </p>
+        <Link to="/register" className="text-link mt-1 text-sm">Create an account</Link>
+      </div>
+    );
+  }
+  if (isLoading) return null;
+  return (
+    <div className="panel">
+      <h2 className="text-[15px] font-semibold text-[var(--text-1)]">On your list this week</h2>
+      {items.length === 0 ? (
+        <p className="mt-2 text-sm leading-relaxed text-[var(--text-2)]">
+          Nothing on your list airs in the next 7 days.
+        </p>
+      ) : (
+        <ul className="-mx-2 mt-2">
+          {items.map(({ offset, anime }) => {
+            const date = addDays(startOfToday, offset);
+            const day = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : DAY_SHORT[date.getUTCDay()];
+            const time = hasAiringDate(anime)
+              ? formatDate(anime.next_airing_date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preferredTimezone)
+              : null;
+            const active = offset === selectedOffset;
+            return (
+              <li key={`${offset}-${anime.id}`}>
+                <button
+                  type="button"
+                  onClick={() => onSelectDay(offset)}
+                  className={`flex min-h-11 w-full items-baseline gap-3 rounded-lg px-2 py-2 text-left transition-colors duration-150 ${active ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
+                >
+                  <span className={`w-[4.5rem] shrink-0 text-sm tabular ${offset === 0 ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>{day}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-[var(--text-1)]">{anime.title}</span>
+                    <span className="block text-xs text-[var(--text-3)] tabular">
+                      {anime.next_airing_episode ? `Ep ${anime.next_airing_episode}` : 'New episode'}
+                      {time ? ` · ${time}` : ''}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 };
@@ -160,10 +236,8 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle,
 // Main Schedule Page Component
 export default function Schedule() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const queryClient = useQueryClient();
-  const { isAuthenticated, user, refreshProfile } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const adultContentEnabled = Boolean(user?.show_adult_content);
-  const [isUpdatingAdultContent, setIsUpdatingAdultContent] = useState(false);
   const preferredTimezone = user?.preferred_timezone;
   const timezoneLabel = useMemo(() => getTimezoneLabel(preferredTimezone), [preferredTimezone]);
 
@@ -195,35 +269,6 @@ export default function Schedule() {
     setSearchParams(params, { replace: true });
   }, [selectedDay, myListOnly, setSearchParams]);
 
-  const handleToggleAdultContent = useCallback(async () => {
-    if (!isAuthenticated || isUpdatingAdultContent) return;
-
-    const nextValue = !adultContentEnabled;
-    setIsUpdatingAdultContent(true);
-    try {
-      const response = await authApi.updateProfile({ show_adult_content: nextValue });
-      const updatedProfile = response?.data;
-      if (updatedProfile && typeof updatedProfile === 'object') {
-        await refreshProfile(updatedProfile);
-        queryClient.setQueryData(profileKeys.own, updatedProfile);
-      } else {
-        await refreshProfile();
-      }
-      queryClient.removeQueries({ queryKey: scheduleKeys.all });
-      queryClient.removeQueries({ queryKey: animeKeys.all });
-      queryClient.invalidateQueries({ queryKey: profileKeys.own });
-      queryClient.invalidateQueries({ queryKey: profileKeys.all });
-    } finally {
-      setIsUpdatingAdultContent(false);
-    }
-  }, [
-    adultContentEnabled,
-    isAuthenticated,
-    isUpdatingAdultContent,
-    queryClient,
-    refreshProfile,
-  ]);
-
   // Fetch schedule data
   const { data: rawScheduleDays, isLoading, isFetching, error, refetch } = useQuery({
     ...scheduleQueries.week(isAuthenticated, adultContentEnabled),
@@ -238,6 +283,12 @@ export default function Schedule() {
     ),
     [rawScheduleDays, preferredTimezone, myListOnly]
   );
+
+  const myWeek = useMemo(() => {
+    if (!isAuthenticated) return [];
+    const { days } = bucketScheduleByDate(filterMyList(rawScheduleDays), preferredTimezone);
+    return days.flatMap((items, offset) => items.map((anime) => ({ offset, anime })));
+  }, [isAuthenticated, rawScheduleDays, preferredTimezone]);
 
   const animeCounts = useMemo(
     () => scheduleByOffset.map((items) => items.length),
@@ -273,9 +324,9 @@ export default function Schedule() {
         {/* Main Content */}
         <div className="page-container py-6 sm:py-8">
           <header className="mb-6">
-            <h1 className="page-title">Airing Schedule</h1>
-            <p className="text-sm text-gray-500 mt-1.5">
-              Times are shown in your time zone ({timezoneLabel}).
+            <h1 className="page-title">Airing schedule</h1>
+            <p className="mt-2 text-[15px] text-[var(--text-2)]">
+              Times are in your time zone ({timezoneLabel}).
             </p>
           </header>
 
@@ -292,6 +343,7 @@ export default function Schedule() {
           {/* Day Selector */}
           <div className="mb-8 sm:mb-10">
             <DaySelector
+              quietEmpty={myListOnly}
               selectedDay={selectedDay}
               onSelect={setSelectedDay}
               animeCounts={animeCounts}
@@ -300,46 +352,24 @@ export default function Schedule() {
             />
           </div>
 
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-10">
+          <div className="min-w-0">
           {/* Selected Day Header */}
           <div className="flex items-center justify-between gap-3 mb-5 sm:mb-6">
-            <h2 className="text-lg font-bold text-white/90">
+            <h2 className="section-title">
               {DAY_NAMES[selectedDay]}
-              <span className="text-gray-500 font-normal ml-2">
+              <span className="ml-2 font-normal text-[var(--text-2)]">
                 {formatCalendarDate(
                   addDays(startOfToday, selectedOffset),
-                  { month: 'short', day: 'numeric' }
+                  { day: 'numeric', month: 'short' }
                 )}
               </span>
             </h2>
 
             <div className="flex items-center gap-3">
-              <div className="text-sm text-gray-400">
+              <div className="text-sm text-[var(--text-2)]">
                 {selectedDayAnime.length} {selectedDayAnime.length === 1 ? 'episode' : 'episodes'}
               </div>
-              {/* Members only: guests would just see a disabled control. */}
-              {isAuthenticated && (
-              <button
-                onClick={handleToggleAdultContent}
-                type="button"
-                disabled={isUpdatingAdultContent}
-                className={`flex items-center justify-center w-[40px] h-[40px] rounded-xl transition-colors ${
-                  adultContentEnabled
-                    ? 'bg-accent/20 text-accent'
-                    : 'bg-dark-200 text-gray-400 hover:text-white'
-                } ${!isAuthenticated || isUpdatingAdultContent ? 'opacity-60 cursor-not-allowed' : ''}`}
-                aria-label="Show explicit content"
-                aria-pressed={adultContentEnabled}
-                title={
-                  !isAuthenticated
-                    ? 'Log in to change explicit content visibility'
-                    : adultContentEnabled
-                      ? 'Explicit hentai: visible'
-                      : 'Explicit hentai: hidden'
-                }
-              >
-                {adultContentEnabled ? <Eye aria-hidden="true" className="w-[18px] h-[18px]" /> : <EyeOff aria-hidden="true" className="w-[18px] h-[18px]" />}
-              </button>
-              )}
             </div>
           </div>
 
@@ -347,33 +377,52 @@ export default function Schedule() {
           {isLoading ? (
             <ScheduleGridSkeleton count={10} />
           ) : selectedDayAnime.length > 0 ? (
-            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-6 anime-card-grid-gap">
-              {selectedDayAnime.map((anime, index) => (
-                <AnimeCard
-                  key={anime.id}
-                  anime={anime}
-                  priority={index < 6}
-                  index={index}
-                  showAiringCountdown
-                  metaText={formatAirTime(anime, preferredTimezone)}
-                />
+            <div className="flex flex-col gap-4">
+              {agendaGroups(selectedDayAnime, isAuthenticated).map((group, _index, groups) => (
+                group.untimed && groups.length > 1 ? (
+                  <details key={group.title} className="panel group/untimed">
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[15px] text-[var(--text-2)] [&::-webkit-details-marker]:hidden">
+                      <span>{group.items.length} more · time not announced</span>
+                      <ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-open/untimed:rotate-180" />
+                    </summary>
+                    <div className="mt-1">
+                      {group.items.map((anime, index) => (
+                        <AnimeCard key={anime.id} variant="row" anime={anime} index={index} showAiringCountdown metaText={null} />
+                      ))}
+                    </div>
+                  </details>
+                ) : (
+                <section key={group.title} aria-label={group.title} className="panel">
+                  {group.showTitle && (
+                    <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-semibold text-[var(--text-2)]">
+                      {group.title}
+                      <span className="text-sm font-normal text-[var(--text-3)] tabular">{group.items.length}</span>
+                    </h3>
+                  )}
+                  <div>
+                    {group.items.map((anime, index) => (
+                      <AnimeCard
+                        key={anime.id}
+                        variant="row"
+                        anime={anime}
+                        priority={index < 6}
+                        index={index}
+                        showAiringCountdown
+                        metaText={group.untimed ? null : formatAirTime(anime, preferredTimezone)}
+                      />
+                    ))}
+                  </div>
+                </section>
+                )
               ))}
             </div>
           ) : (
-            <div className="ui-empty-state">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-dark-200 mb-5">
-                <Bell aria-hidden="true" className="w-6 h-6 text-gray-500" />
-              </div>
-              <h3 className="text-lg font-semibold text-white mb-2">
-                No episodes scheduled
-              </h3>
-              <p className="text-sm text-gray-400 max-w-md mx-auto">
-                {myListOnly
-                  ? `Nothing from your list airs on ${DAY_NAMES[selectedDay]}.`
-                  : `There are no anime episodes airing on ${DAY_NAMES[selectedDay]}.`}
-                {' '}Try another day in the strip above.
-              </p>
-            </div>
+            <EmptyState title="No episodes scheduled">
+              {myListOnly
+                ? `Nothing from your list airs on ${DAY_NAMES[selectedDay]}.`
+                : `There are no anime episodes airing on ${DAY_NAMES[selectedDay]}.`}
+              {' '}Try another day in the strip above.
+            </EmptyState>
           )}
 
           {!isLoading && laterCount > 0 && (
@@ -381,6 +430,20 @@ export default function Schedule() {
               {laterCount} more {laterCount === 1 ? 'airs' : 'air'} later
             </p>
           )}
+          </div>
+
+          <aside aria-label="Your week" className="hidden lg:block lg:pt-[3rem]">
+            <WeekAside
+              isAuthenticated={isAuthenticated}
+              isLoading={isLoading}
+              items={myWeek}
+              startOfToday={startOfToday}
+              selectedOffset={selectedOffset}
+              preferredTimezone={preferredTimezone}
+              onSelectDay={(offset) => setSelectedDay((todayDayIndex + offset) % 7)}
+            />
+          </aside>
+          </div>
         </div>
       </div>
     </ErrorBoundary>

@@ -29,7 +29,7 @@ export default function VerificationBanner() {
     if (!showVerificationBanner) return null;
 
     return (
-        <div className="bg-yellow-500/10 border-b border-yellow-500/20 backdrop-blur-sm relative z-[60]">
+        <div className="bg-yellow-500/10 border-yellow-500/20 backdrop-blur-sm relative z-[60]">
             <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between gap-4 text-sm">
                 <div className="flex items-center gap-2 text-yellow-500">
                     <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -39,7 +39,7 @@ export default function VerificationBanner() {
                         {' '}
                         <Link
                             to="/settings?tab=account"
-                            className="font-medium underline underline-offset-2 hover:text-yellow-400 transition-colors"
+                            className="font-semibold hover:text-yellow-400 transition-colors"
                         >
                             Change email
                         </Link>

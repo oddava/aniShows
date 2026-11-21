@@ -241,7 +241,7 @@ const ForumThreadDetail = () => {
     return (
         <>
             <Helmet>
-                <title>{thread.title} | aniShows Forums</title>
+                <title>{thread.title} | AniShows Forums</title>
                 <meta name="description" content={(thread.content || thread.excerpt || '').substring(0, 150)} />
             </Helmet>
             <div className="container mx-auto px-4 pt-8 pb-24 max-w-6xl min-h-screen">
@@ -262,19 +262,19 @@ const ForumThreadDetail = () => {
                 <div className="mb-4 lg:w-[85%] mx-auto">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                         {thread.is_pinned && (
-                            <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase text-yellow-500 bg-yellow-500/10 rounded-md border border-yellow-500/20">
+                            <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-bold text-yellow-500 bg-yellow-500/10 rounded-md border border-yellow-500/20">
                                 <Pin size={10} /> Pinned
                             </span>
                         )}
                         {thread.is_locked && (
-                            <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-400 bg-gray-400/10 rounded-md border border-gray-400/20">
+                            <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-bold text-gray-400 bg-gray-400/10 rounded-md border border-gray-400/20">
                                 <Lock size={10} /> Locked
                             </span>
                         )}
                         {thread.tags?.map(tag => (
                             <span
                                 key={tag.id}
-                                className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md"
+                                className="px-2 py-0.5 text-xs font-bold rounded-md"
                                 style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
                             >
                                 {tag.name}

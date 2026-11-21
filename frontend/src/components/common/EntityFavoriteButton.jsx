@@ -27,8 +27,8 @@ export default function EntityFavoriteButton({
         return (
             <Link
                 to="/login"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-dark-100 px-4 py-2.5 text-sm font-bold text-gray-200 transition-colors hover:bg-dark-200 hover:text-white"
-                title={`Sign in to favorite this ${entityLabel}`}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-white/[0.06] px-4 text-sm font-semibold text-[var(--text-1)] transition-colors duration-150 hover:bg-white/[0.1]"
+                title={`Sign in to favorite ${entityLabel}`}
                 aria-label={`Sign in to favorite ${entityLabel}, ${countLabel}`}
             >
                 <Heart className="h-4 w-4" aria-hidden="true" />
@@ -48,10 +48,10 @@ export default function EntityFavoriteButton({
             aria-label={actionLabel}
             aria-describedby={countId}
             aria-busy={isPending || undefined}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-colors ${
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold tabular transition-colors duration-150 ${
                 isFavorite
-                    ? 'bg-red-500 text-white'
-                    : 'bg-dark-100 text-gray-200 hover:bg-dark-200 hover:text-red-400'
+                    ? 'bg-[var(--signature-soft)] text-[var(--signature)]'
+                    : 'bg-white/[0.06] text-[var(--text-1)] hover:bg-white/[0.1]'
             } ${isPending ? 'cursor-wait opacity-80' : ''}`}
             title={actionLabel}
         >

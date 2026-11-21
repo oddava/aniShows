@@ -1,16 +1,55 @@
-import { Link } from 'react-router-dom';
-import { ChevronDown, Heart, Pencil, Plus } from 'lucide-react';
-import StatusSelector from '../StatusSelector';
+import TrackingPanel from './TrackingPanel';
+import { NextEpisodePanel } from '../InformationBox';
 import { applyImageFallback } from '../../utils/imageUtils';
+import { capsToSentence } from '../detailTabs/format';
 
 /**
- * The head of the main column: on small screens the poster and tracking
- * actions, then the title, the expandable synopsis and (small screens) the
- * information box.
+ * The facts people look for first, in one line under the title:
+ * "8.7 / 10 · TV · Fall 1999 · Toei Animation · Airing".
+ */
+function TitleMeta({ anime }) {
+    const hasScore = anime.rating != null && anime.rating !== '' && Number(anime.rating) > 0;
+    const season = anime.season
+        ? [capsToSentence(anime.season), anime.season_year].filter(Boolean).join(' ')
+        : (anime.season_year || (anime.release_date ? String(anime.release_date).slice(0, 4) : ''));
+    const facts = [
+        anime.anime_type,
+        season,
+        anime.studio?.name,
+        anime.status && anime.status !== 'Finished' ? capsToSentence(anime.status) : null,
+    ].filter(Boolean);
+
+    if (!hasScore && facts.length === 0) return null;
+
+    return (
+        <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-[15px] text-[var(--text-2)] lg:mt-3 lg:text-[17px]">
+            {/* Each separator trails its item, so a wrapped line never starts with "·". */}
+            {[
+                hasScore ? (
+                    <span key="score" className="tabular">
+                        <span className="font-semibold text-[var(--text-1)]">{anime.rating}</span>
+                        <span className="text-[var(--text-3)]"> / 10</span>
+                    </span>
+                ) : null,
+                ...facts.map((fact) => <span key={fact}>{fact}</span>),
+            ].filter(Boolean).map((item, i, all) => (
+                <span key={item.key} className="whitespace-nowrap">
+                    {item}
+                    {i < all.length - 1 && <span aria-hidden="true" className="ml-2 text-[var(--text-3)]">·</span>}
+                </span>
+            ))}
+        </p>
+    );
+}
+
+/**
+ * The head of the main column. Small screens: the poster beside the title,
+ * then the tracking controls on their own opaque surface (off the banner
+ * art), the next episode, then the synopsis. Large screens: the title and synopsis only; the
+ * poster and tracking live in PosterColumn.
  */
 export default function TitleSection({
     anime,
-    accentColor,
     isAuthenticated,
     coverUrl,
     coverSrcSet,
@@ -19,116 +58,84 @@ export default function TitleSection({
     setIsCoverLoaded,
     isFavorite,
     isLargeViewport,
-    editTriggerKey,
     handleListUpdate,
-    handleOpenListEdit,
     handleFavorite,
     synopsisExpanded,
     setSynopsisExpanded,
 }) {
-    return (
-        <div className="text-left mb-8">
-            <div className="lg:hidden mb-8">
-                <div className="flex max-w-[360px] md:max-w-[420px] items-end gap-4">
-                    <div className="w-[118px] md:w-40 flex-shrink-0">
-                        <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-dark-200 shadow-xl shadow-black/40 ring-1 ring-white/10">
-                            {!isCoverLoaded && (
-                                <div
-                                    aria-hidden="true"
-                                    className="absolute inset-0 animate-pulse bg-gradient-to-br from-dark-100 via-dark-200 to-dark-50"
-                                />
-                            )}
-                            <img
-                                src={coverUrl}
-                                srcSet={coverSrcSet}
-                                sizes="(min-width: 768px) 160px, 118px"
-                                alt={anime.title}
-                                onLoad={() => setIsCoverLoaded(true)}
-                                onError={(event) => {
-                                    setIsCoverLoaded(false);
-                                    applyImageFallback(event, coverFallbackUrl);
-                                }}
-                                className={`w-full h-full object-cover text-transparent transition-opacity duration-700 ease-out ${isCoverLoaded ? 'opacity-100' : 'opacity-0'}`}
-                            />
-                        </div>
-                    </div>
+    const isLongSynopsis = (anime.synopsis?.length || 0) > 300;
 
-                    <div className="min-w-0 flex-1">
-                        <div className="space-y-3" data-title="Mobile Tracking Actions">
-                            {isAuthenticated ? (
-                                <div className="flex items-center gap-3">
-                                    <div className="flex-1 min-w-0">
-                                        <StatusSelector
-                                            animeId={anime.id}
-                                            initialStatus={anime.user_list_status}
-                                            onUpdate={handleListUpdate}
-                                            totalEpisodes={anime.episode_count}
-                                            compactSidebar={true}
-                                            showEditInDropdown={false}
-                                            externalEditTrigger={isLargeViewport ? 0 : editTriggerKey}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={handleOpenListEdit}
-                                        title="Edit List Entry"
-                                        className="w-9 h-9 flex justify-center items-center rounded-lg transition-all duration-300 bg-dark-100 text-gray-400 hover:text-white"
-                                    >
-                                        <Pencil className="w-4.5 h-4.5" />
-                                    </button>
-                                    <button
-                                        onClick={handleFavorite}
-                                        title={isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
-                                        className={`w-9 h-9 flex justify-center items-center rounded-lg transition-all duration-300
-                                            ${isFavorite
-                                                ? 'bg-red-500/10 text-red-500'
-                                                : 'bg-dark-100 text-gray-400 hover:text-white'}`}
-                                    >
-                                        <Heart className={`w-4.5 h-4.5 ${isFavorite ? 'fill-current' : ''}`} />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="w-full">
-                                    <Link to="/login" className="btn-primary py-2.5 px-6 rounded-lg flex items-center justify-center gap-2 text-sm font-bold w-full shadow-lg">
-                                        <Plus className="w-4 h-4" /> Sign In to Track
-                                    </Link>
-                                </div>
-                            )}
-                        </div>
+    return (
+        <div className="mb-8 text-left lg:mb-10">
+            <div className="flex min-w-0 items-end gap-4 lg:block">
+                <div className="w-[104px] flex-shrink-0 md:w-36 lg:hidden">
+                    <div className="relative aspect-[2/3] overflow-hidden rounded-[var(--radius-md)] bg-[var(--ink-2)] shadow-[var(--shadow-pop)]">
+                        <img
+                            src={coverUrl}
+                            srcSet={coverSrcSet}
+                            sizes="(min-width: 768px) 144px, 104px"
+                            alt={anime.title}
+                            onLoad={() => setIsCoverLoaded(true)}
+                            onError={(event) => {
+                                setIsCoverLoaded(false);
+                                applyImageFallback(event, coverFallbackUrl);
+                            }}
+                            className={`h-full w-full object-cover text-transparent transition-opacity duration-500 ease-out ${isCoverLoaded ? 'opacity-100' : 'opacity-0'}`}
+                        />
                     </div>
+                </div>
+
+                <div className="min-w-0 flex-1 pb-1 lg:pb-0">
+                    <h1 className="page-title break-words text-[1.75rem] sm:text-[2.25rem] lg:text-[3.25rem]">
+                        {anime.title}
+                    </h1>
+                    <TitleMeta anime={anime} />
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-start gap-2 sm:gap-3 lg:items-end lg:gap-4 mb-3 lg:mb-4 min-w-0">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold text-white/90 tracking-tight leading-tight lg:leading-[1.05] text-left w-full lg:w-auto break-words">
-                    {anime.title}
-                </h1>
-            </div>
+            {/* Small screens: the controls sit below the banner on the plain page
+                surface, so the art never sits behind them. */}
+            {!isLargeViewport && (
+                <div className="mt-6 lg:hidden">
+                    <TrackingPanel
+                        anime={anime}
+                        isAuthenticated={isAuthenticated}
+                        isFavorite={isFavorite}
+                        onFavorite={handleFavorite}
+                        onListUpdate={handleListUpdate}
+                        compact
+                    />
+                    {/* "When's the next one?" is the question this page answers
+                        first, so on phones it follows the controls instead of
+                        waiting below the whole overview. */}
+                    <NextEpisodePanel anime={anime} className="mt-4" />
+                </div>
+            )}
+
             {anime.synopsis && (
-                <div className="text-left mb-8">
-                    <div className={`relative transition-all duration-500 ease-in-out ${!synopsisExpanded ? 'max-h-[140px] overflow-hidden' : 'max-h-[none]'}`}>
-                        {anime.synopsis.split('\n').filter(p => p.trim()).map((para, i) => (
-                            <p key={i} className="text-gray-200 font-medium leading-7 lg:leading-8 text-sm lg:text-base max-w-4xl mb-4 last:mb-0">
+                <div className="mt-6 lg:mt-5">
+                    <div className={`relative ${!synopsisExpanded && isLongSynopsis ? 'max-h-[7rem] overflow-hidden lg:max-h-[8rem]' : ''}`}>
+                        {anime.synopsis.split('\n').filter((p) => p.trim()).map((para, i) => (
+                            <p key={i} className="mb-4 max-w-3xl text-[15px] leading-7 text-[var(--text-2)] last:mb-0 lg:text-base">
                                 {para}
                             </p>
                         ))}
-                        {anime.synopsis.length > 300 && !synopsisExpanded && (
-                            <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-dark via-dark/60 to-transparent pointer-events-none" />
+                        {isLongSynopsis && !synopsisExpanded && (
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[var(--ink-0)] to-transparent" />
                         )}
                     </div>
-                    {anime.synopsis.length > 300 && (
+                    {isLongSynopsis && (
                         <button
                             type="button"
                             onClick={() => setSynopsisExpanded(!synopsisExpanded)}
                             aria-expanded={synopsisExpanded}
-                            className="mt-2 -ml-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-xs lg:text-sm font-semibold text-gray-300 hover:text-white transition-colors"
+                            className="text-link -mt-1 inline-flex min-h-11 items-center text-[15px]"
                         >
-                            {synopsisExpanded ? 'Show Less' : 'Read More'}
-                            <ChevronDown className={`w-3.5 h-3.5 lg:w-4 lg:h-4 transition-transform ${synopsisExpanded ? 'rotate-180' : ''}`} />
+                            {synopsisExpanded ? 'Show less' : 'Read more'}
                         </button>
                     )}
                 </div>
             )}
-
         </div>
     );
 }

@@ -133,6 +133,27 @@ def _build_items(request, *, can_view_adult: bool) -> tuple[list[dict], bool]:
     return fallback, False
 
 
+def _drop_listed(user_id: int, items: list[dict]) -> list[dict]:
+    """Never recommend what is already on the list (L2).
+
+    Stored rows are built before later list writes and the payload is cached,
+    so a show marked Watching or Completed since then is filtered at read time.
+    """
+    from ...users.models import UserAnimeList
+
+    ids = [item["anime"]["id"] for item in items if isinstance(item.get("anime"), dict)]
+    if not ids:
+        return items
+    listed = set(
+        UserAnimeList.objects.filter(user_id=user_id, anime_id__in=ids).values_list(
+            "anime_id", flat=True
+        )
+    )
+    if not listed:
+        return items
+    return [item for item in items if item.get("anime", {}).get("id") not in listed]
+
+
 class RecommendationsQuerySerializer(Serializer):
     limit = IntegerField(required=False, default=12, min_value=1, max_value=MAX_LIMIT)
 
@@ -154,7 +175,7 @@ class RecommendationsViewSet(ViewSet):
         cache_key = recommendations_cache_key(user.id)
         cached = _cache_get(cache_key)
         if isinstance(cached, dict) and cached.get("adult") is can_view_adult:
-            return Response(cached["items"][:limit])
+            return Response(_drop_listed(user.id, cached["items"])[:limit])
 
         try:
             items, fresh = _build_items(request, can_view_adult=can_view_adult)
@@ -174,7 +195,7 @@ class RecommendationsViewSet(ViewSet):
             {"adult": can_view_adult, "items": items},
             FRESH_CACHE_TTL if fresh else SHORT_CACHE_TTL,
         )
-        return Response(items[:limit])
+        return Response(_drop_listed(user.id, items)[:limit])
 
     @action(
         detail=False,

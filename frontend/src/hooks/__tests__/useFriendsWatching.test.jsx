@@ -137,7 +137,7 @@ describe('useFriendsWatching', () => {
         );
         await waitFor(() => expect(screen.getByTestId('probe-a').textContent).toBe('1/1'));
 
-        fireEvent.click(screen.getByRole('button', { name: 'Follow Back friend3' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Follow back friend3' }));
 
         await waitFor(() => expect(screen.getByTestId('probe-a').textContent).toBe('2/2'));
         expect(followApi.getFriendsWatching).toHaveBeenCalledTimes(2);

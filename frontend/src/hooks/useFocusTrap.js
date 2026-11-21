@@ -12,22 +12,32 @@ export function useFocusTrap(isActive, onEscape) {
     const containerRef = useRef(null);
     const previousActiveElement = useRef(null);
 
-    // Store the previously focused element when trap activates
+    // Remember what had focus when the trap turns on, and give focus back to it
+    // when the trap turns off (dialog closed) or unmounts. Components that stay
+    // mounted while closed (an exit animation, `return null`) need the former.
     useEffect(() => {
-        if (isActive) {
-            previousActiveElement.current = document.activeElement;
-        }
-    }, [isActive]);
-
-    // Restore focus when trap deactivates
-    useEffect(() => {
+        if (!isActive) return undefined;
+        const previous = document.activeElement;
+        previousActiveElement.current = previous;
+        const container = containerRef.current;
         return () => {
-            if (previousActiveElement.current && 
-                typeof previousActiveElement.current.focus === 'function') {
-                previousActiveElement.current.focus();
+            const active = document.activeElement;
+            // Leave focus alone if the user deliberately moved it elsewhere.
+            const focusIsLost = !active
+                || active === document.body
+                || !active.isConnected
+                || (container && container.contains(active));
+            if (
+                focusIsLost
+                && previous
+                && previous !== document.body
+                && previous.isConnected
+                && typeof previous.focus === 'function'
+            ) {
+                previous.focus({ preventScroll: true });
             }
         };
-    }, []);
+    }, [isActive]);
 
     // Handle tab key navigation and escape
     useEffect(() => {

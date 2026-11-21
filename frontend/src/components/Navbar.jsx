@@ -1,5 +1,6 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import React, { useState } from 'react';
+import { Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 import Logo from './Logo';
@@ -11,6 +12,26 @@ import MobileTopBar from './navbar/MobileTopBar';
 import useNavbarSearch from './navbar/useNavbarSearch';
 import useNavbarAutoHide from './navbar/useNavbarAutoHide';
 import useNavbarNotifications from './navbar/useNavbarNotifications';
+
+/** Desktop bell with the unread count, one click from anywhere (N1). */
+function NotificationBell({ count = 0 }) {
+    const label = count > 0 ? `Notifications, ${count} unread` : 'Notifications';
+    return (
+        <NavLink
+            to="/notifications"
+            aria-label={label}
+            title={label}
+            className={({ isActive }) => `relative mr-1 flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${isActive ? 'text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
+        >
+            <Bell aria-hidden="true" className="h-5 w-5" />
+            {count > 0 && (
+                <span aria-hidden="true" className="absolute right-1.5 top-1.5 min-w-[18px] rounded-full bg-[var(--signature)] px-1 text-center text-[11px] font-bold leading-[18px] text-[var(--on-signature)] tabular">
+                    {count > 9 ? '9+' : count}
+                </span>
+            )}
+        </NavLink>
+    );
+}
 
 export default function Navbar() {
     const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -39,32 +60,30 @@ export default function Navbar() {
             <nav
                 aria-label="Main"
                 data-autohide-nav
-                className={`hidden md:block fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-[calc(100%-2rem)] max-w-[calc(var(--page-max)+3rem)] rounded-2xl border border-white/10 bg-dark/70 backdrop-blur-xl transition-all duration-300 ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-8 opacity-0 pointer-events-none'}`}
-                style={{
-                    background: 'var(--color-navbar-bg)',
-                    borderColor: 'var(--color-navbar-border)',
-                }}
+                className={`hidden md:block fixed inset-x-0 top-0 z-[1000] backdrop-blur-md transition-[transform,opacity] duration-200 ease-out ${isVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'}`}
+                style={{ background: 'var(--color-navbar-bg)' }}
             >
-                <div className="px-4 sm:px-6">
-                    <div className="flex items-center justify-between h-14">
+                <div className="page-container">
+                    <div className="flex items-center justify-between h-16">
                         {/* Logo */}
                         <Link to="/" className="rounded-md" aria-label="AniShows home">
                             <Logo />
                         </Link>
 
                         {/* Desktop Nav */}
-                        <div className="hidden md:flex items-center gap-1.5 flex-1 ml-6 lg:ml-8">
+                        <div className="hidden md:flex items-center gap-1 flex-1 ml-8">
                             <NavItem to="/browse" label="Browse" />
                             <NavItem to="/schedule" label="Schedule" />
                             {(isAuthenticated || authLoading) && (
-                                <NavItem to={currentUserProfilePath} label="My List" />
+                                <NavItem to="/list" label="My list" />
                             )}
 
                             {/* Search - Collapsible */}
                             {showNavSearch ? <NavbarSearch search={search} /> : <div className="flex-1" />}
                         </div>
 
-                        {/* Right Section: Auth */}
+                        {/* Right Section: notifications (N1), then the account menu */}
+                        {isAuthenticated && <NotificationBell count={mobileUnreadCount} />}
                         <UserMenu
                             user={user}
                             isAuthenticated={isAuthenticated}

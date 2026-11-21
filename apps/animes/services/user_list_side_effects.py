@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -53,6 +54,8 @@ SITE_STATUS_KEYS = ("watching", "completed", "on_hold", "dropped", "plan_to_watc
 SITE_STATUS_CACHE_TIMEOUT = 600
 # A +1 within this window of the last +1 on the same anime extends that activity row.
 PROGRESS_COALESCE_WINDOW = timedelta(minutes=30)
+# A list write within this window of the last row for the same anime replaces that row.
+LIST_ACTIVITY_MERGE_WINDOW = timedelta(minutes=10)
 
 
 def site_status_cache_key(anime_id) -> str:
@@ -103,12 +106,209 @@ def invalidate_site_status_counts(anime_ids) -> None:
         logger.warning("Could not drop site status counts", exc_info=True)
 
 
-def _coalesce_progress(kwargs) -> bool:
+def _coalesce_progress(latest, kwargs, now) -> bool:
     """Fold a +1 into the user's last PROGRESS row for the same anime (spec 3 P1-7).
 
     True when the activity was absorbed (updated or, when it nets to zero, removed),
     so binge clicks leave one feed row; the heatmap sum of episode diffs is unchanged.
     """
+    if (
+        latest is None
+        or latest.activity_type != UserActivity.ActivityType.PROGRESS
+        or latest.created_at < now - PROGRESS_COALESCE_WINDOW
+        or latest.created_at.date() != now.date()
+    ):
+        return False
+    new_episodes = kwargs.get("new_episodes")
+    if new_episodes == latest.old_episodes:
+        latest.delete()
+    else:
+        latest.new_episodes = new_episodes
+        latest.save(update_fields=["new_episodes"])
+    return True
+
+
+@dataclass(frozen=True, slots=True)
+class _EntryState:
+    """What the activity log knows about an entry at one moment."""
+
+    status: str
+    episodes: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class _ListEvent:
+    """One list write: the entry before and after (``None`` = not on the list)."""
+
+    before: _EntryState | None
+    after: _EntryState | None
+    # The write moved ``is_rewatching`` or ``total_rewatches``: its own event, never merged.
+    touches_rewatch: bool = False
+    # The write took back a rewatch that had just started (flag off, nothing counted).
+    reverts_rewatch: bool = False
+
+
+def _transition_fields(before: _EntryState | None, after: _EntryState | None):
+    """The activity row that describes ``before -> after`` (``None`` when nothing to show).
+
+    The one place the row type is chosen, for a single write and for a merged run of
+    writes alike. Status and removal rows carry the episode counts too, so a later write
+    can tell what state they started from; only PROGRESS and COMPLETED rows feed the
+    heatmap.
+    """
+    at = UserActivity.ActivityType
+    completed = UserAnimeList.UserAnimeStatus.completed
+    if before is None and after is None:
+        return None
+    if before is None:
+        assert after is not None
+        return {
+            "activity_type": at.COMPLETED if after.status == completed else at.ADDED,
+            "new_status": after.status,
+            "new_episodes": after.episodes,
+        }
+    if after is None:
+        return {
+            "activity_type": at.REMOVED,
+            "old_status": before.status,
+            "old_episodes": before.episodes,
+        }
+    changes = {
+        "old_status": before.status,
+        "new_status": after.status,
+        "old_episodes": before.episodes,
+        "new_episodes": after.episodes,
+    }
+    if after.status == completed and before.status != completed:
+        return {"activity_type": at.COMPLETED, **changes}
+    if after.status != before.status:
+        return {"activity_type": at.STATUS_CHANGE, **changes}
+    if after.episodes != before.episodes:
+        return {
+            "activity_type": at.PROGRESS,
+            "old_episodes": before.episodes,
+            "new_episodes": after.episodes,
+        }
+    return None
+
+
+def _heatmap_episodes(activity_type, old_episodes, new_episodes) -> int:
+    """Episodes a row adds to the heatmap (mirrors ``activity_service.get_heatmap_data``)."""
+    at = UserActivity.ActivityType
+    if activity_type not in (at.PROGRESS, at.COMPLETED):
+        return 0
+    if new_episodes is None:
+        return 1
+    return max(new_episodes - (old_episodes or 0), 0)
+
+
+def _row_span(row, event: _ListEvent):
+    """``(before, after)`` the stored ``row`` recorded, or ``None`` when it cannot be told.
+
+    PROGRESS rows keep no status (their status did not change), so it is read from the
+    state the new write started from. Rows written before status rows kept episode
+    counts give ``None``: they are left alone.
+    """
+    at = UserActivity.ActivityType
+    kind = row.activity_type
+    if kind == at.ADDED:
+        return None, _EntryState(row.new_status, row.new_episodes)
+    if kind == at.COMPLETED and row.old_status is None and row.old_episodes is None:
+        return None, _EntryState(row.new_status, row.new_episodes)
+    if kind in (at.COMPLETED, at.STATUS_CHANGE):
+        if row.old_episodes is None or row.new_episodes is None:
+            return None
+        return (
+            _EntryState(row.old_status, row.old_episodes),
+            _EntryState(row.new_status, row.new_episodes),
+        )
+    if kind == at.REMOVED:
+        if row.old_episodes is None:
+            return None
+        return _EntryState(row.old_status, row.old_episodes), None
+    if kind == at.PROGRESS:
+        if event.before is None:
+            return None
+        status = event.before.status
+        return _EntryState(status, row.old_episodes), _EntryState(status, row.new_episodes)
+    return None
+
+
+def _merge_list_activity(latest, kwargs, event: _ListEvent, now) -> bool:
+    """Fold a list write into the user's last row for the anime when that row is recent.
+
+    The feed says what happened, not every click: within ``LIST_ACTIVITY_MERGE_WINDOW``
+    of the previous row for the same user and anime, that row is replaced by one that
+    describes the net change (Added then Completed is one "Completed"), and a write that
+    puts the entry back where that row started (an Undo, an add then a remove) leaves no
+    row at all. True when the write was absorbed.
+
+    The heatmap counts episodes from PROGRESS and COMPLETED rows, so a replacement is
+    made only when it counts the same episodes as the two rows it stands for; otherwise
+    both rows stay. A net no-op drops the episodes too: they were taken back. Runs of
+    +1s keep their own rule (``_coalesce_progress``), and rewatch starts and finishes
+    stay rows of their own.
+    """
+    at = UserActivity.ActivityType
+    if (
+        latest is None
+        or latest.created_at < now - LIST_ACTIVITY_MERGE_WINDOW
+        or tz.localdate(latest.created_at) != tz.localdate(now)
+    ):
+        return False
+
+    if latest.activity_type == at.REWATCHING:
+        # Only the Undo of a rewatch start folds in: back to where it started.
+        started_from = _EntryState(latest.old_status, latest.old_episodes)
+        if event.reverts_rewatch and event.after == started_from:
+            latest.delete()
+            return True
+        return False
+    if event.touches_rewatch:
+        return False
+    if latest.activity_type == at.PROGRESS and kwargs["activity_type"] == at.PROGRESS:
+        return False
+
+    span = _row_span(latest, event)
+    if span is None:
+        return False
+    start, middle = span
+    if middle != event.before:
+        return False  # something unlogged happened in between: keep both rows
+    if start == event.after:
+        latest.delete()
+        return True
+
+    merged = _transition_fields(start, event.after)
+    if merged is None:
+        return False
+    counted = _heatmap_episodes(
+        merged["activity_type"], merged.get("old_episodes"), merged.get("new_episodes")
+    )
+    separate = _heatmap_episodes(
+        latest.activity_type, latest.old_episodes, latest.new_episodes
+    ) + _heatmap_episodes(
+        kwargs["activity_type"], kwargs.get("old_episodes"), kwargs.get("new_episodes")
+    )
+    if counted != separate:
+        return False
+
+    keeps_score = merged["activity_type"] in (at.ADDED, at.COMPLETED)
+    latest.activity_type = merged["activity_type"]
+    latest.old_status = merged.get("old_status")
+    latest.new_status = merged.get("new_status")
+    latest.old_episodes = merged.get("old_episodes")
+    latest.new_episodes = merged.get("new_episodes")
+    latest.old_score = None
+    latest.new_score = kwargs.get("new_score") if keeps_score else None
+    latest.notes = kwargs.get("notes", "")
+    latest.created_at = now
+    latest.save()
+    return True
+
+
+def _absorb_into_latest(kwargs, event: _ListEvent | None) -> bool:
+    """Fold the write into the user's last row for the anime (one locked read for both rules)."""
     now = tz.now()
     with transaction.atomic():
         latest = (
@@ -117,23 +317,16 @@ def _coalesce_progress(kwargs) -> bool:
             .order_by("-created_at", "-id")
             .first()
         )
-        if (
-            latest is None
-            or latest.activity_type != UserActivity.ActivityType.PROGRESS
-            or latest.created_at < now - PROGRESS_COALESCE_WINDOW
-            or latest.created_at.date() != now.date()
-        ):
+        if latest is None:
             return False
-        new_episodes = kwargs.get("new_episodes")
-        if new_episodes == latest.old_episodes:
-            latest.delete()
-        else:
-            latest.new_episodes = new_episodes
-            latest.save(update_fields=["new_episodes"])
-    return True
+        if event is not None and _merge_list_activity(latest, kwargs, event, now):
+            return True
+        return kwargs["activity_type"] == UserActivity.ActivityType.PROGRESS and (
+            _coalesce_progress(latest, kwargs, now)
+        )
 
 
-def _create_activity_deduped(**kwargs):
+def _create_activity_deduped(event: _ListEvent | None = None, **kwargs):
     user = kwargs.get("user")
     if not user_exists(user):
         return
@@ -164,30 +357,42 @@ def _create_activity_deduped(**kwargs):
         return
 
     try:
-        if kwargs["activity_type"] == UserActivity.ActivityType.PROGRESS and _coalesce_progress(
-            kwargs
-        ):
+        if _absorb_into_latest(kwargs, event):
             return
         UserActivity.objects.create(**kwargs)
     except IntegrityError:
         logger.debug("Skipping activity creation for deleted user", exc_info=True)
 
 
-def build_user_activity_kwargs(instance, *, created: bool):
-    if created:
-        activity_type = UserActivity.ActivityType.ADDED
-        if instance.status == UserAnimeList.UserAnimeStatus.completed:
-            activity_type = UserActivity.ActivityType.COMPLETED
+def _entry_state(instance) -> _EntryState:
+    return _EntryState(instance.status, instance.episodes_watched)
 
-        return {
-            "user": instance.user,
-            "anime": instance.anime,
-            "activity_type": activity_type,
-            "new_status": instance.status,
-            "new_episodes": instance.episodes_watched,
-            "new_score": instance.score if instance.score else None,
-            "notes": instance.notes or "",
-        }
+
+def build_list_event(instance, *, created: bool) -> _ListEvent:
+    if created:
+        return _ListEvent(before=None, after=_entry_state(instance))
+    old_status = getattr(instance, "_old_status", None)
+    old_episodes = getattr(instance, "_old_episodes", None)
+    old_is_rewatching = bool(getattr(instance, "_old_is_rewatching", None))
+    old_total_rewatches = getattr(instance, "_old_total_rewatches", None)
+    before = _EntryState(old_status, old_episodes) if old_status is not None else None
+    count_changed = (
+        old_total_rewatches is not None and old_total_rewatches != instance.total_rewatches
+    )
+    return _ListEvent(
+        before=before,
+        after=_entry_state(instance),
+        touches_rewatch=old_is_rewatching != bool(instance.is_rewatching) or count_changed,
+        reverts_rewatch=old_is_rewatching and not instance.is_rewatching and not count_changed,
+    )
+
+
+def build_user_activity_kwargs(instance, *, created: bool):
+    base = {"user": instance.user, "anime": instance.anime, "notes": instance.notes or ""}
+    score = instance.score if instance.score else None
+
+    if created:
+        return {**base, **_transition_fields(None, _entry_state(instance)), "new_score": score}
 
     old_status = getattr(instance, "_old_status", None)
     old_episodes = getattr(instance, "_old_episodes", None)
@@ -195,49 +400,21 @@ def build_user_activity_kwargs(instance, *, created: bool):
 
     if instance.is_rewatching and not old_is_rewatching:
         return {
-            "user": instance.user,
-            "anime": instance.anime,
+            **base,
             "activity_type": UserActivity.ActivityType.REWATCHING,
             "old_status": old_status,
             "new_status": instance.status,
             "old_episodes": old_episodes,
             "new_episodes": instance.episodes_watched,
-            "notes": instance.notes or "",
         }
-    if (
-        instance.status == UserAnimeList.UserAnimeStatus.completed
-        and old_status != UserAnimeList.UserAnimeStatus.completed
-    ):
-        return {
-            "user": instance.user,
-            "anime": instance.anime,
-            "activity_type": UserActivity.ActivityType.COMPLETED,
-            "old_status": old_status,
-            "new_status": instance.status,
-            "old_episodes": old_episodes,
-            "new_episodes": instance.episodes_watched,
-            "new_score": instance.score if instance.score else None,
-            "notes": instance.notes or "",
-        }
-    if old_status and instance.status != old_status:
-        return {
-            "user": instance.user,
-            "anime": instance.anime,
-            "activity_type": UserActivity.ActivityType.STATUS_CHANGE,
-            "old_status": old_status,
-            "new_status": instance.status,
-            "notes": instance.notes or "",
-        }
-    if old_episodes is not None and instance.episodes_watched != old_episodes:
-        return {
-            "user": instance.user,
-            "anime": instance.anime,
-            "activity_type": UserActivity.ActivityType.PROGRESS,
-            "old_episodes": old_episodes,
-            "new_episodes": instance.episodes_watched,
-            "notes": instance.notes or "",
-        }
-    return None
+    if not old_status or old_episodes is None:
+        return None
+    fields = _transition_fields(_EntryState(old_status, old_episodes), _entry_state(instance))
+    if fields is None:
+        return None
+    if fields["activity_type"] == UserActivity.ActivityType.COMPLETED:
+        fields["new_score"] = score
+    return {**base, **fields}
 
 
 def log_user_activity(instance, *, created: bool):
@@ -247,8 +424,11 @@ def log_user_activity(instance, *, created: bool):
     activity_kwargs = build_user_activity_kwargs(instance, created=created)
     if not activity_kwargs:
         return
+    event = build_list_event(instance, created=created)
 
-    transaction.on_commit(lambda kw=activity_kwargs: _create_activity_deduped(**kw))
+    transaction.on_commit(
+        lambda kw=activity_kwargs, ev=event: _create_activity_deduped(event=ev, **kw)
+    )
     transaction.on_commit(lambda: invalidate_heatmap_cache(instance.user.id))
 
 
@@ -258,14 +438,17 @@ def log_user_activity_on_delete(instance):
     if not user_exists(instance.user):
         return
 
+    before = _entry_state(instance)
     activity_kwargs = {
         "user": instance.user,
         "anime": instance.anime,
-        "activity_type": UserActivity.ActivityType.REMOVED,
-        "old_status": instance.status,
+        **_transition_fields(before, None),
         "notes": instance.notes or "",
     }
-    transaction.on_commit(lambda kw=activity_kwargs: _create_activity_deduped(**kw))
+    event = _ListEvent(before=before, after=None)
+    transaction.on_commit(
+        lambda kw=activity_kwargs, ev=event: _create_activity_deduped(event=ev, **kw)
+    )
     transaction.on_commit(lambda: invalidate_heatmap_cache(instance.user.id))
 
 

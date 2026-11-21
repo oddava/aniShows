@@ -1,23 +1,21 @@
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
-// Memoized tab button component
-const TabButton = memo(({ tab, isActive, to, accentColor, count }) => {
+// One tab of the detail page: plain text; the active one sits on a soft fill
+// (no lines, no underline).
+const TabButton = memo(({ tab, isActive, to, count }) => {
     return (
         <Link
             to={to}
             aria-current={isActive ? 'page' : undefined}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 lg:px-3 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap flex-shrink-0 min-h-[40px] sm:min-h-0
+            className={`inline-flex min-h-11 flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-[15px] sm:px-3.5 font-medium transition-colors
                 ${isActive
-                    ? 'text-white '
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-            style={isActive ? {
-                backgroundColor: accentColor || '#75698d'
-            } : {}}
+                    ? 'bg-white/[0.07] text-[var(--text-1)]'
+                    : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'}`}
         >
             {tab.label}
             {count > 0 && (
-                <span className={`text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md ${isActive ? 'bg-white/20' : 'bg-white/5'}`}>
+                <span className="tabular text-sm font-normal text-[var(--text-3)]">
                     {count}
                 </span>
             )}

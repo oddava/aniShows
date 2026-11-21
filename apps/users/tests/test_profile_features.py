@@ -273,7 +273,8 @@ class ProfileFeaturesTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["is_following"])
-        self.assertLessEqual(len(queries), 4)
+        # 5: the profile query set (4) plus the live list totals (P1).
+        self.assertLessEqual(len(queries), 5)
 
     def test_followers_list_falls_back_to_google_avatar_for_email_signup(self):
         """Follower cards should use the same avatar fallback as profile views."""

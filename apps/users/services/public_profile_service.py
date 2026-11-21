@@ -10,7 +10,7 @@ from ...shared.text import normalize_bio, normalize_primary_color
 from ..serializers.accounts import PublicUserSerializer
 from .avatar_service import get_user_avatar_url
 from .cache import get_public_profile_cache_key
-from .profile_service import build_profile_user_queryset, get_featured_badges
+from .profile_service import build_profile_user_queryset, get_featured_badges, with_live_list_stats
 from .user_queryset import filter_username_ci, get_annotated_user_queryset
 
 User = get_user_model()
@@ -31,6 +31,13 @@ class PublicProfileResult:
 
 
 def get_public_profile(username: str, viewer=None, request=None) -> PublicProfileResult:
+    result = _get_public_profile(username, viewer, request)
+    return PublicProfileResult(
+        data=with_live_list_stats(result.data), cache_hit=result.cache_hit, source=result.source
+    )
+
+
+def _get_public_profile(username: str, viewer=None, request=None) -> PublicProfileResult:
     is_authenticated = viewer is not None and getattr(viewer, "is_authenticated", False)
     is_own_profile = is_authenticated and viewer.username.lower() == username.lower()
     viewer_id = viewer.id if is_authenticated else "anonymous"

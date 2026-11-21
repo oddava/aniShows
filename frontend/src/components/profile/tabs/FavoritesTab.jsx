@@ -1,7 +1,6 @@
 // Profile "Favorites" tab body (G5 Community). Rendered by the ProfileContent shell (G1).
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AnimeCardSkeleton } from '../../AnimeCard';
 import DraggableFavoritesGrid from '../../DraggableFavoritesGrid';
@@ -109,7 +108,7 @@ export default function FavoritesContent({
                             <button
                                 type="button"
                                 onClick={() => setIsReordering(true)}
-                                className="btn-secondary text-sm px-4 py-2"
+                                className="btn-secondary px-4 text-[15px]"
                             >
                                 Reorder
                             </button>
@@ -122,31 +121,23 @@ export default function FavoritesContent({
                     />
                 </ProfileErrorBoundary>
             ) : (
-                <div className="ui-empty-state flex flex-col items-center justify-center py-20">
-                    <Heart className="w-12 h-12 text-gray-700 mb-4" />
-                    <p className="text-gray-400 text-lg font-medium">
-                        {isPublicView ? "No favorites yet." : "You haven't added any favorites yet."}
-                    </p>
+                <p className=" pt-6 text-[17px] text-[var(--text-2)]">
+                    {isPublicView ? 'No favorites yet.' : 'No favorites yet. The heart on a show’s page puts it here.'}
                     {!isPublicView && (
-                        <Link to="/browse" className="btn-primary mt-6 px-6 py-2.5">
-                            Browse Anime
-                        </Link>
+                        <> <Link to="/browse?sort=rating" className="text-link">See the top rated</Link></>
                     )}
-                </div>
+                </p>
             )}
 
             {hasNextFavorites && (
-                <div className="text-center">
+                <div>
                     <button
+                        type="button"
                         onClick={() => fetchNextFavorites()}
                         disabled={isFetchingNextFavorites}
-                        className="btn-secondary text-sm px-6 py-2"
+                        className="btn-secondary px-5 text-[15px]"
                     >
-                        {isFetchingNextFavorites ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                            'Load More Favorites'
-                        )}
+                        {isFetchingNextFavorites ? 'Loading…' : 'Load more'}
                     </button>
                 </div>
             )}

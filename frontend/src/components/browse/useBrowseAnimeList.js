@@ -3,6 +3,21 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { animeApi } from '../../api/client';
 import { getNextPageNumber } from '../../api/pagination';
 import { animeKeys } from '../../api/queries/anime';
+
+/** Index of `search` in animeKeys.browseList(...). */
+const SEARCH_KEY_INDEX = 5;
+
+/**
+ * Keep the previous grid on screen (dimmed) while a filter or sort change
+ * loads, but never across a new search: a new query clears to skeletons, so
+ * the heading and the cards always belong to the same search (B1). The
+ * superseded request is aborted by React Query (the signal is passed down).
+ */
+export function keepPreviousUnlessNewSearch(previousData, previousQuery, currentSearch) {
+  if (!previousData || !previousQuery) return undefined;
+  const previousSearch = previousQuery.queryKey?.[SEARCH_KEY_INDEX] || '';
+  return previousSearch === (currentSearch || '') ? previousData : undefined;
+}
 import { usePrefetchAnime } from '../../hooks/usePrefetchAnime';
 
 /**
@@ -46,6 +61,7 @@ export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
     isLoading,
     isFetching,
     isError,
+    isPlaceholderData,
     refetch,
   } = useInfiniteQuery({
     queryKey: animeKeys.browseList({
@@ -97,7 +113,8 @@ export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
         max_year: currentMaxYear || undefined,
       }, signal).then(res => res.data),
     initialPageParam: 1,
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData, previousQuery) =>
+      keepPreviousUnlessNewSearch(previousData, previousQuery, currentSearch),
     getNextPageParam: (lastPage) => {
       return getNextPageNumber(lastPage?.next);
     },
@@ -211,6 +228,7 @@ export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
     isLoading,
     isFetching,
     isError,
+    isPlaceholderData,
     refetch,
   };
 }

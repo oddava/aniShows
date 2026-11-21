@@ -229,7 +229,7 @@ export default function FollowButton({
         if (isFollowBack) {
             return (
                 <>
-                    <span className={showLabelOnMobile ? '' : 'hidden sm:inline'}>Follow Back</span>
+                    <span className={showLabelOnMobile ? '' : 'hidden sm:inline'}>Follow back</span>
                 </>
             );
         }
@@ -242,37 +242,16 @@ export default function FollowButton({
     };
 
     // Get button styles based on state
+    // One quiet system for both tones: the accent fill only for "Follow"
+    // (the action), a hairline for the states you are already in.
     const getButtonStyles = () => {
-        if (tone === 'dark') {
-            if (isFriends) {
-                return 'bg-dark-100 text-gray-200 border border-gray-700 hover:bg-dark-50 hover:border-accent';
-            }
-
-            if (isFollowing) {
-                return 'bg-dark-100 text-gray-300 border border-gray-700 hover:bg-red-500/15 hover:text-red-300 hover:border-red-500/40';
-            }
-
-            if (isFollowBack) {
-                return 'bg-dark-100 text-white border border-accent/50 hover:bg-dark-50 hover:border-accent';
-            }
-
-            // Unfollowed state: lighter surface to stand out as primary action.
-            return 'bg-gray-100 text-dark border border-gray-200 hover:bg-white';
+        if (isFriends || isFollowing) {
+            return 'border border-[var(--line-3)] bg-transparent text-[var(--text-1)] hover:border-red-400/50 hover:text-red-300';
         }
-
-        if (isFriends) {
-            return 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50';
-        }
-
-        if (isFollowing) {
-            return 'bg-gray-700/50 text-gray-300 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50 border border-gray-600';
-        }
-
         if (isFollowBack) {
-            return 'bg-accent-dark/85 text-white hover:bg-accent-dark border border-accent';
+            return 'border border-[var(--signature)] bg-transparent text-[var(--signature)] hover:bg-[var(--signature-soft)]';
         }
-
-        return 'bg-accent-dark text-white hover:bg-accent-dark/85';
+        return 'border border-transparent bg-[var(--color-accent-fill)] text-[var(--on-signature)] hover:bg-[var(--color-accent-fill-hover)]';
     };
 
     const label = isFriends
@@ -280,7 +259,7 @@ export default function FollowButton({
         : isFollowing
             ? 'Following'
             : isFollowBack
-                ? 'Follow Back'
+                ? 'Follow back'
                 : 'Follow';
     // The visible label (icon-only on phones unless showLabelOnMobile) plus
     // who it is for; pressed = you follow them.
@@ -295,7 +274,7 @@ export default function FollowButton({
         : isFollowing 
             ? 'Unfollow'
             : isFollowBack
-                ? 'Follow Back'
+                ? 'Follow back'
                 : 'Follow';
 
     if (variant === 'compact') {
@@ -325,7 +304,7 @@ export default function FollowButton({
             onClick={handleClick}
             disabled={toggleMutation.isPending}
             className={`
-                flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-medium
+                flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-medium
                 transition-all duration-200
                 ${getButtonStyles()}
                 disabled:opacity-50 disabled:cursor-not-allowed

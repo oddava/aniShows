@@ -54,20 +54,23 @@ export function getSocialLinkDuplicateKey(link = {}) {
     return `platform:${platform}|value:${value.toLowerCase()}`;
 }
 
-export const DEFAULT_PROFILE_PRIMARY_COLOR = '#75698d';
+export const DEFAULT_PROFILE_PRIMARY_COLOR = '#8db1ff';
+// Quick picks come from the palette tokens (signature + the status colours in
+// index.css); any other colour is still one click away in the picker.
 export const PROFILE_COLOR_PRESETS = [
-    '#75698d',
-    '#ef4444',
-    '#f97316',
-    '#eab308',
-    '#22c55e',
-    '#06b6d4',
-    '#3b82f6',
-    '#ec4899',
+    '#8db1ff', // --signature
+    '#b8a5ff', // --status-completed
+    '#86cc90', // --status-watching
+    '#e9c46a', // --status-on-hold
+    '#f391ba', // --status-dropped
+    '#a3abb6', // --status-planning
 ];
 
 export function normalizeProfilePrimaryColor(value) {
     const normalized = String(value || '').trim().toLowerCase();
+    // The old defaults (pre-overhaul violet, retired lime) were never a
+    // choice: show the signature.
+    if (normalized === '#8b5cf6' || normalized === '#d4f65a') return DEFAULT_PROFILE_PRIMARY_COLOR;
     return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
 }
 

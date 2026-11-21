@@ -21,6 +21,7 @@ export default function BrowseResults({
   clearAllFilters,
   searchWithoutFilters,
   isLoading,
+  isStale = false,
   isError,
   isFetchingNextPage,
   refetch,
@@ -33,7 +34,7 @@ export default function BrowseResults({
       title="Failed to load anime"
       message="The catalog didn’t respond. Your filters are kept; try again."
       onRetry={() => refetch()}
-      retryLabel="Try Again"
+      retryLabel="Try again"
     />
   );
 
@@ -41,10 +42,16 @@ export default function BrowseResults({
   if (viewMode === 'grid') {
     return (
       <div>
+        {currentSearch && !isError && (isLoading || allAnime.length > 0) && (
+          <h2 role="status" className="sr-only">
+            {isLoading ? 'Searching for ' : 'Results for '}
+            &ldquo;<span className="text-gray-100">{currentSearch}</span>&rdquo;
+          </h2>
+        )}
         {isError ? (
           errorState
         ) : isLoading ? (
-          <div className="skeleton-fade-in">
+          <div className="skeleton-fade-in" aria-busy="true">
             <GridSkeleton count={skeletonCount} />
             <div ref={loadMoreRef} className="h-0 overflow-hidden" />
           </div>
@@ -57,12 +64,10 @@ export default function BrowseResults({
           />
         ) : (
           <>
-            {currentSearch && (
-              <h2 role="status" className="section-title mb-5 normal-case tracking-normal font-semibold text-sm">
-                Results for &ldquo;<span className="text-gray-200">{currentSearch}</span>&rdquo;
-              </h2>
-            )}
-            <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 anime-card-grid-gap">
+            <div
+              aria-busy={isStale || undefined}
+              className={`grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-6 anime-card-grid-gap transition-opacity duration-200 ${isStale ? 'opacity-50' : ''}`}
+            >
               {allAnime.map((anime, index) => (
                   <AnimeCard
                     key={anime.id}
@@ -89,7 +94,7 @@ export default function BrowseResults({
   // List View
   if (viewMode === 'list') {
     return (
-      <div className="space-y-3">
+      <div className="panel !px-2 !py-2 sm:!px-3">
         {isError ? (
           errorState
         ) : isLoading ? (
@@ -111,7 +116,7 @@ export default function BrowseResults({
               renderRow={(anime) => (
                 <AnimeListRow anime={anime} titleLanguage={titleLanguage} />
               )}
-              estimateSize={140}
+              estimateSize={112}
               overscan={5}
             />
             <div ref={loadMoreRef} className="h-10 flex justify-center items-center py-8">

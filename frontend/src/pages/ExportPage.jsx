@@ -3,15 +3,22 @@ import { getApiErrorMessage } from '../api/errors';
 import { useNavigate } from 'react-router-dom';
 import { importExportApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { 
-    Download, 
-    FileJson, 
-    FileText, 
-    Shield, 
-    AlertCircle,
-    CheckCircle,
-    RefreshCw
-} from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
+
+/** One block of the preview: a title and a short, scrollable JSON excerpt. */
+function PreviewBlock({ title, value, total, shown }) {
+    return (
+        <div>
+            <h4 className="text-sm font-medium text-[var(--text-1)] mb-2">{title}</h4>
+            <pre className="rounded-[var(--radius-md)] bg-white/[0.04] p-3 text-sm overflow-auto text-[var(--text-2)]">
+                {JSON.stringify(value, null, 2)}
+            </pre>
+            {total > shown && (
+                <p className="mt-2 text-sm text-[var(--text-3)]">...and {total - shown} more</p>
+            )}
+        </div>
+    );
+}
 
 const ExportPage = () => {
     const navigate = useNavigate();
@@ -35,7 +42,7 @@ const ExportPage = () => {
 
         try {
             const response = await importExportApi.exportData('json');
-            
+
             // Create download link
             const blob = new Blob([response.data], { type: 'application/json' });
             const url = window.URL.createObjectURL(blob);
@@ -46,8 +53,8 @@ const ExportPage = () => {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
-            
-            setSuccess('Export downloaded successfully!');
+
+            setSuccess('Export downloaded.');
         } catch (err) {
             setError(getApiErrorMessage(err, 'Failed to export data'));
         } finally {
@@ -62,7 +69,7 @@ const ExportPage = () => {
 
         try {
             const response = await importExportApi.exportData('xml');
-            
+
             // Create download link
             const blob = new Blob([response.data], { type: 'application/xml' });
             const url = window.URL.createObjectURL(blob);
@@ -77,7 +84,7 @@ const ExportPage = () => {
             const skipped = Number(response.headers?.['x-export-skipped']) || 0;
             setSuccess(skipped > 0
                 ? `Export downloaded. ${skipped} ${skipped === 1 ? 'entry' : 'entries'} without a MyAnimeList ID ${skipped === 1 ? 'was' : 'were'} left out.`
-                : 'Export downloaded successfully!');
+                : 'Export downloaded.');
         } catch (err) {
             setError(getApiErrorMessage(err, 'Failed to export data'));
         } finally {
@@ -102,203 +109,150 @@ const ExportPage = () => {
         }
     };
 
+    const spinner = <RefreshCw aria-hidden="true" className="w-4 h-4 animate-spin motion-reduce:animate-none" />;
+
     return (
-        <div className="container mx-auto px-4 py-8 max-w-4xl">
-            <h1 className="text-3xl font-bold text-white mb-2">Export Your Data</h1>
-            <p className="text-gray-400 mb-8">
-                Download a copy of your anime list, favorites, reviews, and profile data.
-            </p>
+        <div className="page-container pt-6 pb-16 md:pt-10">
+            <header>
+                <h1 className="page-title">Export your data</h1>
+                <p className="mt-1 text-sm text-[var(--text-2)]">
+                    Download a copy of your list, favorites, reviews and profile.
+                </p>
+            </header>
 
-            {error && (
-                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5" />
-                    {error}
+            <div className="max-w-3xl">
+                <div aria-live="polite">
+                    {error && <p role="alert" className="mt-6 text-sm text-[var(--danger)]">{error}</p>}
+                    {success && <p className="mt-6 text-sm text-[var(--text-1)]">{success}</p>}
                 </div>
-            )}
 
-            {success && (
-                <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 text-green-400 rounded-lg flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5" />
-                    {success}
-                </div>
-            )}
-
-            {/* Privacy Notice */}
-            <div className="bg-dark-100 border border-gray-800 rounded-2xl p-6 mb-8">
-                <div className="flex items-start gap-4">
-                    <div className="p-3 bg-accent/10 rounded-xl">
-                        <Shield className="w-6 h-6 text-accent" />
-                    </div>
-                    <div>
-                        <h3 className="font-semibold text-white mb-2">Your Data Privacy</h3>
-                        <p className="text-gray-400 text-sm mb-2">
-                            Your data belongs to you. We provide these export options to ensure 
-                            you always have access to your information.
+                <div className="mt-6 grid gap-6 md:grid-cols-2">
+                    <section className="panel flex flex-col">
+                        <h2 className="section-title">JSON</h2>
+                        <p className="mt-1 text-sm text-[var(--text-3)]">Everything</p>
+                        <p className="mt-3 text-sm leading-relaxed text-[var(--text-2)]">
+                            Your full list, favorites, reviews and profile in a machine-readable format.
                         </p>
-                        <ul className="text-sm text-gray-400 list-disc list-inside space-y-1">
-                            <li>Exports include your anime list, favorites, reviews, episode ratings, follows, and profile data</li>
-                            <li>Your data is exported in standard formats (JSON/XML) for easy portability</li>
-                            <li>Exports do not include your password or authentication tokens</li>
-                            <li>Data is prepared on-demand and not stored after download</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            {/* Export Options */}
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
-                {/* JSON Export */}
-                <div className="bg-dark-100 rounded-2xl border border-gray-800 p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-3 bg-blue-500/10 rounded-xl">
-                            <FileJson className="w-6 h-6 text-blue-400" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-white">JSON Export</h3>
-                            <p className="text-sm text-gray-500">Complete data export</p>
-                        </div>
-                    </div>
-                    
-                    <p className="text-gray-400 text-sm mb-4">
-                        Download your complete data in JSON format. This includes all your anime lists, 
-                        favorites, reviews, and profile information in a machine-readable format.
-                    </p>
-                    
-                    <div className="space-y-2">
-                        <button
-                            onClick={handleExportJSON}
-                            disabled={loading}
-                            className="w-full px-4 py-2 bg-accent-dark text-dark font-semibold rounded-lg hover:bg-accent-dark/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
-                        >
-                            {loading ? (
-                                <>
-                                    <RefreshCw className="w-4 h-4 animate-spin" />
-                                    Preparing...
-                                </>
-                            ) : (
-                                <>
-                                    <Download className="w-4 h-4" />
-                                    Download JSON
-                                </>
-                            )}
-                        </button>
-                        
-                        <button
-                            onClick={handlePreviewJSON}
-                            disabled={loading}
-                            className="w-full px-4 py-2 bg-dark-50 border border-gray-700 text-gray-300 rounded-lg hover:bg-dark-200 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                            Preview Data
-                        </button>
-                    </div>
-                </div>
-
-                {/* XML Export */}
-                <div className="bg-dark-100 rounded-2xl border border-gray-800 p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                        <div className="p-3 bg-green-500/10 rounded-xl">
-                            <FileText className="w-6 h-6 text-green-400" />
-                        </div>
-                        <div>
-                            <h3 className="text-lg font-semibold text-white">MAL XML Export</h3>
-                            <p className="text-sm text-gray-500">Anime list only</p>
-                        </div>
-                    </div>
-                    
-                    <p className="text-gray-400 text-sm mb-4">
-                        Download your anime list in MyAnimeList XML format. This format is compatible 
-                        with other anime tracking platforms that support MAL imports.
-                    </p>
-                    <p className="text-gray-500 text-xs mb-4">
-                        Entries without a MyAnimeList ID are left out of the XML, since other sites could not
-                        match them. The JSON export includes every entry.
-                    </p>
-                    
-                    <button
-                        onClick={handleExportXML}
-                        disabled={loading}
-                        className="w-full px-4 py-2 bg-green-500/20 text-green-400 font-semibold rounded-lg hover:bg-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors border border-green-500/30"
-                    >
-                        {loading ? (
-                            <>
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                                Preparing...
-                            </>
-                        ) : (
-                            <>
-                                <Download className="w-4 h-4" />
-                                Download XML
-                            </>
-                        )}
-                    </button>
-                </div>
-            </div>
-
-            {/* JSON Preview Modal */}
-            {showPreview && jsonPreview && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-                    <div className="bg-dark-100 rounded-2xl max-w-4xl w-full max-h-[80vh] flex flex-col border border-gray-800">
-                        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-                            <h3 className="text-lg font-semibold text-white">Data Preview</h3>
+                        <div className="mt-auto flex flex-wrap gap-2 pt-5">
                             <button
-                                onClick={() => setShowPreview(false)}
-                                className="text-gray-400 hover:text-white transition-colors"
+                                type="button"
+                                onClick={handleExportJSON}
+                                disabled={loading}
+                                className="btn-primary text-sm"
                             >
-                                &times;
+                                {loading ? <>{spinner} Preparing...</> : 'Download JSON'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handlePreviewJSON}
+                                disabled={loading}
+                                className="btn-ghost text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Preview data
                             </button>
                         </div>
-                        
-                        <div className="flex-1 overflow-auto p-4">
-                            <div className="space-y-4">
-                                <div>
-                                    <h4 className="font-medium text-gray-300 mb-2">Profile</h4>
-                                    <pre className="bg-dark-50 border border-gray-800 p-3 rounded-lg text-sm overflow-auto text-gray-300">
-                                        {JSON.stringify(jsonPreview.profile, null, 2)}
-                                    </pre>
-                                </div>
-                                
-                                <div>
-                                    <h4 className="font-medium text-gray-300 mb-2">
-                                        Anime List ({jsonPreview.anime_list?.length || 0} entries)
-                                    </h4>
-                                    <pre className="bg-dark-50 border border-gray-800 p-3 rounded-lg text-sm overflow-auto text-gray-300">
-                                        {JSON.stringify(jsonPreview.anime_list?.slice(0, 3), null, 2)}
-                                        {jsonPreview.anime_list?.length > 3 && (
-                                            <div className="text-gray-500 mt-2">...and {jsonPreview.anime_list.length - 3} more</div>
-                                        )}
-                                    </pre>
-                                </div>
-                                
-                                <div>
-                                    <h4 className="font-medium text-gray-300 mb-2">
-                                        Favorites ({jsonPreview.favorites?.length || 0} entries)
-                                    </h4>
-                                    <pre className="bg-dark-50 border border-gray-800 p-3 rounded-lg text-sm overflow-auto text-gray-300">
-                                        {JSON.stringify(jsonPreview.favorites?.slice(0, 3), null, 2)}
-                                        {jsonPreview.favorites?.length > 3 && (
-                                            <div className="text-gray-500 mt-2">...and {jsonPreview.favorites.length - 3} more</div>
-                                        )}
-                                    </pre>
-                                </div>
-                                
-                                <div>
-                                    <h4 className="font-medium text-gray-300 mb-2">
-                                        Reviews ({jsonPreview.reviews?.length || 0} entries)
-                                    </h4>
-                                    <pre className="bg-dark-50 border border-gray-800 p-3 rounded-lg text-sm overflow-auto text-gray-300">
-                                        {JSON.stringify(jsonPreview.reviews?.slice(0, 2), null, 2)}
-                                        {jsonPreview.reviews?.length > 2 && (
-                                            <div className="text-gray-500 mt-2">...and {jsonPreview.reviews.length - 2} more</div>
-                                        )}
-                                    </pre>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div className="p-4 border-t border-gray-800 flex justify-end">
+                    </section>
+
+                    <section className="panel flex flex-col">
+                        <h2 className="section-title">MyAnimeList XML</h2>
+                        <p className="mt-1 text-sm text-[var(--text-3)]">Your anime list only</p>
+                        <p className="mt-3 text-sm leading-relaxed text-[var(--text-2)]">
+                            Works with MyAnimeList and other sites that accept MAL imports.
+                        </p>
+                        <p className="mt-2 text-sm leading-relaxed text-[var(--text-3)]">
+                            Entries without a MyAnimeList ID are left out of the XML, since other sites could not
+                            match them. The JSON export includes every entry.
+                        </p>
+                        <div className="mt-auto pt-5">
                             <button
+                                type="button"
+                                onClick={handleExportXML}
+                                disabled={loading}
+                                className="btn-secondary text-sm"
+                            >
+                                {loading ? <>{spinner} Preparing...</> : 'Download XML'}
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
+                <section className="panel mt-6">
+                    <h2 className="section-title">What’s in the export</h2>
+                    <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <dt className="text-[15px] font-medium text-[var(--text-1)]">Anime list</dt>
+                            <dd className="text-sm text-[var(--text-2)]">Every entry with its status, score and progress</dd>
+                        </div>
+                        <div>
+                            <dt className="text-[15px] font-medium text-[var(--text-1)]">Favorites</dt>
+                            <dd className="text-sm text-[var(--text-2)]">In the order you set</dd>
+                        </div>
+                        <div>
+                            <dt className="text-[15px] font-medium text-[var(--text-1)]">Reviews</dt>
+                            <dd className="text-sm text-[var(--text-2)]">With their ratings and text, plus episode ratings</dd>
+                        </div>
+                        <div>
+                            <dt className="text-[15px] font-medium text-[var(--text-1)]">Profile</dt>
+                            <dd className="text-sm text-[var(--text-2)]">Bio, social links, follows and privacy settings</dd>
+                        </div>
+                    </dl>
+
+                    <h3 className="mt-8 text-[15px] font-medium text-[var(--text-1)]">Not included</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-[var(--text-2)]">
+                        Your password and sign-in tokens, messages and notifications, and anything the site
+                        works out for you (recommendations, history). Exports are made when you ask and aren’t
+                        kept afterwards.
+                    </p>
+                </section>
+            </div>
+
+            {showPreview && jsonPreview && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="export-preview-title"
+                        className="bg-[var(--ink-1)] rounded-[var(--radius-lg)] max-w-4xl w-full max-h-[80vh] flex flex-col"
+                    >
+                        <div className="flex items-center justify-between py-2 pl-5 pr-2">
+                            <h2 id="export-preview-title" className="section-title">Data preview</h2>
+                            <button
+                                type="button"
                                 onClick={() => setShowPreview(false)}
-                                className="px-4 py-2 bg-dark-50 hover:bg-dark-200 text-gray-300 border border-gray-700 rounded-lg transition-colors"
+                                aria-label="Close preview"
+                                className="btn-ghost w-11 px-0"
+                            >
+                                <X aria-hidden="true" className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-auto px-5 pb-2 space-y-5">
+                            <PreviewBlock title="Profile" value={jsonPreview.profile} total={0} shown={0} />
+                            <PreviewBlock
+                                title={`Anime list (${jsonPreview.anime_list?.length || 0} entries)`}
+                                value={jsonPreview.anime_list?.slice(0, 3)}
+                                total={jsonPreview.anime_list?.length || 0}
+                                shown={3}
+                            />
+                            <PreviewBlock
+                                title={`Favorites (${jsonPreview.favorites?.length || 0} entries)`}
+                                value={jsonPreview.favorites?.slice(0, 3)}
+                                total={jsonPreview.favorites?.length || 0}
+                                shown={3}
+                            />
+                            <PreviewBlock
+                                title={`Reviews (${jsonPreview.reviews?.length || 0} entries)`}
+                                value={jsonPreview.reviews?.slice(0, 2)}
+                                total={jsonPreview.reviews?.length || 0}
+                                shown={2}
+                            />
+                        </div>
+
+                        <div className="p-4 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setShowPreview(false)}
+                                className="btn-secondary text-sm"
                             >
                                 Close
                             </button>
@@ -306,62 +260,6 @@ const ExportPage = () => {
                     </div>
                 </div>
             )}
-
-            {/* Data Retention Info */}
-            <div className="bg-dark-100 rounded-2xl border border-gray-800 p-6">
-                <h3 className="font-semibold text-white mb-4">What's Included in Your Export?</h3>
-                
-                <div className="grid md:grid-cols-2 gap-4">
-                    <div className="flex items-start gap-3">
-                        <div className="p-1">
-                            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-                        </div>
-                        <div>
-                            <p className="font-medium text-white">Anime List</p>
-                            <p className="text-sm text-gray-400">All your anime entries with status, scores, and progress</p>
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                        <div className="p-1">
-                            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-                        </div>
-                        <div>
-                            <p className="font-medium text-white">Favorites</p>
-                            <p className="text-sm text-gray-400">Your favorite anime list with custom ordering</p>
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                        <div className="p-1">
-                            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-                        </div>
-                        <div>
-                            <p className="font-medium text-white">Reviews</p>
-                            <p className="text-sm text-gray-400">All your anime reviews with ratings and text</p>
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-start gap-3">
-                        <div className="p-1">
-                            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-                        </div>
-                        <div>
-                            <p className="font-medium text-white">Profile</p>
-                            <p className="text-sm text-gray-400">Bio, social links, and privacy settings</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="mt-6 pt-6 border-t border-gray-800">
-                    <h4 className="font-medium text-white mb-2">Not Included:</h4>
-                    <ul className="text-sm text-gray-400 space-y-1">
-                        <li>Passwords or authentication credentials</li>
-                        <li>Private messages or notifications</li>
-                        <li>System-generated data (recommendations, history)</li>
-                    </ul>
-                </div>
-            </div>
         </div>
     );
 };

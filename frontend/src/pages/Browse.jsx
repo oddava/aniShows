@@ -1,6 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
+import { Languages } from 'lucide-react';
 import { LoadingBar } from '../components/LoadingBar';
 import ActiveFilterChips from '../components/browse/ActiveFilterChips';
 import AdvancedFiltersPanel from '../components/browse/AdvancedFiltersPanel';
@@ -20,7 +21,6 @@ import {
   YEAR_OPTIONS,
   formatSeasonLabel,
 } from '../components/browse/browseFilterOptions';
-import { authApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useSkeletonCount } from '../hooks/useSkeletonCount';
 import { useAnalytics } from '../hooks/useAnalytics';
@@ -32,8 +32,7 @@ import { useTheme } from '../context/ThemeContext';
 import TopFilterBar from '../components/browse/TopFilterBar';
 import BrowseRowMode from '../components/browse/BrowseRowMode';
 import { filterBrowseGenres } from '../utils/realGenres';
-import { animeKeys, genreQueries, studioQueries } from '../api/queries/anime';
-import { profileKeys } from '../api/queries/user';
+import { genreQueries, studioQueries } from '../api/queries/anime';
 
 // localStorage can throw (private mode, blocked storage); these preferences
 // are conveniences, so a failure only means the default is used.
@@ -116,10 +115,8 @@ export default function Browse() {
   } = filters;
 
   // Hooks
-  const queryClient = useQueryClient();
-  const { isAuthenticated, user, refreshProfile } = useAuth();
+  const { user } = useAuth();
   const adultContentEnabled = Boolean(user?.show_adult_content);
-  const [isUpdatingAdultContent, setIsUpdatingAdultContent] = useState(false);
   const skeletonCount = useSkeletonCount(viewMode);
   const { trackTabChange, trackViewModeChange, trackSearch } = useAnalytics();
   const { theme } = useTheme();
@@ -152,34 +149,6 @@ export default function Browse() {
     if (currentSearch) trackSearch(currentSearch);
   }, [currentSearch, trackSearch]);
 
-  const handleToggleAdultContent = useCallback(async () => {
-    if (!isAuthenticated || isUpdatingAdultContent) return;
-
-    const nextValue = !adultContentEnabled;
-    setIsUpdatingAdultContent(true);
-    try {
-      const response = await authApi.updateProfile({ show_adult_content: nextValue });
-      const updatedProfile = response?.data;
-      if (updatedProfile && typeof updatedProfile === 'object') {
-        await refreshProfile(updatedProfile);
-        queryClient.setQueryData(profileKeys.own, updatedProfile);
-      } else {
-        await refreshProfile();
-      }
-      queryClient.removeQueries({ queryKey: animeKeys.all });
-      queryClient.invalidateQueries({ queryKey: profileKeys.own });
-      queryClient.invalidateQueries({ queryKey: profileKeys.all });
-    } finally {
-      setIsUpdatingAdultContent(false);
-    }
-  }, [
-    adultContentEnabled,
-    isAuthenticated,
-    isUpdatingAdultContent,
-    queryClient,
-    refreshProfile,
-  ]);
-
   // "Fall 2026" heads the grid while a season is selected (P2-7).
   const seasonLabel = formatSeasonLabel(currentSeason, currentYear);
 
@@ -207,6 +176,7 @@ export default function Browse() {
     isLoading,
     isFetching,
     isError,
+    isPlaceholderData,
     refetch,
   } = useBrowseAnimeList({ filters, adultContentEnabled });
 
@@ -274,38 +244,39 @@ export default function Browse() {
                   onOpenMobileFilters={() => setShowFilters(!showFilters)}
                   hasActiveFilters={hasActiveFilters}
                   adultContentEnabled={adultContentEnabled}
-                  onToggleAdultContent={handleToggleAdultContent}
-                  isUpdatingAdultContent={isUpdatingAdultContent}
-                  canToggleAdultContent={isAuthenticated}
+                  trailing={isGridMode ? (
+                    <>
+                      <SortSelect value={currentSort} hasSearch={Boolean(currentSearch)} onChange={setSort} />
+                      <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+                      <button
+                        onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
+                        className="flex h-10 min-w-10 items-center justify-center rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)] max-sm:bg-white/[0.05] max-sm:px-0"
+                        type="button"
+                        title="Toggle title language"
+                        aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}
+                      >
+                        <Languages aria-hidden="true" className="h-4 w-4 sm:hidden" />
+                        <span className="hidden sm:inline">{titleLanguage === 'en' ? 'English titles' : 'Japanese titles'}</span>
+                      </button>
+                    </>
+                  ) : null}
                 />
 
                 <AdvancedFiltersPanel
                   isOpen={showFilters}
                   onClose={() => setShowFilters(false)}
+                  adultContentEnabled={adultContentEnabled}
+                  hasActiveFilters={hasActiveFilters}
+                  onClearAll={clearAllFilters}
                   {...filterSidebarProps}
                 />
 
-                {/* Controls Bar - only show view controls in grid mode */}
-                {isGridMode && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                    {seasonLabel && <h1 className="page-title">{seasonLabel}</h1>}
-                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto sm:ml-auto">
-                      <SortSelect value={currentSort} hasSearch={Boolean(currentSearch)} onChange={setSort} />
-                      <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
-
-                      {/* Title Language Toggle */}
-                      <button
-                        onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
-                        className="flex items-center justify-center px-3 h-9 bg-dark-100 border border-gray-700 rounded-lg text-[11px] font-bold text-gray-300 hover:border-accent transition-colors"
-                        type="button"
-                        title="Toggle title language"
-                        aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}
-                      >
-                        <span className="font-semibold text-gray-500 mr-1">Titles</span>
-                        {titleLanguage === 'en' ? 'EN' : 'JP'}
-                      </button>
-                    </div>
-                  </div>
+                {(seasonLabel || currentSearch) ? (
+                  <h1 className={seasonLabel ? 'page-title mb-6' : 'section-title mb-5'}>
+                    {seasonLabel || `Results for “${currentSearch}”`}
+                  </h1>
+                ) : (
+                  <h1 className="sr-only">Browse anime</h1>
                 )}
 
                 {/* Active Filter Chips */}
@@ -364,6 +335,7 @@ export default function Browse() {
                     clearAllFilters={clearAllFilters}
                     searchWithoutFilters={searchWithoutFilters}
                     isLoading={isLoading}
+                    isStale={isPlaceholderData}
                     isError={isError}
                     isFetchingNextPage={isFetchingNextPage}
                     refetch={refetch}

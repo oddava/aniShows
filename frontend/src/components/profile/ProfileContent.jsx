@@ -1,5 +1,4 @@
 import React, { Suspense } from 'react';
-import { Lock } from 'lucide-react';
 import ProfileErrorBoundary, { ErrorVariant } from './ProfileErrorBoundary';
 import FriendsTab from './FriendsTab';
 import ActivityTab from './tabs/ActivityTab';
@@ -15,6 +14,20 @@ import ReviewsTab from './tabs/ReviewsTab';
  * The error boundary and Suspense around Activity/Insights stay here so switching
  * between those two tabs reuses one boundary instance, exactly as before the split.
  */
+
+/** The placeholder every lazy profile tab shows while its code loads. */
+function TabSkeleton() {
+    return (
+        <ul aria-hidden="true" className="panel">
+            {Array.from({ length: 5 }, (_, index) => (
+                <li key={index} className="flex items-center gap-4 py-3">
+                    <span className="h-14 w-10 rounded-md bg-[var(--ink-2)] animate-pulse" />
+                    <span className="h-4 w-1/2 rounded bg-[var(--ink-2)] animate-pulse" />
+                </li>
+            ))}
+        </ul>
+    );
+}
 
 export default function ProfileContent({
     activeTab,
@@ -45,10 +58,9 @@ export default function ProfileContent({
 }) {
     if (isPrivate) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-                <Lock className="w-16 h-16 mb-4 opacity-50" />
-                <h3 className="text-xl font-semibold mb-2">This profile is private</h3>
-                <p>Only the user can see their lists and reviews.</p>
+            <div className="pb-8">
+                <h2 className="section-title">This profile is private</h2>
+                <p className="mt-2 text-[17px] text-[var(--text-2)]">Only its owner can see their lists and reviews.</p>
             </div>
         );
     }
@@ -105,8 +117,8 @@ export default function ProfileContent({
         case 'activity':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Activity">
-                    <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
-                        <ActivityTab username={targetUsername} isPrivate={isPrivate} />
+                    <Suspense fallback={<TabSkeleton />}>
+                        <ActivityTab username={targetUsername} isPrivate={isPrivate} isOwner={isOwnProfile} />
                     </Suspense>
                 </ProfileErrorBoundary>
             );
@@ -114,7 +126,7 @@ export default function ProfileContent({
         case 'insights':
             return (
                 <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Insights">
-                    <Suspense fallback={<div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
+                    <Suspense fallback={<TabSkeleton />}>
                         <InsightsTab
                             username={targetUsername}
                             isPrivate={isPrivate}

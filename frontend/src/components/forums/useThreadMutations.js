@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { notify, notifyError } from '../ui/toast';
 import { forumsApi } from '../../api/client';
 import { getApiErrorMessage } from '../../api/errors';
 import { forumKeys, invalidateForumLists } from '../../api/queries/forums';
@@ -13,7 +13,7 @@ export const forumErrorMessage = (error, fallback) => (
     error?.response?.status === 429 ? TOO_FAST_MESSAGE : getApiErrorMessage(error, fallback)
 );
 
-const toastError = (fallback) => (error) => toast.error(forumErrorMessage(error, fallback));
+const toastError = (fallback) => (error) => notifyError(forumErrorMessage(error, fallback));
 
 /**
  * Every write on the thread page: replies, thread edit/delete/pin, likes,
@@ -63,7 +63,7 @@ export default function useThreadMutations({
             setReplyContent('');
             setShowReplyForm(false);
             setReplyTo(null);
-            toast.success('Reply posted!');
+            notify('Reply posted');
         },
         onError: toastError('Failed to post reply'),
     });
@@ -73,7 +73,7 @@ export default function useThreadMutations({
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: threadKey });
             setEditingThread(false);
-            toast.success('Thread updated!');
+            notify('Thread updated');
         },
         onError: toastError('Failed to update thread'),
     });
@@ -81,7 +81,7 @@ export default function useThreadMutations({
     const deleteThreadMutation = useMutation({
         mutationFn: () => forumsApi.deleteThread(id),
         onSuccess: () => {
-            toast.success('Thread deleted');
+            notify('Thread deleted');
             window.location.href = '/forums';
         },
         onError: toastError('Failed to delete thread'),
@@ -93,11 +93,11 @@ export default function useThreadMutations({
         onSuccess: (data) => {
             patchThread({ is_pinned: data.is_pinned });
             invalidateForumLists(queryClient);
-            toast.success(data.is_pinned ? 'Thread pinned' : 'Thread unpinned');
+            notify(data.is_pinned ? 'Thread pinned' : 'Thread unpinned');
         },
         onError: (error, _vars, context) => {
             rollbackThread(context);
-            toast.error(forumErrorMessage(error, 'Failed to update pin status'));
+            notifyError(forumErrorMessage(error, 'Failed to update pin status'));
         },
     });
 
@@ -114,7 +114,7 @@ export default function useThreadMutations({
         onSuccess: (data) => patchThread({ like_count: data.like_count, is_liked_by_user: data.is_liked }),
         onError: (error, _vars, context) => {
             rollbackThread(context);
-            toast.error(forumErrorMessage(error, 'Failed to like thread'));
+            notifyError(forumErrorMessage(error, 'Failed to like thread'));
         },
     });
 
@@ -127,7 +127,7 @@ export default function useThreadMutations({
         onSuccess: (data) => patchThread({ like_count: data.like_count, is_liked_by_user: data.is_liked }),
         onError: (error, _vars, context) => {
             rollbackThread(context);
-            toast.error(forumErrorMessage(error, 'Failed to unlike thread'));
+            notifyError(forumErrorMessage(error, 'Failed to unlike thread'));
         },
     });
 
@@ -137,11 +137,11 @@ export default function useThreadMutations({
         onSuccess: (data, subscribe) => {
             const isSubscribed = typeof data?.is_subscribed === 'boolean' ? data.is_subscribed : subscribe;
             patchThread({ is_subscribed: isSubscribed });
-            toast.success(isSubscribed ? 'Following this thread' : 'Unfollowed this thread');
+            notify(isSubscribed ? 'Following this thread' : 'Unfollowed this thread');
         },
         onError: (error, _vars, context) => {
             rollbackThread(context);
-            toast.error(forumErrorMessage(error, 'Failed to update follow status'));
+            notifyError(forumErrorMessage(error, 'Failed to update follow status'));
         },
     });
 
@@ -161,7 +161,7 @@ export default function useThreadMutations({
         }),
         onError: (error, _postId, context) => {
             restorePosts(queryClient, context?.snapshot);
-            toast.error(forumErrorMessage(error, 'Failed to like reply'));
+            notifyError(forumErrorMessage(error, 'Failed to like reply'));
         },
     });
 
@@ -181,7 +181,7 @@ export default function useThreadMutations({
         }),
         onError: (error, _postId, context) => {
             restorePosts(queryClient, context?.snapshot);
-            toast.error(forumErrorMessage(error, 'Failed to unlike reply'));
+            notifyError(forumErrorMessage(error, 'Failed to unlike reply'));
         },
     });
 
@@ -193,7 +193,7 @@ export default function useThreadMutations({
                 edited_at: data?.edited_at ?? new Date().toISOString(),
             });
             setEditingPostId(null);
-            toast.success('Reply updated!');
+            notify('Reply updated');
         },
         onError: toastError('Failed to update reply'),
     });
@@ -203,7 +203,7 @@ export default function useThreadMutations({
         mutationFn: (postId) => forumsApi.deletePost(postId),
         onSuccess: () => {
             invalidatePosts();
-            toast.success('Reply deleted');
+            notify('Reply deleted');
         },
         onError: toastError('Failed to delete reply'),
     });
@@ -216,7 +216,7 @@ export default function useThreadMutations({
             patchThread({ is_locked: isLocked });
             invalidateForumLists(queryClient);
             queryClient.invalidateQueries({ queryKey: forumKeys.postsAll(id) });
-            toast.success(isLocked ? 'Thread locked' : 'Thread unlocked');
+            notify(isLocked ? 'Thread locked' : 'Thread unlocked');
         },
         onError: toastError('Failed to update lock status'),
     });
@@ -227,7 +227,7 @@ export default function useThreadMutations({
             patchThread({ is_removed: true, removal_reason: reason || '' });
             queryClient.invalidateQueries({ queryKey: threadKey });
             invalidateForumLists(queryClient);
-            toast.success('Thread removed');
+            notify('Thread removed');
         },
         onError: toastError('Failed to remove thread'),
     });
@@ -238,7 +238,7 @@ export default function useThreadMutations({
             patchThread({ is_removed: false, removal_reason: '' });
             queryClient.invalidateQueries({ queryKey: threadKey });
             invalidateForumLists(queryClient);
-            toast.success('Thread restored');
+            notify('Thread restored');
         },
         onError: toastError('Failed to restore thread'),
     });
@@ -252,7 +252,7 @@ export default function useThreadMutations({
                 removal_reason: reason || '',
             });
             invalidatePosts();
-            toast.success('Reply removed');
+            notify('Reply removed');
         },
         onError: toastError('Failed to remove reply'),
     });
@@ -262,7 +262,7 @@ export default function useThreadMutations({
         onSuccess: (_data, postId) => {
             patchCachedPosts(queryClient, id, postId, { is_removed: false, removal: null, removal_reason: '' });
             invalidatePosts();
-            toast.success('Reply restored');
+            notify('Reply restored');
         },
         onError: toastError('Failed to restore reply'),
     });

@@ -19,14 +19,14 @@ export default function Terms() {
                     <section className="mb-8">
                         <h2 className="text-2xl font-semibold mb-4 text-white">1. Acceptance of Terms</h2>
                         <p className="text-gray-300">
-                            By accessing and using aniShows ("the Service"), you accept and agree to be bound by the terms and provision of this agreement.
+                            By accessing and using AniShows ("the Service"), you accept and agree to be bound by the terms and provision of this agreement.
                         </p>
                     </section>
 
                     <section className="mb-8">
                         <h2 className="text-2xl font-semibold mb-4 text-white">2. Use License</h2>
                         <p className="text-gray-300">
-                            Permission is granted to temporarily view the materials (information or software) on aniShows' website for personal, non-commercial transitory viewing only.
+                            Permission is granted to temporarily view the materials (information or software) on AniShows' website for personal, non-commercial transitory viewing only.
                         </p>
                     </section>
 
@@ -43,7 +43,7 @@ export default function Terms() {
                     <section className="mb-8">
                         <h2 className="text-2xl font-semibold mb-4 text-white">4. Disclaimer</h2>
                         <p className="text-gray-300">
-                            The materials on aniShows' website are provided "as is". aniShows makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties, including without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.
+                            The materials on AniShows' website are provided "as is". AniShows makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties, including without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.
                         </p>
                     </section>
                 </div>

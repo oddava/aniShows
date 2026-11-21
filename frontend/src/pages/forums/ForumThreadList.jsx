@@ -1,168 +1,18 @@
-import { useState, memo, useEffect } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { Pin, Lock, Plus, ChevronRight, ArrowLeft, MessageSquare, Eye } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 import Pagination from '../../components/common/Pagination';
 import ErrorState from '../../components/common/ErrorState';
+import EmptyState from '../../components/ui/EmptyState';
+import Skeleton from '../../components/ui/Skeleton';
 import { preloadForumChunks } from '../../app/routes/community';
 import { getTotalPages } from '../../components/forums/buildPostTree';
 import { ThreadListSkeleton } from '../../components/forums/ForumSkeletons';
 import { useDelayedLoading } from '../../hooks/useDelayedLoading';
-import Avatar from '../../components/forums/Avatar';
-import MiniProfileHoverCard from '../../components/common/MiniProfileHoverCard';
+import ThreadRow, { forumTabClass } from '../../components/forums/ThreadRow';
 import { forumQueries } from '../../api/queries/forums';
-import { DeletedAuthorAvatar, DeletedAuthorName } from '../../components/forums/DeletedAuthor';
-
-// List items carry a server-made `excerpt` (markup and spoilers stripped); `content` is a fallback.
-const getThreadPreview = (thread) => {
-    const plainText = (thread?.excerpt ?? thread?.content)?.replace(/[#*`]/g, '').replace(/\s+/g, ' ').trim() || '';
-    if (!plainText) {
-        return 'No content yet.';
-    }
-
-    return plainText.length > 180
-        ? `${plainText.substring(0, 180)}...`
-        : plainText;
-};
-
-const PinnedThreadRow = memo(({ thread }) => {
-    const navigate = useNavigate();
-    return (
-        <div
-            onClick={() => navigate(`/forums/thread/${thread.id}`)}
-            tabIndex={0}
-            role="button"
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    navigate(`/forums/thread/${thread.id}`);
-                }
-            }}
-            className="forums-thread-card group cursor-pointer p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--forums-accent)]/70"
-            style={{
-                backgroundColor: 'var(--forums-surface)',
-            }}
-        >
-            <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 space-y-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                        <Pin size={14} className="forums-accent-text shrink-0" />
-                        {thread.is_locked && <Lock size={14} className="forums-meta-text shrink-0" />}
-                        <h3 className="forums-thread-title truncate">
-                            {thread.title}
-                        </h3>
-                    </div>
-                    <p className="forums-meta-text">Pinned discussion</p>
-                </div>
-                <div className="forums-meta-text flex shrink-0 items-center gap-4">
-                    <div className="flex items-center gap-1.5" title={`${thread.reply_count} replies`}>
-                        <MessageSquare size={14} />
-                        <span className="text-sm font-semibold">{thread.reply_count}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5" title={`${thread.view_count} views`}>
-                        <Eye size={14} />
-                        <span className="text-sm font-semibold">{thread.view_count}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-});
-PinnedThreadRow.displayName = 'PinnedThreadRow';
-
-const ThreadCard = memo(({ thread }) => {
-    const navigate = useNavigate();
-    return (
-        <div
-            onClick={() => navigate(`/forums/thread/${thread.id}`)}
-            tabIndex={0}
-            role="button"
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    navigate(`/forums/thread/${thread.id}`);
-                }
-            }}
-            className="forums-thread-card group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--forums-accent)]/70"
-        >
-            <div className="flex flex-col gap-4">
-                <div className="flex min-w-0 items-center gap-2">
-                    {thread.is_locked && <Lock size={14} className="forums-meta-text shrink-0" />}
-                    <h3 className="forums-thread-title line-clamp-2">
-                        {thread.title}
-                    </h3>
-                </div>
-
-                <p className="forums-body-text line-clamp-2">
-                    {getThreadPreview(thread)}
-                </p>
-
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div className="flex min-w-0 flex-wrap items-center gap-3">
-                        <div onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center gap-2">
-                                {thread.author ? (
-                                    <>
-                                        <MiniProfileHoverCard user={thread.author}>
-                                            <Link to={`/u/${thread.author.username}`} className="shrink-0">
-                                                <Avatar user={thread.author} size="xs" />
-                                            </Link>
-                                        </MiniProfileHoverCard>
-                                        <Link
-                                            to={`/u/${thread.author.username}`}
-                                            className="truncate text-sm font-semibold text-[var(--forums-accent-text)] transition-colors hover:text-[var(--forums-accent-text-hover)]"
-                                        >
-                                            {thread.author.username}
-                                        </Link>
-                                    </>
-                                ) : (
-                                    <>
-                                        <DeletedAuthorAvatar size="xs" />
-                                        <DeletedAuthorName className="truncate text-sm italic forums-meta-text" />
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                        <span className="forums-meta-text">•</span>
-                        <span className="forums-meta-text whitespace-nowrap">
-                            {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
-                        </span>
-                        <div className="flex flex-wrap items-center gap-2">
-                            {thread.tags?.map(tag => (
-                                <span
-                                    key={tag.id}
-                                    className="rounded-lg border px-2 py-1 text-sm font-semibold leading-none"
-                                    style={{
-                                        color: tag.color,
-                                        borderColor: `${tag.color}66`,
-                                        backgroundColor: `${tag.color}1a`,
-                                    }}
-                                >
-                                    {tag.name}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="forums-meta-text flex shrink-0 items-center gap-4">
-                        <div className="flex items-center gap-1.5" title={`${thread.reply_count} replies`}>
-                            <MessageSquare size={14} />
-                            <span className="text-sm font-semibold">{thread.reply_count}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5" title={`${thread.view_count} views`}>
-                            <Eye size={14} />
-                            <span className="text-sm font-semibold">{thread.view_count}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-});
-ThreadCard.displayName = 'ThreadCard';
 
 const ForumThreadList = () => {
     const { slug } = useParams();
@@ -218,31 +68,22 @@ const ForumThreadList = () => {
     // 1. If loading for 500ms+ with no cached data, show skeleton
     if (showCategoryLoading) {
         return (
-            <div className="forums-page">
-                <div className="mx-auto max-w-5xl px-4 py-8 md:px-6">
-                    {/* Breadcrumb skeleton */}
-                    <div className="mb-6 flex items-center gap-2">
-                        <div className="h-4 w-24 rounded bg-[var(--forums-surface-soft)]"></div>
-                        <ChevronRight size={12} className="forums-meta-text" />
-                        <div className="h-4 w-32 rounded bg-[var(--forums-surface-soft)]"></div>
-                    </div>
-
-                    {/* Header skeleton */}
-                    <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div aria-hidden="true" className="forums-page">
+                <div className="page-container pt-6 pb-16 md:pt-10">
+                    <Skeleton className="h-4 w-24" />
+                    <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
                         <div>
-                            <div className="mb-2 h-8 w-48 rounded bg-[var(--forums-surface-soft)]"></div>
-                            <div className="h-4 w-72 rounded bg-[var(--forums-surface-soft)]"></div>
+                            <Skeleton className="h-10 w-56" />
+                            <Skeleton className="mt-3 h-3.5 w-72" />
                         </div>
-                        <div className="h-10 w-32 shrink-0 rounded-xl bg-[var(--forums-surface-soft)]"></div>
+                        <Skeleton className="h-11 w-32" rounded="rounded-lg" />
                     </div>
-
-                    {/* Tags skeleton */}
-                    <div className="mb-6 flex gap-2">
-                        {[1, 2, 3, 4].map((i) => <div key={i} className="h-8 w-20 rounded-lg bg-[var(--forums-surface-soft)]"></div>)}
+                    <div className="mt-6 flex gap-1">
+                        {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-11 w-24" rounded="rounded-lg" />)}
                     </div>
-
-                    {/* Thread list skeleton */}
-                    <ThreadListSkeleton />
+                    <div className="mt-6 max-w-4xl">
+                        <ThreadListSkeleton />
+                    </div>
                 </div>
             </div>
         );
@@ -253,114 +94,117 @@ const ForumThreadList = () => {
         return <div className="forums-page"></div>;
     }
 
+    const results = threadsData?.results || [];
+    const pinned = page === 1 ? results.filter((t) => t.is_pinned) : [];
+    const regular = results.filter((t) => !t.is_pinned);
+    const selectTag = (value) => {
+        setSelectedTag(value);
+        setPage(1);
+    };
+    const createPath = `/forums/category/${slug}/create`;
+
     // 3. Have data - render content immediately
     return (
         <div className="forums-page">
             <Helmet>
-                <title>{category ? `${category.name}` : 'Category'} | aniShows Forums</title>
+                <title>{category ? `${category.name}` : 'Category'} | AniShows Forums</title>
             </Helmet>
 
-            <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">
-                {/* Breadcrumb */}
-                <div className="forums-meta-text mb-8 flex items-center gap-2">
-                    <Link to="/forums" className="flex items-center gap-1 transition-colors hover:text-[var(--forums-accent-text)]">
-                        <ArrowLeft size={14} /> Forums
-                    </Link>
-                    <ChevronRight size={12} />
-                    <span className="font-semibold text-[var(--forums-text)]">{category?.name}</span>
-                </div>
+            <div className="page-container pt-6 pb-16 md:pt-10">
+                <Link to="/forums" className="text-link -my-2.5 text-sm">All forums</Link>
 
-                {/* Header */}
-                <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                    <div>
-                        <h1 className="forums-heading">{category?.name}</h1>
+                <header className="mt-2 flex flex-wrap items-end justify-between gap-4">
+                    <div className="min-w-0">
+                        <h1 className="page-title">{category?.name}</h1>
                         {category?.description && (
-                            <p className="forums-body-text mt-2 max-w-2xl">{category.description}</p>
+                            <p className="mt-1 max-w-2xl text-sm text-[var(--text-2)]">{category.description}</p>
                         )}
                     </div>
                     {isAuthenticated && (
-                        <Link
-                            to={`/forums/category/${slug}/create`}
-                            className="forums-primary-action flex shrink-0 items-center gap-2 px-5 py-3"
-                        >
-                            <Plus size={18} /> New Thread
-                        </Link>
+                        <Link to={createPath} className="btn-primary text-sm">New thread</Link>
                     )}
-                </div>
+                </header>
 
-                {/* Tags */}
-                {tagsData?.results && tagsData.results.length > 0 && (
-                    <div className="mb-8 flex flex-wrap items-center gap-2">
-                        <button
-                            onClick={() => { setSelectedTag(''); setPage(1); }}
-                            className={`forums-pill px-4 py-2 ${selectedTag === ''
-                                ? 'forums-pill-active'
-                                : 'hover:border-[var(--forums-accent-weak)] hover:text-[var(--forums-text)]'
-                                }`}
-                        >
-                            All
-                        </button>
-                        {tagsData.results.map(tag => (
-                            <button
-                                key={tag.id}
-                                onClick={() => { setSelectedTag(tag.slug); setPage(1); }}
-                                className="rounded-lg border px-4 py-2 text-sm font-semibold transition-colors"
-                                style={{
-                                    backgroundColor: selectedTag === tag.slug ? tag.color : `${tag.color}15`,
-                                    borderColor: selectedTag === tag.slug ? tag.color : 'transparent',
-                                    color: selectedTag === tag.slug ? '#fff' : tag.color,
-                                }}
-                            >
-                                {tag.name}
-                            </button>
-                        ))}
-                    </div>
+                {tagsData?.results?.length > 0 && (
+                    <nav aria-label="Filter by tag" className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
+                        <ul className="flex min-w-max gap-1">
+                            <li>
+                                <button
+                                    type="button"
+                                    onClick={() => selectTag('')}
+                                    aria-pressed={selectedTag === ''}
+                                    className={forumTabClass(selectedTag === '')}
+                                >
+                                    All
+                                </button>
+                            </li>
+                            {tagsData.results.map((tag) => (
+                                <li key={tag.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => selectTag(tag.slug)}
+                                        aria-pressed={selectedTag === tag.slug}
+                                        className={forumTabClass(selectedTag === tag.slug)}
+                                    >
+                                        {tag.name}
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </nav>
                 )}
 
-                {/* Threads */}
-                <div className="forums-thread-list relative min-h-[400px]">
+                <div className="relative mt-6 min-h-[400px] max-w-4xl">
                     {showThreadsLoading ? (
                         <ThreadListSkeleton />
                     ) : threadsError && !threadsData ? (
                         <ErrorState
-                            title="Failed to load threads"
+                            title="Couldn't load threads"
                             onRetry={() => refetchThreads()}
                         />
                     ) : (
                         <>
                             {showThreadsRefreshing && (
-                                <div className="mb-2 flex justify-end">
-                                    <span className="forums-meta-text text-xs">Refreshing…</span>
-                                </div>
+                                <p className="mb-2 text-right text-sm text-[var(--text-3)]">Refreshing…</p>
                             )}
 
-                            {/* Pinned Threads — compact section at top, only page 1 */}
-                            {page === 1 && threadsData?.results?.filter(t => t.is_pinned).length > 0 && (
-                                <div className="forums-thread-list">
-                                    {threadsData.results.filter(t => t.is_pinned).map(thread => (
-                                        <PinnedThreadRow key={thread.id} thread={thread} />
+                            {/* Pinned threads first, page 1 only */}
+                            {pinned.length > 0 && (
+                                <section className="mb-8">
+                                    <h2 className="mb-3 text-sm font-medium text-[var(--text-2)]">Pinned</h2>
+                                    <div className="grid gap-2">
+                                        {pinned.map((thread) => (
+                                            <ThreadRow key={thread.id} thread={thread} compact />
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
+
+                            {regular.length > 0 && (
+                                <div className="grid gap-2">
+                                    {regular.map((thread) => (
+                                        <ThreadRow key={thread.id} thread={thread} />
                                     ))}
                                 </div>
                             )}
 
-                            {/* Regular Threads */}
-                            {threadsData?.results?.filter(t => !t.is_pinned).map((thread) => (
-                                <ThreadCard key={thread.id} thread={thread} />
-                            ))}
-
-                            {(!threadsData?.results || threadsData.results.length === 0) && (
-                                <div className="forums-surface py-16 text-center">
-                                    <MessageSquare size={48} className="mx-auto mb-4 text-[var(--forums-meta)]" />
-                                    <h3 className="forums-section-title">No threads yet</h3>
-                                    <p className="forums-meta-text mt-2">Be the first to start a discussion.</p>
-                                </div>
+                            {results.length === 0 && (
+                                <EmptyState
+                                    actions={isAuthenticated ? (
+                                        <Link to={createPath} className="btn-primary text-sm">Start a thread</Link>
+                                    ) : (
+                                        <Link to="/login" className="btn-primary text-sm">Sign in to start a thread</Link>
+                                    )}
+                                >
+                                    {selectedTag ? 'No threads with this tag yet.' : 'No threads here yet. Be the first to start one.'}
+                                </EmptyState>
                             )}
                         </>
                     )}
                 </div>
 
                 {totalPages > 1 && (
-                    <div className="mt-8 flex justify-center">
+                    <div className="mt-8 flex max-w-4xl justify-center">
                         <Pagination
                             currentPage={page}
                             totalPages={totalPages}

@@ -55,8 +55,8 @@ export default function SearchSuggestionList({
                         role="option"
                         aria-selected={selectedIndex === index}
                         onClick={() => handleSuggestionClick(anime.slug)}
-                        className={`w-full cursor-pointer flex items-center gap-3 border-l-2 p-3 text-left transition-colors ${selectedIndex === index
-                            ? 'bg-accent/10 border-accent'
+                        className={`w-full cursor-pointer flex items-center gap-3 p-3 text-left transition-colors ${selectedIndex === index
+ ? 'bg-accent/10 border-accent'
                             : 'border-transparent hover:bg-dark-50'
                             }`}
                     >
@@ -96,7 +96,7 @@ export default function SearchSuggestionList({
                 type="button"
                 tabIndex={-1}
                 onClick={handleSearch}
-                className="w-full py-3 px-4 text-center text-sm font-medium text-accent hover:bg-dark-50 transition-colors border-t border-gray-700/50 flex items-center justify-center gap-2"
+                className="w-full py-3 px-4 text-center text-sm font-medium text-accent hover:bg-dark-50 transition-colors flex items-center justify-center gap-2"
             >
                 View all results for "{searchQuery}"
             </button>

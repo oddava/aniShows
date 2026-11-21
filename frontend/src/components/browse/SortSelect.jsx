@@ -14,8 +14,8 @@ export default function SortSelect({ value, hasSearch, onChange }) {
       onChange={onChange}
       options={getSortOptions(hasSearch)}
       placeholder="Sort"
-      className="w-40"
-      triggerClassName="!h-9 !rounded-lg !border-gray-700 !bg-dark-100 !px-3 !py-0 !text-[11px] !font-bold text-gray-300 hover:!border-accent"
+      className="w-[9.5rem]"
+      triggerClassName="!h-10 !rounded-lg !border-transparent !bg-white/[0.05] !px-3 !py-0 !text-sm !font-medium text-[var(--text-1)]"
     />
   );
 }

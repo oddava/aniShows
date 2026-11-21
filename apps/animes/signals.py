@@ -181,18 +181,21 @@ def capture_old_anime_list_state(sender, instance, **kwargs):
             instance._old_episodes = old.episodes_watched
             instance._old_score = old.score
             instance._old_is_rewatching = old.is_rewatching
+            instance._old_total_rewatches = old.total_rewatches
             instance._old_notes = old.notes
         except UserAnimeList.DoesNotExist:
             instance._old_status = None
             instance._old_episodes = None
             instance._old_score = None
             instance._old_is_rewatching = None
+            instance._old_total_rewatches = None
             instance._old_notes = None
     else:
         instance._old_status = None
         instance._old_episodes = None
         instance._old_score = None
         instance._old_is_rewatching = None
+        instance._old_total_rewatches = None
         instance._old_notes = None
 
 

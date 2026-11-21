@@ -114,6 +114,22 @@ describe('Notifications page', () => {
         expect(screen.getByRole('button', { name: 'Replies' })).toHaveAttribute('aria-pressed', 'false');
     });
 
+    it('offers Mark all read only when something is unread', async () => {
+        api.getAll.mockResolvedValue(page([GROUPED_EPISODES]));
+        api.getUnreadCount.mockResolvedValue({ data: { count: 0 } });
+        renderPage();
+
+        expect(await screen.findByText(/latest is Episode 7/)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Mark all read' })).not.toBeInTheDocument();
+    });
+
+    it('shows Mark all read while there are unread rows', async () => {
+        renderPage();
+        await screen.findByText('mika');
+
+        expect(screen.getByRole('button', { name: 'Mark all read' })).toBeEnabled();
+    });
+
     it('filters on the server, with the category in the query key', async () => {
         const client = renderPage();
         await screen.findByText('mika');
@@ -133,8 +149,7 @@ describe('Notifications page', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Episodes' }));
 
-        expect(await screen.findByText('No episode alerts yet.')).toBeInTheDocument();
-        expect(screen.getByText('Add airing shows to Watching to get them.')).toBeInTheDocument();
+        expect(await screen.findByText('No episode alerts yet. Add airing shows to Watching to get them.')).toBeInTheDocument();
     });
 
     it('uses images from the payload and makes no lookups of its own', async () => {

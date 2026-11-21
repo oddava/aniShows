@@ -153,7 +153,7 @@ const AdminLayout = () => {
                             </svg>
                         </div>
                         <span className="text-xl font-bold text-white">
-                            aniShows
+                            AniShows
                             <span className="text-gray-400 ml-1.5 text-sm font-semibold tracking-wider uppercase">Admin</span>
                         </span>
                     </NavLink>

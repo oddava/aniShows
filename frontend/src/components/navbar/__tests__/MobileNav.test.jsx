@@ -1,42 +1,41 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import MobileNav from '../MobileNav';
 
-function renderNav() {
+function renderNav(path = '/browse', props = {}) {
     return render(
-        <MemoryRouter initialEntries={['/browse']}>
-            <MobileNav
-                user={{ username: 'oddava' }}
-                isAuthenticated
-                logout={vi.fn()}
-                mobileUnreadCount={0}
-                currentUserProfilePath="/u/oddava"
-            />
-            <a href="/after">After the nav</a>
-        </MemoryRouter>
+        <MemoryRouter initialEntries={[path]}>
+            <MobileNav isAuthenticated mobileUnreadCount={0} {...props} />
+        </MemoryRouter>,
     );
 }
 
-describe('MobileNav account disclosure', () => {
-    it('closes when keyboard focus leaves it and returns focus on Escape', async () => {
-        const user = userEvent.setup();
-        renderNav();
+describe('MobileNav (M5)', () => {
+    it('puts My List one tap away, next to Home, Browse, Schedule and Notifications', () => {
+        renderNav('/browse');
+        const nav = screen.getByRole('navigation', { name: 'Primary' });
+        const labels = Array.from(nav.querySelectorAll('a')).map((link) => link.textContent);
+        expect(labels).toEqual(['Home', 'Browse', 'Schedule', 'My list', 'Alerts']);
+        expect(screen.getByRole('link', { name: 'My list' })).toHaveAttribute('href', '/list');
+        expect(screen.getByRole('link', { name: 'Browse' })).toHaveAttribute('aria-current', 'page');
+    });
 
-        const account = screen.getByRole('button', { name: /Account/ });
-        await user.click(account);
-        expect(account).toHaveAttribute('aria-expanded', 'true');
+    it('marks My List current on the library and announces unread notifications', () => {
+        renderNav('/list', { mobileUnreadCount: 12 });
+        expect(screen.getByRole('link', { name: 'My list' })).toHaveAttribute('aria-current', 'page');
+        expect(screen.getByRole('link', { name: 'Alerts, 12 unread' })).toBeInTheDocument();
+        expect(screen.getByText('9+')).toBeInTheDocument();
+    });
 
-        // Profile, Settings, Sign Out, then out of the nav.
-        for (let i = 0; i < 4; i += 1) await user.tab();
-        expect(screen.getByRole('link', { name: 'After the nav' })).toHaveFocus();
-        expect(account).toHaveAttribute('aria-expanded', 'false');
+    it('offers Sign in to guests instead of the list and notifications', () => {
+        renderNav('/', { isAuthenticated: false });
+        expect(screen.queryByRole('link', { name: 'My list' })).not.toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
+    });
 
-        await user.click(account);
-        await user.tab();
-        await user.keyboard('{Escape}');
-        expect(account).toHaveAttribute('aria-expanded', 'false');
-        expect(account).toHaveFocus();
+    it('stays out of the way on pages outside the main sections', () => {
+        renderNav('/anime/frieren');
+        expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
     });
 });

@@ -1,5 +1,5 @@
 const AUTO_TIMEZONE_VALUE = 'auto';
-const TIMEZONE_STORAGE_KEY = 'aniShows.userTimezonePreference';
+const TIMEZONE_STORAGE_KEY = 'AniShows.userTimezonePreference';
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_INDEX_BY_NAME = Object.fromEntries(DAY_NAMES.map((day, index) => [day, index]));
 const FALLBACK_TIMEZONES = [
@@ -126,11 +126,19 @@ export function formatTimeZoneLabel(value) {
         .join(' / ');
 }
 
+/**
+ * Every displayed date reads day before month ("Sun 22 Nov", "2 Oct 2026",
+ * "22 Nov 2026, 15:43"), and times are 24-hour, so all formatters share one
+ * day-month locale. Parsing helpers (getWeekdayIndex, getZonedCalendarToday)
+ * keep their own fixed locales.
+ */
+const DISPLAY_LOCALE = 'en-GB';
+
 export function formatDateTime(value, options = {}, preference) {
     const date = parseDate(value);
     if (!date) return '';
 
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(DISPLAY_LOCALE, {
         timeZone: resolveTimeZone(preference),
         ...options,
     }).format(date);
@@ -140,7 +148,7 @@ export function formatDate(value, options = {}, preference) {
     const date = parseDate(value);
     if (!date) return '';
 
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(DISPLAY_LOCALE, {
         timeZone: resolveTimeZone(preference),
         ...options,
     }).format(date);
@@ -177,7 +185,23 @@ export function getZonedCalendarToday(preference, now = new Date()) {
 
 /** Formats a calendar date produced by getZonedCalendarToday (UTC-anchored). */
 export function formatCalendarDate(date, options = {}) {
-    return new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'UTC' }).format(date);
+    return new Intl.DateTimeFormat(DISPLAY_LOCALE, { ...options, timeZone: 'UTC' }).format(date);
+}
+
+/**
+ * A span of calendar dates (UTC-anchored, as from getZonedCalendarToday),
+ * day before month, sharing what the ends share: "21–27 Nov",
+ * "28 Nov – 4 Dec", "28 Dec 2026 – 3 Jan 2027".
+ */
+export function formatCalendarRange(start, end) {
+    const dayMonth = { day: 'numeric', month: 'short' };
+    const sameYear = start.getUTCFullYear() === end.getUTCFullYear();
+    if (sameYear && start.getUTCMonth() === end.getUTCMonth()) {
+        const tail = formatCalendarDate(end, dayMonth);
+        return start.getUTCDate() === end.getUTCDate() ? tail : `${start.getUTCDate()}–${tail}`;
+    }
+    const options = sameYear ? dayMonth : { ...dayMonth, year: 'numeric' };
+    return `${formatCalendarDate(start, options)} – ${formatCalendarDate(end, options)}`;
 }
 
 export function getCurrentWeekdayIndex(preference) {
@@ -296,21 +320,14 @@ export function formatRelativeTime(date, preference) {
 }
 
 /**
- * Format a date as a full airing time string in the selected timezone.
+ * A full airing time in the selected timezone, 24-hour, no zone name:
+ * "Tue 24 Nov · 17:43". Empty for no date.
  */
 export function formatAiringTime(date, preference) {
-    return formatDateTime(
-        date,
-        {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            timeZoneName: 'short',
-        },
-        preference
-    );
+    const day = formatDateTime(date, { weekday: 'short', month: 'short', day: 'numeric' }, preference);
+    if (!day) return '';
+    const time = formatDateTime(date, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }, preference);
+    return `${day} · ${time}`;
 }
 
 export function formatDateTimeInUserTimezone(value, options = {}) {
@@ -335,3 +352,18 @@ export function isWithin24Hours(date) {
 }
 
 export { AUTO_TIMEZONE_VALUE, DAY_NAMES };
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago", then "20 Nov 2026". */
+export function formatTimeAgo(value, now = new Date()) {
+    const target = value ? new Date(value) : null;
+    if (!target || Number.isNaN(target.getTime())) return '';
+    const seconds = Math.round((now - target) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} h ago`;
+    const days = Math.round(hours / 24);
+    if (days < 7) return days === 1 ? 'yesterday' : `${days} days ago`;
+    return target.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}

@@ -5,7 +5,7 @@ import ReviewSummary from '../ReviewSummary';
 import CustomSelect from '../common/CustomSelect';
 
 /** The reviews block under the tabs. `reviews` is the state from useAnimeReviews. */
-export default function ReviewsSection({ anime, reviews, isAuthenticated, accentColor, mappedAccent }) {
+export default function ReviewsSection({ anime, reviews, isAuthenticated, accentColor }) {
     const {
         isWritingReview, setIsWritingReview,
         editingReview, setEditingReview,
@@ -27,54 +27,73 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
         handleReviewSubmit,
     } = reviews;
 
+    const hasReviews = allReviews.length > 0 || Boolean(ratingFilter);
+    const showWriteButton = isAuthenticated && canReview && !isWritingReview && !editingReview && !userReview;
+
+    // Nothing to read yet: one line and, when allowed, the action. No sort
+    // menu, no summary, no empty block under it.
+    if (!reviewsLoading && !hasReviews && !isWritingReview && !editingReview) {
+        const emptyLine = isAuthenticated && !userReview && !canReview
+            ? 'No reviews yet. Add it to your list to write the first one.'
+            : 'No reviews yet.';
+        return (
+            <section className="panel mt-4 mb-16" aria-labelledby="reviews-heading">
+                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <h2 id="reviews-heading" className="section-title">Reviews</h2>
+                        <p className="text-[15px] text-[var(--text-2)]">{emptyLine}</p>
+                    </div>
+                    {showWriteButton && (
+                        <button
+                            type="button"
+                            onClick={() => setIsWritingReview(true)}
+                            className="btn-primary text-[15px]"
+                        >
+                            Write a review
+                        </button>
+                    )}
+                </div>
+            </section>
+        );
+    }
+
     return (
-        <div className="mt-16 mb-16">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-[0.16em] mb-6 flex items-center gap-2 sm:gap-3">
+        <section className="panel mt-4 mb-16" aria-labelledby="reviews-heading">
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+                <h2 id="reviews-heading" className="section-title">
                     Reviews
-                    <span 
-                        className="text-[10px] font-bold px-2 py-0.5 rounded-md border"
-                        style={{ 
-                            color: mappedAccent,
-                            borderColor: mappedAccent ? `${mappedAccent}30` : 'rgba(117,105,141,0.2)',
-                            backgroundColor: mappedAccent ? `${mappedAccent}10` : 'rgba(117,105,141,0.05)'
-                        }}
-                    >
-                        {reviewCount}
-                    </span>
+                    {reviewCount > 0 && (
+                        <span className="ml-2 text-[15px] font-normal text-[var(--text-3)] tabular">{reviewCount}</span>
+                    )}
                 </h2>
                 <div className="flex items-center gap-3">
-                    <CustomSelect
-                        value={reviewSort}
-                        onChange={(nextValue) => setReviewSort(nextValue)}
-                        options={[
-                            { value: 'helpful', label: 'Most Helpful' },
-                            { value: 'newest', label: 'Newest' },
-                            { value: 'highest', label: 'Highest Rated' },
-                            { value: 'lowest', label: 'Lowest Rated' },
-                        ]}
-                        triggerClassName="bg-dark-100 border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-300"
-                        menuClassName="z-[320]"
-                        ariaLabel="Sort reviews"
-                    />
-
-                    {isAuthenticated && !isWritingReview && !editingReview && !userReview && (
-                        canReview ? (
-                            <button
-                                onClick={() => setIsWritingReview(true)}
-                                className="text-xs sm:text-sm px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl  text-white font-bold bg-accent-dark"
-                                style={{
-                                    backgroundColor: accentColor || '#75698d'
-                                }}
-                            >
-                                Write a Review
-                            </button>
-                        ) : (
-                            <div className="text-xs text-gray-300 bg-dark-50 px-4 py-2.5 rounded-xl border border-gray-700 ">
-                                Add to list to write a review
-                            </div>
-                        )
+                    {hasReviews && (
+                        <CustomSelect
+                            value={reviewSort}
+                            onChange={(nextValue) => setReviewSort(nextValue)}
+                            options={[
+                                { value: 'helpful', label: 'Most helpful' },
+                                { value: 'newest', label: 'Newest' },
+                                { value: 'highest', label: 'Highest rated' },
+                                { value: 'lowest', label: 'Lowest rated' },
+                            ]}
+                            triggerClassName="min-h-11 rounded-[var(--radius-sm)] bg-transparent px-3 py-2 text-sm text-[var(--text-2)]"
+                            menuClassName="z-[320]"
+                            ariaLabel="Sort reviews"
+                        />
                     )}
+
+                    {showWriteButton ? (
+                        <button
+                            type="button"
+                            onClick={() => setIsWritingReview(true)}
+                            className="btn-primary text-[15px]"
+                        >
+                            Write a review
+                        </button>
+                    ) : (isAuthenticated && hasReviews && !canReview && !userReview && !isWritingReview && !editingReview) ? (
+                        <p className="text-sm text-[var(--text-2)]">Add it to your list to write a review</p>
+                    ) : null}
                 </div>
             </div>
 
@@ -105,8 +124,8 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
 
             <div className="space-y-4">
                 {reviewsLoading ? (
-                    <div className="text-center py-12">
-                        <Loader className="w-10 h-10 text-accent animate-spin mx-auto" />
+                    <div className="py-12">
+                        <Loader className="w-8 h-8 text-[var(--text-3)] animate-spin mx-auto" aria-label="Loading reviews" />
                     </div>
                 ) : allReviews.length > 0 ? (
                     <>
@@ -123,8 +142,8 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
 
                         {ratingOnlyReviews.length > 0 && (
                             <div className="mt-8">
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-4">
-                                    Rating-only reviews ({ratingOnlyReviews.length})
+                                <p className="mb-4 text-sm text-[var(--text-2)]">
+                                    Rating-only reviews <span className="tabular text-[var(--text-3)]">{ratingOnlyReviews.length}</span>
                                 </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                     {ratingOnlyReviews.map((review) => (
@@ -146,21 +165,23 @@ export default function ReviewsSection({ anime, reviews, isAuthenticated, accent
                                 <button
                                     onClick={() => fetchNextPage()}
                                     disabled={isFetchingNextPage}
-                                    className="btn-secondary text-sm px-8 py-3 rounded-xl"
+                                    className="btn-secondary text-[15px]"
                                 >
-                                    {isFetchingNextPage ? <Loader className="w-5 h-5 animate-spin" /> : 'Load More Reviews'}
+                                    {isFetchingNextPage ? <Loader className="w-5 h-5 animate-spin" /> : 'Load more reviews'}
                                 </button>
                             </div>
                         )}
                     </>
                 ) : (
                     !isWritingReview && (
-                        <div className="text-center py-16 bg-dark-100/50 rounded-2xl border border-gray-800 border-dashed">
-                            <p className="text-gray-400 mb-4">No reviews for this anime yet.</p>
-                        </div>
+                        <p className="text-[15px] text-[var(--text-2)]">
+                            {isAuthenticated && !userReview && !canReview
+                                ? 'No reviews yet. Add it to your list to write the first one.'
+                                : 'No reviews yet.'}
+                        </p>
                     )
                 )}
             </div>
-        </div>
+        </section>
     );
 }

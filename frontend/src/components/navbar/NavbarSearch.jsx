@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Loader2, Search, X } from 'lucide-react';
 import logger from '../../utils/logger';
 import { MIN_SEARCH_LENGTH } from './useAnimeSearchSuggestions';
 
@@ -20,8 +20,8 @@ const preloadSearchSuggestionList = () => {
 
 const SearchingIndicator = () => (
     <div className="py-6 text-center text-gray-400">
-        <div className="w-6 h-6 mx-auto mb-2 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm">Searching...</p>
+        <Loader2 aria-hidden="true" className="mx-auto mb-2 h-5 w-5 animate-spin text-[var(--signature)]" />
+        <p className="text-sm">Searching…</p>
     </div>
 );
 
@@ -38,7 +38,7 @@ export function SearchNoMatches({ query, onSearchAll }) {
             <button
                 type="button"
                 onClick={onSearchAll}
-                className="mt-3 text-sm font-medium text-accent hover:underline"
+                className="mt-3 text-link text-sm"
             >
                 Search all anime
             </button>
@@ -47,8 +47,8 @@ export function SearchNoMatches({ query, onSearchAll }) {
 }
 
 /**
- * The collapsible desktop search box and its suggestions dropdown. `search` is
- * the state from useNavbarSearch.
+ * The desktop header search: one plain field (no collapse), "/" or Ctrl+K to
+ * focus, suggestions below. `search` is the state from useNavbarSearch.
  */
 export default function NavbarSearch({ search }) {
     const {
@@ -73,33 +73,13 @@ export default function NavbarSearch({ search }) {
     }, [isSearchExpanded, showSuggestions]);
 
     return (
-        <div className="nav-search-slot flex-1 flex justify-end mx-2 lg:mx-4" ref={searchRef} onBlur={handleSearchBlur}>
-            <div className={`relative transition-[width,max-width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${isSearchExpanded ? 'w-full max-w-[16rem] lg:max-w-[22rem]' : 'w-10 lg:w-52'}`}>
-                <form onSubmit={handleSearch} className="relative group/search flex items-center justify-end w-full h-full">
-                    {/* Search Icon / Toggle Button */}
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (!isSearchExpanded) {
-                                setIsSearchExpanded(true);
-                                setTimeout(() => searchInputRef.current?.focus(), 50);
-                            }
-                        }}
-                        className={`absolute left-0 z-10 flex items-center transition-colors duration-200 ${isSearchExpanded ? 'h-[36px] w-[36px] justify-center pointer-events-none' : 'w-10 h-10 lg:w-full lg:h-9 justify-center lg:justify-start lg:gap-2.5 lg:pl-3 lg:pr-2 rounded-full lg:bg-dark-100 lg:border lg:border-white/5 text-gray-300 hover:text-white hover:bg-white/10 lg:hover:bg-dark-100 lg:hover:border-white/10 cursor-pointer pointer-events-auto'}`}
-                        aria-label="Search anime"
-                        aria-keyshortcuts="/ Control+K"
-                        tabIndex={isSearchExpanded ? -1 : 0}
-                    >
-                        <Search aria-hidden="true" className={`w-4 h-4 shrink-0 transition-colors duration-200 ${isSearchExpanded ? 'text-gray-500 group-focus-within/search:text-accent' : ''}`} />
-                        {!isSearchExpanded && (
-                            <>
-                                <span className="hidden lg:inline text-sm text-gray-500">Search anime…</span>
-                                <kbd className="hidden lg:inline ml-auto px-1.5 py-0.5 rounded font-mono text-[10px] leading-none text-gray-500 border border-white/10">/</kbd>
-                            </>
-                        )}
-                    </button>
-
-                    {/* Input */}
+        <div className="nav-search-slot ml-auto mr-2 w-60 lg:w-72" ref={searchRef} onBlur={handleSearchBlur}>
+            <div className="relative">
+                <form onSubmit={handleSearch} role="search" className="group/search relative">
+                    <Search
+                        aria-hidden="true"
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-3)] transition-colors duration-150 group-focus-within/search:text-[var(--signature)]"
+                    />
                     <input
                         ref={searchInputRef}
                         type="text"
@@ -109,24 +89,25 @@ export default function NavbarSearch({ search }) {
                             setSelectedIndex(-1);
                         }}
                         onFocus={() => {
+                            setIsSearchExpanded(true);
                             preloadSearchSuggestionList();
                             if (searchQuery.trim().length >= MIN_SEARCH_LENGTH) {
                                 setShowSuggestions(true);
                             }
                         }}
-                        placeholder="Search anime..."
+                        placeholder="Search anime"
                         aria-label="Search anime"
+                        aria-keyshortcuts="/ Control+K"
                         role="combobox"
                         aria-autocomplete="list"
                         aria-expanded={showSuggestions}
                         aria-controls={searchSuggestions.length > 0 ? 'navbar-search-listbox' : undefined}
                         aria-activedescendant={showSuggestions && selectedIndex >= 0 ? `navbar-search-option-${selectedIndex}` : undefined}
-                        tabIndex={isSearchExpanded ? 0 : -1}
-                        className={`w-full rounded-full border border-white/5 bg-dark-100 py-2 pl-10 pr-8 text-sm text-white placeholder:text-gray-500 transition-all duration-[400ms] ease-[cubic-bezier(0.2,0.8,0.2,1)] focus:border-accent/40 focus:bg-dark-100 focus:outline-none focus:ring-4 focus:ring-accent/20 ${isSearchExpanded ? 'opacity-100 scale-x-100 pointer-events-auto origin-right' : 'opacity-0 scale-x-75 pointer-events-none border-transparent bg-transparent origin-right'}`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="h-10 w-full rounded-lg bg-white/[0.05] pl-9 pr-10 text-sm text-[var(--text-1)] placeholder:text-[var(--text-3)] transition-colors duration-150 hover:bg-white/[0.07]"
                     />
-
-                    {/* Clear button */}
-                    {searchQuery && isSearchExpanded && (
+                    {searchQuery ? (
                         <button
                             type="button"
                             onClick={() => {
@@ -135,18 +116,18 @@ export default function NavbarSearch({ search }) {
                                 setSelectedIndex(-1);
                                 searchInputRef.current?.focus();
                             }}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full px-1.5 py-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                            className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[var(--text-3)] transition-colors hover:bg-white/[0.08] hover:text-[var(--text-1)]"
                             aria-label="Clear search"
                         >
-                            <span className="text-[10px] font-bold">CLEAR</span>
+                            <X aria-hidden="true" className="h-4 w-4" />
                         </button>
-                    )}
-
-                    {/* Keyboard shortcut hint */}
-                    {!searchQuery && isSearchExpanded && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1 pointer-events-none">
-                            <kbd className="px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px] text-gray-400 border border-white/10">/</kbd>
-                        </div>
+                    ) : (
+                        <kbd
+                            aria-hidden="true"
+                            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded bg-white/[0.06] px-1.5 py-0.5 font-sans text-[11px] leading-none text-[var(--text-3)] transition-opacity group-focus-within/search:opacity-0"
+                        >
+                            /
+                        </kbd>
                     )}
                 </form>
 
@@ -154,7 +135,7 @@ export default function NavbarSearch({ search }) {
                 <div
                     inert={!showSuggestions}
                     tabIndex={-1}
-                    className={`absolute left-0 right-0 top-full z-50 mt-3 max-h-[70vh] overflow-y-auto overflow-hidden rounded-2xl border border-white/10 bg-dark-100 shadow-2xl shadow-black/50 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] origin-top ${showSuggestions ? 'opacity-100 translate-y-0' : 'pointer-events-none opacity-0 -translate-y-1'
+                    className={`absolute right-0 top-full z-50 mt-2 max-h-[70vh] w-[22rem] overflow-y-auto overflow-hidden rounded-xl bg-[var(--ink-3)] shadow-[var(--shadow-pop)] transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] origin-top ${showSuggestions ? 'opacity-100 translate-y-0' : 'pointer-events-none opacity-0 -translate-y-1'
                         }`}
                 >
                     {isSearching && searchSuggestions.length === 0 ? (

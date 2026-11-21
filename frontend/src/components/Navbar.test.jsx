@@ -61,7 +61,7 @@ describe('Navbar keyboard shortcuts', () => {
     it('opens search without crashing when document.activeElement is null', () => {
         renderNavbar();
 
-        const input = screen.getByPlaceholderText('Search anime...');
+        const input = screen.getByPlaceholderText('Search anime');
         const activeElementSpy = vi.spyOn(document, 'activeElement', 'get').mockReturnValue(null);
 
         expect(() => {

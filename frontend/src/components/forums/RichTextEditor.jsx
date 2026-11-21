@@ -51,7 +51,7 @@ const UrlModal = ({ isOpen, type, onClose, onSubmit }) => {
                 </h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">{type === 'youtube' ? 'YouTube URL' : type === 'image' ? 'Image URL' : 'URL'}</label>
+                        <label className="block text-sm font-semibold text-gray-300 mb-1.5 ">{type === 'youtube' ? 'YouTube URL' : type === 'image' ? 'Image URL' : 'URL'}</label>
                         <input
                             ref={inputRef}
                             type="url"
@@ -64,7 +64,7 @@ const UrlModal = ({ isOpen, type, onClose, onSubmit }) => {
                     </div>
                     {type !== 'image' && (
                         <div>
-                            <label className="block text-xs font-bold text-gray-400 mb-1.5 uppercase tracking-wider">
+                            <label className="block text-sm font-semibold text-gray-300 mb-1.5 ">
                                 {type === 'link' ? 'Link Text (Optional)' : 'Video Title (Optional)'}
                             </label>
                             <input

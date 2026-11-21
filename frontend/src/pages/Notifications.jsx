@@ -1,10 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Loader2, LogIn } from 'lucide-react';
 
 import { notificationKeys, notificationQueries } from '../api/queries/notifications';
-import ErrorState from '../components/common/ErrorState';
 import PageLoader from '../components/common/PageLoader';
 import SEO from '../components/SEO';
 import { useAuth } from '../context/AuthContext';
@@ -32,31 +30,14 @@ const NOTIFICATION_FILTERS = [
     { value: 'account', label: 'Account' },
 ];
 
+/** One plain sentence per filter when there is nothing to show. */
 const EMPTY_STATES = {
-    all: {
-        title: 'No notifications yet.',
-        hint: 'New episodes of shows you’re watching, replies, likes and follows show up here.',
-    },
-    episodes: {
-        title: 'No episode alerts yet.',
-        hint: 'Add airing shows to Watching to get them.',
-    },
-    replies: {
-        title: 'No replies or mentions yet.',
-        hint: 'Replies to your forum posts and @mentions show up here.',
-    },
-    likes: {
-        title: 'No likes yet.',
-        hint: 'Likes on your reviews and posts show up here.',
-    },
-    follows: {
-        title: 'No new followers yet.',
-        hint: 'When someone follows you, it shows up here.',
-    },
-    account: {
-        title: 'No account notifications yet.',
-        hint: 'Badges and announcements show up here.',
-    },
+    all: 'No notifications yet. New episodes, replies, likes and follows will show up here.',
+    episodes: 'No episode alerts yet. Add airing shows to Watching to get them.',
+    replies: 'No replies or mentions yet.',
+    likes: 'No likes on your reviews or posts yet.',
+    follows: 'No new followers yet.',
+    account: 'No badges or announcements yet.',
 };
 
 const PAGE_SIZE = 30;
@@ -70,16 +51,38 @@ const sortNewestFirst = (items) => [...items].sort(
 
 function FeedSkeleton() {
     return (
-        <div className="mt-4 sm:mt-5 w-full space-y-2.5 sm:space-y-3.5" aria-hidden="true">
+        <div className="mt-4 space-y-1" aria-hidden="true">
             {Array.from({ length: 6 }, (_, index) => (
-                <div key={index} className="flex overflow-hidden rounded-md bg-dark-100/80">
-                    <div className="w-14 h-20 sm:w-16 sm:h-24 flex-shrink-0 animate-pulse bg-dark-50" />
-                    <div className="flex-1 px-3 sm:px-4 py-3 space-y-2">
-                        <div className="h-3.5 w-3/4 rounded animate-pulse bg-dark-50" />
-                        <div className="h-3.5 w-1/2 rounded animate-pulse bg-dark-50" />
+                <div key={index} className="flex items-center gap-4 py-3">
+                    <div className="h-[72px] w-12 shrink-0 animate-pulse rounded-[var(--radius-sm)] bg-white/[0.05]" />
+                    <div className="flex-1 space-y-2">
+                        <div className="h-3.5 w-3/4 animate-pulse rounded bg-white/[0.05]" />
+                        <div className="h-3.5 w-1/3 animate-pulse rounded bg-white/[0.05]" />
                     </div>
                 </div>
             ))}
+        </div>
+    );
+}
+
+/** A failed load said plainly, with a retry that refetches in place. */
+function FeedError({ message, onRetry }) {
+    const [retrying, setRetrying] = useState(false);
+    const retry = async () => {
+        if (retrying) return;
+        setRetrying(true);
+        try {
+            await onRetry();
+        } finally {
+            setRetrying(false);
+        }
+    };
+    return (
+        <div role="alert" className="mt-4 flex flex-wrap items-center gap-x-3 text-sm text-[var(--text-2)]">
+            <span>{message}</span>
+            <button type="button" onClick={retry} disabled={retrying} className="text-link">
+                {retrying ? 'Trying again' : 'Try again'}
+            </button>
         </div>
     );
 }
@@ -234,17 +237,11 @@ export default function Notifications() {
 
     if (!isAuthenticated) {
         return (
-            <div className="max-w-3xl mx-auto px-4 py-8 sm:py-12">
+            <div className="page-container pt-6 pb-16 md:pt-10">
                 <SEO page="notifications" noIndex />
-                <div className="rounded-2xl border border-gray-800 bg-dark-100/80 p-8 text-center">
-                    <Bell className="w-12 h-12 mx-auto text-gray-500 mb-4" />
-                    <h1 className="text-2xl font-semibold text-white">Notifications</h1>
-                    <p className="text-gray-400 mt-2 mb-6">Sign in to see your notifications.</p>
-                    <Link to="/login" className="inline-flex items-center gap-2 btn-primary">
-                        <LogIn className="w-4 h-4" />
-                        Sign in
-                    </Link>
-                </div>
+                <h1 className="page-title">Notifications</h1>
+                <p className="mt-2 text-sm text-[var(--text-2)]">Sign in to see your notifications.</p>
+                <Link to="/login" className="btn-primary mt-5 text-sm">Sign in</Link>
             </div>
         );
     }
@@ -254,38 +251,14 @@ export default function Notifications() {
     if (loadingInitial) {
         content = <FeedSkeleton />;
     } else if (feedError && notifications.length === 0) {
-        content = (
-            <ErrorState
-                className="mt-4 sm:mt-5"
-                title="Couldn’t load notifications"
-                message="Check your connection and try again."
-                onRetry={retryFeed}
-            />
-        );
+        content = <FeedError message="Couldn’t load notifications. Check your connection." onRetry={retryFeed} />;
     } else if (notifications.length === 0) {
-        content = (
-            <div className="min-h-[40vh] flex flex-col items-center justify-center text-center text-gray-400 px-4">
-                <Bell aria-hidden="true" className="w-10 h-10 mb-3 text-gray-600" />
-                <p className="text-sm text-gray-300">{emptyState.title}</p>
-                <p className="text-sm text-gray-500 mt-1">{emptyState.hint}</p>
-            </div>
-        );
+        content = <p className="mt-6 text-sm text-[var(--text-2)]">{emptyState}</p>;
     } else {
         content = (
             <>
-                {feedError && (
-                    <div className="mt-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 flex items-center justify-between gap-3">
-                        <span>Failed to load notifications. Please try again.</span>
-                        <button
-                            type="button"
-                            onClick={retryFeed}
-                            className="text-xs px-2 py-1 rounded bg-red-500/20 hover:bg-red-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/70"
-                        >
-                            Retry
-                        </button>
-                    </div>
-                )}
-                <ul className="mt-4 sm:mt-5 w-full space-y-2.5 sm:space-y-3.5">
+                {feedError && <FeedError message="Couldn’t load the latest notifications." onRetry={retryFeed} />}
+                <ul className="-mx-3 mt-4 space-y-1">
                     {notifications.map((notification, index) => (
                         <li key={notification.id}>
                             <NotificationItem
@@ -302,21 +275,14 @@ export default function Notifications() {
                     ))}
                 </ul>
                 {nextPage && (
-                    <div className="mt-4 sm:mt-5 flex justify-center">
+                    <div className="mt-6">
                         <button
                             type="button"
                             onClick={handleLoadMore}
                             disabled={loadingMore}
-                            className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-dark-100 text-sm text-gray-200 hover:text-white disabled:text-gray-500 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+                            className="btn-secondary text-sm"
                         >
-                            {loadingMore ? (
-                                <>
-                                    <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" />
-                                    Loading
-                                </>
-                            ) : (
-                                'Load more'
-                            )}
+                            {loadingMore ? 'Loading' : 'Load more'}
                         </button>
                     </div>
                 )}
@@ -325,47 +291,59 @@ export default function Notifications() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto px-4 py-5 sm:py-6">
+        <div className="page-container pt-6 pb-16 md:pt-10">
             <SEO page="notifications" noIndex />
 
-            <div className="mb-4 sm:mb-5 flex items-center justify-between gap-3">
-                <h1 className="page-title">Notifications</h1>
-                <button
-                    type="button"
-                    onClick={handleMarkAllAsRead}
-                    disabled={!hasUnread || markingAllRead}
-                    className="text-xs sm:text-sm px-2.5 py-1.5 rounded-lg bg-dark-100 text-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-                >
-                    {markingAllRead ? 'Marking...' : 'Mark all read'}
-                </button>
-            </div>
-
-            {actionError && (
-                <div role="alert" className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                    {actionError}
-                </div>
-            )}
-
-            <div className="overflow-x-auto scrollbar-hide w-full">
-                <div className="inline-flex items-center gap-1.5 min-w-max" role="group" aria-label="Filter notifications">
-                    {NOTIFICATION_FILTERS.map((filter) => (
+            <div className="max-w-3xl">
+                <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+                    <div>
+                        <h1 className="page-title">Notifications</h1>
+                        <p className="mt-1 text-sm text-[var(--text-2)] tabular">
+                            {unreadCount > 0 ? `${unreadCount} unread` : 'New episodes, replies, likes and follows.'}
+                        </p>
+                    </div>
+                    {(hasUnread || markingAllRead) && (
                         <button
-                            key={filter.value}
                             type="button"
-                            aria-pressed={activeFilter === filter.value}
-                            onClick={() => setActiveFilter(filter.value)}
-                            className={`px-2.5 py-1.5 rounded-lg text-xs sm:text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 ${activeFilter === filter.value
-                                ? 'bg-accent-dark text-white'
-                                : 'bg-dark-100 text-gray-300 hover:text-white'
-                                }`}
+                            onClick={handleMarkAllAsRead}
+                            disabled={markingAllRead}
+                            className="btn-ghost -mr-3 text-sm"
                         >
-                            {filter.label}
+                            {markingAllRead ? 'Marking…' : 'Mark all read'}
                         </button>
-                    ))}
-                </div>
-            </div>
+                    )}
+                </header>
 
-            {content}
+                {actionError && (
+                    <p role="alert" className="mt-4 rounded-[var(--radius-md)] bg-white/[0.04] px-3 py-2 text-sm text-[var(--text-1)]">
+                        {actionError}
+                    </p>
+                )}
+
+                <div className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
+                    <div className="flex min-w-max gap-1" role="group" aria-label="Filter notifications">
+                        {NOTIFICATION_FILTERS.map((filter) => {
+                            const active = activeFilter === filter.value;
+                            return (
+                                <button
+                                    key={filter.value}
+                                    type="button"
+                                    aria-pressed={active}
+                                    onClick={() => setActiveFilter(filter.value)}
+                                    className={`flex min-h-11 items-center rounded-lg px-3.5 text-sm font-semibold transition-colors duration-150 md:min-h-9 ${active
+                                        ? 'bg-white/[0.07] text-[var(--text-1)]'
+                                        : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
+                                    }`}
+                                >
+                                    {filter.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {content}
+            </div>
         </div>
     );
 }

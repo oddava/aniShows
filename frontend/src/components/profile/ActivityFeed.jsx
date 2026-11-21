@@ -1,50 +1,36 @@
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { activityApi } from '../../api/client';
 import { Link } from 'react-router-dom';
-import {
-    CheckCircle2,
-    CircleDashed,
-    ListPlus,
-    PlayCircle,
-    Repeat2,
-    Star,
-    StickyNote,
-    Trash2,
-    Workflow,
-} from 'lucide-react';
 import AnimeMediaImage from '../common/AnimeMediaImage';
 import { formatDateInUserTimezone } from '../../utils/dateUtils';
-import { activityKeys } from '../../api/queries/user';
+import { activityKeys, listKeys } from '../../api/queries/user';
+import { LIST_STATUSES, statusLabel } from '../../utils/listStatus';
+import { statusesFromEntries, tidyActivities } from './activityTidy';
+
+// The overview shows a handful of rows; it asks for more than that because
+// tidying (dropped churn, merged runs) can leave fewer rows than events.
+const COMPACT_ROWS = 6;
+const COMPACT_FETCH = 40;
+const PAGE_SIZE = 50;
+// When a page tidies down to a few rows, fetch on by itself (up to this many
+// pages) until there are enough rows to read.
+const AUTO_PAGES = 4;
+const MIN_ROWS = 8;
 
 // `value` is the list status the server filters on (`?status=`): the entry's new
-// status, or the old one for removals.
-const STATUS_FILTERS = [
-    { value: 'Watching', label: 'Watching', color: '#16a34a' },
-    { value: 'Completed', label: 'Completed', color: '#3b82f6' },
-    { value: 'On Hold', label: 'On Hold', color: '#f59e0b' },
-    { value: 'Dropped', label: 'Dropped', color: '#ef4444' },
-    { value: 'Plan to Watch', label: 'Plan to Watch', color: '#6b7280' },
-];
-
+// status, or the old one for removals. Labels and colours: utils/listStatus.
 const FILTER_OPTIONS = [
-    { value: 'all', label: 'All', icon: CircleDashed },
-    ...STATUS_FILTERS,
+    { value: 'all', label: 'All' },
+    ...LIST_STATUSES.map(({ value, label, color }) => ({ value, label, color })),
 ];
-
-const ACTIVITY_CONFIG = {
-    completed: { icon: CheckCircle2, marker: 'bg-emerald-400', chip: 'bg-emerald-500/10 text-emerald-300' },
-    added: { icon: ListPlus, marker: 'bg-blue-400', chip: 'bg-blue-500/10 text-blue-300' },
-    progress: { icon: PlayCircle, marker: 'bg-accent-dark', chip: 'bg-accent/10 text-accent-light' },
-    status_change: { icon: Workflow, marker: 'bg-yellow-400', chip: 'bg-yellow-500/10 text-yellow-300' },
-    score: { icon: Star, marker: 'bg-amber-400', chip: 'bg-amber-500/10 text-amber-300' },
-    removed: { icon: Trash2, marker: 'bg-rose-400', chip: 'bg-rose-500/10 text-rose-300' },
-    rewatching: { icon: Repeat2, marker: 'bg-cyan-400', chip: 'bg-cyan-500/10 text-cyan-300' },
-    notes_update: { icon: StickyNote, marker: 'bg-pink-400', chip: 'bg-pink-500/10 text-pink-300' },
-};
 
 function renderActivityDescription(activity) {
-    const description = activity?.activity_description || '';
+    // The server writes the stored status value ("Plan to Watch"); people read
+    // the label ("Planning"), as everywhere else.
+    const description = (activity?.activity_description || '')
+        .split('Plan to Watch').join(statusLabel('Plan to Watch'))
+        .split('On Hold').join(statusLabel('On Hold'));
     if (!description) return '';
     const ranges = [];
     const pushRange = (start, end, className, priority = 1, linkTo = null) => {
@@ -61,7 +47,7 @@ function renderActivityDescription(activity) {
             pushRange(
                 titleIndex,
                 titleIndex + animeTitle.length,
-                'font-semibold text-accent',
+                'font-medium text-[var(--text-1)]',
                 3,
                 animeSlug ? `/anime/${animeSlug}` : null
             );
@@ -97,7 +83,7 @@ function renderActivityDescription(activity) {
                 <Link
                     key={`${start}-${end}`}
                     to={winner.linkTo}
-                    className={`${winner.className} cursor-pointer hover:text-accent/80 transition-colors`}
+                    className={`${winner.className} transition-colors hover:text-[var(--signature)]`}
                 >
                     {text}
                 </Link>
@@ -188,96 +174,78 @@ function parseNextPage(lastPage) {
     }
 }
 
-function activityMetadata(activity) {
-    if (activity.activity_type === 'status_change') {
-        return null;
-    }
-
-    if (activity.activity_type === 'score' && activity.new_score != null) {
-        return null;
-    }
-
-    if (activity.activity_type === 'completed' && activity.new_score != null) {
-        return null;
-    }
-
-    return null;
-}
-
 function EmptyState({ filterType }) {
-    const isFiltered = filterType !== 'all';
-
     return (
-        <div className="ui-empty-state py-14">
-            <p className="text-sm text-gray-300">
-                {isFiltered ? 'No entries for this filter yet.' : 'No watching activity yet.'}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-                {isFiltered ? 'Try another filter to see more updates.' : 'Updates will appear when list progress changes.'}
-            </p>
-        </div>
+        <p className=" pt-6 text-[17px] text-[var(--text-2)]">
+            {filterType !== 'all'
+                ? 'Nothing with this status yet. Try another one.'
+                : 'No activity yet. It shows up here when a list changes.'}
+        </p>
     );
 }
 
-function ActivityCard({ activity, compact = false }) {
-    const config = ACTIVITY_CONFIG[activity.activity_type] || ACTIVITY_CONFIG.added;
+function ActivityRow({ activity }) {
     const anime = activity.anime;
-    const metadata = activityMetadata(activity);
     const title = anime?.title || 'Unknown title';
 
     return (
-        <article className="group relative overflow-hidden rounded-lg bg-dark-100 p-2 transition-colors">
-            <div className="flex items-stretch gap-3">
-                <div className="flex min-w-0 flex-1 flex-col px-1 py-1">
-                    <div className="mb-1">
-                        <p className={`${compact ? 'text-[13px] leading-relaxed text-gray-300' : 'text-sm leading-tight text-gray-100'}`}>
-                            {renderActivityDescription(activity)}
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                        {metadata && (
-                            <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${config.chip}`}>
-                                {metadata}
-                            </span>
-                        )}
-                    </div>
-
-                    {activity.notes && (
-                        <p className="mt-1.5 line-clamp-2 rounded-lg bg-dark-200/70 px-2 py-1.5 text-xs italic text-gray-400">
-                            "{activity.notes}"
-                        </p>
-                    )}
-                    <div className="mt-1.5">
-                        <span className="text-[10px] text-gray-500">
-                            {timeAgo(activity.created_at)}
-                        </span>
-                    </div>
-                </div>
-
-                {anime?.slug && (
-                    <Link
-                        to={`/anime/${anime.slug}`}
-                        className="w-10 shrink-0 overflow-hidden rounded-md bg-dark-50 transition-colors"
-                    >
-                        <AnimeMediaImage
-                            anime={anime}
-                            kind="cover"
-                            size="small"
-                            alt={title}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                        />
-                    </Link>
+        <li className="flex items-center gap-4 py-3 ">
+            {anime?.slug ? (
+                <Link to={`/anime/${anime.slug}`} tabIndex={-1} aria-hidden="true" className="shrink-0">
+                    <AnimeMediaImage
+                        anime={anime}
+                        kind="cover"
+                        size="small"
+                        alt=""
+                        className="h-14 w-10 rounded-md bg-[var(--ink-2)] object-cover"
+                        loading="lazy"
+                    />
+                </Link>
+            ) : (
+                <span aria-hidden="true" className="h-14 w-10 shrink-0 rounded-md bg-[var(--ink-2)]" />
+            )}
+            <div className="min-w-0 flex-1">
+                <p className="text-[15px] leading-snug text-[var(--text-2)]">
+                    {renderActivityDescription(activity) || title}
+                </p>
+                {activity.notes && (
+                    <p className="mt-1 line-clamp-2 text-sm italic text-[var(--text-2)]">“{activity.notes}”</p>
                 )}
             </div>
-        </article>
+            <span className="shrink-0 text-sm text-[var(--text-3)] tabular">{timeAgo(activity.created_at)}</span>
+        </li>
     );
 }
 
-export default function ActivityFeed({ username, isPrivate, compact = false }) {
+/**
+ * List entries of this profile the client already holds (the overview's
+ * Watching rows, a list tab it opened), oldest fetch first so the freshest
+ * copy of an entry wins. No request of its own.
+ */
+function cachedListEntries(queryClient, username) {
+    const queries = queryClient.getQueryCache()
+        .findAll({ queryKey: [listKeys.all[0], username] })
+        .filter((query) => query.state.data)
+        .sort((a, b) => a.state.dataUpdatedAt - b.state.dataUpdatedAt);
+    return queries.flatMap(({ state: { data } }) => {
+        if (Array.isArray(data)) return data;
+        if (Array.isArray(data?.pages)) return data.pages.flatMap((page) => page?.results || []);
+        return Array.isArray(data?.results) ? data.results : [];
+    });
+}
+
+/**
+ * A profile's list activity, newest first, in rows grouped by day, tidied
+ * (see activityTidy): no add/remove churn, one row per burst of changes, and
+ * no status row the show's loaded list entry has since contradicted.
+ * `compact` (the overview) drops the filters, shows a handful of rows, and
+ * renders nothing at all (header included) when there is no activity.
+ * `currentEntries`: list entries the caller has loaded (newest data).
+ */
+export default function ActivityFeed({ username, isPrivate, isOwner = false, compact = false, header = null, currentEntries = null }) {
+    const queryClient = useQueryClient();
     const [filterType, setFilterType] = useState('all');
-    const pageSize = compact ? 8 : 16;
+    const pageSize = compact ? COMPACT_FETCH : PAGE_SIZE;
 
     const {
         data,
@@ -304,10 +272,26 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
         staleTime: 2 * 60 * 1000,
     });
 
-    const activities = useMemo(
-        () => data?.pages?.flatMap(page => page?.results || []) || [],
-        [data]
-    );
+    const rawCount = data?.pages?.reduce((total, page) => total + (page?.results?.length || 0), 0) || 0;
+    const activities = useMemo(() => {
+        const currentStatus = statusesFromEntries([
+            ...cachedListEntries(queryClient, username),
+            ...(currentEntries || []),
+        ]);
+        return tidyActivities(data?.pages?.flatMap(page => page?.results || []) || [], { isOwner, currentStatus });
+    }, [currentEntries, data, isOwner, queryClient, username]);
+    const pagesLoaded = data?.pages?.length || 0;
+
+    // Most of what loaded was churn: look further back before showing a short
+    // feed (or "nothing yet").
+    const wantedRows = compact ? COMPACT_ROWS : MIN_ROWS;
+    // While it looks further back by itself, the feed shows skeletons, not a
+    // single row that then jumps.
+    const autoPaging = hasNextPage && rawCount > 0 && activities.length < wantedRows && pagesLoaded < AUTO_PAGES;
+    useEffect(() => {
+        if (isFetching || !hasNextPage || rawCount === 0) return;
+        if (activities.length < wantedRows && pagesLoaded < AUTO_PAGES) fetchNextPage();
+    }, [activities.length, fetchNextPage, hasNextPage, isFetching, pagesLoaded, rawCount, wantedRows]);
 
     const dateGroups = useMemo(
         () => groupActivitiesByDate(activities),
@@ -332,15 +316,27 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
 
     if (isPrivate) {
         return (
-            <div className="ui-empty-state py-12">
-                <p className="text-sm text-gray-400">Activity is not available for private profiles.</p>
-            </div>
+            <p className="text-[17px] text-[var(--text-2)]">This profile is private, so its activity is too.</p>
+        );
+    }
+
+    if (compact) {
+        if (isLoading || isError || activities.length === 0) return null;
+        return (
+            <section>
+                {header}
+                <ul>
+                    {activities.slice(0, COMPACT_ROWS).map((activity) => (
+                        <ActivityRow key={activity.id} activity={activity} />
+                    ))}
+                </ul>
+            </section>
         );
     }
 
     return (
-        <section className="space-y-4">
-            <div className="flex flex-wrap gap-2">
+        <section className="space-y-6 max-w-3xl">
+            <div className="scroll-fade -mx-4 flex items-center gap-2 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0" role="group" aria-label="Filter by status">
                 {FILTER_OPTIONS.map((filter) => {
                     const isActive = filterType === filter.value;
                     return (
@@ -349,89 +345,71 @@ export default function ActivityFeed({ username, isPrivate, compact = false }) {
                             type="button"
                             onClick={() => setFilterType(filter.value)}
                             aria-pressed={isActive}
-                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${isActive
-                                ? 'bg-accent/15 text-accent-light'
-                                : 'bg-dark-100/70 text-gray-400 hover:bg-dark-100 hover:text-gray-200'
+                            className={`inline-flex min-h-[2.5rem] items-center gap-2 rounded-lg px-3.5 text-sm transition-colors ${isActive
+                                ? 'bg-white/[0.08] text-[var(--text-1)]'
+                                : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
                                 }`}
                         >
-                            {filter.color ? (
-                                <span
-                                    className="h-3 w-3 rounded-[6px]"
-                                    style={{ backgroundColor: filter.color }}
-                                />
-                            ) : (
-                                <CircleDashed className="h-3.5 w-3.5" />
+                            {filter.color && (
+                                <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: filter.color }} />
                             )}
                             {filter.label}
                         </button>
                     );
                 })}
                 {isFilterUpdating && (
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-dark-100/70 px-3 py-1.5 text-xs font-semibold text-gray-300">
-                        <span className="h-3.5 w-3.5 rounded-full border border-gray-400/50 border-t-gray-100 animate-spin" />
-                        Updating...
-                    </span>
+                    <span className="text-sm text-[var(--text-3)]">Updating…</span>
                 )}
             </div>
 
-            {isLoading && activities.length === 0 && (
-                <div className="space-y-2">
-                    {Array.from({ length: compact ? 3 : 5 }).map((_, index) => (
-                        <div key={index} className="h-20 animate-pulse rounded-xl bg-dark-100/60" />
+            {(isLoading || autoPaging) && activities.length < wantedRows && (isLoading || isFetching || autoPaging) && (
+                <ul aria-hidden="true">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                        <li key={index} className="flex items-center gap-4 py-3">
+                            <span className="h-14 w-10 rounded-md bg-[var(--ink-2)] animate-pulse" />
+                            <span className="h-4 w-1/2 rounded bg-[var(--ink-2)] animate-pulse" />
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {isError && (
+                <p className="text-[17px] text-[var(--text-2)]">
+                    Couldn’t load the activity.{' '}
+                    <button type="button" onClick={() => refetch()} className="text-link">Try again</button>
+                </p>
+            )}
+
+            {!isLoading && !isError && !isFilterUpdating && !isFetchingNextPage && visibleActivityCount === 0 && (
+                <EmptyState filterType={filterType} />
+            )}
+
+            {!isLoading && !autoPaging && !isError && visibleActivityCount > 0 && (
+                <div className={`space-y-8 transition-opacity duration-200 ${isFilterUpdating ? 'opacity-60' : 'opacity-100'}`}>
+                    {visibleDateGroups.map((group) => (
+                        <div key={group.key}>
+                            <h3 className=" pb-2 text-sm text-[var(--text-2)]">
+                                {group.label}
+                            </h3>
+                            <ul>
+                                {group.activities.map((activity) => (
+                                    <ActivityRow key={activity.id} activity={activity} />
+                                ))}
+                            </ul>
+                        </div>
                     ))}
                 </div>
             )}
 
-            {isError && (
-                <div className="ui-empty-state py-12">
-                    <p className="text-sm text-gray-300">Failed to load activity feed.</p>
-                    <button
-                        type="button"
-                        onClick={() => refetch()}
-                        className="mt-3 rounded-lg bg-dark-100 px-4 py-2 text-xs font-medium text-gray-300 transition-colors hover:bg-dark-50 hover:text-white"
-                    >
-                        Retry
-                    </button>
-                </div>
-            )}
-
-            {!isLoading && !isError && !isFilterUpdating && visibleActivityCount === 0 && (
-                <EmptyState filterType={filterType} />
-            )}
-
-            {!isLoading && !isError && visibleActivityCount > 0 && (
-                <div className="relative">
-                    <div className={`space-y-5 transition-opacity duration-200 ${isFilterUpdating ? 'opacity-60' : 'opacity-100'}`}>
-                        {visibleDateGroups.map((group) => (
-                            <div key={group.key}>
-                                <h4 className={`mb-2 uppercase tracking-[0.14em] ${compact ? 'text-[10px] font-semibold text-gray-600' : 'text-[11px] font-bold text-gray-500'}`}>
-                                    {group.label}
-                                </h4>
-                                <div className="space-y-2">
-                                    {group.activities.map((activity) => (
-                                        <ActivityCard key={activity.id} activity={activity} compact={compact} />
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    {isFilterUpdating && (
-                        <div className="pointer-events-none absolute inset-0 rounded-xl bg-dark/20 backdrop-blur-[1px]" aria-hidden="true" />
-                    )}
-                </div>
-            )}
-
-            {hasNextPage && !isError && (
-                <div className="flex justify-center pt-1">
-                    <button
-                        type="button"
-                        onClick={() => fetchNextPage()}
-                        disabled={isFetchingNextPage}
-                        className="rounded-lg bg-dark-100 px-5 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-dark-50 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        {isFetchingNextPage ? 'Loading...' : 'Load More Activity'}
-                    </button>
-                </div>
+            {hasNextPage && !autoPaging && !isError && (
+                <button
+                    type="button"
+                    onClick={() => fetchNextPage()}
+                    disabled={isFetchingNextPage}
+                    className="btn-secondary px-5 text-[15px]"
+                >
+                    {isFetchingNextPage ? 'Loading…' : 'Load more'}
+                </button>
             )}
         </section>
     );

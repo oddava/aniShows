@@ -1,15 +1,12 @@
 import React from 'react';
 
-const Logo = ({ showText = true, textClassName = "text-xl font-bold text-white", text = "AniShows" }) => {
-    return (
-        <div className="flex items-center group">
-            {showText && (
-                <span className={textClassName}>
-                    {text}
-                </span>
-            )}
-        </div>
-    );
-};
+/** The wordmark, set like oddava.me's header: plain DM Sans, no badge. */
+const Logo = ({ showText = true, textClassName = 'text-[var(--text-1)]', text = 'AniShows' }) => (
+    showText ? (
+        <span className={`text-[1.1875rem] font-semibold leading-none tracking-[-0.02em] ${textClassName}`}>
+            {text}
+        </span>
+    ) : null
+);
 
 export default Logo;

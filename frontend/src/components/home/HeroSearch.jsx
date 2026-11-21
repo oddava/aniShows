@@ -153,7 +153,7 @@ const HeroSearch = forwardRef(function HeroSearch(_props, formRef) {
             </form>
 
             {showPanel && (
-                <div tabIndex={-1} style={listMaxHeight ? { maxHeight: listMaxHeight } : undefined} className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl border border-white/10 bg-dark-100 shadow-2xl shadow-black/50 animate-fade-in">
+                <div tabIndex={-1} style={listMaxHeight ? { maxHeight: listMaxHeight } : undefined} className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-2xl bg-[var(--ink-3)] shadow-[var(--shadow-pop)] animate-fade-in">
                     {showList ? (
                         <Suspense fallback={null}>
                             <SearchSuggestionList

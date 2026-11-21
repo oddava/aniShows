@@ -57,7 +57,7 @@ describe('BrowseResults', () => {
         render(<BrowseResults {...props} />);
 
         expect(screen.getByText('Failed to load anime')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
         expect(props.refetch).toHaveBeenCalled();
     });
 

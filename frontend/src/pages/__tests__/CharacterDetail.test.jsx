@@ -24,10 +24,6 @@ vi.mock('../../components/SEO', () => ({
     ),
 }));
 
-vi.mock('../../components/common/AnimeMediaImage', () => ({
-    default: ({ alt }) => <img alt={alt} />,
-}));
-
 function renderCharacter(character) {
     characterApi.getById.mockResolvedValue({ data: character });
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
@@ -63,7 +59,7 @@ describe('CharacterDetail', () => {
         await screen.findByRole('heading', { level: 1, name: 'Frieren' });
         // One entry: its cover link and its title link both point at the anime.
         expect(document.querySelectorAll('a[href="/anime/frieren"]')).toHaveLength(2);
-        expect(screen.getByText('1 Appearance')).toBeInTheDocument();
+        expect(screen.getByText('1 appearance')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Atsumi Tanezaki' })).toHaveAttribute('href', '/staff/5');
         expect(screen.getByRole('link', { name: 'Mallorie Rodak' })).toHaveAttribute('href', '/staff/6');
         expect(screen.getByRole('link', { name: 'AniList' })).toHaveAttribute('href', 'https://anilist.co/character/9');

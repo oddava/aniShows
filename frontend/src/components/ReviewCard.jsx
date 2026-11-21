@@ -182,7 +182,7 @@ function ReviewReportDialog({ reviewId, onClose }) {
                 aria-labelledby={titleId}
                 className="w-full max-w-sm rounded-2xl border border-gray-800 bg-dark-100 shadow-xl"
             >
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+                <div className="flex items-center justify-between px-4 py-3 ">
                     <h2 id={titleId} className="text-sm font-bold text-white">Report review</h2>
                     <button
                         type="button"
@@ -208,7 +208,7 @@ function ReviewReportDialog({ reviewId, onClose }) {
                 ) : (
                     <form onSubmit={handleSubmit} className="p-4 space-y-4">
                         <div>
-                            <label htmlFor={reasonId} className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-2">
+                            <label htmlFor={reasonId} className="block text-xs font-bold text-gray-500 mb-2">
                                 Reason
                             </label>
                             <CustomSelect
@@ -221,7 +221,7 @@ function ReviewReportDialog({ reviewId, onClose }) {
                             />
                         </div>
                         <div>
-                            <label htmlFor={noteId} className="block text-[10px] font-bold text-gray-500 uppercase tracking-[0.16em] mb-2">
+                            <label htmlFor={noteId} className="block text-xs font-bold text-gray-500 mb-2">
                                 Note (optional)
                             </label>
                             <textarea
@@ -637,7 +637,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
 
                     {/* Mobile sub-ratings */}
                     {hasSubRatings && (
-                        <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-gray-800/50 lg:hidden">
+                        <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 lg:hidden">
                             {review.rating_story && (
                                 <div className="flex items-center gap-1 text-[10px] text-gray-500">
                                     <Book className="w-3 h-3" /> {(review.rating_story / 2).toFixed(1)}
@@ -661,7 +661,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                         </div>
                     )}
 
-                    <div className="mt-3 pt-3 border-t border-gray-800/30 space-y-3">
+                    <div className="mt-3 pt-3 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                             <button
                                 onClick={() => handleVote('helpful')}
@@ -718,7 +718,7 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
 
                 {/* Right Column: Scorecard (desktop only) */}
                 {hasSubRatings && (
-                    <div className="hidden lg:flex w-44 shrink-0 bg-dark-50/50 border-l border-gray-800/50 p-4 flex-col gap-4">
+                    <div className="hidden lg:flex w-44 shrink-0 bg-dark-50/50 p-4 flex-col gap-4">
                         <ScoreRow icon={Book} label="Story" value={review.rating_story} accentColor={accentColor} />
                         <ScoreRow icon={Film} label="Animation" value={review.rating_animation} accentColor={accentColor} />
                         <ScoreRow icon={Music} label="Music" value={review.rating_music} accentColor={accentColor} />

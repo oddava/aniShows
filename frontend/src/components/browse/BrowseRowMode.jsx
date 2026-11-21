@@ -10,11 +10,11 @@ import { animeKeys } from '../../api/queries/anime';
 const ROW_PAGE_SIZE = 6;
 const BROWSE_ROWS_TIMEOUT_MS = 12000;
 const PLACEHOLDER_ROWS = [
-    { key: 'trending', title: 'Trending Now' },
-    { key: 'popular-season', title: 'Popular This Season' },
-    { key: 'upcoming', title: 'Upcoming Next Season' },
-    { key: 'all-time', title: 'All Time Popular' },
-    { key: 'top-rated', title: 'Top Rated' },
+    { key: 'trending', title: 'Trending now' },
+    { key: 'popular-season', title: 'Popular this season' },
+    { key: 'upcoming', title: 'Upcoming next season' },
+    { key: 'all-time', title: 'All-time popular' },
+    { key: 'top-rated', title: 'Top rated' },
 ];
 
 function takeUniqueAnime(animeList = [], seenIds, limit = ROW_PAGE_SIZE) {
@@ -100,9 +100,9 @@ export default function BrowseRowMode({ titleLanguage = 'en' }) {
                     </button>
                     <Link
                         to="/browse?sort=popular"
-                        className="px-4 py-2 rounded-lg border border-gray-700 text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
+                        className="btn-secondary text-sm"
                     >
-                        Open Browse List
+                        Browse all anime
                     </Link>
                 </div>
             </div>

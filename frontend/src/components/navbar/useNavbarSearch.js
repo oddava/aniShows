@@ -95,11 +95,19 @@ export default function useNavbarSearch() {
                 if (searchInputRef.current.value.trim().length >= MIN_SEARCH_LENGTH) setShowSuggestions(true);
             }
 
-            // ESC to blur search and close dropdowns
-            // (The profile menu handles its own Escape so it can restore focus
-            // to its button.)
+            // Escape in the field: the first press only closes the open list and
+            // keeps focus (and the query) in the field; a second press leaves
+            // the search. (The profile menu handles its own Escape so it can
+            // restore focus to its button.)
             if (e.key === 'Escape') {
-                if (document.activeElement === searchInputRef.current) {
+                const inField = document.activeElement === searchInputRef.current;
+                if (inField && showSuggestions) {
+                    e.preventDefault();
+                    setShowSuggestions(false);
+                    setSelectedIndex(-1);
+                    return;
+                }
+                if (inField) {
                     e.preventDefault();
                     searchInputRef.current.blur();
                 }

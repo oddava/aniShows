@@ -101,7 +101,7 @@ function CropDialog({
                 className="relative w-full h-svh sm:h-auto max-h-full sm:max-w-2xl sm:max-h-[90vh] bg-dark-100 sm:rounded-2xl border border-gray-800 overflow-hidden shadow-2xl flex flex-col animate-modal-in">
 
                 {/* Header */}
-                <div className="flex items-center justify-between px-4 py-2 sm:py-3 border-b border-white/10 bg-dark-200 shrink-0 z-10">
+                <div className="flex items-center justify-between px-4 py-2 sm:py-3 bg-dark-200 shrink-0 z-10">
                     <div className="flex items-center gap-2 sm:gap-4">
                         <button
                             type="button"
@@ -144,7 +144,7 @@ function CropDialog({
                 </div>
 
                 {/* Controls */}
-                <div className="px-6 py-3 sm:py-4 bg-dark-200 border-t border-white/10 shrink-0 z-10">
+                <div className="px-6 py-3 sm:py-4 bg-dark-200 shrink-0 z-10">
                     <div className="flex items-center gap-4 max-w-md mx-auto">
                         <button
                             type="button"

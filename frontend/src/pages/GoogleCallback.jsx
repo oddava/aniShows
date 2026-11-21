@@ -7,7 +7,7 @@ import { GOOGLE_CALLBACK_PATH, consumeGoogleSignInState } from '../components/au
 import logger from '../utils/logger';
 
 const EXISTING_EMAIL_MESSAGE =
-    'This email already has an aniShows account with a password. Sign in with your email and password instead.';
+    'This email already has an AniShows account with a password. Sign in with your email and password instead.';
 
 function describeGoogleError(err) {
     const detail = getApiErrorMessage(err, '');

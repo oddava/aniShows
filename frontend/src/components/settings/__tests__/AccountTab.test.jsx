@@ -119,7 +119,7 @@ describe('AccountTab', () => {
         const handlePrivacyToggle = vi.fn();
         renderTab({ isPrivate: true, handlePrivacyToggle });
 
-        const toggle = screen.getByRole('switch', { name: 'Private Profile' });
+        const toggle = screen.getByRole('switch', { name: 'Private profile' });
         expect(toggle).toHaveAttribute('aria-checked', 'true');
         expect(toggle).toHaveAccessibleDescription(/reviews and forum posts stay visible/i);
         fireEvent.click(toggle);

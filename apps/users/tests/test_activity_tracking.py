@@ -56,6 +56,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.ADDED,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.new_status, "Watching")
 
     def test_activity_created_on_add_completed(self):
@@ -72,6 +73,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.COMPLETED,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.new_status, "Completed")
 
     def test_activity_on_status_change(self):
@@ -94,6 +96,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.STATUS_CHANGE,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.old_status, "Watching")
         self.assertEqual(activity.new_status, "On Hold")
 
@@ -116,6 +119,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.PROGRESS,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.old_episodes, 3)
         self.assertEqual(activity.new_episodes, 6)
 
@@ -239,6 +243,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.COMPLETED,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.old_status, "Watching")
         self.assertEqual(activity.new_status, "Completed")
 
@@ -262,6 +267,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.REWATCHING,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
 
     def test_activity_on_delete(self):
         """Deleting anime list entry creates a REMOVED activity."""
@@ -281,6 +287,7 @@ class ActivitySignalTests(TransactionTestCase):
             activity_type=UserActivity.ActivityType.REMOVED,
         ).first()
         self.assertIsNotNone(activity)
+        assert activity is not None
         self.assertEqual(activity.old_status, "Watching")
 
     def test_score_only_change_not_logged(self):
@@ -308,7 +315,7 @@ class ActivitySignalTests(TransactionTestCase):
             status=UserAnimeList.UserAnimeStatus.watching,
             episodes_watched=0,
         )
-        entry._skip_activity = True
+        entry._skip_activity = True  # type: ignore[attr-defined]
         entry.save()
 
         count = UserActivity.objects.filter(user=self.user, anime=self.anime).count()
@@ -324,6 +331,194 @@ class ActivitySignalTests(TransactionTestCase):
         )
         # Should have created activity without error
         self.assertTrue(UserActivity.objects.filter(user=self.user, anime=self.anime).exists())
+
+
+class ListActivityMergeTests(TransactionTestCase):
+    """Writes within 10 minutes describe the net change; an Undo leaves no row."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="mergeuser", email="merge@example.com", password="password123"
+        )
+        self.anime = Anime.objects.create(
+            title="Merge Anime", slug="merge-anime", episode_count=12, status="Finished"
+        )
+
+    def rows(self):
+        return list(
+            UserActivity.objects.filter(user=self.user, anime=self.anime).order_by(
+                "created_at", "id"
+            )
+        )
+
+    def kinds(self):
+        return [row.activity_type for row in self.rows()]
+
+    def heatmap_total(self):
+        from django.core.cache import cache
+
+        from ..services.cache import get_user_heatmap_cache_key
+
+        cache.delete(get_user_heatmap_cache_key(self.user.id))
+        response = APIClient().get(reverse("activity-heatmap"), {"username": self.user.username})
+        return sum(day["count"] for day in response.data)
+
+    def age_rows(self, minutes):
+        UserActivity.objects.update(created_at=timezone.now() - timedelta(minutes=minutes))
+
+    def add(self, status=UserAnimeList.UserAnimeStatus.watching, episodes=0):
+        return UserAnimeList.objects.create(
+            user=self.user, anime=self.anime, status=status, episodes_watched=episodes
+        )
+
+    def change(self, entry, **fields):
+        for name, value in fields.items():
+            setattr(entry, name, value)
+        entry.save()
+        return entry
+
+    def test_add_then_undo_leaves_nothing(self):
+        entry = self.add()
+        entry.delete()
+
+        self.assertEqual(self.rows(), [])
+
+    def test_add_completed_then_undo_leaves_nothing_on_the_heatmap(self):
+        entry = self.add(UserAnimeList.UserAnimeStatus.completed, 12)
+        entry.delete()
+
+        self.assertEqual(self.rows(), [])
+        self.assertEqual(self.heatmap_total(), 0)
+
+    def test_remove_then_undo_leaves_nothing(self):
+        entry = self.add(episodes=4)
+        self.age_rows(30)
+        entry.delete()
+        self.add(episodes=4)
+
+        self.assertEqual(self.kinds(), [UserActivity.ActivityType.ADDED])
+
+    def test_rapid_status_changes_collapse_to_one_row(self):
+        status = UserAnimeList.UserAnimeStatus
+        entry = self.add(status.plan_to_watch)
+        self.change(entry, status=status.on_hold)
+        self.change(entry, status=status.completed, episodes_watched=12)
+
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].activity_type, UserActivity.ActivityType.COMPLETED)
+        self.assertEqual((rows[0].old_status, rows[0].new_status), (None, "Completed"))
+        self.assertEqual(self.heatmap_total(), 12)
+
+    def test_status_change_then_undo_leaves_nothing(self):
+        status = UserAnimeList.UserAnimeStatus
+        entry = self.add(status.completed, 12)
+        self.age_rows(30)
+        self.change(entry, status=status.watching)
+        self.change(entry, status=status.completed)
+
+        self.assertEqual(self.kinds(), [UserActivity.ActivityType.COMPLETED])
+        self.assertEqual(self.heatmap_total(), 12)
+
+    def test_completion_then_undo_takes_its_episodes_back(self):
+        status = UserAnimeList.UserAnimeStatus
+        entry = self.add(episodes=5)
+        self.age_rows(30)
+        self.change(entry, status=status.completed, episodes_watched=12)
+        self.assertEqual(self.heatmap_total(), 7)
+
+        self.change(entry, status=status.watching, episodes_watched=5)
+
+        self.assertEqual(self.kinds(), [UserActivity.ActivityType.ADDED])
+        self.assertEqual(self.heatmap_total(), 0)
+
+    def test_progress_then_completion_merges_and_keeps_the_episodes(self):
+        entry = self.add(episodes=3)
+        self.age_rows(30)
+        self.change(entry, episodes_watched=4)
+        self.change(entry, status=UserAnimeList.UserAnimeStatus.completed, episodes_watched=12)
+
+        rows = self.rows()
+        self.assertEqual(self.kinds()[-1], UserActivity.ActivityType.COMPLETED)
+        self.assertEqual(len(rows), 2)  # the old ADDED row and one "Completed"
+        self.assertEqual((rows[-1].old_episodes, rows[-1].new_episodes), (3, 12))
+        self.assertEqual(self.heatmap_total(), 9)
+
+    def test_change_that_would_hide_progress_keeps_both_rows(self):
+        # Watching 0 -> 1 then On Hold: one STATUS_CHANGE row would drop the episode
+        # from the heatmap, so both rows stay.
+        entry = self.add()
+        self.age_rows(30)
+        self.change(entry, episodes_watched=1)
+        self.change(entry, status=UserAnimeList.UserAnimeStatus.on_hold)
+
+        self.assertEqual(
+            self.kinds(),
+            [
+                UserActivity.ActivityType.ADDED,
+                UserActivity.ActivityType.PROGRESS,
+                UserActivity.ActivityType.STATUS_CHANGE,
+            ],
+        )
+        self.assertEqual(self.heatmap_total(), 1)
+
+    def test_change_after_the_window_logs_a_new_row(self):
+        status = UserAnimeList.UserAnimeStatus
+        entry = self.add()
+        self.age_rows(11)
+        self.change(entry, status=status.on_hold)
+        self.age_rows(11)
+        self.change(entry, status=status.watching)
+
+        self.assertEqual(
+            self.kinds(),
+            [
+                UserActivity.ActivityType.ADDED,
+                UserActivity.ActivityType.STATUS_CHANGE,
+                UserActivity.ActivityType.STATUS_CHANGE,
+            ],
+        )
+
+    def test_rewatch_start_then_undo_leaves_nothing(self):
+        status = UserAnimeList.UserAnimeStatus
+        entry = self.add(status.completed, 12)
+        self.age_rows(30)
+        self.change(entry, is_rewatching=True, status=status.watching, episodes_watched=0)
+        self.change(entry, is_rewatching=False, status=status.completed, episodes_watched=12)
+
+        self.assertEqual(self.kinds(), [UserActivity.ActivityType.COMPLETED])
+        self.assertEqual(self.heatmap_total(), 12)
+
+    def test_finishing_a_rewatch_is_kept(self):
+        status = UserAnimeList.UserAnimeStatus
+        entry = self.add(status.completed, 12)
+        self.age_rows(30)
+        self.change(entry, is_rewatching=True, status=status.watching, episodes_watched=0)
+        self.change(
+            entry,
+            is_rewatching=False,
+            total_rewatches=1,
+            status=status.completed,
+            episodes_watched=12,
+        )
+
+        self.assertEqual(
+            self.kinds(),
+            [
+                UserActivity.ActivityType.COMPLETED,
+                UserActivity.ActivityType.REWATCHING,
+                UserActivity.ActivityType.COMPLETED,
+            ],
+        )
+
+    def test_status_rows_keep_episode_counts(self):
+        entry = self.add(episodes=3)
+        self.age_rows(30)
+        self.change(entry, status=UserAnimeList.UserAnimeStatus.dropped)
+
+        row = self.rows()[-1]
+        self.assertEqual(row.activity_type, UserActivity.ActivityType.STATUS_CHANGE)
+        self.assertEqual((row.old_episodes, row.new_episodes), (3, 3))
 
 
 class HeatmapAPITests(APITestCase):

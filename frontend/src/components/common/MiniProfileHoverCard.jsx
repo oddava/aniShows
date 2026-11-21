@@ -241,7 +241,7 @@ export default function MiniProfileHoverCard({ user, username, children }) {
                                     {stats.map((stat) => (
                                         <div key={stat.label} className="text-center">
                                             <p className="text-[11px] font-bold leading-none text-gray-200">{stat.value}</p>
-                                            <p className="mt-0.5 text-[8px] font-semibold uppercase tracking-[0.06em] text-gray-500">
+                                            <p className="mt-0.5 text-xs font-semibold text-gray-500">
                                                 {stat.label}
                                             </p>
                                         </div>
@@ -254,7 +254,7 @@ export default function MiniProfileHoverCard({ user, username, children }) {
                             ) : (
                             <>
                             <section>
-                                <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.1em] text-gray-500">Watching</p>
+                                <p className="mb-1 text-xs font-bold text-gray-500">Watching</p>
                                 {watchingItems.length > 0 ? (
                                     <div className="flex items-center gap-1.5">
                                         {watchingItems.map((item) => (
@@ -270,7 +270,7 @@ export default function MiniProfileHoverCard({ user, username, children }) {
                             </section>
 
                             <section>
-                                <p className="mb-1 text-[9px] font-bold uppercase tracking-[0.1em] text-gray-500">Favorites</p>
+                                <p className="mb-1 text-xs font-bold text-gray-500">Favorites</p>
                                 {favoriteItems.length > 0 ? (
                                     <div className="flex items-center gap-1.5">
                                         {favoriteItems.map((item) => (

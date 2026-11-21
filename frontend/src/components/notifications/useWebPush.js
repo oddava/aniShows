@@ -11,7 +11,7 @@ const ERROR_COPY = {
     dismissed: 'Push stays off: the browser’s permission prompt was dismissed.',
     'push-disabled': 'Push notifications aren’t available on this server right now.',
     unsupported: 'This browser can’t receive push notifications.',
-    'ios-needs-install': 'Add aniShows to your Home Screen to get push notifications.',
+    'ios-needs-install': 'Add AniShows to your Home Screen to get push notifications.',
 };
 
 const errorMessage = (error) => ERROR_COPY[error?.code] || 'Couldn’t change push on this device. Try again.';

@@ -1,12 +1,14 @@
-import { createElement, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
 
 import { listApi } from '../api/client';
 import { animeKeys, patchAnimeListStatus } from '../api/queries/anime';
 import { listKeys } from '../api/queries/lists';
 import { profileKeys, userKeys } from '../api/queries/profile';
 import logger from '../utils/logger';
+import { notify, notifyError } from '../components/ui/toast';
+import { statusChangeMessage } from '../utils/listStatus';
+import { airedEpisodeCount } from '../utils/episodes';
 
 /** The writable fields of a list entry, as the API returns and accepts them. */
 const ENTRY_FIELDS = [
@@ -77,6 +79,33 @@ export function listErrorMessage(error, fallback = 'Could not update your list.'
     return typeof first === 'string' ? first : fallback;
 }
 
+/** The fields an Undo puts back (the server's normaliser may have moved any of them). */
+const UNDO_FIELDS = ['status', 'score', 'episodes_watched', 'started_at', 'finished_at', 'is_rewatching', 'total_rewatches'];
+
+/**
+ * The toast line for a write: what changed, in words (T6).
+ */
+export function describeListChange(previous, saved, total = null) {
+    if (!saved?.status) return 'Removed from your list';
+    if (previous.status !== saved.status) {
+        if (saved.status === 'Completed' && saved.episodes_watched > (previous.episodes_watched || 0)) {
+            // A show still airing completes up to the aired episode (the server caps it).
+            return total && saved.episodes_watched < total
+                ? `Completed. Caught up to episode ${saved.episodes_watched}`
+                : `Completed. All ${saved.episodes_watched} episodes marked watched`;
+        }
+        return statusChangeMessage(previous.status, saved.status);
+    }
+    if (previous.episodes_watched !== saved.episodes_watched) {
+        const n = saved.episodes_watched;
+        return n === previous.episodes_watched + 1 ? `Episode ${n} watched` : `Progress set to ${n}`;
+    }
+    if (previous.score !== saved.score) {
+        return saved.score ? `Scored ${saved.score}` : 'Score cleared';
+    }
+    return 'Saved';
+}
+
 const knownTotal = (anime) => {
     const total = Number(anime?.episode_count);
     return Number.isFinite(total) && total > 0 ? total : null;
@@ -86,13 +115,16 @@ const knownTotal = (anime) => {
  * One list entry's writes, shared by every list control (G3 contract, overview section 5).
  *
  * `useListEntryMutation({ anime: { id, slug, episode_count }, entry })` returns
- * `{ entry, setStatus, setProgress, increment, save, remove, startRewatch, isPending }`.
- * `entry` is the `user_list_status` / list-row shape. Every write is optimistic, rolls
- * back with an error toast carrying the server's message, and then adopts the entry
- * the server returns (its normaliser may change status, progress or dates). Each
- * action resolves to the saved entry, or `null` when nothing was saved. One write
- * runs at a time: an action called while `isPending` is ignored (resolves `null`),
- * so callers should disable their controls while it is true.
+ * `{ entry, setStatus, setProgress, setScore, increment, save, remove, startRewatch, undo, isPending }`.
+ *
+ * Every change shows at once (optimistic) together with its toast and Undo; the
+ * requests then run one after another in the order they were made, so a quick
+ * "Completed" then "9", or five +1 taps, never lose a write, and a later write
+ * uses the id an earlier add returned. When an answer arrives the entry adopts
+ * what the server saved (its normaliser may move status, progress or dates)
+ * with any still-queued changes laid on top. A failed write rolls back to the
+ * last saved state and shows the server's reason. Each action resolves to the
+ * saved entry, or `null` when nothing was saved.
  *
  * Only the caches a list write can change are refreshed: lists (incl. the summary),
  * the watching shelf, the own profile, own activity, this anime's detail queries, and
@@ -101,12 +133,19 @@ const knownTotal = (anime) => {
 export default function useListEntryMutation({ anime, entry } = {}) {
     const queryClient = useQueryClient();
     const [current, setCurrentState] = useState(() => entryState(entry));
-    const [isPending, setIsPending] = useState(false);
+    const [pendingCount, setPendingCount] = useState(0);
     const currentRef = useRef(current);
-    const inFlight = useRef(false);
+    // What the server last confirmed, and the changes still waiting for it.
+    const confirmedRef = useRef(current);
+    const queuedRef = useRef([]);
+    const chainRef = useRef(Promise.resolve());
     const animeId = anime?.id;
     const slug = anime?.slug;
     const episodeCount = anime?.episode_count;
+    // Airing data, so Completed can show where progress will land before the
+    // server answers (the server caps it at the aired episode the same way).
+    const airingRef = useRef(anime);
+    airingRef.current = anime;
 
     const setCurrent = useCallback((next) => {
         currentRef.current = next;
@@ -114,7 +153,10 @@ export default function useListEntryMutation({ anime, entry } = {}) {
     }, []);
 
     useEffect(() => {
-        if (!inFlight.current) setCurrent(entryState(entry));
+        if (queuedRef.current.length > 0) return;
+        const next = entryState(entry);
+        confirmedRef.current = next;
+        setCurrent(next);
     }, [ // eslint-disable-line react-hooks/exhaustive-deps
         entry?.id, entry?.status, entry?.score, entry?.episodes_watched, entry?.notes,
         entry?.started_at, entry?.finished_at, entry?.total_rewatches, entry?.is_rewatching,
@@ -129,45 +171,107 @@ export default function useListEntryMutation({ anime, entry } = {}) {
         if (slug) queryClient.invalidateQueries({ queryKey: animeKeys.bySlug(slug) });
     }, [queryClient, animeId, slug, episodeCount]);
 
-    /** Apply `optimistic` now, send `request(previous)`, then adopt the server entry. */
-    const run = useCallback(async (optimistic, request) => {
-        if (inFlight.current) return null;
-        inFlight.current = true;
-        const previous = currentRef.current;
-        setCurrent({ ...previous, ...optimistic });
-        setIsPending(true);
-        try {
-            const response = await request(previous);
-            const saved = response?.data?.id ? entryState(response.data) : entryState(null);
-            setCurrent(saved);
-            refreshCaches(saved);
-            return { previous, saved };
-        } catch (error) {
-            logger.error('Error updating list:', error);
-            setCurrent(previous);
-            toast.error(listErrorMessage(error));
-            return null;
-        } finally {
-            inFlight.current = false;
-            setIsPending(false);
-        }
-    }, [refreshCaches, setCurrent]);
+    const undoRef = useRef(null);
+    const keepWatchingRef = useRef(null);
 
-    const save = useCallback(async (fields) => {
-        const result = await run(fields, (previous) => (
-            previous.id
-                ? listApi.update(previous.id, fields)
+    /** The still-queued optimistic changes, oldest first. */
+    const queuedOverlay = () => Object.assign({}, ...queuedRef.current.map((op) => op.optimistic));
+
+    /**
+     * Show `optimistic` now (with its toast unless `silent`), then queue
+     * `request(confirmed)`: it runs after every earlier write and receives the
+     * last server-confirmed entry (so it knows the id an earlier add returned).
+     */
+    const run = useCallback((optimistic, request, { silent = false } = {}) => {
+        const before = currentRef.current;
+        const op = { optimistic };
+        queuedRef.current = [...queuedRef.current, op];
+        setPendingCount((count) => count + 1);
+        setCurrent({ ...before, ...optimistic });
+
+        const toastId = `list-${animeId}`;
+        const onUndo = () => undoRef.current?.(before);
+        const total = knownTotal({ episode_count: episodeCount });
+        // Completed on a show still airing stopped at the aired episode: the
+        // toast offers to keep it in Watching instead (progress kept).
+        const toastOptions = (after) => (
+            after.status === 'Completed' && before.status !== 'Completed' && total && after.episodes_watched < total
+                ? { id: toastId, onUndo: () => keepWatchingRef.current?.(), undoLabel: 'Keep watching' }
+                : { id: toastId, onUndo }
+        );
+        const optimisticEntry = { ...before, ...optimistic };
+        const shownMessage = silent ? null : describeListChange(before, optimisticEntry, total);
+        if (shownMessage) notify(shownMessage, toastOptions(optimisticEntry));
+
+        const finish = () => {
+            queuedRef.current = queuedRef.current.filter((queued) => queued !== op);
+            setPendingCount((count) => count - 1);
+        };
+
+        const execute = async () => {
+            try {
+                const response = await request(confirmedRef.current);
+                const saved = response?.data?.id ? entryState(response.data) : entryState(null);
+                finish();
+                confirmedRef.current = saved;
+                setCurrent({ ...saved, ...queuedOverlay() });
+                refreshCaches(saved);
+                if (shownMessage) {
+                    // The server may have done more (Completed fills progress): say so.
+                    const savedMessage = describeListChange(before, saved, total);
+                    if (savedMessage !== shownMessage) notify(savedMessage, toastOptions(saved));
+                }
+                return { previous: before, saved };
+            } catch (error) {
+                logger.error('Error updating list:', error);
+                finish();
+                setCurrent({ ...confirmedRef.current, ...queuedOverlay() });
+                notifyError(listErrorMessage(error), { id: toastId });
+                return null;
+            }
+        };
+
+        const result = chainRef.current.then(execute, execute);
+        chainRef.current = result.catch(() => null);
+        return result;
+    }, [animeId, episodeCount, refreshCaches, setCurrent]);
+
+    const save = useCallback(async (fields, options) => {
+        const result = await run(fields, (confirmed) => (
+            confirmed.id
+                ? listApi.update(confirmed.id, fields)
                 : listApi.add({ anime_id: animeId, ...fields })
-        ));
+        ), options);
         return result?.saved ?? null;
     }, [animeId, run]);
 
-    const setStatus = useCallback((status) => save({ status }), [save]);
+    // Completed fills progress on the server (to the total, or to the aired
+    // episode while airing): show that at once instead of after the answer.
+    const setStatus = useCallback(async (status, options) => {
+        if (status !== 'Completed') return save({ status }, options);
+        const total = knownTotal({ episode_count: episodeCount });
+        const aired = airedEpisodeCount(airingRef.current);
+        const target = aired !== null && total && aired < total ? aired : total;
+        const watched = currentRef.current.episodes_watched || 0;
+        const optimistic = target ? { status, episodes_watched: Math.max(watched, target) } : { status };
+        const result = await run(optimistic, (confirmed) => (
+            confirmed.id
+                ? listApi.update(confirmed.id, { status })
+                : listApi.add({ anime_id: animeId, status })
+        ), options);
+        return result?.saved ?? null;
+    }, [animeId, episodeCount, run, save]);
 
-    const setProgress = useCallback((episodesWatched) => {
+    const setScore = useCallback(
+        (score, options) => save({ score: Math.max(0, Math.min(10, Math.trunc(Number(score) || 0))) }, options),
+        [save],
+    );
+
+    const setProgress = useCallback((episodesWatched, options) => {
         const total = knownTotal({ episode_count: episodeCount });
         const capped = Math.max(0, total ? Math.min(episodesWatched, total) : episodesWatched);
-        return save({ episodes_watched: capped });
+        if (capped === (currentRef.current.episodes_watched || 0)) return Promise.resolve(null);
+        return save({ episodes_watched: capped }, options);
     }, [episodeCount, save]);
 
     const increment = useCallback(() => {
@@ -179,30 +283,48 @@ export default function useListEntryMutation({ anime, entry } = {}) {
 
     const startRewatch = useCallback(() => save({ is_rewatching: true }), [save]);
 
-    const undoRemove = useCallback((removed) => run(
-        removed,
-        () => listApi.add(restorePayload(animeId, removed)),
-    ), [animeId, run]);
+    /**
+     * Put the entry back the way it was before a write: re-add a removed
+     * entry, remove a just-added one, or restore the fields a write changed.
+     * Queued like any write, so it lands after the write it undoes.
+     */
+    const undo = useCallback((previous) => {
+        if (!previous.status) {
+            return run(EMPTY_ENTRY, (confirmed) => (
+                confirmed.id ? listApi.remove(confirmed.id) : Promise.resolve({})
+            ), { silent: true });
+        }
+        const fields = Object.fromEntries(UNDO_FIELDS.map((field) => [field, previous[field] ?? EMPTY_ENTRY[field]]));
+        return run(fields, (confirmed) => (
+            confirmed.id
+                ? listApi.update(confirmed.id, fields)
+                : listApi.add(restorePayload(animeId, previous))
+        ), { silent: true });
+    }, [animeId, run]);
+
+    useEffect(() => {
+        undoRef.current = undo;
+        keepWatchingRef.current = () => save({ status: 'Watching' });
+    }, [undo, save]);
 
     const remove = useCallback(async () => {
-        if (!currentRef.current.id) return null;
-        const result = await run(EMPTY_ENTRY, (previous) => listApi.remove(previous.id));
-        if (!result) return null;
-        toast((toastInstance) => createElement(
-            'span',
-            { className: 'flex items-center gap-3' },
-            'Removed',
-            createElement('button', {
-                type: 'button',
-                className: 'font-bold text-accent hover:underline',
-                onClick: () => {
-                    toast.dismiss(toastInstance.id);
-                    undoRemove(result.previous);
-                },
-            }, 'Undo'),
-        ), { id: `list-removed-${animeId}` });
-        return result.saved;
-    }, [animeId, run, undoRemove]);
+        if (!currentRef.current.status) return null;
+        const result = await run(EMPTY_ENTRY, (confirmed) => (
+            confirmed.id ? listApi.remove(confirmed.id) : Promise.resolve({})
+        ));
+        return result ? result.saved : null;
+    }, [run]);
 
-    return { entry: current, setStatus, setProgress, increment, save, remove, startRewatch, isPending };
+    return {
+        entry: current,
+        setStatus,
+        setProgress,
+        setScore,
+        increment,
+        save,
+        remove,
+        startRewatch,
+        undo,
+        isPending: pendingCount > 0,
+    };
 }

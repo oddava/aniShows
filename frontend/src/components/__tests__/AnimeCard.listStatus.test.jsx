@@ -17,9 +17,6 @@ vi.mock('../../context/AuthContext', () => ({
     useAuth: () => ({ isAuthenticated: true, user: { id: 7, username: 'kiyo' } }),
 }));
 
-vi.mock('../../hooks/useAnimeAccentColor', () => ({
-    default: () => null,
-}));
 
 const WATCHING_SHELF = JSON.stringify(['user', 'list', 'watching']);
 
@@ -57,8 +54,8 @@ describe('AnimeCard list-status changes refresh Home\'s Currently Watching shelf
     it('invalidates the shelf when the status changes', async () => {
         const { invalidatedKeys } = renderCard();
 
-        fireEvent.click(screen.getByRole('button', { name: 'List status: Watching. Change' }));
-        fireEvent.click(screen.getByRole('button', { name: /Completed/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Watching. Change list status for Overgeared' }));
+        fireEvent.click(screen.getByRole('menuitemradio', { name: /Completed/ }));
 
         await waitFor(() => expect(listApi.update).toHaveBeenCalledWith(41, { status: 'Completed' }));
         await waitFor(() => {
@@ -70,18 +67,18 @@ describe('AnimeCard list-status changes refresh Home\'s Currently Watching shelf
     it('invalidates the shelf when the entry is removed', async () => {
         const { invalidatedKeys } = renderCard();
 
-        fireEvent.click(screen.getByRole('button', { name: 'List status: Watching. Change' }));
-        fireEvent.click(screen.getByRole('button', { name: /Remove/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Watching. Change list status for Overgeared' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: /Remove/ }));
 
         await waitFor(() => expect(listApi.remove).toHaveBeenCalledWith(41));
         await waitFor(() => expect(invalidatedKeys()).toContain(WATCHING_SHELF));
-        expect(screen.getByRole('button', { name: 'Add Overgeared to list' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Add Overgeared to your list' })).toBeInTheDocument();
     });
 
     it('invalidates the shelf when an episode is marked watched', async () => {
         const { invalidatedKeys } = renderCard({ showProgress: true });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Mark episode 1 of Overgeared as watched' }));
+        fireEvent.click(screen.getByRole('button', { name: 'One episode more of Overgeared' }));
 
         await waitFor(() => expect(listApi.update).toHaveBeenCalledWith(41, { episodes_watched: 1 }));
         await waitFor(() => expect(invalidatedKeys()).toContain(WATCHING_SHELF));

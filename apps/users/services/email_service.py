@@ -8,6 +8,7 @@ from django.utils.http import urlsafe_base64_encode
 from ...shared.celery import observed_shared_task
 from ...shared.logger import logger
 from ..tokens import EmailChangeTokenGenerator, email_verification_token_generator
+from .email_layout import BRAND, action_email_html
 
 SECURITY_NOTICE_FOOTER = (
     "If this was you, you can ignore this email. If it wasn't, reset your password "
@@ -41,6 +42,29 @@ def link_validity() -> str:
     return f"{hours} hour{'s' if hours != 1 else ''}"
 
 
+# The cleanup task's own default; the beat entry below normally sets the same.
+_DEFAULT_UNVERIFIED_DAYS = 7
+
+
+def unverified_account_days() -> int:
+    """Days an unverified account is kept before the daily cleanup removes it.
+
+    Read from the ``user-maintenance-daily`` beat entry (``unverified_days``)
+    so the email states what the cleanup really does.
+    """
+    schedule = getattr(settings, "CELERY_BEAT_SCHEDULE", None) or {}
+    kwargs = (schedule.get("user-maintenance-daily") or {}).get("kwargs") or {}
+    try:
+        return int(kwargs.get("unverified_days", _DEFAULT_UNVERIFIED_DAYS))
+    except (TypeError, ValueError):
+        return _DEFAULT_UNVERIFIED_DAYS
+
+
+def link_expiry_line() -> str:
+    """The one sentence every link email uses for expiry."""
+    return f"This link expires in {link_validity()} and works once."
+
+
 class EmailService:
     """Handle email operations asynchronously."""
 
@@ -50,10 +74,26 @@ class EmailService:
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         verify_link = f"{settings.FRONTEND_URL}/verify-email/{uid}/{token}/"
 
+        resend_url = f"{settings.FRONTEND_URL}/verification-pending"
+        expiry = (
+            f"{link_expiry_line()} If it expires, you can request a new one at {resend_url}. "
+            f"Accounts that are not verified within {unverified_account_days()} days "
+            "are removed automatically."
+        )
         send_email_task.delay(
-            subject="Verify your email - aniShows",
-            message=self._get_verification_message(verify_link),
+            subject=f"Verify your email - {BRAND}",
+            message=self._get_verification_message(verify_link, expiry),
             recipient_list=[user.email],
+            html_message=action_email_html(
+                heading=f"Welcome to {BRAND}",
+                lines=[
+                    f"Hi {user.username}, confirm this email address to finish setting up "
+                    "your account."
+                ],
+                button_label="Verify my email",
+                button_url=verify_link,
+                notes=[expiry, IGNORE_IF_NOT_YOU],
+            ),
         )
 
     def send_password_reset_email(self, user):
@@ -62,18 +102,35 @@ class EmailService:
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}/"
 
-        message = f"""Someone asked to reset the password of your aniShows account ({user.username}).
+        expiry = (
+            f"{link_expiry_line()} You can request a new one any time at "
+            f"{settings.FRONTEND_URL}/forgot-password."
+        )
+        ignore = f"{IGNORE_IF_NOT_YOU} Your password stays the same."
+        message = f"""Someone asked to reset the password of your {BRAND} account ({user.username}).
 
-Choose a new password here (the link is valid for {link_validity()} and works once):
+Choose a new password here:
 
 {reset_link}
 
-{IGNORE_IF_NOT_YOU} Your password stays the same.
+{expiry}
+
+{ignore}
 """
         send_email_task.delay(
-            subject="Reset your password - aniShows",
+            subject=f"Reset your password - {BRAND}",
             message=message,
             recipient_list=[user.email],
+            html_message=action_email_html(
+                heading="Reset your password",
+                lines=[
+                    f"Someone asked to reset the password of your {BRAND} account "
+                    f"({user.username})."
+                ],
+                button_label="Choose a new password",
+                button_url=reset_link,
+                notes=[expiry, ignore],
+            ),
         )
 
     def send_email_change_confirmation(self, user, new_email):
@@ -86,19 +143,36 @@ Choose a new password here (the link is valid for {link_validity()} and works on
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         confirm_link = f"{settings.FRONTEND_URL}/confirm-email-change/{uid}/{token}/"
 
-        message = f"""You requested to change your email address on aniShows.
+        expiry = (
+            f"{link_expiry_line()} You can send a new one from your account settings "
+            f"at {settings.FRONTEND_URL}/settings?tab=account."
+        )
+        ignore = f"{IGNORE_IF_NOT_YOU} Nothing changes unless the link is used."
+        message = f"""You asked to change the email address of your {BRAND} account ({user.username}).
 
-Click the link below to confirm your new email address (valid for {link_validity()}):
+Confirm your new email address here:
 
 {confirm_link}
 
-{IGNORE_IF_NOT_YOU} Nothing changes unless the link is used.
+{expiry}
+
+{ignore}
 """
 
         send_email_task.delay(
-            subject="Confirm your new email - aniShows",
+            subject=f"Confirm your new email - {BRAND}",
             message=message,
             recipient_list=[new_email],
+            html_message=action_email_html(
+                heading="Confirm your new email",
+                lines=[
+                    f"You asked to change the email address of your {BRAND} account "
+                    f"({user.username}) to this one."
+                ],
+                button_label="Confirm my new email",
+                button_url=confirm_link,
+                notes=[expiry, ignore],
+            ),
         )
 
     def _send_notice(self, address: str, subject: str, body: str) -> None:
@@ -115,8 +189,8 @@ Click the link below to confirm your new email address (valid for {link_validity
         """Tell the account's address that its password was changed or reset."""
         self._send_notice(
             user.email,
-            "Your aniShows password was changed",
-            f"The password for your aniShows account ({user.username}) was just changed, "
+            f"Your {BRAND} password was changed",
+            f"The password for your {BRAND} account ({user.username}) was just changed, "
             "and every device was signed out.",
         )
 
@@ -124,8 +198,8 @@ Click the link below to confirm your new email address (valid for {link_validity
         """Tell the *current* address that a change to ``new_email`` was requested."""
         self._send_notice(
             user.email,
-            "Email change requested - aniShows",
-            f"Someone asked to change the email of your aniShows account ({user.username}) "
+            f"Email change requested - {BRAND}",
+            f"Someone asked to change the email of your {BRAND} account ({user.username}) "
             f"to {mask_email(new_email)}. Nothing changes unless that address confirms it.",
         )
 
@@ -133,19 +207,19 @@ Click the link below to confirm your new email address (valid for {link_validity
         """Tell the *previous* address that the account now uses ``new_email``."""
         self._send_notice(
             old_email,
-            "Your aniShows email was changed",
-            f"The email of your aniShows account ({user.username}) was changed to "
+            f"Your {BRAND} email was changed",
+            f"The email of your {BRAND} account ({user.username}) was changed to "
             f"{mask_email(new_email)}, and every device was signed out.",
         )
 
-    def _get_verification_message(self, link: str) -> str:
-        return f"""Welcome to aniShows!
+    def _get_verification_message(self, link: str, expiry: str) -> str:
+        return f"""Welcome to {BRAND}!
 
-Please verify your email (the link is valid for {link_validity()}):
+Confirm this email address to finish setting up your account:
 
 {link}
 
-Note: Unverified accounts are automatically deleted after 7 days.
+{expiry}
 
 {IGNORE_IF_NOT_YOU}
 """

@@ -1,108 +1,38 @@
-import { Github, Twitter, Coffee, Mail, Heart } from 'lucide-react';
+import { Github, Mail, Twitter } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import Logo from './Logo';
 
+const linkClass = 'inline-flex min-h-11 items-center gap-1.5 text-[15px] text-[var(--text-2)] transition-colors hover:text-[var(--text-1)]';
+
+/**
+ * Set like oddava.me's footer: a quiet row of text links with small icons,
+ * and who made it. On phones it clears the floating tab bar (M1).
+ */
 export default function Footer({ className = '' }) {
     return (
-        <footer className={`bg-dark-50 pt-8 md:pt-16 pb-24 md:pb-8 ${className}`}>
+        <footer className={`pt-16 pb-[calc(var(--tabbar-h)+2.5rem+env(safe-area-inset-bottom,0px))] md:pt-24 md:pb-10 ${className}`}>
             <div className="page-container">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-                    {/* Brand */}
-                    <div className="col-span-1 md:col-span-2">
-                        <Link to="/" className="inline-block mb-4">
-                            <Logo textClassName="text-2xl font-bold text-white" />
-                        </Link>
-                        <p className="text-gray-400 mb-6 max-w-sm">
-                            Track what you watch, rate what you finish, and find
-                            what to watch next.
-                        </p>
-                        <div className="flex gap-3">
-                            <a
-                                href="https://github.com/oddava"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ui-icon-button rounded-full"
-                                aria-label="Github"
-                            >
-                                <Github className="w-5 h-5" />
-                            </a>
-                            <a
-                                href="https://twitter.com/oddava"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ui-icon-button rounded-full"
-                                aria-label="Twitter"
-                            >
-                                <Twitter className="w-5 h-5" />
-                            </a>
-                            <a
-                                href="https://buymeacoffee.com/oddava"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ui-icon-button rounded-full"
-                                aria-label="Buy Me A Coffee"
-                            >
-                                <Coffee className="w-5 h-5" />
-                            </a>
-                            <a
-                                href="mailto:oddava@proton.me"
-                                className="ui-icon-button rounded-full"
-                                aria-label="Email"
-                            >
-                                <Mail className="w-5 h-5" />
-                            </a>
-                        </div>
+                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                    <nav aria-label="Footer" className="flex flex-wrap gap-x-6">
+                        <Link to="/browse" className={linkClass}>Browse</Link>
+                        <Link to="/schedule" className={linkClass}>Schedule</Link>
+                        <Link to="/import" className={linkClass}>Import</Link>
+                        <Link to="/terms" className={linkClass}>Terms</Link>
+                        <Link to="/privacy" className={linkClass}>Privacy</Link>
+                    </nav>
+                    <div className="flex flex-wrap items-center gap-x-6">
+                        <a href="https://github.com/oddava" target="_blank" rel="noopener noreferrer" className={linkClass}>
+                            <Github aria-hidden="true" className="h-4 w-4" />GitHub
+                        </a>
+                        <a href="https://twitter.com/oddava" target="_blank" rel="noopener noreferrer" className={linkClass}>
+                            <Twitter aria-hidden="true" className="h-4 w-4" />X
+                        </a>
+                        <a href="mailto:oddava@proton.me" className={linkClass}>
+                            <Mail aria-hidden="true" className="h-4 w-4" />Email
+                        </a>
+                        <a href="https://oddava.me" className={`${linkClass} text-[var(--text-3)]`}>
+                            Made by <span className="text-[var(--text-1)]">oddava</span>
+                        </a>
                     </div>
-
-                    {/* Quick Links */}
-                    <div>
-                        <h3 className="font-bold text-white mb-6">Quick Links</h3>
-                        <ul className="space-y-4">
-                            <li>
-                                <Link to="/browse" className="text-gray-400 hover:text-accent transition-colors">
-                                    Browse Anime
-                                </Link>
-                            </li>
-                            <li>
-                                <Link to="/forums" className="text-gray-400 hover:text-accent transition-colors">
-                                    Forums
-                                </Link>
-                            </li>
-                            <li>
-                                <Link to="/browse?sort=popular" className="text-gray-400 hover:text-accent transition-colors">
-                                    Trending Now
-                                </Link>
-                            </li>
-                            <li>
-                                <Link to="/browse?sort=rating" className="text-gray-400 hover:text-accent transition-colors">
-                                    Top Rated
-                                </Link>
-                            </li>
-                        </ul>
-                    </div>
-
-                    {/* Legal */}
-                    <div>
-                        <h3 className="font-bold text-white mb-6">Legal</h3>
-                        <ul className="space-y-4">
-                            <li>
-                                <Link to="/terms" className="text-gray-400 hover:text-accent transition-colors">
-                                    Terms of Service
-                                </Link>
-                            </li>
-                            <li>
-                                <Link to="/privacy" className="text-gray-400 hover:text-accent transition-colors">
-                                    Privacy Policy
-                                </Link>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div className="pt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                    <p className="text-gray-400 text-sm">
-                        © {new Date().getFullYear()} aniShows. All rights reserved.
-                    </p>
                 </div>
             </div>
         </footer>

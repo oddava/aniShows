@@ -85,7 +85,7 @@ describe('service worker', () => {
         await fire('push', pushEvent({ v: 1, body: 'Hello', url: '/' }));
 
         const [title, options] = self.registration.showNotification.mock.calls[0];
-        expect(title).toBe('aniShows');
+        expect(title).toBe('AniShows');
         expect(options.renotify).toBe(false);
         expect(options.tag).toBeUndefined();
         expect(self.navigator.setAppBadge).not.toHaveBeenCalled();
