@@ -161,3 +161,97 @@
     background-image: none;
   }
 }
+
+/* ---- Overhaul motion: 150–250 ms, ease-out, opacity/transform only. ---- */
+
+/* Toast in/out (react-hot-toast flips data-visible). */
+.ui-toast {
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+
+.ui-toast[data-visible="true"] {
+  animation: toast-in var(--dur-slow) var(--ease-out);
+}
+
+.ui-toast[data-visible="false"] {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Bottom sheet */
+.sheet-backdrop {
+  animation: fade-in var(--dur-base) ease-out;
+}
+
+.sheet-panel {
+  animation: sheet-up var(--dur-slow) var(--ease-out);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+[data-state="closing"] .sheet-backdrop {
+  animation: fade-out var(--dur-base) ease-out forwards;
+}
+
+[data-state="closing"] .sheet-panel {
+  animation: sheet-down var(--dur-base) var(--ease-out) forwards;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes sheet-down {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+/* Popover menus */
+.popover-in {
+  animation: popover-in var(--dur-fast) var(--ease-out);
+  transform-origin: bottom right;
+}
+
+@keyframes popover-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Images fade in once decoded; the box is sized beforehand, so nothing shifts. */
+.img-fade {
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-out);
+}
+
+.img-fade[data-loaded="true"] {
+  opacity: 1;
+}
+
+/* Card quick-add: hidden until hover/focus with a pointer, always shown on touch (T1). */
+@media (hover: hover) and (pointer: fine) {
+  .card-reveal {
+    opacity: 0;
+    transition: opacity var(--dur-fast) ease-out;
+  }
+
+  .group:hover .card-reveal,
+  .group:focus-within .card-reveal,
+  .card-reveal:has([aria-expanded="true"]) {
+    opacity: 1;
+  }
+}
+
+/* A value that just changed (stepper count, score) settles in. */
+@keyframes value-settle {
+  from { opacity: 0.4; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.value-settle {
+  animation: value-settle var(--dur-base) var(--ease-out);
+}

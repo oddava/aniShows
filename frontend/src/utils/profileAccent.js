@@ -1,7 +1,11 @@
-const DEFAULT_PROFILE_PRIMARY_COLOR = '#8b5cf6';
+// The signature colour. Accounts created before the overhaul store the old
+// violet default, which nobody chose, so it reads as "no choice".
+const DEFAULT_PROFILE_PRIMARY_COLOR = '#d4f65a';
+const LEGACY_DEFAULT_PROFILE_COLOR = '#8b5cf6';
 
 export function normalizeProfilePrimaryColor(value) {
     const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === LEGACY_DEFAULT_PROFILE_COLOR) return DEFAULT_PROFILE_PRIMARY_COLOR;
     return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : DEFAULT_PROFILE_PRIMARY_COLOR;
 }
 
@@ -87,7 +91,7 @@ function hslToHex({ hue, saturation, lightness }) {
 }
 
 // --color-dark in index.css; the accent is drawn on it site-wide.
-export const PROFILE_ACCENT_BACKGROUND = '#0a0a0a';
+export const PROFILE_ACCENT_BACKGROUND = '#0b0d10';
 export const MIN_ACCENT_CONTRAST = 4.5;
 
 function channelLuminance(channel) {

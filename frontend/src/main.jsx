@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { initSentry } from './sentry'
+import '@fontsource-variable/big-shoulders-display';
 import './index.css'
 import { clearAppRuntimeCaches } from './pwa/serviceWorker'
 

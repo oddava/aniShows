@@ -5,56 +5,124 @@
 @import "./styles/pages/forums.css";
 
 /*
- * Design tokens. The palette is the original aniShows one (near-black
- * surfaces lightly tinted by the violet accent); what is added here is the
- * structure around it: motion timings, focus, elevation and layout widths.
+ * Design tokens (docs/ux-overhaul-plan.md).
+ *
+ * Surfaces are neutral "ink" with a faint night-blue cast; nothing is tinted
+ * by the brand colour. The signature colour, Highlighter, is used sparingly:
+ * primary actions, focus, and "on tonight" markers. Text on it is ink.
+ * Status colours are fixed and part of the brand: never derived from cover
+ * art (cover colour only tints backdrops).
+ *
+ * The legacy names (--color-accent-*, --color-surface-*, --color-border-*,
+ * --color-overlay-*) are kept as aliases so older components follow along.
  */
 :root {
   color-scheme: dark;
-  --color-accent-base: #8b5cf6;
-  --color-surface-base: color-mix(in srgb, #0b0c0f 96%, var(--color-accent-base) 4%);
-  --color-surface-deep: color-mix(in srgb, #0d0e12 95%, var(--color-accent-base) 5%);
-  --color-surface-1-base: color-mix(in srgb, #121317 94%, var(--color-accent-base) 6%);
-  --color-surface-2-base: color-mix(in srgb, #17181d 91%, var(--color-accent-base) 9%);
-  --color-surface-3-base: color-mix(in srgb, #1d1e24 88%, var(--color-accent-base) 12%);
-  --color-surface-4-base: color-mix(in srgb, #23252b 85%, var(--color-accent-base) 15%);
-  --color-border-subtle: color-mix(in srgb, var(--color-accent-base) 3%, transparent);
-  --color-border-soft: color-mix(in srgb, var(--color-accent-base) 5%, transparent);
-  --color-border-base: color-mix(in srgb, var(--color-accent-base) 8%, transparent);
-  --color-border-strong-base: color-mix(in srgb, var(--color-accent-base) 12%, transparent);
-  --color-border-emphasis: color-mix(in srgb, var(--color-accent-base) 20%, transparent);
-  --color-overlay-soft: color-mix(in srgb, var(--color-accent-base) 2%, transparent);
-  --color-overlay-muted: color-mix(in srgb, var(--color-accent-base) 4%, transparent);
-  --color-overlay-base: color-mix(in srgb, var(--color-accent-base) 6%, transparent);
-  --color-overlay-strong: color-mix(in srgb, var(--color-accent-base) 10%, transparent);
-  --color-surface-glass: color-mix(in srgb, var(--color-surface-2-base) 86%, transparent);
-  --color-surface-overlay: color-mix(in srgb, var(--color-surface-1-base) 95%, transparent);
-  --color-navbar-bg:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, #15161a 90%, var(--color-accent-base) 10%) 0%,
-      color-mix(in srgb, #111215 92%, var(--color-accent-base) 8%) 48%,
-      color-mix(in srgb, #0c0d10 94%, var(--color-accent-base) 6%) 100%
-    );
-  --color-navbar-border: color-mix(in srgb, var(--color-accent-base) 10%, transparent);
-  --color-navbar-shadow: color-mix(in srgb, var(--color-accent-base) 5%, transparent);
-  --color-scrollbar-thumb: color-mix(in srgb, var(--color-accent-base) 15%, var(--color-surface-3-base));
-  --color-scrollbar-thumb-hover: color-mix(in srgb, var(--color-accent-base) 25%, var(--color-surface-4-base));
-  --color-accent-text: #a78bfa;
-  --color-accent-text-hover: #c4b5fd;
-  /* Solid accent for filled controls: white text on it is 5.7:1. */
-  --color-accent-fill: #7c3aed;
-  --color-accent-fill-hover: #6d28d9;
-  --color-focus-ring: color-mix(in srgb, var(--color-accent) 30%, transparent);
-  --color-focus-ring-strong: #a78bfa;
 
-  /* Motion: short and decelerating; nothing bounces. */
+  /* Ink surfaces, page to most raised. */
+  --ink-0: #0b0d10;
+  --ink-1: #121519;
+  --ink-2: #181c21;
+  --ink-3: #20252b;
+  --ink-4: #29303a;
+
+  /* Lines and veils: plain white at low alpha, so they work on any surface. */
+  --line-1: rgb(255 255 255 / 0.05);
+  --line-2: rgb(255 255 255 / 0.08);
+  --line-3: rgb(255 255 255 / 0.13);
+  --line-4: rgb(255 255 255 / 0.2);
+
+  /* Signature: Highlighter. Ink text on it is 15:1. */
+  --signature: #d4f65a;
+  --signature-hover: #e1fa85;
+  --signature-press: #c3e842;
+  --signature-soft: rgb(212 246 90 / 0.12);
+  --signature-line: rgb(212 246 90 / 0.35);
+  --on-signature: #0f1208;
+
+  /* Fixed status colours (text-safe on every ink surface, AA). */
+  --status-watching: #3dd68c;
+  --status-completed: #5b9bff;
+  --status-on-hold: #f2b53a;
+  --status-dropped: #f0645a;
+  --status-planning: #9aa6b8;
+
+  /* Feedback */
+  --danger: #f0645a;
+  --success: #3dd68c;
+
+  /* Type: a condensed signage face for display, Inter for text. */
+  --font-display: "Big Shoulders Display Variable", "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --font-text: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --text-2xs: 0.6875rem;  /* 11 */
+  --text-xs: 0.75rem;     /* 12 */
+  --text-sm: 0.875rem;    /* 14 */
+  --text-base: 1rem;      /* 16 */
+  --text-lg: 1.125rem;    /* 18 */
+  --display-sm: 1.5rem;   /* 24 */
+  --display-md: 2rem;     /* 32 */
+  --display-lg: 2.75rem;  /* 44 */
+  --display-xl: 3.75rem;  /* 60 */
+
+  /* Space (4 px grid), radii, elevation */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 0.7), 0 0 0 1px var(--line-2);
+
+  /* Touch */
+  --tap: 44px;
+  --tabbar-h: 4.25rem;
+
+  /* Motion: short, decelerating, nothing bounces. */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-fast: 140ms;
-  --dur-base: 220ms;
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 250ms;
 
   /* Layout */
   --page-max: 80rem;
+
+  /* ---- Legacy aliases ---- */
+  --color-accent-base: var(--signature);
+  --color-surface-base: var(--ink-0);
+  --color-surface-deep: #0e1013;
+  --color-surface-1-base: var(--ink-1);
+  --color-surface-2-base: var(--ink-2);
+  --color-surface-3-base: var(--ink-3);
+  --color-surface-4-base: var(--ink-4);
+  --color-border-subtle: var(--line-1);
+  --color-border-soft: var(--line-1);
+  --color-border-base: var(--line-2);
+  --color-border-strong-base: var(--line-3);
+  --color-border-emphasis: var(--line-4);
+  --color-overlay-soft: rgb(255 255 255 / 0.025);
+  --color-overlay-muted: rgb(255 255 255 / 0.04);
+  --color-overlay-base: rgb(255 255 255 / 0.06);
+  --color-overlay-strong: rgb(255 255 255 / 0.1);
+  --color-surface-glass: rgb(18 21 25 / 0.86);
+  --color-surface-overlay: rgb(18 21 25 / 0.95);
+  --color-navbar-bg: rgb(14 16 20 / 0.82);
+  --color-navbar-border: var(--line-2);
+  --color-navbar-shadow: transparent;
+  --color-scrollbar-thumb: var(--ink-4);
+  --color-scrollbar-thumb-hover: #39414c;
+  --color-accent-text: var(--signature);
+  --color-accent-text-hover: var(--signature-hover);
+  --color-accent-fill: var(--signature);
+  --color-accent-fill-hover: var(--signature-hover);
+  --color-on-accent: var(--on-signature);
+  --color-focus-ring: rgb(212 246 90 / 0.28);
+  --color-focus-ring-strong: var(--signature);
 }
 
 @theme {
@@ -72,16 +140,25 @@
   --color-text-muted: #9ca3af;
   /* Tailwind's gray-500 (#6b7280) is 3.8:1 on these surfaces; lifted to pass
      AA (4.8:1+) since it is used for secondary text throughout. */
-  --color-gray-500: #878d9a;
-  --color-gray-700: color-mix(in srgb, #3f3f46 90%, var(--color-accent-base) 10%);
-  --color-gray-800: color-mix(in srgb, #27272a 92%, var(--color-accent-base) 8%);
-  --color-gray-900: color-mix(in srgb, #18181b 94%, var(--color-accent-base) 6%);
+  --color-gray-500: #8a919c;
+  --color-gray-700: #3a4049;
+  --color-gray-800: #262b32;
+  --color-gray-900: #171a1f;
 
-  --color-accent: #8b5cf6;
-  --color-accent-light: #a78bfa;
-  --color-accent-dark: #7c3aed;
+  /* `accent` utilities now mean the signature colour. */
+  --color-accent: #d4f65a;
+  --color-accent-light: #e1fa85;
+  --color-accent-dark: #c3e842;
+  --color-on-accent: #0f1208;
+
+  --color-status-watching: var(--status-watching);
+  --color-status-completed: var(--status-completed);
+  --color-status-on-hold: var(--status-on-hold);
+  --color-status-dropped: var(--status-dropped);
+  --color-status-planning: var(--status-planning);
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Big Shoulders Display Variable", "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
 
   --breakpoint-xs: 30rem;
 }
@@ -103,11 +180,24 @@
   }
 
   body {
-    @apply bg-dark text-gray-200 antialiased selection:bg-accent/30;
+    @apply bg-dark text-gray-200 antialiased;
+    font-family: var(--font-text);
+  }
+
+  ::selection {
+    background: var(--signature);
+    color: var(--on-signature);
   }
 
   h1, h2, h3 {
     text-wrap: balance;
+  }
+
+  /* Phones: content never hides under the floating tab bar (M1). */
+  @media (width < 48rem) {
+    body {
+      padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
+    }
   }
 
   select option {
@@ -164,13 +254,47 @@
 }
 
 @layer components {
-  /* Section heading: the site's small uppercase label, one definition. */
+  /* Display type: the condensed signage face. Section headings read like
+     the rows of a TV listing; one definition each. */
+  .font-display {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+  }
+
   .section-title {
-    @apply text-sm md:text-base font-bold text-gray-400 uppercase tracking-[0.12em];
+    font-family: var(--font-display);
+    font-size: 1.375rem;
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    color: #eef0f3;
+  }
+
+  @media (width >= 48rem) {
+    .section-title {
+      font-size: 1.625rem;
+    }
+  }
+
+  /* The small uppercase eyebrow label (was .section-title's old look). */
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.12em] text-gray-400;
   }
 
   .page-title {
-    @apply text-2xl sm:text-3xl font-bold tracking-tight text-white/90;
+    font-family: var(--font-display);
+    font-size: var(--display-md);
+    line-height: 1.02;
+    font-weight: 800;
+    letter-spacing: 0.005em;
+    color: #f4f5f7;
+  }
+
+  @media (width >= 40rem) {
+    .page-title {
+      font-size: var(--display-lg);
+    }
   }
 
   .tabular {
@@ -193,7 +317,9 @@
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent px-5 py-2.5 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent px-5 py-2.5 font-semibold disabled:cursor-not-allowed disabled:opacity-50;
+    min-height: 2.75rem;
+    color: var(--on-signature) !important;
     background-color: var(--color-accent-fill);
     transition: background-color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
   }
@@ -204,11 +330,25 @@
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-lg border border-gray-800 bg-dark-100 px-5 py-2.5 font-semibold text-gray-200 disabled:cursor-not-allowed disabled:opacity-50;
+    min-height: 2.75rem;
     transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out);
   }
 
   .btn-secondary:hover:not(:disabled) {
-    @apply border-accent/35 bg-dark-50 text-white;
+    @apply bg-dark-200 text-white;
+    border-color: var(--line-4);
+  }
+
+  /* Quiet text-only action ("Undo", "View all"). */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 font-semibold text-gray-300;
+    min-height: 2.75rem;
+    transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    @apply text-white;
+    background-color: var(--color-overlay-base);
   }
 
   /* A small press response: confirms the click without decoration. */
@@ -220,7 +360,9 @@
   }
 
   .badge {
-    @apply rounded-md border border-accent/20 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent-light;
+    @apply rounded-md px-2 py-0.5 text-xs font-semibold;
+    background: var(--signature-soft);
+    color: var(--signature);
   }
 
   .input {
@@ -252,11 +394,11 @@
   }
 
   .ui-pill-button {
-    @apply rounded-lg border border-gray-800 bg-dark-100 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-accent/35 hover:text-white;
+    @apply rounded-lg border border-gray-800 bg-dark-100 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-white/20 hover:text-white;
   }
 
   .ui-icon-button {
-    @apply flex h-10 w-10 items-center justify-center rounded-lg border border-gray-800 bg-dark-100 text-gray-400 transition-colors hover:border-accent/35 hover:text-white;
+    @apply flex h-11 w-11 items-center justify-center rounded-lg border border-gray-800 bg-dark-100 text-gray-400 transition-colors hover:border-white/20 hover:text-white;
   }
 
   .ui-avatar-fallback {
@@ -324,6 +466,23 @@
 }
 
 @layer utilities {
+  /* A solid signature fill always carries ink text, whatever text colour the
+     markup asked for (older markup says text-white on bg-accent-dark). */
+  .bg-accent,
+  .bg-accent-dark,
+  .bg-accent-light,
+  .bg-accent-dark\/90,
+  .bg-accent-dark\/85,
+  .hover\:bg-accent-dark:hover,
+  .hover\:bg-accent:hover,
+  .group:hover .group-hover\:bg-accent-dark {
+    color: var(--on-signature) !important;
+  }
+
+  .text-on-accent {
+    color: var(--on-signature);
+  }
+
   .anime-detail-page {
     /* Match profile bio readability with slightly softer neutral text tones */
     --color-gray-200: #b7c0cf;
@@ -439,5 +598,16 @@
 
   .divide-white\/\[0\.04\] > :not([hidden]) ~ :not([hidden]) {
     border-color: var(--color-border-subtle) !important;
+  }
+}
+
+/* Toasts sit above the phone tab bar. */
+.toast-container {
+  bottom: 1.25rem !important;
+}
+
+@media (width < 48rem) {
+  .toast-container {
+    bottom: calc(var(--tabbar-h) + 0.75rem + env(safe-area-inset-bottom, 0px)) !important;
   }
 }

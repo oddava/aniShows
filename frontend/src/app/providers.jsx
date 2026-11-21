@@ -33,26 +33,23 @@ export default function AppProviders({ children }) {
                                 <ScrollToTop />
                                 <UmamiAnalytics />
                                 {children}
+                                {/* One toast style site-wide (components/ui/toast.jsx);
+                                    bottom-centre, above the phone tab bar. */}
                                 <Toaster
-                                    position="bottom-right"
+                                    position="bottom-center"
+                                    containerClassName="toast-container"
+                                    gutter={8}
                                     toastOptions={{
+                                        duration: 5000,
                                         style: {
-                                            background: 'var(--color-dark-100)',
-                                            color: '#fff',
-                                            border: '1px solid var(--color-border)',
+                                            background: 'var(--ink-3)',
+                                            color: '#f1f3f5',
+                                            borderRadius: '10px',
+                                            fontSize: '14px',
+                                            boxShadow: 'var(--shadow-pop)',
                                         },
-                                        success: {
-                                            iconTheme: {
-                                                primary: '#10b981',
-                                                secondary: '#fff',
-                                            },
-                                        },
-                                        error: {
-                                            iconTheme: {
-                                                primary: '#ef4444',
-                                                secondary: '#fff',
-                                            },
-                                        },
+                                        success: { iconTheme: { primary: '#d4f65a', secondary: '#0f1208' } },
+                                        error: { iconTheme: { primary: '#f0645a', secondary: '#fff' } },
                                     }}
                                 />
                             </BrowserRouter>
