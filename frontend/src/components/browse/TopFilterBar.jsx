@@ -162,16 +162,16 @@ export default function TopFilterBar({
                         value={currentYear}
                         onChange={(value) => setSingle('year', value)}
                     />
-                    {quickGenres.length > 0 && (
-                        <FilterMenu
-                            label="Genres"
-                            multiple
-                            columns={2}
-                            options={quickGenres.map((genre) => ({ value: genre.slug, label: genre.name }))}
-                            value={currentGenres}
-                            onChange={setGenres}
-                        />
-                    )}
+                    {/* Always in the row (its list fills in when genres load),
+                        so nothing after it moves on a first visit. */}
+                    <FilterMenu
+                        label="Genres"
+                        multiple
+                        columns={2}
+                        options={quickGenres.map((genre) => ({ value: genre.slug, label: genre.name }))}
+                        value={currentGenres}
+                        onChange={setGenres}
+                    />
                     <button
                         type="button"
                         onClick={onOpenMobileFilters}

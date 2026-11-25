@@ -98,6 +98,9 @@ export default function FilterMenu({
                                 {!isActive && <Check aria-hidden="true" className="h-4 w-4 text-[var(--signature)]" />}
                             </button>
                         )}
+                        {options.length === 0 && (
+                            <p className={`px-3 py-2 text-sm text-[var(--text-3)] ${columns > 1 ? 'col-span-2' : ''}`}>Loading…</p>
+                        )}
                         {options.map((option) => {
                             const on = selected.includes(String(option.value));
                             return (

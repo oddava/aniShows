@@ -177,7 +177,7 @@ function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, i
                 <div className={SHELF_ROW_CLASSES}>
                     {isLoading ? (
                         Array.from({ length: 6 }, (_, i) => (
-                            <div key={i} className={SHELF_ITEM_CLASSES} aria-hidden="true">
+                            <div key={`sk-${i}`} className={SHELF_ITEM_CLASSES} aria-hidden="true">
                                 <AnimeCardSkeleton />
                             </div>
                         ))

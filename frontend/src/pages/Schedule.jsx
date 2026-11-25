@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import AnimeCard from '../components/AnimeCard';
-import { ScheduleGridSkeleton } from '../components/skeletons';
+import Skeleton from '../components/ui/Skeleton';
 import { LoadingBar } from '../components/LoadingBar';
 import SEO from '../components/SEO';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -192,6 +192,22 @@ const agendaGroups = (items, isAuthenticated) => {
   ].filter((group) => group.items.length > 0);
   return groups.map((group) => ({ ...group, showTitle: groups.length > 1 || group.untimed }));
 };
+
+// The day's agenda while it loads: rows shaped like AnimeCard's row variant.
+const AgendaSkeleton = () => (
+  <div aria-hidden="true" data-testid="schedule-grid-skeleton" className="panel">
+    {Array.from({ length: 6 }, (_, i) => (
+      <div key={i} className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-4 py-3">
+        <Skeleton className="h-[72px] w-12" />
+        <div>
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="mt-2 h-3.5 w-1/3" />
+        </div>
+        <Skeleton className="h-11 w-11 sm:w-24" rounded="rounded-lg" />
+      </div>
+    ))}
+  </div>
+);
 
 // The side column: every show on your list that airs this week, by day.
 // A row selects its day. Guests get one line on why to sign in.
@@ -396,7 +412,7 @@ export default function Schedule() {
 
           {/* Anime Grid */}
           {isLoading ? (
-            <ScheduleGridSkeleton count={10} />
+            <AgendaSkeleton />
           ) : (
             <div key={dayKey} className={dayFade}>
               {selectedDayAnime.length > 0 ? (
@@ -459,8 +475,8 @@ export default function Schedule() {
 
           <aside aria-label="Your week" className="hidden lg:block lg:pt-[3rem]">
             <WeekAside
-              isAuthenticated={isAuthenticated}
-              isLoading={isLoading}
+              isAuthenticated={isAuthenticated || (authLoading && hasSession())}
+              isLoading={isLoading || authLoading}
               items={myWeek}
               startOfToday={startOfToday}
               selectedOffset={selectedOffset}
