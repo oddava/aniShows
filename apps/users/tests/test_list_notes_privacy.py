@@ -17,9 +17,13 @@ NOTE = "Rewatch the finale with subtitles"
 
 class ListNotesPrivacyTests(APITestCase):
     def setUp(self):
-        self.owner = User.objects.create_user(username="noteowner", email="n@example.com", password="x")
+        self.owner = User.objects.create_user(
+            username="noteowner", email="n@example.com", password="x"
+        )
         UserProfile.objects.filter(user=self.owner).update(email_verified=True)
-        self.other = User.objects.create_user(username="noteother", email="o@example.com", password="x")
+        self.other = User.objects.create_user(
+            username="noteother", email="o@example.com", password="x"
+        )
         self.anime = Anime.objects.create(title="Noted", slug="noted", episode_count=12)
         self.entry = UserAnimeList.objects.create(
             user=self.owner, anime=self.anime, status="Watching", notes=NOTE
