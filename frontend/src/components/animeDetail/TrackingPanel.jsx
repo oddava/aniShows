@@ -53,7 +53,7 @@ export default function TrackingPanel({
     const showScoreRow = scoreOpen || justCompleted;
     // The score drawer stays mounted through its 250 ms close, then leaves
     // the DOM, so nothing in it is reachable while it is shut.
-    const scoreDrawer = usePresence(showScoreRow, 250);
+    const scoreDrawer = usePresence(showScoreRow, 140);
 
     if (!isAuthenticated) {
         return (
@@ -166,14 +166,14 @@ export default function TrackingPanel({
                         </span>
                     </button>
                     {scoreDrawer.mounted && (
-                        // Rows 0fr -> 1fr opens it to its natural height
-                        // (@starting-style gives the first frame); closing
-                        // runs the same transition back before unmounting.
+                        // Takes its full height at once (nothing animates layout);
+                        // the scores settle in and fade out on their own.
                         <div
                             inert={scoreDrawer.closing || undefined}
-                            className={`grid transition-[grid-template-rows,opacity] duration-[250ms] ease-out starting:grid-rows-[0fr] starting:opacity-0 ${scoreDrawer.closing ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}
+                            data-state={scoreDrawer.closing ? 'closing' : 'open'}
+                            className="drawer-reveal"
                         >
-                            <div className="min-h-0 overflow-hidden">
+                            <div>
                                 <div className="px-2 pb-2">
                                     {justCompleted && (
                                         <p className="px-1.5 pb-2 text-xs text-gray-400">Finished? Score it in one tap, or skip.</p>

@@ -12,10 +12,11 @@ import GuestLanding from '../components/home/GuestLanding';
 import ContinueSection from '../components/home/ContinueSection';
 import AiringRibbon from '../components/home/AiringRibbon';
 import { animeQueries } from '../api/queries/anime';
+import { hasSession } from '../api/httpClient';
 import { recommendationMutations, recommendationQueries } from '../api/queries/recommendations';
 
 export default function Home() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, loading: authLoading } = useAuth();
     const revealRefs = useRef([]);
     const observer = useRef(null);
 
@@ -103,7 +104,9 @@ export default function Home() {
         <>
             <SEO page="home" />
             <div className="min-h-screen home-page">
-                {!isAuthenticated && <GuestLanding />}
+                {/* A returning member whose session is still being restored
+                    never sees the sign-up landing flash first. */}
+                {!isAuthenticated && !(authLoading && hasSession()) && <GuestLanding />}
 
                 {/* Main Content Area */}
                 <div className="relative space-y-16 md:space-y-20 pb-16 md:pb-24">

@@ -86,7 +86,7 @@ export default function UserMenu({
                         className="press relative group flex h-10 items-center gap-2.5 rounded-lg pl-1.5 pr-2.5 transition-colors duration-150 hover:bg-white/[0.06]"
                     >
                         {/* Avatar or Placeholder */}
-                        <div className="w-7 h-7 rounded-full overflow-hidden ">
+                        <div aria-hidden="true" className="w-7 h-7 rounded-full overflow-hidden ">
                             {user?.avatar ? (
                                 <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                             ) : (

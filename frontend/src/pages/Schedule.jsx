@@ -21,6 +21,7 @@ import {
 } from '../utils/dateUtils';
 import { scheduleQueries } from '../api/queries/anime';
 import useActivePill from '../hooks/useActivePill';
+import useSwitchFade from '../hooks/useSwitchFade';
 
 // Day names for display
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -83,6 +84,9 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
         const isToday = position === 0;
         const date = addDays(startOfToday, position);
         const dayOfMonth = formatCalendarDate(date, { day: 'numeric' });
+        const dayLabel = isToday ? 'Today' : DAY_SHORT[index];
+        const countLabel = count > 0 || !quietEmpty ? `${count} ep` : 'Free';
+        const episodes = `${count} ${count === 1 ? 'episode' : 'episodes'}`;
 
         return (
           <button
@@ -91,19 +95,25 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
             onClick={() => onSelect(index)}
             aria-pressed={isSelected}
             aria-current={isToday ? 'date' : undefined}
-            aria-label={`${DAY_NAMES[index]} ${dayOfMonth}, ${count} ${count === 1 ? 'episode' : 'episodes'}`}
+            // The name starts with exactly what the button shows (WCAG 2.5.3,
+            // so voice users can say it), then spells it out.
+            aria-label={`${dayLabel} ${dayOfMonth} ${countLabel} (${DAY_NAMES[index]}, ${episodes})`}
             className={`relative flex min-h-16 min-w-0 flex-col items-start rounded-[var(--radius-md)] px-1.5 py-2.5 text-left transition-colors duration-200 sm:px-3 ${isSelected
               ? 'bg-white/[0.08]'
               : 'hover:bg-white/[0.04]'}`}
           >
             <span className={`max-w-full truncate text-xs font-semibold sm:text-sm ${isSelected || isToday ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>
-              {isToday ? 'Today' : DAY_SHORT[index]}
+              {dayLabel}
             </span>
+            {/* Real spaces between the lines, so the text reads "Today 26 4 ep"
+                (a flex column does not render them). */}
+            {' '}
             <span className={`text-lg font-semibold leading-tight tabular ${isSelected ? 'text-[var(--text-1)]' : 'text-[var(--text-2)]'}`}>
               {dayOfMonth}
             </span>
-            <span aria-hidden="true" className={`text-xs tabular ${count > 0 ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}`}>
-              {count > 0 || !quietEmpty ? <><span>{count}</span> ep</> : 'Free'}
+            {' '}
+            <span className={`text-xs tabular ${count > 0 || isSelected ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}`}>
+              {countLabel}
             </span>
           </button>
         );
@@ -301,6 +311,10 @@ export default function Schedule() {
   );
 
   const selectedDayAnime = scheduleByOffset[selectedOffset] || [];
+  // One keyed wrapper for the day's agenda or its empty state: every day or
+  // My list switch fades in the same way, and the first paint does not fade.
+  const dayKey = `${selectedDay}-${myListOnly ? 'mine' : 'all'}`;
+  const dayFade = useSwitchFade(dayKey);
 
   const handleToday = () => {
     setSelectedDay(todayDayIndex);
@@ -381,53 +395,57 @@ export default function Schedule() {
           {/* Anime Grid */}
           {isLoading ? (
             <ScheduleGridSkeleton count={10} />
-          ) : selectedDayAnime.length > 0 ? (
-            <div key={`${selectedDay}-${myListOnly ? 'mine' : 'all'}`} className="swap-fade flex flex-col gap-4">
-              {agendaGroups(selectedDayAnime, isAuthenticated).map((group, _index, groups) => (
-                group.untimed && groups.length > 1 ? (
-                  <details key={group.title} className="panel group/untimed">
-                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[15px] text-[var(--text-2)] [&::-webkit-details-marker]:hidden">
-                      <span>{group.items.length} more · time not announced</span>
-                      <ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-open/untimed:rotate-180" />
-                    </summary>
-                    <div className="mt-1">
+          ) : (
+            <div key={dayKey} className={dayFade}>
+              {selectedDayAnime.length > 0 ? (
+              <div className="flex flex-col gap-4">
+                {agendaGroups(selectedDayAnime, isAuthenticated).map((group, _index, groups) => (
+                  group.untimed && groups.length > 1 ? (
+                    <details key={group.title} className="panel group/untimed">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[15px] text-[var(--text-2)] [&::-webkit-details-marker]:hidden">
+                        <span>{group.items.length} more · time not announced</span>
+                        <ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-open/untimed:rotate-180" />
+                      </summary>
+                      <div className="mt-1">
+                        {group.items.map((anime, index) => (
+                          <AnimeCard key={anime.id} variant="row" anime={anime} index={index} showAiringCountdown metaText={null} />
+                        ))}
+                      </div>
+                    </details>
+                  ) : (
+                  <section key={group.title} aria-label={group.title} className="panel">
+                    {group.showTitle && (
+                      <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-semibold text-[var(--text-2)]">
+                        {group.title}
+                        <span className="text-sm font-normal text-[var(--text-3)] tabular">{group.items.length}</span>
+                      </h3>
+                    )}
+                    <div>
                       {group.items.map((anime, index) => (
-                        <AnimeCard key={anime.id} variant="row" anime={anime} index={index} showAiringCountdown metaText={null} />
+                        <AnimeCard
+                          key={anime.id}
+                          variant="row"
+                          anime={anime}
+                          priority={index < 6}
+                          index={index}
+                          showAiringCountdown
+                          metaText={group.untimed ? null : formatAirTime(anime, preferredTimezone)}
+                        />
                       ))}
                     </div>
-                  </details>
-                ) : (
-                <section key={group.title} aria-label={group.title} className="panel">
-                  {group.showTitle && (
-                    <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-semibold text-[var(--text-2)]">
-                      {group.title}
-                      <span className="text-sm font-normal text-[var(--text-3)] tabular">{group.items.length}</span>
-                    </h3>
-                  )}
-                  <div>
-                    {group.items.map((anime, index) => (
-                      <AnimeCard
-                        key={anime.id}
-                        variant="row"
-                        anime={anime}
-                        priority={index < 6}
-                        index={index}
-                        showAiringCountdown
-                        metaText={group.untimed ? null : formatAirTime(anime, preferredTimezone)}
-                      />
-                    ))}
-                  </div>
-                </section>
-                )
-              ))}
+                  </section>
+                  )
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="No episodes scheduled">
+                {myListOnly
+                  ? `Nothing from your list airs on ${DAY_NAMES[selectedDay]}.`
+                  : `There are no anime episodes airing on ${DAY_NAMES[selectedDay]}.`}
+                {' '}Try another day in the strip above.
+              </EmptyState>
+              )}
             </div>
-          ) : (
-            <EmptyState title="No episodes scheduled">
-              {myListOnly
-                ? `Nothing from your list airs on ${DAY_NAMES[selectedDay]}.`
-                : `There are no anime episodes airing on ${DAY_NAMES[selectedDay]}.`}
-              {' '}Try another day in the strip above.
-            </EmptyState>
           )}
 
           {!isLoading && laterCount > 0 && (

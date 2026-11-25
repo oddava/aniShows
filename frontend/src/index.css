@@ -43,7 +43,8 @@
   /* Text */
   --text-1: #e6e9ee;
   --text-2: #a3abb6;
-  --text-3: #7d8591;
+  /* AA (4.5:1+) for small text on ink-0..ink-2 (ANISHOWS-006; was #7d8591, 4.44:1 on panels). */
+  --text-3: #878f9b;
 
   /* Fixed status colours (text-safe on every ink surface, AA). */
   --status-watching: #86cc90;
@@ -163,7 +164,7 @@
   --color-gray-300: #c9ced6;
   --color-gray-400: #a3abb6;
   --color-gray-500: #8a929e;
-  --color-gray-600: #7d8591;
+  --color-gray-600: #878f9b;
   --color-gray-700: #3a414c;
   --color-gray-800: #2f3640;
   --color-gray-900: #1b1f25;
@@ -711,4 +712,9 @@ html[data-sheet-open] .toast-container {
 }
 .range-field input[type="range"]:focus-visible::-moz-range-thumb {
   background: var(--signature);
+}
+
+/* No footer while a page loader is up (components/common/PageLoader.jsx). */
+html[data-page-loading] .site-footer {
+  display: none;
 }

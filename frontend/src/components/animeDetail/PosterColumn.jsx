@@ -30,6 +30,7 @@ export default function PosterColumn({
                         srcSet={coverSrcSet}
                         sizes="(max-width: 768px) 192px, (max-width: 1024px) 256px, 280px"
                         alt={anime.title}
+                        fetchPriority="high"
                         onLoad={() => setIsCoverLoaded(true)}
                         onError={(event) => {
                             setIsCoverLoaded(false);

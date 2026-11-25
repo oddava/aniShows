@@ -15,6 +15,11 @@ import ProgressStepper from './ui/ProgressStepper';
 import { ScoreBadge } from './ui/Badge';
 import { CardSkeleton } from './ui/Skeleton';
 
+// Covers that have finished loading this visit. A card showing one again
+// (Back to a grid, a shelf re-rendered) starts visible instead of fading in
+// from blank a second time.
+const loadedCovers = new Set();
+
 function timeUntil(dateString) {
     if (!dateString) return null;
     const diff = new Date(dateString).getTime() - Date.now();
@@ -61,20 +66,24 @@ function AnimeCard({
         entry: listEntry,
     });
 
-    const [imageLoaded, setImageLoaded] = useState(false);
     const imageRef = useRef(null);
 
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
+    const [imageLoaded, setImageLoaded] = useState(() => loadedCovers.has(imageUrl));
+    const markLoaded = useCallback(() => {
+        if (imageUrl) loadedCovers.add(imageUrl);
+        setImageLoaded(true);
+    }, [imageUrl]);
     const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
     const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
 
     useEffect(() => {
-        setImageLoaded(false);
+        setImageLoaded(loadedCovers.has(imageUrl));
         const frame = requestAnimationFrame(() => {
-            if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) setImageLoaded(true);
+            if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) markLoaded();
         });
         return () => cancelAnimationFrame(frame);
-    }, [imageUrl]);
+    }, [imageUrl, markLoaded]);
 
     // A missing optimised cover swaps to the original; the skeleton stays and
     // the fallback fades in on its own load.
@@ -113,6 +122,8 @@ function AnimeCard({
     }, [metaText, showMeta, anime.anime_type, anime.release_date]);
 
     const loading = priority || (eagerFirstSix && index < 6) ? 'eager' : 'lazy';
+    // The first posters on screen are the page's largest paint: fetch them first.
+    const fetchPriority = priority || (eagerFirstSix && index < 4) ? 'high' : undefined;
     const href = `/anime/${anime.slug}`;
     const smallUrl = getOptimizedImageUrl(anime, 'cover', 'small');
     const placeholderUrl = !lite && smallUrl && smallUrl !== imageUrl ? smallUrl : null;
@@ -179,7 +190,7 @@ function AnimeCard({
                     draggable={false}
                     loading={loading}
                     decoding="async"
-                    onLoad={() => setImageLoaded(true)}
+                    onLoad={markLoaded}
                     onError={handleImageError}
                     data-loaded={imageLoaded}
                     className="img-fade h-full w-full object-cover"
@@ -215,8 +226,9 @@ function AnimeCard({
                         alt=""
                         draggable={false}
                         loading={loading}
+                        fetchPriority={fetchPriority}
                         decoding="async"
-                        onLoad={() => setImageLoaded(true)}
+                        onLoad={markLoaded}
                         onError={handleImageError}
                         data-loaded={imageLoaded}
                         className="img-fade relative h-full w-full object-cover transition-[opacity,filter] duration-300 ease-out [@media(hover:hover)]:group-hover:brightness-[1.08]"

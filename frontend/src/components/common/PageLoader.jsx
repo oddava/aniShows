@@ -1,4 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+
+// While any page loader is up the footer is not laid out at all (index.css):
+// it then appears under the finished page instead of sliding up from below
+// the loader on a short page.
+let shown = 0;
 
 /**
  * Route-level fallback while a page chunk loads. It is a full viewport tall,
@@ -8,6 +13,15 @@ import React from 'react';
  * `animate-spin` both set `animation`.
  */
 export default function PageLoader() {
+    useEffect(() => {
+        shown += 1;
+        document.documentElement.dataset.pageLoading = 'true';
+        return () => {
+            shown -= 1;
+            if (shown === 0) delete document.documentElement.dataset.pageLoading;
+        };
+    }, []);
+
     return (
         <div role="status" className="min-h-[100dvh] flex items-center justify-center">
             <div aria-hidden="true" className="delayed-show">

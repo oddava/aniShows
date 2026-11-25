@@ -97,6 +97,10 @@ export default function AnimeListContent({
     const statusPill = useActivePill();
     const viewPill = useActivePill();
     const currentLabel = statusLabel(listStatusFilter);
+    // As many placeholders as the tab holds (its tab count), up to 14, so a
+    // short list does not flash a full grid that then collapses.
+    const tabCount = search ? undefined : summary?.counts?.[listStatusFilter];
+    const skeletonCount = Number.isFinite(tabCount) ? Math.min(tabCount, 14) : 14;
 
     return (
         <div className="space-y-6 animate-tab-content">
@@ -191,6 +195,7 @@ export default function AnimeListContent({
             <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Anime List">
                 <AnimeListView
                     listsLoading={listsLoading}
+                    skeletonCount={skeletonCount}
                     listsFetching={listsFetching}
                     isError={isError}
                     onRetry={refetch}
@@ -221,6 +226,7 @@ export default function AnimeListContent({
 
 function AnimeListView({
     listsLoading,
+    skeletonCount = 14,
     listsFetching,
     isError,
     onRetry,
@@ -234,7 +240,7 @@ function AnimeListView({
     if (listsLoading) {
         return (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4">
-                {Array(14).fill(0).map((_, i) => <AnimeCardSkeleton key={i} />)}
+                {Array.from({ length: skeletonCount }, (_, i) => <AnimeCardSkeleton key={i} />)}
             </div>
         );
     }

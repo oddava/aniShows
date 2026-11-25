@@ -265,6 +265,7 @@ export default function AnimeDetail() {
                     srcSet={bannerSrcSet}
                     sizes="100vw"
                     alt={anime.title}
+                    fetchPriority="high"
                     onLoad={() => setIsBannerLoaded(true)}
                     onError={(event) => {
                         setIsBannerLoaded(false);

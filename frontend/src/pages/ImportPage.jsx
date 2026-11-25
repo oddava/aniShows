@@ -652,7 +652,7 @@ function ImportJobCard({ job, expanded, onToggle, onCancel, cancelling, onRunAga
                         aria-valuemax={100}
                         aria-valuenow={progress}
                     >
-                        <div className="h-full bg-accent-dark transition-[width] duration-500" style={{ width: `${progress}%` }} />
+                        <div className="progress-fill h-full bg-accent-dark" style={{ '--progress': progress / 100 }} />
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
                         {job.processed_entries} of {job.total_entries || '?'} entries

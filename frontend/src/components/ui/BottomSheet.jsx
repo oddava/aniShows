@@ -92,6 +92,12 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
         dragStart.current = null;
         setDragging(false);
     };
+    // The system took the touch (a call, a gesture): no dismiss, snap back.
+    const onTouchCancel = () => {
+        dragStart.current = null;
+        setDragging(false);
+        setDrag(0);
+    };
     let backdropStyle;
     if (closing) backdropStyle = releaseAt ? { '--backdrop-from': backdropOpacity(releaseAt) } : undefined;
     else if (drag > 0) backdropStyle = { opacity: backdropOpacity(drag), transition: dragging ? 'none' : undefined };
@@ -120,6 +126,7 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
                     onTouchStart={onTouchStart}
                     onTouchMove={onTouchMove}
                     onTouchEnd={onTouchEnd}
+                    onTouchCancel={onTouchCancel}
                     aria-hidden="true"
                 >
                     <span className="h-1 w-10 rounded-full bg-white/20" />

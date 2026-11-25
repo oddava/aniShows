@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import { notificationKeys, notificationQueries } from '../api/queries/notifications';
 import PageLoader from '../components/common/PageLoader';
@@ -20,6 +20,7 @@ import { getNotificationTarget } from '../utils/notificationUtils';
 import NotificationItem from '../components/notifications/NotificationItem';
 import { useNotificationSocket } from '../components/notifications/notificationSocket';
 import useActivePill from '../hooks/useActivePill';
+import useDelayedLoading from '../hooks/useDelayedLoading';
 
 /** Chips map to the API's server-side `category=` filter. */
 const NOTIFICATION_FILTERS = [
@@ -113,6 +114,7 @@ export default function Notifications() {
 
     const notifications = useMemo(() => flattenFeed(feedQuery.data), [feedQuery.data]);
     const loadingInitial = feedQuery.isLoading;
+    const showFeedSkeleton = useDelayedLoading(loadingInitial, 300);
     const loadingMore = feedQuery.isFetchingNextPage;
     const nextPage = feedQuery.hasNextPage;
 
@@ -237,25 +239,21 @@ export default function Notifications() {
         return <PageLoader />;
     }
 
+    // Same as every other signed-in page (ANISHOWS-010): sign in, then back here.
     if (!isAuthenticated) {
-        return (
-            <div className="page-container pt-6 pb-16 md:pt-10">
-                <SEO page="notifications" noIndex />
-                <h1 className="page-title">Notifications</h1>
-                <p className="mt-2 text-sm text-[var(--text-2)]">Sign in to see your notifications.</p>
-                <Link to="/login" className="btn-primary mt-5 text-sm">Sign in</Link>
-            </div>
-        );
+        return <Navigate to="/login" replace state={{ from: '/notifications' }} />;
     }
 
     const emptyState = EMPTY_STATES[activeFilter] || EMPTY_STATES.all;
     let content;
     if (loadingInitial) {
-        content = <FeedSkeleton />;
+        // A fast load never flashes six placeholder rows that then collapse
+        // into a one-line empty state.
+        content = showFeedSkeleton ? <FeedSkeleton /> : null;
     } else if (feedError && notifications.length === 0) {
         content = <FeedError message="Couldn’t load notifications. Check your connection." onRetry={retryFeed} />;
     } else if (notifications.length === 0) {
-        content = <p className="mt-6 text-sm text-[var(--text-2)]">{emptyState}</p>;
+        content = <p className="swap-fade mt-6 text-sm text-[var(--text-2)]">{emptyState}</p>;
     } else {
         content = (
             <>
@@ -345,7 +343,9 @@ export default function Notifications() {
                     </div>
                 </div>
 
-                {content}
+                {/* The feed keeps half a screen, so its outcome (a list, one
+                    line, an error) never pulls the footer up the page. */}
+                <div className="min-h-[50vh]">{content}</div>
             </div>
         </div>
     );

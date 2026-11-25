@@ -125,7 +125,7 @@ export default function StatsTab({
                                     yAxisId="votes"
                                     orientation="right"
                                     allowDecimals={false}
-                                    tick={{ fill: '#7d8591', fontSize: 12 }}
+                                    tick={{ fill: '#878f9b', fontSize: 12 }}
                                     stroke="rgba(255,255,255,0.08)"
                                 />
                                 <RechartsTooltip content={<EpisodeRatingsTooltip />} />

@@ -1,6 +1,6 @@
 // Rating distribution bar: a row you can click to filter by that score.
 const RatingBar = ({ stars, count, total, onFilter, isActive }) => {
-    const percentage = total > 0 ? (count / total) * 100 : 0;
+    const fraction = total > 0 ? count / total : 0;
 
     return (
         <button
@@ -13,8 +13,8 @@ const RatingBar = ({ stars, count, total, onFilter, isActive }) => {
             <span className={`w-4 shrink-0 text-sm tabular ${isActive ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>{stars}</span>
             <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--ink-3)]">
                 <span
-                    className={`block h-full rounded-full transition-[width] duration-500 ${isActive ? 'bg-[var(--signature)]' : 'bg-[var(--text-3)] group-hover:bg-[var(--text-2)]'}`}
-                    style={{ width: `${percentage}%` }}
+                    className={`progress-fill block h-full rounded-full ${isActive ? 'bg-[var(--signature)]' : 'bg-[var(--text-3)] group-hover:bg-[var(--text-2)]'}`}
+                    style={{ '--progress': fraction }}
                 />
             </span>
             <span className="w-8 text-right text-sm text-[var(--text-3)] tabular">{count}</span>

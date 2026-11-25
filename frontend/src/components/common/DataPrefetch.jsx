@@ -21,6 +21,9 @@ const TAB_QUERIES = {
     watch: (slug) => ({ ...animeQueries.watchEpisodes(slug, WATCH_TAB_PAGE_SIZE), staleTime: DETAIL_STALE_MS }),
 };
 
+// Same freshness as the episode-ratings query in useAnimeDetailTabData.
+const EPISODE_RATINGS_STALE_MS = 60000;
+
 const warmed = new Set();
 
 /** Start the browser fetching an image the next page will show. */
@@ -56,6 +59,15 @@ export default function DataPrefetch() {
             const slug = decodeURIComponent(match[1]);
             const tabQuery = match[2] && TAB_QUERIES[match[2]];
             if (tabQuery) queryClient.prefetchInfiniteQuery(tabQuery(slug)).catch(() => {});
+            if (match[2] === 'stats') {
+                // The Stats tab's code (the same import() AnimeDetailTabContent
+                // lazy-loads, so the same chunk) and its episode ratings, with
+                // the key and options the tab uses.
+                import('../StatsTab').catch(() => {});
+                queryClient
+                    .prefetchQuery({ ...animeQueries.episodeRatings(slug, viewerId), staleTime: EPISODE_RATINGS_STALE_MS })
+                    .catch(() => {});
+            }
             const options = animeQueries.detail(slug, viewerId);
             queryClient
                 .prefetchQuery({ ...options, staleTime: DETAIL_STALE_MS })

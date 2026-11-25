@@ -9,7 +9,7 @@ const linkClass = 'inline-flex min-h-11 items-center gap-1.5 text-[15px] text-[v
  */
 export default function Footer({ className = '' }) {
     return (
-        <footer className={`pt-16 pb-[calc(var(--tabbar-h)+2.5rem+env(safe-area-inset-bottom,0px))] md:pt-24 md:pb-10 ${className}`}>
+        <footer className={`site-footer pt-16 pb-[calc(var(--tabbar-h)+2.5rem+env(safe-area-inset-bottom,0px))] md:pt-24 md:pb-10 ${className}`}>
             <div className="page-container">
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                     <nav aria-label="Footer" className="flex flex-wrap gap-x-6">

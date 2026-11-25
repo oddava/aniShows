@@ -15,6 +15,7 @@ export default function TopFilterBar({
     yearOptions,
     searchInputRef,
     onOpenMobileFilters,
+    filtersOpen = false,
     hasActiveFilters,
     adultContentEnabled,
     trailing = null,
@@ -130,6 +131,8 @@ export default function TopFilterBar({
                 <button
                     type="button"
                     onClick={onOpenMobileFilters}
+                    data-filters-toggle
+                    aria-expanded={filtersOpen}
                     className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-[var(--text-2)] transition-colors hover:bg-white/[0.09] hover:text-[var(--text-1)] sm:hidden"
                     aria-label="Filters"
                 >
@@ -172,6 +175,8 @@ export default function TopFilterBar({
                     <button
                         type="button"
                         onClick={onOpenMobileFilters}
+                        data-filters-toggle
+                        aria-expanded={filtersOpen}
                         className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)]"
                     >
                         <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
@@ -197,6 +202,7 @@ TopFilterBar.propTypes = {
         PropTypes.shape({ current: PropTypes.any })
     ]),
     onOpenMobileFilters: PropTypes.func,
+    filtersOpen: PropTypes.bool,
     hasActiveFilters: PropTypes.bool,
     adultContentEnabled: PropTypes.bool,
     trailing: PropTypes.node,

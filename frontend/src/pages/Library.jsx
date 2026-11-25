@@ -13,6 +13,7 @@ import { LIST_ORDERINGS, listQueries } from '../api/queries/lists';
 import { LIST_STATUSES, normalizeStatus, statusMeta } from '../utils/listStatus';
 import { progressText } from '../utils/episodes';
 import useActivePill from '../hooks/useActivePill';
+import useDelayedLoading from '../hooks/useDelayedLoading';
 
 const ALL = 'All';
 
@@ -60,9 +61,15 @@ function useDebounced(value, delay) {
  * where they were, showing their new state, and a +1 never moves a card
  * from under your finger. Recency reorders on the next visit.
  */
-function useStickyEntries(fetched, viewKey) {
+function useStickyEntries(fetched, viewKey, isPlaceholder) {
     const shown = useRef({ key: viewKey, list: [] });
     return useMemo(() => {
+        // Placeholder data (the previous tab or search, dimmed) never becomes
+        // the kept order: the view's own first page replaces it outright.
+        if (isPlaceholder) {
+            shown.current = { key: null, list: [] };
+            return fetched;
+        }
         if (shown.current.key !== viewKey) {
             shown.current = { key: viewKey, list: fetched };
             return fetched;
@@ -78,7 +85,7 @@ function useStickyEntries(fetched, viewKey) {
         ];
         shown.current = { key: viewKey, list: merged };
         return merged;
-    }, [fetched, viewKey]);
+    }, [fetched, viewKey, isPlaceholder]);
 }
 
 /**
@@ -118,14 +125,22 @@ export default function Library() {
     } = useInfiniteQuery({
         ...listQueries.paged(username, statusFilter, search, ordering),
         enabled: Boolean(username),
-        placeholderData: (previous, previousQuery) => (
-            previousQuery?.queryKey?.[2] === statusFilter ? previous : undefined
-        ),
+        // The previous view stays on screen, dimmed, while the next one loads
+        // (another tab included), so a quick switch never flashes a skeleton.
+        placeholderData: (previous) => previous,
         staleTime: 60 * 1000,
     });
 
+    // Which status the cards on screen belong to. While a cold tab loads, the
+    // placeholder is the previous tab's cards: dimmed for up to 250ms, then a
+    // skeleton sized for the new tab if it is still loading.
+    const [shownStatus, setShownStatus] = useState(statusFilter);
+    if (data && !isPlaceholderData && shownStatus !== statusFilter) setShownStatus(statusFilter);
+    const otherTabShown = isPlaceholderData && shownStatus !== statusFilter;
+    const slowTabSwitch = useDelayedLoading(otherTabShown, 250);
+
     const fetched = useMemo(() => data?.pages?.flatMap((page) => page?.results || []) || [], [data]);
-    const entries = useStickyEntries(fetched, `${status}|${search}|${ordering}`);
+    const entries = useStickyEntries(fetched, `${status}|${search}|${ordering}`, isPlaceholderData);
     const total = summary?.total ?? 0;
 
     useEffect(() => {
@@ -157,7 +172,9 @@ export default function Library() {
 
     const meta = status === ALL ? { label: 'All', value: ALL } : statusMeta(status);
     const tabs = [{ value: ALL, label: 'All', color: null }, ...LIST_STATUSES];
-    const showSkeleton = isPending || !username;
+    const showSkeleton = isPending || !username || (otherTabShown && slowTabSwitch);
+    // Another tab's cards are dimmed from the first frame (no fade from full).
+    const dimClass = otherTabShown ? 'opacity-60' : `transition-opacity duration-200 ${isPlaceholderData ? 'opacity-60' : ''}`;
     // As many placeholders as the tab will hold (up to a screenful), so a
     // short list does not flash a full grid that then collapses.
     const expected = status === ALL ? summary?.total : summary?.counts?.[status];
@@ -170,7 +187,7 @@ export default function Library() {
             staleTime: 60 * 1000,
         }).catch(() => {});
     };
-    const empty = !showSkeleton && !isError && entries.length === 0;
+    const empty = !showSkeleton && !otherTabShown && !isError && entries.length === 0;
 
     return (
         <>
@@ -285,7 +302,7 @@ export default function Library() {
                             {search ? 'Try another title, or another tab.' : EMPTY_COPY[status].body}
                         </EmptyState>
                     ) : view === 'grid' ? (
-                        <div className={`grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 anime-card-grid-gap transition-opacity duration-200 ${isPlaceholderData ? 'opacity-60' : ''}`}>
+                        <div className={`grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 anime-card-grid-gap ${showSkeleton ? '' : dimClass}`}>
                             {showSkeleton
                                 ? Array.from({ length: skeletonCount(12) }, (_, i) => <CardSkeleton key={i} />)
                                 : entries.map((entry, index) => (
@@ -322,7 +339,7 @@ export default function Library() {
                             {showSkeleton ? (
                                 Array.from({ length: skeletonCount(8) }, (_, i) => <RowSkeleton key={i} />)
                             ) : (
-                                <ul className={isPlaceholderData ? 'opacity-60' : ''}>
+                                <ul className={dimClass}>
                                     {entries.map((entry) => <LibraryRow key={entry.id} entry={entry} quietStatus={status !== ALL} />)}
                                 </ul>
                             )}

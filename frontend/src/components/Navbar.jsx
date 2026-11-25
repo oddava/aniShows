@@ -14,6 +14,7 @@ import useNavbarAutoHide from './navbar/useNavbarAutoHide';
 import useNavbarNotifications from './navbar/useNavbarNotifications';
 import useActivePill from '../hooks/useActivePill';
 import usePendingPath from '../hooks/usePendingPath';
+import { hasSession } from '../api/httpClient';
 
 /** Desktop bell with the unread count, one click from anywhere (N1). */
 function NotificationBell({ count = 0 }) {
@@ -23,7 +24,7 @@ function NotificationBell({ count = 0 }) {
             to="/notifications"
             aria-label={label}
             title={label}
-            className={({ isActive }) => `relative mr-1 flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${isActive ? 'text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
+            className={({ isActive }) => `press relative mr-1 flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white/[0.07] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:bg-white/[0.06] hover:text-[var(--text-1)]'}`}
         >
             <Bell aria-hidden="true" className="h-5 w-5" />
             {count > 0 && (
@@ -108,10 +109,12 @@ export default function Navbar() {
                 </div>
             </nav>
 
-            {/* Mobile Bottom Navigation Island */}
+            {/* Mobile Bottom Navigation Island. While a returning member's
+                session is being restored, it already shows the member tabs,
+                so it never switches from 4 tabs (with Sign in) to 5. */}
             <MobileNav
                 user={user}
-                isAuthenticated={isAuthenticated}
+                isAuthenticated={isAuthenticated || (authLoading && hasSession())}
                 logout={logout}
                 mobileUnreadCount={mobileUnreadCount}
                 currentUserProfilePath={currentUserProfilePath}

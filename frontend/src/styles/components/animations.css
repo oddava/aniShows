@@ -590,50 +590,7 @@
   }
 }
 
-/* Browse "More filters": a full-screen sheet on phones (rises, sinks on
-   close), an inline panel on wider screens (settles down from the toolbar). */
-.filters-panel {
-  animation: filters-in 280ms var(--ease-glide);
-}
 
-[data-state="closing"] .filters-panel {
-  animation: filters-out 160ms ease-in forwards;
-}
-
-@keyframes filters-in {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes filters-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
-@media (max-width: 639px) {
-  .filters-panel {
-    animation: filters-sheet-in 360ms var(--ease-glide);
-  }
-
-  [data-state="closing"] .filters-panel {
-    animation: filters-sheet-out 220ms var(--ease-out) forwards;
-  }
-
-  /* The sheet's own page-coloured backdrop goes with it. */
-  [data-state="closing"]:has(> .filters-panel) {
-    animation: filters-out 220ms ease-in forwards;
-  }
-}
-
-@keyframes filters-sheet-in {
-  from { opacity: 0; transform: translateY(32px); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes filters-sheet-out {
-  from { opacity: 1; transform: none; }
-  to { opacity: 0; transform: translateY(32px); }
-}
 
 /* Content that replaces other content in place (a day, a tab, a filter):
    a quick fade, opacity only, so popovers inside stay viewport-anchored. */
@@ -642,8 +599,27 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .swap-fade,
-  .filters-panel {
+  .swap-fade {
     animation: none !important;
   }
+}
+
+/* Content revealed in place (the score row under "Your score"): its space is
+   taken at once, the content settles in and fades out on its own. */
+.drawer-reveal {
+  animation: drawer-in 260ms var(--ease-glide) backwards;
+}
+
+.drawer-reveal[data-state="closing"] {
+  animation: drawer-out 140ms ease-in forwards;
+}
+
+@keyframes drawer-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes drawer-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
