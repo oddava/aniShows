@@ -77,7 +77,7 @@ export default function SettingsTabs({ user, activeTab, setActiveTab }) {
                         aria-controls={isActive ? settingsPanelId(key) : undefined}
                         tabIndex={isActive ? 0 : -1}
                         onClick={() => setActiveTab(key)}
-                        className={`press inline-flex min-h-11 shrink-0 items-center rounded-lg px-3.5 text-[15px] font-medium transition-colors duration-150
+                        className={`inline-flex min-h-11 shrink-0 items-center rounded-lg px-3.5 text-[15px] font-medium transition-colors duration-150
                         ${isActive
                             ? 'bg-white/[0.07] text-[var(--text-1)]'
                             : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'}`}

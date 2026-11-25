@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, Pencil, Plus, RotateCcw, Star } from 'lucide-react';
 import useListEntryMutation from '../../hooks/useListEntryMutation';
+import usePresence from '../../hooks/usePresence';
 import { LIST_STATUSES } from '../../utils/listStatus';
 import { airedEpisodeCount, knownEpisodeTotal } from '../../utils/episodes';
 import QuickAdd from '../ui/QuickAdd';
@@ -49,6 +50,10 @@ export default function TrackingPanel({
         // Scored, or no longer Completed (Keep watching, Undo): the prompt goes.
         if (entry.score > 0 || entry.status !== 'Completed') setJustCompleted(false);
     }, [entry.score, entry.status]);
+    const showScoreRow = scoreOpen || justCompleted;
+    // The score drawer stays mounted through its 250 ms close, then leaves
+    // the DOM, so nothing in it is reachable while it is shut.
+    const scoreDrawer = usePresence(showScoreRow, 250);
 
     if (!isAuthenticated) {
         return (
@@ -78,7 +83,6 @@ export default function TrackingPanel({
         setJustCompleted(false);
     };
 
-    const showScoreRow = scoreOpen || justCompleted;
     const iconButton = 'press flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-white/[0.07] text-gray-300 transition-colors hover:bg-white/[0.11] hover:text-white';
 
     return (
@@ -161,16 +165,26 @@ export default function TrackingPanel({
                             )}
                         </span>
                     </button>
-                    {showScoreRow && (
-                        <div className="px-2 pb-2">
-                            {justCompleted && (
-                                <p className="px-1.5 pb-2 text-xs text-gray-400">Finished? Score it in one tap, or skip.</p>
-                            )}
-                            <ScorePicker
-                                value={entry.score}
-                                onChange={handleScore}
-                                size="sm"
-                            />
+                    {scoreDrawer.mounted && (
+                        // Rows 0fr -> 1fr opens it to its natural height
+                        // (@starting-style gives the first frame); closing
+                        // runs the same transition back before unmounting.
+                        <div
+                            inert={scoreDrawer.closing || undefined}
+                            className={`grid transition-[grid-template-rows,opacity] duration-[250ms] ease-out starting:grid-rows-[0fr] starting:opacity-0 ${scoreDrawer.closing ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}
+                        >
+                            <div className="min-h-0 overflow-hidden">
+                                <div className="px-2 pb-2">
+                                    {justCompleted && (
+                                        <p className="px-1.5 pb-2 text-xs text-gray-400">Finished? Score it in one tap, or skip.</p>
+                                    )}
+                                    <ScorePicker
+                                        value={entry.score}
+                                        onChange={handleScore}
+                                        size="sm"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

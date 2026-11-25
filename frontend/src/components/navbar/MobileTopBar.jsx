@@ -44,7 +44,7 @@ export default function MobileTopBar() {
     const showSearch = path !== '/browse';
     // Over artwork (top of the page) the icon buttons get a dark backing so
     // they stay legible on bright banners.
-    const iconButtonClasses = `w-11 h-11 flex items-center justify-center rounded-full text-gray-100 transition-colors ${scrolled ? 'hover:bg-white/10' : 'bg-[rgb(21_24_29/0.6)] backdrop-blur-sm hover:bg-[rgb(21_24_29/0.8)]'}`;
+    const iconButtonClasses = `press w-11 h-11 flex items-center justify-center rounded-full text-gray-100 transition-colors ${scrolled ? 'hover:bg-white/10' : 'bg-[rgb(21_24_29/0.6)] backdrop-blur-sm hover:bg-[rgb(21_24_29/0.8)]'}`;
 
     const goBack = () => {
         // location.key is "default" on the first entry of a session: nothing to go back to.

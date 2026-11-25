@@ -58,9 +58,11 @@ export default function UserMenu({
         <div className="hidden md:flex items-center gap-3">
             {authLoading ? (
                 // Loading state - show skeleton instead of "Sign In" buttons
-                <div className="flex items-center gap-2">
-                    <div className="w-20 h-9 bg-white/5 rounded-xl animate-pulse" />
-                    <div className="w-9 h-9 bg-white/5 rounded-full animate-pulse" />
+                // Sized like the signed-in bell + account chip, so the search
+                // box beside it does not slide when auth resolves.
+                <div aria-hidden="true" className="flex items-center gap-1">
+                    <div className="h-11 w-11" />
+                    <div className="skeleton-shimmer h-10 w-[9.5rem] rounded-lg" />
                 </div>
             ) : isAuthenticated ? (
                 <div
@@ -81,7 +83,7 @@ export default function UserMenu({
                         aria-expanded={isProfileOpen}
                         aria-controls={isProfileOpen ? profileMenuId : undefined}
                         aria-label={`Account menu for ${user?.username || 'you'}${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
-                        className="relative group flex h-10 items-center gap-2.5 rounded-lg pl-1.5 pr-2.5 transition-colors duration-150 hover:bg-white/[0.06]"
+                        className="press relative group flex h-10 items-center gap-2.5 rounded-lg pl-1.5 pr-2.5 transition-colors duration-150 hover:bg-white/[0.06]"
                     >
                         {/* Avatar or Placeholder */}
                         <div className="w-7 h-7 rounded-full overflow-hidden ">
@@ -104,16 +106,16 @@ export default function UserMenu({
 
                     {/* Enhanced Dropdown Menu */}
                     {menu.mounted && (
-                        <div id={profileMenuId} data-state={menu.closing ? 'closing' : 'open'} className="popover-in absolute right-0 top-full mt-3 w-64 py-1.5 rounded-xl bg-[var(--ink-3)] shadow-[var(--shadow-pop)] z-[1001]" style={{ transformOrigin: 'top right' }}>
+                        <div id={profileMenuId} data-state={menu.closing ? 'closing' : 'open'} data-side="bottom" className="popover-in absolute right-0 top-full mt-3 w-64 py-1.5 rounded-xl bg-[var(--ink-3)] shadow-[var(--shadow-pop)] z-[1001]">
                             {/* User Info Header */}
                             <div className="px-4 py-3 mb-1.5">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-lg overflow-hidden">
+                                    <div className="w-9 h-9 rounded-full overflow-hidden">
                                         {user?.avatar ? (
                                             <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
                                         ) : (
-                                            <div className="w-full h-full bg-accent-dark flex items-center justify-center">
-                                                <span className="text-xl font-bold text-white">{user?.username?.charAt(0)}</span>
+                                            <div className="w-full h-full bg-[var(--signature-soft)] flex items-center justify-center">
+                                                <span className="text-base font-semibold uppercase text-[var(--signature)]">{user?.username?.charAt(0)}</span>
                                             </div>
                                         )}
                                     </div>

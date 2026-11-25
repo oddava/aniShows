@@ -73,7 +73,7 @@ export default function FilterMenu({
                 aria-expanded={open}
                 aria-controls={open ? panelId : undefined}
                 aria-label={isActive ? `${label}: ${triggerText}` : label}
-                className={`flex h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm transition-colors duration-150 ${isActive
+                className={`press flex h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm transition-colors duration-150 ${isActive
                     ? 'bg-[var(--signature-soft)] font-medium text-[var(--signature)]'
                     : 'bg-white/[0.05] text-[var(--text-2)] hover:bg-white/[0.08] hover:text-[var(--text-1)]'}`}
             >
@@ -85,6 +85,8 @@ export default function FilterMenu({
                 <div
                     id={panelId}
                     data-state={panel.closing ? 'closing' : 'open'}
+                    data-side="bottom"
+                    data-align="start"
                     role="group"
                     aria-label={label}
                     className={`popover-in absolute left-0 top-full z-40 mt-2 rounded-xl bg-[var(--ink-3)] p-1.5 shadow-[var(--shadow-pop)] ${columns > 1 ? 'w-[26rem]' : 'min-w-48'}`}

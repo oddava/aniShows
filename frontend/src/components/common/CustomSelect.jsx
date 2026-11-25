@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import usePresence from '../../hooks/usePresence';
 
 function normalizeOption(option) {
     if (option && typeof option === 'object' && 'value' in option) {
@@ -39,6 +40,8 @@ export default function CustomSelect({
     const triggerRef = useRef(null);
     const menuRef = useRef(null);
     const [isOpen, setIsOpen] = useState(false);
+    // The listbox stays mounted through its 120 ms closing animation.
+    const menu = usePresence(isOpen, 120);
     const [activeIndex, setActiveIndex] = useState(-1);
     const isControlled = value !== undefined;
     const [internalValue, setInternalValue] = useState(defaultValue ?? '');
@@ -170,6 +173,9 @@ export default function CustomSelect({
         <div ref={containerRef} className={`relative ${className}`}>
             {name ? <input type="hidden" name={name} value={selectedValue} disabled={disabled} /> : null}
 
+            {/* Hover and keyboard focus lighten the fill (no ring). The fill is
+                an inset shadow, so it lifts whatever background a caller sets,
+                including !bg-* overrides in triggerClassName. */}
             <button
                 ref={triggerRef}
                 id={selectId}
@@ -178,7 +184,7 @@ export default function CustomSelect({
                 aria-label={ariaLabel}
                 aria-expanded={isOpen}
                 aria-haspopup="listbox"
-                className={`inline-flex w-full items-center justify-between gap-2 rounded-xl bg-dark-200 px-4 py-3 text-sm font-semibold text-white outline-none transition-colors hover:border-white/20 focus-visible:ring-2 focus-visible:ring-accent/50 disabled:cursor-not-allowed disabled:opacity-60 ${triggerClassName}`}
+                className={`inline-flex w-full items-center justify-between gap-2 rounded-xl bg-dark-200 px-4 py-3 text-sm font-semibold text-white outline-none press hover:shadow-[inset_0_0_0_100vmax_rgb(255_255_255/0.06)] focus-visible:!outline-none focus-visible:!shadow-[inset_0_0_0_100vmax_rgb(255_255_255/0.1)] disabled:cursor-not-allowed disabled:opacity-60 ${triggerClassName}`}
                 onClick={() => setIsOpen((current) => !current)}
                 onKeyDown={handleTriggerKeyDown}
             >
@@ -193,12 +199,16 @@ export default function CustomSelect({
                 />
             </button>
 
-            {isOpen ? (
+            {menu.mounted ? (
                 <div
                     ref={menuRef}
                     role="listbox"
                     aria-labelledby={selectId}
-                    className={`absolute left-0 right-0 z-[260] mt-2 max-h-64 overflow-y-auto rounded-xl bg-[var(--ink-3)] p-1 shadow-2xl backdrop-blur-xl ${menuClassName}`}
+                    data-side="bottom"
+                    data-align="center"
+                    data-state={menu.closing ? 'closing' : 'open'}
+                    inert={menu.closing || undefined}
+                    className={`popover-in absolute left-0 right-0 z-[260] mt-2 max-h-64 overflow-y-auto rounded-xl bg-[var(--ink-3)] p-1 shadow-2xl backdrop-blur-xl ${menu.closing ? 'pointer-events-none' : ''} ${menuClassName}`}
                 >
                     {resolvedOptions.map((option, index) => {
                         const isSelected = option.value === selectedValue;

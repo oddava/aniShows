@@ -39,7 +39,7 @@ export default function ProfileTabs({ activeTab, onTabChange }) {
                                 data-active-tab={isActive ? 'true' : undefined}
                                 onClick={() => onTabChange(tab.id)}
                                 aria-current={isActive ? 'page' : undefined}
-                                className={`press min-h-[2.75rem] shrink-0 whitespace-nowrap rounded-lg px-3.5 text-[15px] font-medium transition-colors duration-150 ${isActive
+                                className={`min-h-[2.75rem] shrink-0 whitespace-nowrap rounded-lg px-3.5 text-[15px] font-medium transition-colors duration-150 ${isActive
                                     ? 'bg-white/[0.07] text-[var(--text-1)]'
                                     : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
                                     }`}

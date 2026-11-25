@@ -333,7 +333,7 @@ export default function Notifications() {
                                     type="button"
                                     aria-pressed={active}
                                     onClick={() => setActiveFilter(filter.value)}
-                                    className={`press flex min-h-11 items-center rounded-lg px-3.5 text-sm font-semibold transition-colors duration-150 md:min-h-9 ${active
+                                    className={`flex min-h-11 items-center rounded-lg px-3.5 text-sm font-semibold transition-colors duration-150 md:min-h-9 ${active
                                         ? 'bg-white/[0.07] text-[var(--text-1)]'
                                         : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
                                     }`}

@@ -255,7 +255,7 @@ function RecommendedForYouSection({ revealRef }) {
                         onClick={(event) => handleDismiss(event, rec.anime.id)}
                         aria-label={`Not interested in ${rec.anime.title}`}
                         title="Not interested"
-                        className="absolute top-2 right-2 z-[200] w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg border bg-black/50 border-white/20 text-white hover:bg-black/70 hover:border-white/30 transition-opacity duration-200 opacity-0 group-hover/rec:opacity-100 group-focus-within/rec:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 touch-manipulation after:absolute after:-inset-2 sm:after:inset-0 after:content-['']"
+                        className="absolute top-2 right-2 z-[200] w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg bg-[rgb(27_31_37/0.88)] backdrop-blur-sm text-white hover:bg-[rgb(44_50_59/0.94)] press opacity-0 group-hover/rec:opacity-100 group-focus-within/rec:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 touch-manipulation after:absolute after:-inset-2 sm:after:inset-0 after:content-['']"
                     >
                         <X aria-hidden="true" className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>

@@ -95,6 +95,7 @@ export default function AnimeListContent({
     const listsFetching = isFetching && !isFetchingNextPage;
     const fadeRef = useScrollFade();
     const statusPill = useActivePill();
+    const viewPill = useActivePill();
     const currentLabel = statusLabel(listStatusFilter);
 
     return (
@@ -114,7 +115,7 @@ export default function AnimeListContent({
                                 type="button"
                                 aria-pressed={isActive}
                                 onClick={() => setListStatusFilter(tab.value)}
-                                className={`press inline-flex min-h-[2.75rem] shrink-0 items-center gap-2 rounded-full px-4 text-[15px] transition-colors ${isActive
+                                className={`inline-flex min-h-[2.75rem] shrink-0 items-center gap-2 rounded-full px-4 text-[15px] transition-colors ${isActive
                                     ? 'bg-white/[0.07] text-[var(--text-1)]'
                                     : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
                                     }`}
@@ -152,7 +153,8 @@ export default function AnimeListContent({
                         menuClassName="z-[320]"
                         ariaLabel="Sort list"
                     />
-                    <div className="flex items-center gap-1 rounded-lg bg-white/[0.04] p-0.5">
+                    <div ref={viewPill.hostRef} className="pill-host flex items-center gap-1 rounded-lg bg-white/[0.04] p-0.5" style={{ '--pill-bg': 'rgb(255 255 255 / 0.08)', '--pill-radius': '0.375rem' }}>
+                        <span ref={viewPill.pillRef} aria-hidden="true" className="active-pill" />
                         <button
                             type="button"
                             onClick={() => setViewMode('grid')}
@@ -269,9 +271,6 @@ function AnimeListView({
                         />
                     ))}
                 </div>
-                {listsFetching && (
-                    <div className="pointer-events-none absolute inset-0 rounded-xl bg-dark/25 backdrop-blur-[1px]" aria-hidden="true" />
-                )}
             </div>
         );
     }
@@ -284,9 +283,6 @@ function AnimeListView({
                     : <ListRow key={item.id} item={item} episodesWatched={item.episodes_watched || 0} />
                 ))}
             </div>
-            {listsFetching && (
-                <div className="pointer-events-none absolute inset-0 rounded-xl bg-dark/25 backdrop-blur-[1px]" aria-hidden="true" />
-            )}
         </div>
     );
 }

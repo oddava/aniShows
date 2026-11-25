@@ -7,6 +7,10 @@ const DISMISS_DRAG_PX = 90;
 // A quick flick closes it too, even a short one (px per ms).
 const DISMISS_VELOCITY = 0.5;
 const FLICK_MIN_PX = 24;
+// A flick only counts if the finger was still moving when it lifted.
+const FLICK_RECENT_MS = 80;
+const BACKDROP_FADE_PX = 420;
+const backdropOpacity = (drag) => Math.max(0.25, 1 - drag / BACKDROP_FADE_PX);
 
 /**
  * A sheet that rises from the bottom edge (touch screens: menus and filters).
@@ -76,8 +80,9 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
         // Upward pulls give a little and stop (rubber band); downward follows the finger.
         setDrag(dy >= 0 ? dy : -Math.min(12, Math.sqrt(-dy) * 1.5));
     };
-    const onTouchEnd = () => {
-        const flicked = lastMove.current.v > DISMISS_VELOCITY && drag > FLICK_MIN_PX;
+    const onTouchEnd = (event) => {
+        const recent = event.timeStamp - lastMove.current.t <= FLICK_RECENT_MS;
+        const flicked = recent && lastMove.current.v > DISMISS_VELOCITY && drag > FLICK_MIN_PX;
         if (drag > DISMISS_DRAG_PX || flicked) {
             setReleaseAt(Math.max(0, drag));
             onClose?.();
@@ -87,9 +92,9 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
         dragStart.current = null;
         setDragging(false);
     };
-    const backdropStyle = drag > 0 && !closing
-        ? { opacity: Math.max(0.25, 1 - drag / 420), transition: dragging ? 'none' : undefined }
-        : undefined;
+    let backdropStyle;
+    if (closing) backdropStyle = releaseAt ? { '--backdrop-from': backdropOpacity(releaseAt) } : undefined;
+    else if (drag > 0) backdropStyle = { opacity: backdropOpacity(drag), transition: dragging ? 'none' : undefined };
     let panelStyle;
     if (closing) panelStyle = releaseAt ? { '--sheet-from': `${releaseAt}px` } : undefined;
     else if (drag) panelStyle = { transform: `translateY(${drag}px)`, transition: dragging ? 'none' : undefined };

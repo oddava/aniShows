@@ -49,8 +49,15 @@ export default function AnimeDetail() {
     const [isLargeViewport, setIsLargeViewport] = useState(() => (
         typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false
     ));
-    const [isBannerLoaded, setIsBannerLoaded] = useState(false);
-    const [isCoverLoaded, setIsCoverLoaded] = useState(false);
+    // Loaded flags belong to one show: they are stored with its slug, so a new
+    // show starts unloaded without a reset effect racing the image's own load
+    // event (a cached poster used to load first and then get blanked).
+    const [bannerLoadedSlug, setBannerLoadedSlug] = useState(null);
+    const [coverLoadedSlug, setCoverLoadedSlug] = useState(null);
+    const isBannerLoaded = bannerLoadedSlug === slug;
+    const isCoverLoaded = coverLoadedSlug === slug;
+    const setIsBannerLoaded = useCallback((loaded) => setBannerLoadedSlug(loaded ? slug : null), [slug]);
+    const setIsCoverLoaded = useCallback((loaded) => setCoverLoadedSlug(loaded ? slug : null), [slug]);
     const [synopsisExpanded, setSynopsisExpanded] = useState(false);
     const containerRef = useRef(null);
     const activeTabConfig = useMemo(() => getTabByPath(tabPath), [tabPath]);
@@ -161,11 +168,6 @@ export default function AnimeDetail() {
         queryClient.invalidateQueries({ queryKey: listKeys.all });
         queryClient.invalidateQueries({ queryKey: profileKeys.own });
     }, [anime?.id, animeDetailQueryKey, queryClient]);
-
-    useEffect(() => {
-        setIsBannerLoaded(false);
-        setIsCoverLoaded(false);
-    }, [slug]);
 
     useEffect(() => {
         if (tabPath && !activeTabConfig) {

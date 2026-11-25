@@ -31,6 +31,7 @@ a:focus-visible {
   box-shadow: 0 0 0 4px var(--color-focus-ring) !important;
 }
 
+/* Fields are borderless; their focus is a lighter fill (index.css). */
 input:focus,
 textarea:focus,
 select:focus,
@@ -39,7 +40,6 @@ textarea:focus-visible,
 select:focus-visible {
   outline: none !important;
   box-shadow: none !important;
-  border-color: var(--color-accent) !important;
 }
 
 .richtext-editor-textarea:focus,

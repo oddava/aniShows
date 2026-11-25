@@ -63,7 +63,7 @@ function ScoreCell({ score, title, onChange, disabled }) {
                 )}
             </button>
             {picker.mounted && (
-                <div data-state={picker.closing ? 'closing' : 'open'} className="popover-in absolute right-0 top-full z-30 mt-1 w-64 rounded-[var(--radius-md)] bg-[var(--ink-3)] p-2 shadow-[var(--shadow-pop)]">
+                <div data-state={picker.closing ? 'closing' : 'open'} data-side="bottom" className="popover-in absolute right-0 top-full z-30 mt-1 w-64 rounded-[var(--radius-md)] bg-[var(--ink-3)] p-2 shadow-[var(--shadow-pop)]">
                     <ScorePicker
                         value={score}
                         size="sm"

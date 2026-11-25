@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Download, LayoutGrid, Loader2, Rows3, Search, Tv } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -97,6 +97,7 @@ export default function Library() {
     const search = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
     const username = user?.username;
     const sentinel = useRef(null);
+    const queryClient = useQueryClient();
 
     useEffect(() => {
         try {
@@ -157,6 +158,18 @@ export default function Library() {
     const meta = status === ALL ? { label: 'All', value: ALL } : statusMeta(status);
     const tabs = [{ value: ALL, label: 'All', color: null }, ...LIST_STATUSES];
     const showSkeleton = isPending || !username;
+    // As many placeholders as the tab will hold (up to a screenful), so a
+    // short list does not flash a full grid that then collapses.
+    const expected = status === ALL ? summary?.total : summary?.counts?.[status];
+    const skeletonCount = (max) => (Number.isFinite(expected) ? Math.min(expected, max) : max);
+    // Pointing at a status tab loads its first page, so the switch is instant.
+    const warmStatus = (value) => {
+        if (!username || value === status) return;
+        queryClient.prefetchInfiniteQuery({
+            ...listQueries.paged(username, value === ALL ? undefined : value, search, ordering),
+            staleTime: 60 * 1000,
+        }).catch(() => {});
+    };
     const empty = !showSkeleton && !isError && entries.length === 0;
 
     return (
@@ -184,7 +197,7 @@ export default function Library() {
                 {/* Status tabs: fixed colours, one label each (T7), counts from the summary. */}
                 <nav ref={tabsRef} aria-label="List status" className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
                     <ul ref={statusPill.hostRef} className="pill-host flex min-w-max gap-1">
-                        <span ref={statusPill.pillRef} aria-hidden="true" className="active-pill" />
+                        <li ref={statusPill.pillRef} aria-hidden="true" role="presentation" className="active-pill" />
                         {tabs.map((item) => {
                             const active = item.value === status;
                             const count = item.value === ALL ? summary?.total : summary?.counts?.[item.value];
@@ -195,9 +208,11 @@ export default function Library() {
                                     <button
                                         type="button"
                                         onClick={() => setStatus(item.value)}
+                                        onPointerEnter={() => warmStatus(item.value)}
+                                        onFocus={() => warmStatus(item.value)}
                                         data-active-tab={active ? 'true' : undefined}
                                         aria-current={active ? 'page' : undefined}
-                                        className={`press relative flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${active ? 'bg-white/[0.07] text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-100'}`}
+                                        className={`relative flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${active ? 'bg-white/[0.07] text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-100'}`}
                                     >
                                         {item.color && <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />}
                                         {item.label}
@@ -240,7 +255,7 @@ export default function Library() {
                                 onClick={() => setView(option.id)}
                                 aria-pressed={view === option.id}
                                 aria-label={`${option.label} view`}
-                                className={`press flex h-10 w-11 items-center justify-center rounded-md transition-colors ${view === option.id ? 'bg-white/[0.1] text-white' : 'text-gray-400 hover:text-white'}`}
+                                className={`flex h-10 w-11 items-center justify-center rounded-md transition-colors ${view === option.id ? 'bg-white/[0.1] text-white' : 'text-gray-400 hover:text-white'}`}
                             >
                                 <option.icon aria-hidden="true" className="h-4 w-4" />
                             </button>
@@ -272,7 +287,7 @@ export default function Library() {
                     ) : view === 'grid' ? (
                         <div className={`grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 anime-card-grid-gap transition-opacity duration-200 ${isPlaceholderData ? 'opacity-60' : ''}`}>
                             {showSkeleton
-                                ? Array.from({ length: 12 }, (_, i) => <CardSkeleton key={i} />)
+                                ? Array.from({ length: skeletonCount(12) }, (_, i) => <CardSkeleton key={i} />)
                                 : entries.map((entry, index) => (
                                     <AnimeCard
                                         key={entry.id}
@@ -305,7 +320,7 @@ export default function Library() {
                                 )}
                             </div>
                             {showSkeleton ? (
-                                Array.from({ length: 8 }, (_, i) => <RowSkeleton key={i} />)
+                                Array.from({ length: skeletonCount(8) }, (_, i) => <RowSkeleton key={i} />)
                             ) : (
                                 <ul className={isPlaceholderData ? 'opacity-60' : ''}>
                                     {entries.map((entry) => <LibraryRow key={entry.id} entry={entry} quietStatus={status !== ALL} />)}

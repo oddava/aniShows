@@ -13,6 +13,7 @@ import useNavbarSearch from './navbar/useNavbarSearch';
 import useNavbarAutoHide from './navbar/useNavbarAutoHide';
 import useNavbarNotifications from './navbar/useNavbarNotifications';
 import useActivePill from '../hooks/useActivePill';
+import usePendingPath from '../hooks/usePendingPath';
 
 /** Desktop bell with the unread count, one click from anywhere (N1). */
 function NotificationBell({ count = 0 }) {
@@ -55,6 +56,8 @@ export default function Navbar() {
     const location = useLocation();
     const showNavSearch = location.pathname.replace(/\/+$/, '') !== '/browse';
     const navPill = useActivePill();
+    const pendingPath = usePendingPath();
+    const isCurrent = (to) => pendingPath === to || pendingPath.startsWith(`${to}/`);
 
     return (
         <>
@@ -76,10 +79,10 @@ export default function Navbar() {
                         <div className="hidden md:flex items-center gap-1 flex-1 ml-8">
                             <div ref={navPill.hostRef} className="pill-host flex items-center gap-1">
                                 <span ref={navPill.pillRef} aria-hidden="true" className="active-pill" />
-                                <NavItem to="/browse" label="Browse" />
-                                <NavItem to="/schedule" label="Schedule" />
+                                <NavItem to="/browse" active={isCurrent('/browse')} label="Browse" />
+                                <NavItem to="/schedule" active={isCurrent('/schedule')} label="Schedule" />
                                 {(isAuthenticated || authLoading) && (
-                                    <NavItem to="/list" label="My list" />
+                                    <NavItem to="/list" active={isCurrent('/list')} label="My list" />
                                 )}
                             </div>
 

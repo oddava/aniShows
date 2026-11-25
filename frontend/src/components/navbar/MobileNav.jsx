@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Bell, CalendarDays, Compass, Home, LibraryBig, LogIn } from 'lucide-react';
 import useActivePill from '../../hooks/useActivePill';
+import usePendingPath from '../../hooks/usePendingPath';
 
 const PILL_TARGET = '[aria-current="page"] > .tab-icon';
 
@@ -15,8 +16,9 @@ const MAIN_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/profile',
  * the bar (body padding in index.css, M1).
  */
 export default function MobileNav({ isAuthenticated, mobileUnreadCount = 0 }) {
-    const location = useLocation();
-    const path = location.pathname;
+    // The address, not the router's location: the tab answers the tap at
+    // once, even while the next page is still loading.
+    const path = usePendingPath();
     const pill = useActivePill(PILL_TARGET);
 
     const show = useMemo(() => MAIN_PATHS.some((item) => (
@@ -52,7 +54,7 @@ export default function MobileNav({ isAuthenticated, mobileUnreadCount = 0 }) {
                 className={`pill-host mx-auto grid h-[var(--tabbar-h)] max-w-md ${tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}
                 style={{ '--pill-radius': '999px', '--pill-bg': 'rgb(141 177 255 / 0.16)' }}
             >
-                <span ref={pill.pillRef} aria-hidden="true" className="active-pill" />
+                <li ref={pill.pillRef} aria-hidden="true" role="presentation" className="active-pill" />
                 {tabs.map(({ to, label, icon: Icon, badge }) => {
                     const active = isActive(to);
                     const name = badge > 0 ? `${label}, ${badge} unread` : label;

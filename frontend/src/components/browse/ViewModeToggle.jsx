@@ -1,5 +1,6 @@
 import { Grid3X3, List, LayoutGrid } from 'lucide-react';
 import PropTypes from 'prop-types';
+import useActivePill from '../../hooks/useActivePill';
 
 const VIEW_MODES = [
   { value: 'grid', label: 'Grid', icon: Grid3X3 },
@@ -8,8 +9,10 @@ const VIEW_MODES = [
 ];
 
 export default function ViewModeToggle({ viewMode, onChange, showLabels = false }) {
+  const pill = useActivePill();
   return (
-    <div role="group" aria-label="View" className="flex items-center rounded-lg bg-white/[0.05] p-0.5">
+    <div ref={pill.hostRef} role="group" aria-label="View" className="pill-host flex items-center rounded-lg bg-white/[0.05] p-0.5" style={{ '--pill-bg': 'rgb(255 255 255 / 0.1)', '--pill-radius': '0.375rem' }}>
+      <span ref={pill.pillRef} aria-hidden="true" className="active-pill" />
       {VIEW_MODES.map((mode) => {
         const Icon = mode.icon;
         const isActive = viewMode === mode.value;
@@ -17,6 +20,7 @@ export default function ViewModeToggle({ viewMode, onChange, showLabels = false 
         return (
           <button
             key={mode.value}
+            type="button"
             onClick={() => onChange(mode.value)}
             title={mode.label}
             aria-label={`${mode.label} view`}

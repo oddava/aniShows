@@ -4,11 +4,22 @@ import { useAuth } from '../../context/AuthContext';
 import { animeQueries } from '../../api/queries/anime';
 import { registerDataPrefetch } from '../../app/routePrefetch';
 import { getImageSrcSet, getOptimizedImageUrl } from '../../utils/imageUtils';
+import {
+    DETAIL_RELATION_PAGE_SIZE,
+    WATCH_TAB_PAGE_SIZE,
+} from '../animeDetail/animeDetailTabs';
 
 // Same freshness the anime page asks for, so a prefetched page renders from
 // cache without a second request.
 const DETAIL_STALE_MS = 300000;
-const ANIME_PATH = /^\/anime\/([^/]+)\/?/;
+const ANIME_PATH = /^\/anime\/([^/]+)(?:\/([^/]+))?\/?$/;
+
+// A tab link warms that tab's first page (same options as the tab's query).
+const TAB_QUERIES = {
+    characters: (slug) => ({ ...animeQueries.characters(slug, DETAIL_RELATION_PAGE_SIZE), staleTime: Infinity }),
+    staff: (slug) => ({ ...animeQueries.staff(slug, DETAIL_RELATION_PAGE_SIZE), staleTime: Infinity }),
+    watch: (slug) => ({ ...animeQueries.watchEpisodes(slug, WATCH_TAB_PAGE_SIZE), staleTime: DETAIL_STALE_MS }),
+};
 
 const warmed = new Set();
 
@@ -43,6 +54,8 @@ export default function DataPrefetch() {
             const match = ANIME_PATH.exec(path);
             if (!match) return;
             const slug = decodeURIComponent(match[1]);
+            const tabQuery = match[2] && TAB_QUERIES[match[2]];
+            if (tabQuery) queryClient.prefetchInfiniteQuery(tabQuery(slug)).catch(() => {});
             const options = animeQueries.detail(slug, viewerId);
             queryClient
                 .prefetchQuery({ ...options, staleTime: DETAIL_STALE_MS })

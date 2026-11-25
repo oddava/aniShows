@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import usePresence from '../../hooks/usePresence';
 
 const ADULT_GENRES = new Set(['ecchi', 'hentai']);
 
@@ -83,7 +84,7 @@ function SelectField({ label, value, onChange, options, anyLabel = 'Any' }) {
         <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="popover-in absolute left-0 right-0 top-full z-40 mt-2 rounded-xl bg-[var(--ink-3)] p-1.5 shadow-[var(--shadow-pop)]">
+        <div data-side="bottom" data-align="center" className="popover-in absolute left-0 right-0 top-full z-40 mt-2 rounded-xl bg-[var(--ink-3)] p-1.5 shadow-[var(--shadow-pop)]">
           {searchable && (
             <div className="relative mb-1">
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-3)]" />
@@ -216,6 +217,8 @@ export default function AdvancedFiltersPanel({
   // Escape closes, focus returns to Filters). Desktop: an inline panel.
   const isSheet = useMediaQuery('(max-width: 639px)');
   const trapRef = useFocusTrap(isOpen && isSheet, onClose);
+  // Stays mounted for its closing motion (slide down on phones, fade on desktop).
+  const presence = usePresence(isOpen, 220);
   // Closing the sheet hands focus back to whatever opened it.
   const openerRef = useRef(null);
   useEffect(() => {
@@ -251,18 +254,18 @@ export default function AdvancedFiltersPanel({
     return () => document.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!presence.mounted) return null;
 
   const section = 'mt-7 first:mt-0';
 
   return (
-    <div className="fixed inset-0 z-[1100] flex flex-col bg-[var(--ink-0)] sm:static sm:z-auto sm:mb-6 sm:block sm:bg-transparent">
+    <div data-state={presence.closing ? 'closing' : 'open'} className="fixed inset-0 z-[1100] flex flex-col bg-[var(--ink-0)] sm:static sm:z-auto sm:mb-6 sm:block sm:bg-transparent">
       <div
         ref={trapRef}
         role={isSheet ? 'dialog' : 'region'}
         aria-modal={isSheet ? 'true' : undefined}
         aria-label={isSheet ? 'Filters' : 'More filters'}
-        className="popover-in flex min-h-0 flex-1 flex-col sm:block sm:rounded-[var(--radius-lg)] sm:bg-[var(--ink-1)]"
+        className="filters-panel flex min-h-0 flex-1 flex-col sm:block sm:rounded-[var(--radius-lg)] sm:bg-[var(--ink-1)]"
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-4 sm:px-6 sm:pt-5">

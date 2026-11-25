@@ -37,7 +37,9 @@ export default function CategoryRow({
                                 <AnimeCard
                                     anime={anime}
                                     titleLanguage={titleLanguage}
+                                    index={index}
                                     priority={index < eagerCount}
+                                    eagerFirstSix={false}
                                     showMeta
                                 />
                             </div>

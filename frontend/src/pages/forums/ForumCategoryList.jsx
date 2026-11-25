@@ -16,6 +16,7 @@ import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import { ForumCategoryPageSkeleton, ThreadListSkeleton } from '../../components/forums/ForumSkeletons';
 import ThreadRow, { forumTabClass } from '../../components/forums/ThreadRow';
 import { forumQueries } from '../../api/queries/forums';
+import useActivePill from '../../hooks/useActivePill';
 
 const getTimeAgo = (dateString) => {
     if (!dateString) return 'recently';
@@ -48,6 +49,7 @@ RailThreadItem.displayName = 'RailThreadItem';
 const ForumCategoryList = () => {
     const { isAuthenticated } = useAuth();
     const [activeTab, setActiveTab] = useState('active');
+    const sortPill = useActivePill('[aria-pressed="true"]');
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [page, setPage] = useState(1);
@@ -328,7 +330,8 @@ const ForumCategoryList = () => {
                                     className="forum-field min-h-11 py-2.5 pl-10 pr-3 text-sm"
                                 />
                             </label>
-                            <div role="group" aria-label="Sort threads" className="flex items-center gap-1">
+                            <div ref={sortPill.hostRef} role="group" aria-label="Sort threads" className="pill-host flex items-center gap-1">
+                                <span ref={sortPill.pillRef} aria-hidden="true" className="active-pill" />
                                 <button
                                     type="button"
                                     onClick={() => setActiveTab('active')}

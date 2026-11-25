@@ -1,11 +1,14 @@
 import React from 'react';
+import { useDelayedLoading } from '../hooks/useDelayedLoading';
 
 /**
  * Top loading progress bar component
- * Shows animated progress during loading states
+ * Shows animated progress during loading states, once they have lasted
+ * 250 ms, so a quick fetch never flashes it.
  */
 export function LoadingBar({ isLoading }) {
-    if (!isLoading) return null;
+    const show = useDelayedLoading(Boolean(isLoading), 250);
+    if (!isLoading || !show) return null;
 
     return (
         <div className="fixed top-0 left-0 right-0 h-1 z-[100] overflow-hidden">

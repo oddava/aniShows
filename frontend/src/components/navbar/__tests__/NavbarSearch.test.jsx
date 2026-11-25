@@ -55,10 +55,21 @@ describe('NavbarSearch', () => {
         await import('../SearchSuggestionList');
     });
 
-    it('shows the spinner while the first search is in flight', () => {
+    it('shows the spinner only once the first search has taken a moment', async () => {
         render(<NavbarSearch search={searchState({ isSearching: true })} />);
 
-        expect(screen.getByText('Searching…')).toBeInTheDocument();
+        // A fast search never flashes it; a slow one shows it after 250 ms.
+        expect(screen.queryByText('Searching…')).not.toBeInTheDocument();
+        expect(await screen.findByText('Searching…')).toBeInTheDocument();
+    });
+
+    it('keeps the previous results up while a refined query loads', async () => {
+        render(<NavbarSearch search={searchState({ isSearching: true, searchSuggestions: SUGGESTIONS })} />);
+
+        expect(await screen.findByRole('option', { name: /Fire Force/ }, { timeout: 5000 })).toBeInTheDocument();
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        expect(screen.getByRole('option', { name: /Fire Force/ })).toBeInTheDocument();
+        expect(screen.queryByText('Searching…')).not.toBeInTheDocument();
     });
 
     it('shows the no-matches state with a way to search all anime', () => {

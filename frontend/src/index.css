@@ -445,15 +445,15 @@
   }
 
   .ui-pill-button {
-    @apply rounded-lg border border-gray-800 bg-dark-100 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-white/20 hover:text-white;
+    @apply rounded-lg bg-dark-100 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-dark-200 hover:text-white;
   }
 
   .ui-icon-button {
-    @apply flex h-11 w-11 items-center justify-center rounded-lg border border-gray-800 bg-dark-100 text-gray-400 transition-colors hover:border-white/20 hover:text-white;
+    @apply flex h-11 w-11 items-center justify-center rounded-lg bg-dark-100 text-gray-400 transition-colors hover:bg-dark-200 hover:text-white;
   }
 
   .ui-avatar-fallback {
-    @apply flex items-center justify-center rounded-xl border border-gray-800 bg-dark-200 font-semibold text-gray-500;
+    @apply flex items-center justify-center rounded-xl bg-dark-200 font-semibold text-gray-500;
   }
 
   .anime-card-grid-gap {
@@ -649,6 +649,14 @@
 
   .divide-white\/\[0\.04\] > :not([hidden]) ~ :not([hidden]) {
     border-color: var(--color-border-subtle) !important;
+  }
+
+  /* Sliding active fill (hooks/useActivePill): once the pill is placed, the
+     current item drops its own fill. In this layer and more specific, so it
+     outranks the legacy !important fills above (an !important inside a layer
+     beats an unlayered one). */
+  .pill-host[data-pill-ready] :is([aria-current="page"], [aria-selected="true"], [aria-pressed="true"], [data-active="true"]) {
+    background-color: transparent !important;
   }
 }
 

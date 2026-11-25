@@ -233,6 +233,8 @@ export default function QuickAdd({
                     id={menuId}
                     ref={menuRef}
                     data-state={popover.closing ? 'closing' : 'open'}
+                    data-side={placement === 'down' ? 'bottom' : 'top'}
+                    data-align={variant === 'button' ? 'center' : 'end'}
                     style={variant === 'button' || !nudge ? undefined : { right: -nudge }}
                     className={`popover-in absolute ${variant === 'button' ? 'left-0 right-0 min-w-52' : 'right-0 w-52'} z-[300] rounded-[var(--radius-md)] bg-[var(--ink-3)] p-1 shadow-[var(--shadow-pop)] ${placement === 'down' ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                 >

@@ -13,7 +13,7 @@ const WATCHED = ['aria-current', 'aria-selected', 'aria-pressed', 'data-active']
  * aria-selected, aria-pressed) or `data-active="true"`; `selector` narrows it
  * to a part of that item (the phone tab bar puts the pill behind the icon).
  *
- * The pill is placed with transform/width only, follows resizes and state
+ * The pill moves with transform only (size changes use FLIP), follows resizes and state
  * changes without a re-render of its own, and starts animating only after it
  * has been placed once, so it never flies in from the corner.
  */
@@ -57,8 +57,25 @@ export default function useActivePill(selector = ACTIVE) {
                 x = a.left - h.left + host.scrollLeft - host.clientLeft;
                 y = a.top - h.top + host.scrollTop - host.clientTop;
             }
-            pill.style.width = `${width}px`;
-            pill.style.height = `${height}px`;
+            const sizeChanged = pill.offsetWidth !== width || pill.offsetHeight !== height;
+            if (placed && sizeChanged && host.hasAttribute('data-pill-animate') && pill.style.opacity === '1') {
+                // FLIP, so only transform animates: take the new size at once,
+                // start it scaled back to what is on screen now (even mid-glide),
+                // then let it settle to scale 1 at the new spot.
+                const h = host.getBoundingClientRect();
+                const p = pill.getBoundingClientRect();
+                const fromX = p.left - h.left + host.scrollLeft - host.clientLeft;
+                const fromY = p.top - h.top + host.scrollTop - host.clientTop;
+                pill.style.transition = 'none';
+                pill.style.width = `${width}px`;
+                pill.style.height = `${height}px`;
+                pill.style.transform = `translate3d(${fromX}px, ${fromY}px, 0) scale(${p.width / width}, ${p.height / height})`;
+                pill.getBoundingClientRect();
+                pill.style.transition = '';
+            } else {
+                pill.style.width = `${width}px`;
+                pill.style.height = `${height}px`;
+            }
             pill.style.transform = `translate3d(${x}px, ${y}px, 0)`;
             pill.style.opacity = '1';
             if (!placed) {

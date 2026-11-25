@@ -208,7 +208,7 @@ export default function ContinueSection() {
         ...userQueries.watching(),
         staleTime: 60 * 1000,
     });
-    const { data: summary } = useQuery({
+    const { data: summary, isPending: summaryQueryPending } = useQuery({
         ...listQueries.summary(user?.username),
         enabled: Boolean(user?.username),
         staleTime: 60 * 1000,
@@ -260,6 +260,7 @@ export default function ContinueSection() {
         () => (rows.length === 0 ? airingPreview(scheduleDays, timezone, now, 8).filter((row) => !row.aired).slice(0, 4) : []),
         [rows.length, scheduleDays, timezone, now],
     );
+    const summaryPending = Boolean(user?.username) && summaryQueryPending;
     const summaryLine = isPending
         ? ''
         : rows.length === 0
@@ -273,8 +274,22 @@ export default function ContinueSection() {
             <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)] md:gap-16">
                 <div className="min-w-0">
                     <h1 className="page-title break-words">{user?.username || 'Welcome back'}</h1>
-                    <p className="mt-3 max-w-sm text-[17px] leading-relaxed text-[var(--text-2)]">{summaryLine}</p>
-                    {summary?.total > 0 && (
+                    {/* Two lines are held for the summary and one for the
+                        counts while they load, so nothing below moves when
+                        they land (most of the text fits in that space). */}
+                    <p className="mt-3 min-h-[3.25em] max-w-sm text-[17px] leading-relaxed text-[var(--text-2)]">
+                        {isPending ? (
+                            <span aria-hidden="true" className="block">
+                                <span className="block py-[0.3em]"><span className="skeleton-shimmer block h-[1.025em] w-[90%] rounded-md" /></span>
+                                <span className="block py-[0.3em]"><span className="skeleton-shimmer block h-[1.025em] w-3/5 rounded-md" /></span>
+                            </span>
+                        ) : summaryLine}
+                    </p>
+                    {summaryPending ? (
+                        <p aria-hidden="true" className="mt-3 text-[15px] text-[var(--text-3)]">
+                            <span className="skeleton-shimmer inline-block h-[1em] w-52 rounded-md align-middle" />
+                        </p>
+                    ) : summary?.total > 0 && (
                         <p className="mt-3 text-[15px] text-[var(--text-3)] tabular">
                             {summary.total} on your list · {(summary.episodes_watched || 0) + episodeDelta} episodes watched
                         </p>

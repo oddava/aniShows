@@ -49,6 +49,10 @@ function AnimeCard({
     showProgress = false,
     variant = 'poster',
     showStatusDot = true,
+    // The first six cards of a grid load eagerly (they are on screen). Rows
+    // that decide for themselves (Browse shelves: only the first shelf) say
+    // so with `priority` and turn this off.
+    eagerFirstSix = true,
 }) {
     const { isAuthenticated } = useAuth();
     const listEntry = userListEntry || anime.user_list_status || null;
@@ -108,7 +112,7 @@ function AnimeCard({
         return [anime.anime_type, Number.isFinite(year) ? year : null].filter(Boolean).join(' · ') || null;
     }, [metaText, showMeta, anime.anime_type, anime.release_date]);
 
-    const loading = priority || index < 6 ? 'eager' : 'lazy';
+    const loading = priority || (eagerFirstSix && index < 6) ? 'eager' : 'lazy';
     const href = `/anime/${anime.slug}`;
     const smallUrl = getOptimizedImageUrl(anime, 'cover', 'small');
     const placeholderUrl = !lite && smallUrl && smallUrl !== imageUrl ? smallUrl : null;
@@ -231,7 +235,7 @@ function AnimeCard({
 
                 {percent !== null && !showProgress && (
                     <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-[var(--radius-md)] bg-black/50">
-                        <span className="progress-fill block h-full bg-[var(--status-watching)]" style={{ width: `${percent}%` }} />
+                        <span className="progress-fill block h-full bg-[var(--status-watching)]" style={{ '--progress': percent / 100 }} />
                     </span>
                 )}
 
@@ -299,6 +303,7 @@ const arePropsEqual = (prev, next) => {
     if (prev.showProgress !== next.showProgress) return false;
     if (prev.variant !== next.variant) return false;
     if (prev.showStatusDot !== next.showStatusDot) return false;
+    if (prev.eagerFirstSix !== next.eagerFirstSix) return false;
     if (prev.anime.episode_count !== next.anime.episode_count) return false;
     if (prev.anime.next_airing_date !== next.anime.next_airing_date) return false;
 

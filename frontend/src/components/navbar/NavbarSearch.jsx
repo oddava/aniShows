@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from 'react';
 import { Loader2, Search, X } from 'lucide-react';
 import logger from '../../utils/logger';
+import { useDelayedLoading } from '../../hooks/useDelayedLoading';
 import { MIN_SEARCH_LENGTH } from './useAnimeSearchSuggestions';
 
 // The result rows (images, highlighting) load in their own chunk, kept out of
@@ -65,6 +66,10 @@ export default function NavbarSearch({ search }) {
         handleSearch,
         handleSearchBlur,
     } = search;
+    // A quick search never flashes "Searching…"; a slow one shows it after
+    // 250 ms. While a refined query loads, the previous results stay up,
+    // slightly dimmed, instead of giving way to a spinner.
+    const slowSearch = useDelayedLoading(isSearching, 250);
 
     useEffect(() => {
         if (isSearchExpanded || showSuggestions) {
@@ -138,20 +143,21 @@ export default function NavbarSearch({ search }) {
                     className={`absolute right-0 top-full z-50 mt-2 max-h-[70vh] w-[22rem] overflow-y-auto overflow-hidden rounded-xl bg-[var(--ink-3)] shadow-[var(--shadow-pop)] transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] origin-top ${showSuggestions ? 'opacity-100 translate-y-0' : 'pointer-events-none opacity-0 -translate-y-1'
                         }`}
                 >
-                    {isSearching && searchSuggestions.length === 0 ? (
-                        // Loading state - show previous results or skeleton
-                        <SearchingIndicator />
-                    ) : searchSuggestions.length > 0 ? (
-                        <Suspense fallback={<SearchingIndicator />}>
-                            <SearchSuggestionList
-                                searchSuggestions={searchSuggestions}
-                                searchQuery={searchQuery}
-                                selectedIndex={selectedIndex}
-                                setSelectedIndex={setSelectedIndex}
-                                handleSuggestionClick={handleSuggestionClick}
-                                handleSearch={handleSearch}
-                            />
-                        </Suspense>
+                    {searchSuggestions.length > 0 ? (
+                        <div aria-busy={isSearching || undefined} className={`transition-opacity duration-150 ${slowSearch ? 'opacity-70' : ''}`}>
+                            <Suspense fallback={<SearchingIndicator />}>
+                                <SearchSuggestionList
+                                    searchSuggestions={searchSuggestions}
+                                    searchQuery={searchQuery}
+                                    selectedIndex={selectedIndex}
+                                    setSelectedIndex={setSelectedIndex}
+                                    handleSuggestionClick={handleSuggestionClick}
+                                    handleSearch={handleSearch}
+                                />
+                            </Suspense>
+                        </div>
+                    ) : isSearching ? (
+                        slowSearch ? <SearchingIndicator /> : null
                     ) : noMatches ? (
                         <SearchNoMatches query={searchQuery.trim()} onSearchAll={handleSearch} />
                     ) : null}
