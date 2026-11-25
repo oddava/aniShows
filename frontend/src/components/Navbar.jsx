@@ -12,6 +12,7 @@ import MobileTopBar from './navbar/MobileTopBar';
 import useNavbarSearch from './navbar/useNavbarSearch';
 import useNavbarAutoHide from './navbar/useNavbarAutoHide';
 import useNavbarNotifications from './navbar/useNavbarNotifications';
+import useActivePill from '../hooks/useActivePill';
 
 /** Desktop bell with the unread count, one click from anywhere (N1). */
 function NotificationBell({ count = 0 }) {
@@ -53,6 +54,7 @@ export default function Navbar() {
     // Browse has its own search box at the top of the page; one is enough.
     const location = useLocation();
     const showNavSearch = location.pathname.replace(/\/+$/, '') !== '/browse';
+    const navPill = useActivePill();
 
     return (
         <>
@@ -72,11 +74,14 @@ export default function Navbar() {
 
                         {/* Desktop Nav */}
                         <div className="hidden md:flex items-center gap-1 flex-1 ml-8">
-                            <NavItem to="/browse" label="Browse" />
-                            <NavItem to="/schedule" label="Schedule" />
-                            {(isAuthenticated || authLoading) && (
-                                <NavItem to="/list" label="My list" />
-                            )}
+                            <div ref={navPill.hostRef} className="pill-host flex items-center gap-1">
+                                <span ref={navPill.pillRef} aria-hidden="true" className="active-pill" />
+                                <NavItem to="/browse" label="Browse" />
+                                <NavItem to="/schedule" label="Schedule" />
+                                {(isAuthenticated || authLoading) && (
+                                    <NavItem to="/list" label="My list" />
+                                )}
+                            </div>
 
                             {/* Search - Collapsible */}
                             {showNavSearch ? <NavbarSearch search={search} /> : <div className="flex-1" />}

@@ -24,6 +24,7 @@ import TitleSection from '../components/animeDetail/TitleSection';
 import AnimeDetailTabContent from '../components/animeDetail/AnimeDetailTabContent';
 import ReviewsSection from '../components/animeDetail/ReviewsSection';
 import RecommendationsSidebar from '../components/animeDetail/RecommendationsSidebar';
+import useActivePill from '../hooks/useActivePill';
 import useAnimeDetailTabData from '../components/animeDetail/useAnimeDetailTabData';
 import useNearViewport from '../components/animeDetail/useNearViewport';
 import useAnimeReviews from '../components/animeDetail/useAnimeReviews';
@@ -55,6 +56,7 @@ export default function AnimeDetail() {
     const activeTabConfig = useMemo(() => getTabByPath(tabPath), [tabPath]);
     const activeTab = activeTabConfig?.id || DEFAULT_TAB_ID;
     const tabStripRef = useScrollFade();
+    const tabPill = useActivePill();
     const animeDetailQueryKey = useMemo(() => animeKeys.detail(slug, user?.id), [slug, user?.id]);
 
     // Queries
@@ -102,6 +104,10 @@ export default function AnimeDetail() {
     // Handlers
     const handleFavorite = useCallback(async () => {
         if (!isAuthenticated) return;
+        // Optimistic: the heart answers the click at once; the server's answer
+        // (or a failure) settles it.
+        const previous = isFavorite;
+        setIsFavorite(!previous);
         try {
             const response = await favoriteApi.toggle(anime.id);
             setIsFavorite(response.data.is_favorite);
@@ -112,9 +118,10 @@ export default function AnimeDetail() {
                 queryClient.invalidateQueries({ queryKey: favoriteKeys.overview(user.username) });
             }
         } catch (error) {
+            setIsFavorite(previous);
             logger.error('Error toggling favorite:', error);
         }
-    }, [isAuthenticated, anime?.id, user, queryClient]);
+    }, [isAuthenticated, isFavorite, anime?.id, user, queryClient]);
 
 
     useEffect(() => {
@@ -250,6 +257,7 @@ export default function AnimeDetail() {
 
             {/* Banner */}
             <div className="relative h-[34vh] min-h-[260px] overflow-hidden bg-[var(--ink-1)] lg:h-[40vh] lg:min-h-[300px]">
+                <div className="hero-drift absolute inset-0 origin-top">
                 <img
                     src={bannerUrl}
                     srcSet={bannerSrcSet}
@@ -260,8 +268,9 @@ export default function AnimeDetail() {
                         setIsBannerLoaded(false);
                         applyImageFallback(event, bannerFallbackUrl);
                     }}
-                    className={`w-full h-full object-cover text-transparent transition-opacity duration-700 ease-out ${isBannerLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isBannerLoaded ? 'opacity-100' : 'opacity-0'}`}
                 />
+                </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/50 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-dark/80 via-transparent to-transparent" />
             </div>
@@ -293,16 +302,19 @@ export default function AnimeDetail() {
                                 className={`scroll-fade -mx-4 mb-4 flex items-center gap-1 overflow-x-auto scrollbar-hide px-4 md:mx-0 md:pl-0 md:pr-6 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : ''}`}
                                 data-title="Navigation"
                             >
-                                {tabsWithCounts.map((tab) => (
-                                    <TabButton
-                                        key={tab.id}
-                                        tab={tab}
-                                        isActive={activeTab === tab.id}
-                                        to={getTabHref(slug, tab.id)}
-                                        accentColor={mappedAccent}
-                                        count={tab.count}
-                                    />
-                                ))}
+                                <div ref={tabPill.hostRef} className="pill-host flex shrink-0 items-center gap-1">
+                                    <span ref={tabPill.pillRef} aria-hidden="true" className="active-pill" />
+                                    {tabsWithCounts.map((tab) => (
+                                        <TabButton
+                                            key={tab.id}
+                                            tab={tab}
+                                            isActive={activeTab === tab.id}
+                                            to={getTabHref(slug, tab.id)}
+                                            accentColor={mappedAccent}
+                                            count={tab.count}
+                                        />
+                                    ))}
+                                </div>
                             </nav>
 
                             {/* Tab Content */}

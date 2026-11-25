@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Bell, CalendarDays, Compass, Home, LibraryBig, LogIn } from 'lucide-react';
+import useActivePill from '../../hooks/useActivePill';
+
+const PILL_TARGET = '[aria-current="page"] > .tab-icon';
 
 const MAIN_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/profile', '/u', '/settings', '/notifications', '/import'];
 
@@ -14,6 +17,7 @@ const MAIN_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/profile',
 export default function MobileNav({ isAuthenticated, mobileUnreadCount = 0 }) {
     const location = useLocation();
     const path = location.pathname;
+    const pill = useActivePill(PILL_TARGET);
 
     const show = useMemo(() => MAIN_PATHS.some((item) => (
         item === '/' ? path === '/' : path === item || path.startsWith(`${item}/`)
@@ -43,7 +47,12 @@ export default function MobileNav({ isAuthenticated, mobileUnreadCount = 0 }) {
             aria-label="Primary"
             className="md:hidden fixed inset-x-0 bottom-0 z-[1001] bg-[rgb(14_16_20/0.94)] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl select-none"
         >
-            <ul className={`mx-auto grid h-[var(--tabbar-h)] max-w-md ${tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}>
+            <ul
+                ref={pill.hostRef}
+                className={`pill-host mx-auto grid h-[var(--tabbar-h)] max-w-md ${tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}
+                style={{ '--pill-radius': '999px', '--pill-bg': 'rgb(141 177 255 / 0.16)' }}
+            >
+                <span ref={pill.pillRef} aria-hidden="true" className="active-pill" />
                 {tabs.map(({ to, label, icon: Icon, badge }) => {
                     const active = isActive(to);
                     const name = badge > 0 ? `${label}, ${badge} unread` : label;
@@ -53,12 +62,12 @@ export default function MobileNav({ isAuthenticated, mobileUnreadCount = 0 }) {
                                 to={to}
                                 aria-current={active ? 'page' : undefined}
                                 aria-label={badge > 0 ? name : undefined}
-                                className={`relative flex min-h-11 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors [-webkit-tap-highlight-color:transparent] ${active ? 'text-white' : 'text-gray-400 active:text-white'}`}
+                                className={`relative flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors [-webkit-tap-highlight-color:transparent] ${active ? 'text-white' : 'text-gray-400 active:text-white'}`}
                             >
-                                <span className="relative">
-                                    <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={active ? 2.2 : 1.8} />
+                                <span className="tab-icon relative flex h-8 w-14 items-center justify-center rounded-full">
+                                    <Icon aria-hidden="true" className={`h-5 w-5 transition-colors duration-200 ${active ? 'text-[var(--signature)]' : ''}`} strokeWidth={active ? 2.2 : 1.8} />
                                     {badge > 0 && (
-                                        <span aria-hidden="true" className="absolute -right-2.5 -top-1.5 min-w-[16px] rounded-full bg-[var(--signature)] px-1 text-center text-[10px] font-bold leading-4 text-[var(--on-signature)]">
+                                        <span aria-hidden="true" className="absolute right-2 -top-1 min-w-[16px] rounded-full bg-[var(--signature)] px-1 text-center text-[10px] font-bold leading-4 text-[var(--on-signature)]">
                                             {badge > 9 ? '9+' : badge}
                                         </span>
                                     )}

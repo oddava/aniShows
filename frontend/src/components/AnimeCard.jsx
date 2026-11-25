@@ -231,7 +231,7 @@ function AnimeCard({
 
                 {percent !== null && !showProgress && (
                     <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-[var(--radius-md)] bg-black/50">
-                        <span className="block h-full bg-[var(--status-watching)]" style={{ width: `${percent}%` }} />
+                        <span className="progress-fill block h-full bg-[var(--status-watching)]" style={{ width: `${percent}%` }} />
                     </span>
                 )}
 

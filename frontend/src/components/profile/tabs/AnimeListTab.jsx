@@ -17,6 +17,7 @@ import {
 } from '../../../utils/imageUtils';
 import { LIST_STATUSES, statusLabel } from '../../../utils/listStatus';
 import useScrollFade from '../../../hooks/useScrollFade';
+import useActivePill from '../../../hooks/useActivePill';
 
 // Status tabs: labels and colours from utils/listStatus, like everywhere else.
 const STATUS_TABS = LIST_STATUSES;
@@ -93,12 +94,14 @@ export default function AnimeListContent({
     const totalCount = data?.pages?.[0]?.count ?? items.length;
     const listsFetching = isFetching && !isFetchingNextPage;
     const fadeRef = useScrollFade();
+    const statusPill = useActivePill();
     const currentLabel = statusLabel(listStatusFilter);
 
     return (
         <div className="space-y-6 animate-tab-content">
             <div ref={fadeRef} className="scroll-fade -mx-1 overflow-x-auto scrollbar-hide px-1">
-                <div className="flex w-max gap-2">
+                <div ref={statusPill.hostRef} className="pill-host flex w-max gap-2" style={{ '--pill-radius': '999px' }}>
+                    <span ref={statusPill.pillRef} aria-hidden="true" className="active-pill" />
                     {STATUS_TABS.map((tab) => {
                         const isActive = listStatusFilter === tab.value;
                         const count = summary?.counts?.[tab.value];
@@ -111,7 +114,7 @@ export default function AnimeListContent({
                                 type="button"
                                 aria-pressed={isActive}
                                 onClick={() => setListStatusFilter(tab.value)}
-                                className={`inline-flex min-h-[2.75rem] shrink-0 items-center gap-2 rounded-full px-4 text-[15px] transition-colors ${isActive
+                                className={`press inline-flex min-h-[2.75rem] shrink-0 items-center gap-2 rounded-full px-4 text-[15px] transition-colors ${isActive
                                     ? 'bg-white/[0.07] text-[var(--text-1)]'
                                     : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
                                     }`}

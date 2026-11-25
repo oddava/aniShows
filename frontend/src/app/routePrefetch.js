@@ -45,27 +45,76 @@ export function prefetchCommonRoutes() {
     else window.setTimeout(run, 2500);
 }
 
-/** Internal links prefetch their page on hover, focus or touch. */
+// Page data, not just page code: components/common/DataPrefetch.jsx registers
+// a function that warms the query cache for a path (e.g. /anime/:slug).
+let dataPrefetcher = null;
+
+export function registerDataPrefetch(fn) {
+    dataPrefetcher = fn;
+    return () => {
+        if (dataPrefetcher === fn) dataPrefetcher = null;
+    };
+}
+
+// A pointer that rests on a link this long is aiming for it; a pointer that
+// sweeps across a grid of posters is not, and starts no requests.
+const HOVER_INTENT_MS = 70;
+
+/**
+ * Internal links prefetch their page code on hover, focus or touch, and
+ * their data once the pointer rests on them (focus and touch: at once).
+ */
 export function installLinkPrefetch() {
     if (typeof document === 'undefined') return () => {};
+    let intentTimer = null;
+    let intentAnchor = null;
+
+    const sameOriginPath = (anchor) => {
+        if (!anchor || anchor.target === '_blank') return null;
+        try {
+            const url = new URL(anchor.href, window.location.href);
+            return url.origin === window.location.origin ? url.pathname : null;
+        } catch {
+            return null;
+        }
+    };
+
     const onIntent = (event) => {
         const anchor = event.target?.closest?.('a[href]');
-        if (!anchor || anchor.target === '_blank') return;
-        let url;
-        try {
-            url = new URL(anchor.href, window.location.href);
-        } catch {
+        const path = sameOriginPath(anchor);
+        if (!path) return;
+        prefetchRoute(path);
+        if (!dataPrefetcher) return;
+        if (event.type !== 'pointerover') {
+            dataPrefetcher(path);
             return;
         }
-        if (url.origin !== window.location.origin) return;
-        prefetchRoute(url.pathname);
+        if (anchor === intentAnchor) return;
+        clearTimeout(intentTimer);
+        intentAnchor = anchor;
+        intentTimer = setTimeout(() => {
+            intentTimer = null;
+            if (intentAnchor === anchor) dataPrefetcher?.(path);
+        }, HOVER_INTENT_MS);
+    };
+    const onLeave = (event) => {
+        if (!intentAnchor) return;
+        const to = event.relatedTarget;
+        if (to && intentAnchor.contains(to)) return;
+        if (event.target?.closest?.('a[href]') !== intentAnchor) return;
+        clearTimeout(intentTimer);
+        intentTimer = null;
+        intentAnchor = null;
     };
     const options = { passive: true, capture: true };
     document.addEventListener('pointerover', onIntent, options);
+    document.addEventListener('pointerout', onLeave, options);
     document.addEventListener('focusin', onIntent, options);
     document.addEventListener('touchstart', onIntent, options);
     return () => {
+        clearTimeout(intentTimer);
         document.removeEventListener('pointerover', onIntent, options);
+        document.removeEventListener('pointerout', onLeave, options);
         document.removeEventListener('focusin', onIntent, options);
         document.removeEventListener('touchstart', onIntent, options);
     };

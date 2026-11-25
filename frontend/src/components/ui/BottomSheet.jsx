@@ -4,6 +4,9 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 const CLOSE_MS = 220;
 const DISMISS_DRAG_PX = 90;
+// A quick flick closes it too, even a short one (px per ms).
+const DISMISS_VELOCITY = 0.5;
+const FLICK_MIN_PX = 24;
 
 /**
  * A sheet that rises from the bottom edge (touch screens: menus and filters).
@@ -15,7 +18,11 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
     const [mounted, setMounted] = useState(open);
     const [closing, setClosing] = useState(false);
     const [drag, setDrag] = useState(0);
+    // Where the finger let go: the closing slide continues from there.
+    const [releaseAt, setReleaseAt] = useState(0);
+    const [dragging, setDragging] = useState(false);
     const dragStart = useRef(null);
+    const lastMove = useRef({ y: 0, t: 0, v: 0 });
     const headingId = useId();
 
     useEffect(() => {
@@ -23,6 +30,7 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
             setMounted(true);
             setClosing(false);
             setDrag(0);
+            setReleaseAt(0);
             return undefined;
         }
         if (!mounted) return undefined;
@@ -55,16 +63,36 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
 
     const onTouchStart = (event) => {
         dragStart.current = event.touches[0].clientY;
+        lastMove.current = { y: event.touches[0].clientY, t: event.timeStamp, v: 0 };
+        setDragging(true);
     };
     const onTouchMove = (event) => {
         if (dragStart.current === null) return;
-        setDrag(Math.max(0, event.touches[0].clientY - dragStart.current));
+        const y = event.touches[0].clientY;
+        const dy = y - dragStart.current;
+        const prev = lastMove.current;
+        const dt = event.timeStamp - prev.t;
+        if (dt > 0) lastMove.current = { y, t: event.timeStamp, v: (y - prev.y) / dt };
+        // Upward pulls give a little and stop (rubber band); downward follows the finger.
+        setDrag(dy >= 0 ? dy : -Math.min(12, Math.sqrt(-dy) * 1.5));
     };
     const onTouchEnd = () => {
-        if (drag > DISMISS_DRAG_PX) onClose?.();
-        else setDrag(0);
+        const flicked = lastMove.current.v > DISMISS_VELOCITY && drag > FLICK_MIN_PX;
+        if (drag > DISMISS_DRAG_PX || flicked) {
+            setReleaseAt(Math.max(0, drag));
+            onClose?.();
+        } else {
+            setDrag(0);
+        }
         dragStart.current = null;
+        setDragging(false);
     };
+    const backdropStyle = drag > 0 && !closing
+        ? { opacity: Math.max(0.25, 1 - drag / 420), transition: dragging ? 'none' : undefined }
+        : undefined;
+    let panelStyle;
+    if (closing) panelStyle = releaseAt ? { '--sheet-from': `${releaseAt}px` } : undefined;
+    else if (drag) panelStyle = { transform: `translateY(${drag}px)`, transition: dragging ? 'none' : undefined };
 
     return createPortal(
         <div className="fixed inset-0 z-[1100]" data-state={closing ? 'closing' : 'open'}>
@@ -72,6 +100,7 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
                 aria-hidden="true"
                 onClick={() => onClose?.()}
                 className="sheet-backdrop absolute inset-0 bg-black/60"
+                style={backdropStyle}
             />
             <div
                 ref={trapRef}
@@ -79,7 +108,7 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
                 aria-modal="true"
                 aria-labelledby={labelledBy || (title ? headingId : undefined)}
                 className="sheet-panel absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-[20px] bg-[var(--ink-2)] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-pop)]"
-                style={drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : undefined}
+                style={panelStyle}
             >
                 <div
                     className="flex justify-center pt-3 pb-2 cursor-grab touch-none"

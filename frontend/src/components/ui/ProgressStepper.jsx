@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
+import useChangeKey from '../../hooks/useChangeKey';
 
 /** Clamp an episode count to [0, total]; an unknown total only floors at 0. */
 export function clampEpisodes(value, total) {
@@ -120,6 +121,7 @@ export default function ProgressStepper({
     };
 
     const { current, rest } = progressLabel(shown, total, aired);
+    const countChange = useChangeKey(current);
     const small = size === 'sm';
     const btn = small
         ? 'relative h-7 w-7 after:absolute after:-inset-2 after:content-[""]'
@@ -137,15 +139,20 @@ export default function ProgressStepper({
                 onClick={() => step(-1)}
                 disabled={disabled || shown <= 0}
                 aria-label={`One episode less${name}`}
-                className={`${btn} flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-gray-300 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-30 disabled:hover:bg-transparent touch-manipulation`}
+                className={`${btn} press flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-gray-300 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-30 disabled:hover:bg-transparent touch-manipulation`}
             >
                 <Minus aria-hidden="true" className={small ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
             </button>
             <span
-                className={`min-w-0 whitespace-nowrap px-1 text-center tabular ${small ? 'text-xs' : 'text-sm'}`}
+                className={`min-w-0 overflow-hidden whitespace-nowrap px-1 text-center tabular ${small ? 'text-xs' : 'text-sm'}`}
                 aria-live="polite"
             >
-                <span className="font-semibold text-white">{current}</span>{' '}
+                <span
+                    key={countChange.key}
+                    className={`font-semibold text-white ${countChange.changed ? `count-${countChange.direction}` : ''}`}
+                >
+                    {current}
+                </span>{' '}
                 <span className="text-gray-400">{rest}</span>
             </span>
             <button
@@ -153,7 +160,7 @@ export default function ProgressStepper({
                 onClick={() => step(1)}
                 disabled={disabled || (max !== null && shown >= max)}
                 aria-label={`One episode more${name}`}
-                className={`${btn} flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--signature-soft)] text-[var(--signature)] transition-colors hover:bg-[var(--signature)] hover:text-[var(--on-signature)] disabled:opacity-30 disabled:hover:bg-[var(--signature-soft)] disabled:hover:text-[var(--signature)] touch-manipulation`}
+                className={`${btn} press flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--signature-soft)] text-[var(--signature)] transition-colors hover:bg-[var(--signature)] hover:text-[var(--on-signature)] disabled:opacity-30 disabled:hover:bg-[var(--signature-soft)] disabled:hover:text-[var(--signature)] touch-manipulation`}
             >
                 <Plus aria-hidden="true" className={small ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
             </button>

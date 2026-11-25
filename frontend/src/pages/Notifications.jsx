@@ -19,6 +19,7 @@ import logger from '../utils/logger';
 import { getNotificationTarget } from '../utils/notificationUtils';
 import NotificationItem from '../components/notifications/NotificationItem';
 import { useNotificationSocket } from '../components/notifications/notificationSocket';
+import useActivePill from '../hooks/useActivePill';
 
 /** Chips map to the API's server-side `category=` filter. */
 const NOTIFICATION_FILTERS = [
@@ -94,6 +95,7 @@ export default function Notifications() {
     const queryClient = useQueryClient();
     const userId = user?.id;
     const [activeFilter, setActiveFilter] = useState('all');
+    const filterPill = useActivePill();
     const [actionError, setActionError] = useState('');
     const category = activeFilter === 'all' ? undefined : activeFilter;
 
@@ -321,7 +323,8 @@ export default function Notifications() {
                 )}
 
                 <div className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
-                    <div className="flex min-w-max gap-1" role="group" aria-label="Filter notifications">
+                    <div ref={filterPill.hostRef} className="pill-host flex min-w-max gap-1" role="group" aria-label="Filter notifications">
+                        <span ref={filterPill.pillRef} aria-hidden="true" className="active-pill" />
                         {NOTIFICATION_FILTERS.map((filter) => {
                             const active = activeFilter === filter.value;
                             return (
@@ -330,7 +333,7 @@ export default function Notifications() {
                                     type="button"
                                     aria-pressed={active}
                                     onClick={() => setActiveFilter(filter.value)}
-                                    className={`flex min-h-11 items-center rounded-lg px-3.5 text-sm font-semibold transition-colors duration-150 md:min-h-9 ${active
+                                    className={`press flex min-h-11 items-center rounded-lg px-3.5 text-sm font-semibold transition-colors duration-150 md:min-h-9 ${active
                                         ? 'bg-white/[0.07] text-[var(--text-1)]'
                                         : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
                                     }`}

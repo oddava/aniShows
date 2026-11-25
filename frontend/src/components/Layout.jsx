@@ -5,6 +5,7 @@ import Footer from './Footer';
 import VerificationBanner from './VerificationBanner';
 import PageLoader from './common/PageLoader';
 import RouteProgress from './common/RouteProgress';
+import DataPrefetch from './common/DataPrefetch';
 
 // Pages are keyed by their first two path segments, so a route change fades the
 // new page in, while sub-paths of one page (anime tabs, profile tabs) and query
@@ -21,6 +22,7 @@ export default function Layout() {
         <div className="min-h-screen bg-dark flex flex-col">
             <a href="#main-content" className="skip-link">Skip to content</a>
             <RouteProgress />
+            <DataPrefetch />
             <Suspense fallback={null}>
                 <Navbar />
             </Suspense>

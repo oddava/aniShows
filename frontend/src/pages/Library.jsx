@@ -12,6 +12,7 @@ import { CardSkeleton, RowSkeleton } from '../components/ui/Skeleton';
 import { LIST_ORDERINGS, listQueries } from '../api/queries/lists';
 import { LIST_STATUSES, normalizeStatus, statusMeta } from '../utils/listStatus';
 import { progressText } from '../utils/episodes';
+import useActivePill from '../hooks/useActivePill';
 
 const ALL = 'All';
 
@@ -139,6 +140,8 @@ export default function Library() {
     // A deep link or a tab change brings the active tab into view on phones;
     // nothing else (a +1, a save) moves the page.
     const tabsRef = useRef(null);
+    const statusPill = useActivePill();
+    const viewPill = useActivePill();
     useEffect(() => {
         tabsRef.current?.querySelector('[data-active-tab]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }, [status]);
@@ -180,7 +183,8 @@ export default function Library() {
 
                 {/* Status tabs: fixed colours, one label each (T7), counts from the summary. */}
                 <nav ref={tabsRef} aria-label="List status" className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
-                    <ul className="flex min-w-max gap-1">
+                    <ul ref={statusPill.hostRef} className="pill-host flex min-w-max gap-1">
+                        <span ref={statusPill.pillRef} aria-hidden="true" className="active-pill" />
                         {tabs.map((item) => {
                             const active = item.value === status;
                             const count = item.value === ALL ? summary?.total : summary?.counts?.[item.value];
@@ -193,7 +197,7 @@ export default function Library() {
                                         onClick={() => setStatus(item.value)}
                                         data-active-tab={active ? 'true' : undefined}
                                         aria-current={active ? 'page' : undefined}
-                                        className={`relative flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${active ? 'bg-white/[0.07] text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-100'}`}
+                                        className={`press relative flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${active ? 'bg-white/[0.07] text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-100'}`}
                                     >
                                         {item.color && <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />}
                                         {item.label}
@@ -224,7 +228,8 @@ export default function Library() {
                         ariaLabel="Sort"
                         triggerClassName="h-11 rounded-lg bg-dark-100 px-3 text-sm"
                     />
-                    <div role="group" aria-label="View" className="flex rounded-lg bg-white/[0.04] p-0.5">
+                    <div ref={viewPill.hostRef} role="group" aria-label="View" className="pill-host flex rounded-lg bg-white/[0.04] p-0.5" style={{ '--pill-bg': 'rgb(255 255 255 / 0.1)', '--pill-radius': '0.375rem' }}>
+                        <span ref={viewPill.pillRef} aria-hidden="true" className="active-pill" />
                         {[
                             { id: 'grid', label: 'Grid', icon: LayoutGrid },
                             { id: 'table', label: 'Table', icon: Rows3 },
@@ -235,7 +240,7 @@ export default function Library() {
                                 onClick={() => setView(option.id)}
                                 aria-pressed={view === option.id}
                                 aria-label={`${option.label} view`}
-                                className={`flex h-10 w-11 items-center justify-center rounded-md transition-colors ${view === option.id ? 'bg-white/[0.1] text-white' : 'text-gray-400 hover:text-white'}`}
+                                className={`press flex h-10 w-11 items-center justify-center rounded-md transition-colors ${view === option.id ? 'bg-white/[0.1] text-white' : 'text-gray-400 hover:text-white'}`}
                             >
                                 <option.icon aria-hidden="true" className="h-4 w-4" />
                             </button>

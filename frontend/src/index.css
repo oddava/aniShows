@@ -93,6 +93,13 @@
   --dur-fast: 150ms;
   --dur-base: 200ms;
   --dur-slow: 250ms;
+  /* Springs, sampled into linear() (scratch: damped oscillator).
+     glide: indicators that move between items, settles with a hair of give.
+     pop: small confirmations (a status dot, a heart, a press release). */
+  --ease-glide: var(--ease-out);
+  --ease-pop: var(--ease-out);
+  --dur-glide: 400ms;
+  --dur-pop: 440ms;
 
   /* Layout */
   --page-max: 80rem;
@@ -128,6 +135,13 @@
   --color-on-accent: var(--on-signature);
   --color-focus-ring: rgb(141 177 255 / 0.3);
   --color-focus-ring-strong: var(--signature);
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --ease-glide: linear(0, 0.0334, 0.1134, 0.2169, 0.3284, 0.4379, 0.5394, 0.6298, 0.7078, 0.7734, 0.8275, 0.8711, 0.9057, 0.9326, 0.9532, 0.9687, 0.98, 0.9882, 0.9939, 0.9978, 1.0003, 1.0018, 1.0026, 1.0029, 1.0029, 1.0028, 1.0025, 1.0022, 1);
+    --ease-pop: linear(0, 0.0537, 0.1838, 0.351, 0.5256, 0.6875, 0.825, 0.9325, 1.0098, 1.0594, 1.0859, 1.0947, 1.0909, 1.0793, 1.0638, 1.0472, 1.0316, 1.0182, 1.0076, 0.9999, 0.9949, 0.9921, 0.9911, 0.9913, 0.9923, 0.9937, 0.9953, 0.9968, 1);
+  }
 }
 
 @theme {
@@ -393,13 +407,8 @@
     background-color: var(--color-overlay-base);
   }
 
-  /* A small press response: confirms the click without decoration. */
-  .btn-primary:active:not(:disabled),
-  .btn-secondary:active:not(:disabled),
-  .ui-pill-button:active:not(:disabled),
-  .ui-icon-button:active:not(:disabled) {
-    transform: scale(0.98);
-  }
+  /* Press response: animations.css (unlayered, so it outlives the
+     transition-colors utilities on the same elements). */
 
   .badge {
     @apply rounded-md px-2 py-0.5 text-xs font-semibold;

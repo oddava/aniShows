@@ -79,7 +79,7 @@ export default function TrackingPanel({
     };
 
     const showScoreRow = scoreOpen || justCompleted;
-    const iconButton = 'flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-white/[0.07] text-gray-300 transition-colors hover:bg-white/[0.11] hover:text-white';
+    const iconButton = 'press flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-white/[0.07] text-gray-300 transition-colors hover:bg-white/[0.11] hover:text-white';
 
     return (
         <div className="space-y-2.5" data-title="Tracking">
@@ -106,7 +106,11 @@ export default function TrackingPanel({
                     title={isFavorite ? 'In your favourites' : 'Add to favourites'}
                     className={`${iconButton} ${isFavorite ? '!text-[var(--status-dropped)]' : ''}`}
                 >
-                    <Heart aria-hidden="true" className={`h-[18px] w-[18px] ${isFavorite ? 'fill-current' : ''}`} />
+                    <Heart
+                        key={isFavorite ? 'on' : 'off'}
+                        aria-hidden="true"
+                        className={`h-[18px] w-[18px] transition-colors ${isFavorite ? 'fill-current change-pop' : ''}`}
+                    />
                 </button>
                 {inList && (
                     <button
