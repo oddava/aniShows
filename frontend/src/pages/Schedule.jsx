@@ -20,6 +20,7 @@ import {
   resolveTimeZone,
 } from '../utils/dateUtils';
 import { scheduleQueries } from '../api/queries/anime';
+import { hasSession } from '../api/httpClient';
 import useActivePill from '../hooks/useActivePill';
 import useSwitchFade from '../hooks/useSwitchFade';
 
@@ -129,7 +130,7 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle,
   const pill = useActivePill();
 
   return (
-    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 sm:min-h-11 sm:flex-row sm:items-center sm:justify-between">
       <div className="whitespace-nowrap font-semibold text-[var(--text-1)] tabular">
         Next 7 days
         <span className="ml-2 font-normal text-[var(--text-2)]">
@@ -251,7 +252,7 @@ const WeekAside = ({ isAuthenticated, isLoading, items, startOfToday, selectedOf
 // Main Schedule Page Component
 export default function Schedule() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
   const adultContentEnabled = Boolean(user?.show_adult_content);
   const preferredTimezone = user?.preferred_timezone;
   const timezoneLabel = useMemo(() => getTimezoneLabel(preferredTimezone), [preferredTimezone]);
@@ -354,7 +355,8 @@ export default function Schedule() {
             startOfToday={startOfToday}
             onToday={handleToday}
             isTodaySelected={selectedDay === todayDayIndex}
-            showMyListToggle={isAuthenticated}
+            // Shown while a member's session restores too, so the header keeps its height.
+            showMyListToggle={isAuthenticated || (authLoading && hasSession())}
             myListOnly={myListOnly}
             onToggleMyList={() => setMyListParam(!myListOnly)}
           />

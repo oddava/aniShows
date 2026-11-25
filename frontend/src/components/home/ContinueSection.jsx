@@ -220,8 +220,11 @@ export default function ContinueSection() {
     const now = useMinuteClock();
     const { user, isAuthenticated } = useAuth();
     const timezone = user?.preferred_timezone;
+    // Rendered while a returning member's session is still being restored
+    // (Home): the rows wait for it and the skeleton holds their place.
     const { data: watching, isPending } = useQuery({
         ...userQueries.watching(),
+        enabled: isAuthenticated,
         staleTime: 60 * 1000,
     });
     const { data: summary, isPending: summaryQueryPending } = useQuery({
@@ -276,7 +279,7 @@ export default function ContinueSection() {
         () => (rows.length === 0 ? airingPreview(scheduleDays, timezone, now, 8).filter((row) => !row.aired).slice(0, 4) : []),
         [rows.length, scheduleDays, timezone, now],
     );
-    const summaryPending = Boolean(user?.username) && summaryQueryPending;
+    const summaryPending = !isAuthenticated || (Boolean(user?.username) && summaryQueryPending);
     const summaryLine = isPending
         ? ''
         : rows.length === 0

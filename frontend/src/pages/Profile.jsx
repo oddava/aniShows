@@ -21,6 +21,7 @@ import OverviewTab from '../components/profile/OverviewTab';
 import ErrorState from '../components/common/ErrorState';
 import useSwitchFade from '../hooks/useSwitchFade';
 import { favoriteKeys, listQueries, profileKeys, profileQueries, reviewKeys } from '../api/queries/user';
+import PageLoader from '../components/common/PageLoader';
 const PROFILE_TABS = new Set(['overview', 'anime_list', 'friends', 'favorites', 'reviews', 'activity', 'insights']);
 
 function normalizeProfileTab(tab) {
@@ -309,7 +310,7 @@ export default function Profile({ forcedUsername }) {
     }
 
     if (!isPublicView && !isAuthenticated) {
-        return <Navigate to="/login" replace />;
+        return <><PageLoader /><Navigate to="/login" replace /></>;
     }
 
     if (isPublicView && isError && profileError?.response?.status !== 404) {

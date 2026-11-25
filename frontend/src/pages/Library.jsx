@@ -14,6 +14,7 @@ import { LIST_STATUSES, normalizeStatus, statusMeta } from '../utils/listStatus'
 import { progressText } from '../utils/episodes';
 import useActivePill from '../hooks/useActivePill';
 import useDelayedLoading from '../hooks/useDelayedLoading';
+import PageLoader from '../components/common/PageLoader';
 
 const ALL = 'All';
 
@@ -162,7 +163,7 @@ export default function Library() {
         tabsRef.current?.querySelector('[data-active-tab]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }, [status]);
 
-    if (!loading && !isAuthenticated) return <Navigate to="/login" replace state={{ from: '/list' }} />;
+    if (!loading && !isAuthenticated) return <><PageLoader /><Navigate to="/login" replace state={{ from: '/list' }} /></>;
 
     const setStatus = (value) => {
         const next = new URLSearchParams(params);
@@ -205,9 +206,9 @@ export default function Library() {
                             <Download aria-hidden="true" className="h-4 w-4" />
                             Import
                         </Link>
-                        {username && (
-                            <Link to={`/u/${username}`} className="btn-ghost text-sm">Profile</Link>
-                        )}
+                        {/* Always there, so the header wraps the same before and
+                            after the account loads (phones). */}
+                        <Link to={username ? `/u/${username}` : '/profile'} className="btn-ghost text-sm">Profile</Link>
                     </div>
                 </header>
 
@@ -233,7 +234,7 @@ export default function Library() {
                                     >
                                         {item.color && <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />}
                                         {item.label}
-                                        {count != null && <span className="text-xs font-medium text-gray-500 tabular">{count}</span>}
+                                        <span className="min-w-[2ch] text-xs font-medium text-gray-500 tabular">{count ?? ''}</span>
                                     </button>
                                 </li>
                             );

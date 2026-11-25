@@ -15,10 +15,11 @@ import ProgressStepper from './ui/ProgressStepper';
 import { ScoreBadge } from './ui/Badge';
 import { CardSkeleton } from './ui/Skeleton';
 
-// Covers that have finished loading this visit. A card showing one again
-// (Back to a grid, a shelf re-rendered) starts visible instead of fading in
-// from blank a second time.
-const loadedCovers = new Set();
+// Covers that have finished loading this visit, with the URL that actually
+// loaded (a fallback, when the optimised copy was missing). A card showing one
+// again (Back to a grid, a shelf re-rendered) starts visible on that URL
+// instead of fading in from blank a second time.
+const loadedCovers = new Map();
 
 function timeUntil(dateString) {
     if (!dateString) return null;
@@ -70,12 +71,20 @@ function AnimeCard({
 
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
     const [imageLoaded, setImageLoaded] = useState(() => loadedCovers.has(imageUrl));
-    const markLoaded = useCallback(() => {
-        if (imageUrl) loadedCovers.add(imageUrl);
+    const markLoaded = useCallback((event) => {
+        const loadedFrom = event?.currentTarget?.currentSrc || loadedCovers.get(imageUrl) || imageUrl;
+        if (imageUrl) loadedCovers.set(imageUrl, loadedFrom);
         setImageLoaded(true);
     }, [imageUrl]);
     const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
     const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
+    // Remembered from an earlier load: start on the URL that worked. Read once
+    // per cover (not every render), so a first load never swaps its own src.
+    const [remembered, setRemembered] = useState(() => ({ url: imageUrl, src: loadedCovers.get(imageUrl) }));
+    if (remembered.url !== imageUrl) setRemembered({ url: imageUrl, src: loadedCovers.get(imageUrl) });
+    const knownSrc = remembered.url === imageUrl ? remembered.src : undefined;
+    const posterSrc = knownSrc || imageUrl;
+    const posterSrcSet = knownSrc && knownSrc !== imageUrl ? undefined : imageSrcSet;
 
     useEffect(() => {
         setImageLoaded(loadedCovers.has(imageUrl));
@@ -220,8 +229,8 @@ function AnimeCard({
                     )}
                     <img
                         ref={imageRef}
-                        src={imageUrl}
-                        srcSet={imageSrcSet}
+                        src={posterSrc}
+                        srcSet={posterSrcSet}
                         sizes="(max-width: 767px) 160px, (max-width: 1023px) 33vw, 20vw"
                         alt=""
                         draggable={false}

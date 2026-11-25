@@ -133,7 +133,7 @@ export default function TopFilterBar({
                     onClick={onOpenMobileFilters}
                     data-filters-toggle
                     aria-expanded={filtersOpen}
-                    className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-[var(--text-2)] transition-colors hover:bg-white/[0.09] hover:text-[var(--text-1)] sm:hidden"
+                    className="press relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-[var(--text-2)] transition-colors hover:bg-white/[0.09] hover:text-[var(--text-1)] sm:hidden"
                     aria-label="Filters"
                 >
                     <SlidersHorizontal aria-hidden="true" className="h-[18px] w-[18px]" />
@@ -177,7 +177,7 @@ export default function TopFilterBar({
                         onClick={onOpenMobileFilters}
                         data-filters-toggle
                         aria-expanded={filtersOpen}
-                        className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)]"
+                        className="press flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)]"
                     >
                         <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
                         More filters

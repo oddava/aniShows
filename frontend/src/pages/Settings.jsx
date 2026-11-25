@@ -17,6 +17,7 @@ import NotificationsTab from "../components/settings/NotificationsTab";
 import useProfileSettings from "../components/settings/useProfileSettings";
 import useAccountSettings from "../components/settings/useAccountSettings";
 import useNotificationPreferences from "../components/settings/useNotificationPreferences";
+import PageLoader from '../components/common/PageLoader';
 
 export default function Settings() {
   const { user, isAuthenticated, loading, refreshProfile, logout } = useAuth();
@@ -74,7 +75,7 @@ export default function Settings() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <><PageLoader /><Navigate to="/login" replace /></>;
   }
 
   return (

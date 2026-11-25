@@ -52,8 +52,10 @@ const sortNewestFirst = (items) => [...items].sort(
 );
 
 function FeedSkeleton() {
+    // Never taller than the feed's reserved region (50vh): whatever the feed
+    // turns out to hold, its arrival does not move the footer.
     return (
-        <div className="mt-4 space-y-1" aria-hidden="true">
+        <div className="mt-4 max-h-[calc(50vh-1rem)] space-y-1 overflow-hidden" aria-hidden="true">
             {Array.from({ length: 6 }, (_, index) => (
                 <div key={index} className="flex items-center gap-4 py-3">
                     <div className="h-[72px] w-12 shrink-0 animate-pulse rounded-[var(--radius-sm)] bg-white/[0.05]" />
@@ -241,7 +243,7 @@ export default function Notifications() {
 
     // Same as every other signed-in page (ANISHOWS-010): sign in, then back here.
     if (!isAuthenticated) {
-        return <Navigate to="/login" replace state={{ from: '/notifications' }} />;
+        return <><PageLoader /><Navigate to="/login" replace state={{ from: '/notifications' }} /></>;
     }
 
     const emptyState = EMPTY_STATES[activeFilter] || EMPTY_STATES.all;
@@ -345,7 +347,7 @@ export default function Notifications() {
 
                 {/* The feed keeps half a screen, so its outcome (a list, one
                     line, an error) never pulls the footer up the page. */}
-                <div className="min-h-[50vh]">{content}</div>
+                <div className="flow-root min-h-[50vh]">{content}</div>
             </div>
         </div>
     );

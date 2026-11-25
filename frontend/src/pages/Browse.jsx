@@ -254,7 +254,7 @@ export default function Browse() {
                         <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
                         <button
                           onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
-                          className="flex h-10 min-w-10 items-center justify-center rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)] max-sm:bg-white/[0.05] max-sm:px-0"
+                          className="press flex h-10 min-w-10 items-center justify-center rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)] max-sm:bg-white/[0.05] max-sm:px-0"
                           type="button"
                           title="Toggle title language"
                           aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}

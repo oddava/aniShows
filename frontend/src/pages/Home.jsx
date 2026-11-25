@@ -17,6 +17,12 @@ import { recommendationMutations, recommendationQueries } from '../api/queries/r
 
 export default function Home() {
     const { isAuthenticated, loading: authLoading } = useAuth();
+    // A returning member's session is restored after the first paint. Until
+    // then the page already has the member layout (its skeletons), so nothing
+    // is inserted above the shelves when it lands and the guest landing never
+    // flashes; the queries that need the member wait for the session.
+    const restoring = authLoading && hasSession();
+    const memberView = isAuthenticated || restoring;
     const revealRefs = useRef([]);
     const observer = useRef(null);
 
@@ -27,6 +33,7 @@ export default function Home() {
         refetch: refetchTrending,
     } = useQuery({
         ...animeQueries.trending(isAuthenticated ? 'member-home' : 'guest-home'),
+        enabled: !restoring,
         staleTime: 1000 * 60 * 15,
         gcTime: 1000 * 60 * 30,
     });
@@ -104,13 +111,15 @@ export default function Home() {
         <>
             <SEO page="home" />
             <div className="min-h-screen home-page">
-                {/* A returning member whose session is still being restored
-                    never sees the sign-up landing flash first. */}
-                {!isAuthenticated && !(authLoading && hasSession()) && <GuestLanding />}
+                {!memberView && <GuestLanding />}
 
                 {/* Main Content Area */}
                 <div className="relative space-y-16 md:space-y-20 pb-16 md:pb-24">
-                    {isAuthenticated && <ContinueSection />}
+                    {memberView && <ContinueSection />}
+                    {/* The shelves wait for the session (they depend on it);
+                        a screen of space holds their place meanwhile. */}
+                    {restoring ? <div aria-hidden="true" className="min-h-[100dvh]" /> : (
+                    <>
                     {isAuthenticated && <AiringRibbon />}
 
                     {/* Recommended For You Section */}
@@ -137,6 +146,8 @@ export default function Home() {
                         isLoading={topRatedLoading}
                         hideWhenEmpty
                     />
+                    </>
+                    )}
                 </div>
 
             </div>
