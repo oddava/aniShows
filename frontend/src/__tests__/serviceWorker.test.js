@@ -74,7 +74,7 @@ describe('service worker', () => {
             body: 'mika followed you',
             tag: 'follow:12',
             renotify: true,
-            icon: '/favicon.png',
+            icon: '/anishows-icon-192.png',
             data: { url: '/u/mika', id: 55 },
         });
         expect(self.navigator.setAppBadge).toHaveBeenCalledWith(3);

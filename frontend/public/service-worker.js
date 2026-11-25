@@ -9,7 +9,7 @@
 // `url` is a same-origin path; anything else opens the home page.
 
 const DEFAULT_TITLE = 'AniShows';
-const ICON = '/favicon.png';
+const ICON = '/anishows-icon-192.png';
 
 self.addEventListener('install', () => {
     self.skipWaiting();
