@@ -128,6 +128,22 @@ resolve_deploy_mode() {
         *) ANALYTICS=0 ;;
     esac
 
+    # The SPA loads Umami's script from its own host, so the CSP must allow
+    # that origin (ANISHOWS-001: left unset, every page blocked it). Derived
+    # from UMAMI_DOMAIN, then from the built script URL, when not given.
+    if [ "$ANALYTICS" = 1 ] && [ -z "${UMAMI_PUBLIC_ORIGIN:-}" ]; then
+        local umami_host="${UMAMI_DOMAIN:-}"
+        if [ -z "$umami_host" ] && [ -n "${VITE_UMAMI_SCRIPT_URL:-}" ]; then
+            umami_host="${VITE_UMAMI_SCRIPT_URL#*://}"
+        fi
+        umami_host="${umami_host#http://}"; umami_host="${umami_host#https://}"
+        umami_host="${umami_host%%/*}"
+        if [ -n "$umami_host" ]; then
+            UMAMI_PUBLIC_ORIGIN="https://${umami_host}"
+            export UMAMI_PUBLIC_ORIGIN
+        fi
+    fi
+
     local -a profiles=()
     [ "$DB_HOST" = db ] && profiles+=(bundled-db)
     [ "$ANALYTICS" = 1 ] && profiles+=(analytics)

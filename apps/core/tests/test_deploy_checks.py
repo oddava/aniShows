@@ -135,6 +135,7 @@ echo "$*" >> "$FAKE_DOCKER_LOG"
 if [ "${1:-}" = compose ]; then
   echo "env: mode=${CADDY_MODE:-} site=${CADDY_SITE_ADDRESS:-} trusted=${CADDY_TRUSTED_PROXIES:-} admin=${ADMIN_ALLOW_CIDRS:-} ipheaders=${CADDY_CLIENT_IP_HEADERS:-} hsts=${CADDY_HSTS_HEADER:-} profiles=${COMPOSE_PROFILES:-}" >> "$FAKE_DOCKER_LOG"
   echo "tags: backend=${BACKEND_TAG:-} frontend=${FRONTEND_TAG:-}" >> "$FAKE_DOCKER_LOG"
+  echo "umami: origin=${UMAMI_PUBLIC_ORIGIN:-}" >> "$FAKE_DOCKER_LOG"
 fi
 args=" $* "
 case "$args" in
@@ -600,6 +601,44 @@ class ComposeWrapperTests(SimpleTestCase):
         self.assertIn("trusted=10.250.250.240/29 127.0.0.1/8 ::1/128 ", line)
         self.assertIn("hsts=max-age=31536000 ", line)
         self.assertTrue(line.endswith("profiles=bundled-db,tunnel"), line)
+
+    def _umami_line(self, env_lines: dict[str, str]) -> str:
+        result, calls = _run_in_temp_repo("scripts/deploy/compose.sh", env_lines, args=("ps",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (line,) = [entry for entry in calls.splitlines() if entry.startswith("umami: ")]
+        return line
+
+    def test_analytics_origin_is_derived_for_the_csp(self):
+        # ANISHOWS-001: an unset UMAMI_PUBLIC_ORIGIN left the CSP blocking the
+        # Umami script on every page.
+        line = self._umami_line(
+            {**SAFE_ENV, "ANALYTICS_ENABLED": "auto", "UMAMI_DOMAIN": "analytics.example.com"}
+        )
+        self.assertEqual(line, "umami: origin=https://analytics.example.com")
+
+    def test_analytics_origin_from_the_script_url(self):
+        line = self._umami_line(
+            {
+                **SAFE_ENV,
+                "ANALYTICS_ENABLED": "1",
+                "VITE_UMAMI_SCRIPT_URL": "https://stats.example.com/script.js",
+            }
+        )
+        self.assertEqual(line, "umami: origin=https://stats.example.com")
+
+    def test_an_explicit_analytics_origin_wins(self):
+        line = self._umami_line(
+            {
+                **SAFE_ENV,
+                "ANALYTICS_ENABLED": "auto",
+                "UMAMI_DOMAIN": "analytics.example.com",
+                "UMAMI_PUBLIC_ORIGIN": "https://cdn.example.com",
+            }
+        )
+        self.assertEqual(line, "umami: origin=https://cdn.example.com")
+
+    def test_no_analytics_no_origin(self):
+        self.assertEqual(self._umami_line(SAFE_ENV), "umami: origin=")
 
     def test_external_cloudflared_gets_no_trust_default(self):
         # No private_ranges fallback: Caddy trusts only loopback (compose's
