@@ -1,16 +1,17 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import toast from 'react-hot-toast';
 import { followApi } from '../api/client';
-import { X, Users, User, UserCheck, UserPlus, UserMinus, Loader2, Search } from 'lucide-react';
+import { AlertCircle, Loader2, Search, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { followKeys, profileKeys } from '../api/queries/user';
 import { friendsWatchingKeys, getCommunityErrorMessage } from '../api/queries/social';
 
-const ITEM_HEIGHT = 68; // px per row — must match actual rendered height
+const ITEM_HEIGHT = 60; // px per row — must match actual rendered height
 const MIN_SEARCH_LENGTH = 2; // the server ignores shorter `?search=` values
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -19,8 +20,15 @@ const SEARCH_DEBOUNCE_MS = 300;
  * focus when it unmounts) hands focus back to whatever opened the modal.
  */
 export default function FollowersModal({ isOpen, ...props }) {
-    if (!isOpen) return null;
-    return <FollowersDialog {...props} />;
+    if (!isOpen || typeof document === 'undefined') return null;
+    // On <body>, above the site's bottom bar; the wrapper carries the
+    // profile's colour (.profile-page) without adding a box.
+    return createPortal(
+        <div className="profile-page contents">
+            <FollowersDialog {...props} />
+        </div>,
+        document.body,
+    );
 }
 
 function FollowersDialog({
@@ -192,65 +200,64 @@ function FollowersDialog({
     return (
         <div
             ref={dialogRef}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 p-4"
             onClick={handleBackdropClick}
             role="dialog"
             aria-modal="true"
             aria-label={`${username}'s following and followers`}
         >
-            <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-gray-800 bg-dark-100 shadow-xl">
-                {/* Header */}
-                <div className="flex items-center justify-between p-4 ">
-                    <h2 className="text-lg font-bold text-white">@{username}</h2>
+            <div className="sheet-panel modal-panel flex h-[min(34rem,85vh)] w-full max-w-md flex-col overflow-hidden rounded-[var(--radius-lg)] bg-[var(--ink-1)] ring-1 ring-white/[0.06]">
+                {/* Header: whose network, and the two lists as one switch. */}
+                <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-4">
+                    <h2 className="min-w-0 truncate text-[17px] font-semibold text-[var(--text-1)]">@{username}</h2>
                     <button
                         type="button"
                         onClick={handleClose}
-                        className="p-2 rounded-lg hover:bg-gray-800 transition-colors"
+                        className="-mr-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--text-3)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-1)]"
                         aria-label="Close modal"
                     >
-                        <X className="w-5 h-5 text-gray-400" />
+                        <X className="h-5 w-5" />
                     </button>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex " role="tablist">
-                    <TabButton
-                        active={activeTab === 'following'}
-                        onClick={() => handleTabChange('following')}
-                        icon={<UserCheck className="w-4 h-4" />}
-                        label="Following"
-                        count={displayFollowingCount}
-                    />
-                    <TabButton
-                        active={activeTab === 'followers'}
-                        onClick={() => handleTabChange('followers')}
-                        icon={<Users className="w-4 h-4" />}
-                        label="Followers"
-                        count={displayFollowersCount}
-                    />
+                <div className="px-5" role="tablist" aria-label="Following and followers">
+                    <div className="grid grid-cols-2 gap-1 rounded-[var(--radius-md)] bg-[var(--ink-0)] p-1">
+                        <TabButton
+                            active={activeTab === 'following'}
+                            onClick={() => handleTabChange('following')}
+                            label="Following"
+                            count={displayFollowingCount}
+                        />
+                        <TabButton
+                            active={activeTab === 'followers'}
+                            onClick={() => handleTabChange('followers')}
+                            label="Followers"
+                            count={displayFollowersCount}
+                        />
+                    </div>
                 </div>
 
-                {/* Search — show when there are enough items (server-side, 2+ chars) */}
+                {/* Search, once the list is long enough to need it (server-side, 2+ chars). */}
                 {showSearch && (
-                    <div className="px-3 pt-3">
+                    <div className="px-5 pt-3">
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-3)]" />
                             <input
                                 type="search"
-                                placeholder="Search users..."
+                                placeholder="Search by username"
                                 aria-label={`Search ${activeTab}`}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-9 pr-3 py-2 bg-dark-200 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-accent/50 transition-colors"
+                                className="input h-10 w-full py-0 pl-9 pr-3 text-sm"
                             />
                         </div>
                     </div>
                 )}
 
-                {/* Virtualized User List */}
+                {/* Virtualized user list */}
                 <div
                     ref={scrollRef}
-                    className="flex-1 overflow-y-auto p-2 custom-scrollbar"
+                    className="custom-scrollbar mt-2 flex-1 overflow-y-auto px-3 pb-3"
                 >
                     {isLoading ? (
                         <LoadingState />
@@ -258,12 +265,11 @@ function FollowersDialog({
                         <ErrorState tab={activeTab} onRetry={refetch} />
                     ) : filteredUsers.length === 0 ? (
                         isSearching ? (
-                            <div className="text-center py-8 text-gray-400">
-                                <Search className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                                <p className="text-sm">No users matching "{debouncedSearch}"</p>
-                            </div>
+                            <p className="px-2 py-10 text-center text-sm text-[var(--text-2)]">
+                                No users matching "{debouncedSearch}"
+                            </p>
                         ) : (
-                            <EmptyState tab={activeTab} />
+                            <EmptyState tab={activeTab} isOwn={viewer?.username === username} />
                         )
                     ) : (
                         <div
@@ -287,10 +293,10 @@ function FollowersDialog({
                                                 height: `${virtualRow.size}px`,
                                                 transform: `translateY(${virtualRow.start}px)`,
                                             }}
-                                            className="flex justify-center items-center"
+                                            className="flex items-center justify-center"
                                         >
                                             {isFetchingNextPage && (
-                                                <Loader2 className="w-5 h-5 animate-spin text-accent" />
+                                                <Loader2 aria-label="Loading more" className="h-5 w-5 animate-spin text-[var(--text-3)]" />
                                             )}
                                         </div>
                                     );
@@ -338,25 +344,23 @@ function FollowersDialog({
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function TabButton({ active, onClick, icon, label, count }) {
+/** One half of the Following / Followers switch; the current one is lifted and in the profile colour. */
+function TabButton({ active, onClick, label, count }) {
     return (
         <button
             type="button"
             onClick={onClick}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+            className={`flex min-h-10 items-center justify-center gap-2 rounded-[calc(var(--radius-md)-4px)] px-3 text-sm font-medium transition-colors ${
                 active
-                    ? 'text-accent border-b-2 border-accent'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'bg-[var(--ink-2)] text-[var(--text-1)]'
+                    : 'text-[var(--text-2)] hover:text-[var(--text-1)]'
             }`}
             aria-selected={active}
             role="tab"
         >
-            {icon}
             <span>{label}</span>
             {count !== undefined && count !== null && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    active ? 'bg-accent/20 text-accent' : 'bg-gray-700 text-gray-400'
-                }`}>
+                <span className={`tabular ${active ? 'text-[var(--signature)]' : 'text-[var(--text-3)]'}`}>
                     {count.toLocaleString()}
                 </span>
             )}
@@ -366,15 +370,12 @@ function TabButton({ active, onClick, icon, label, count }) {
 
 function LoadingState() {
     return (
-        <div className="space-y-3 py-4 px-2">
+        <div aria-busy="true" aria-label="Loading" className="space-y-1 py-1">
             {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
-                    <div className="w-11 h-11 rounded-full bg-dark-200" />
-                    <div className="flex-1 space-y-2">
-                        <div className="h-4 w-24 bg-dark-200 rounded" />
-                        <div className="h-3 w-16 bg-dark-200 rounded" />
-                    </div>
-                    <div className="h-8 w-20 bg-dark-200 rounded-lg" />
+                <div key={i} className="flex h-[60px] items-center gap-3 px-2">
+                    <div className="h-10 w-10 shrink-0 rounded-full bg-[var(--ink-2)] animate-pulse" />
+                    <div className="h-4 w-32 rounded bg-[var(--ink-2)] animate-pulse" />
+                    <div className="ml-auto h-9 w-20 rounded-lg bg-[var(--ink-2)] animate-pulse" />
                 </div>
             ))}
         </div>
@@ -383,14 +384,13 @@ function LoadingState() {
 
 function ErrorState({ tab, onRetry }) {
     return (
-        <div className="text-center py-8 text-gray-400">
-            <p className="text-sm mb-3">Failed to load {tab}</p>
+        <div className="px-4 py-10 text-center">
+            <AlertCircle aria-hidden="true" className="mx-auto h-6 w-6 text-[var(--text-3)]" />
+            <p className="mt-3 text-[15px] font-medium text-[var(--text-1)]">
+                {tab === 'followers' ? 'Followers' : 'Following'} couldn’t load
+            </p>
             {onRetry && (
-                <button
-                    type="button"
-                    onClick={onRetry}
-                    className="px-4 py-2 rounded-lg bg-dark-200 border border-gray-700 text-xs text-gray-300 hover:text-white hover:border-accent transition-colors"
-                >
+                <button type="button" onClick={onRetry} className="btn-secondary mt-4 px-4 text-sm">
                     Try again
                 </button>
             )}
@@ -398,27 +398,26 @@ function ErrorState({ tab, onRetry }) {
     );
 }
 
-function EmptyState({ tab }) {
+function EmptyState({ tab, isOwn }) {
+    const title = tab === 'followers' ? 'No followers yet' : 'Not following anyone yet';
+    const detail = tab === 'followers'
+        ? (isOwn ? 'When someone follows you, they show up here.' : 'People who follow them show up here.')
+        : (isOwn ? 'Follow people to see their lists and activity.' : 'People they follow show up here.');
     return (
-        <div className="text-center py-12 text-gray-400">
-            <Users className="w-12 h-12 mx-auto mb-3 opacity-40" />
-            <p className="text-sm font-medium">No {tab} yet</p>
-            <p className="text-xs text-gray-500 mt-1">
-                {tab === 'followers'
-                    ? "When someone follows this user, they'll appear here"
-                    : 'Users this account follows will appear here'}
-            </p>
+        <div className="px-4 py-12 text-center">
+            <p className="text-[15px] font-medium text-[var(--text-1)]">{title}</p>
+            <p className="mt-1 text-sm text-[var(--text-3)]">{detail}</p>
         </div>
     );
 }
 
 function UserListItem({ user, onClose, isFollowing, isFollower, showFollowsYou, onFollowToggle }) {
     return (
-        <div className="group flex h-full items-center gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-gray-800/50">
+        <div className="flex h-full items-center gap-3 px-2">
             <Link
                 to={`/u/${user.username}`}
                 onClick={onClose}
-                className="flex items-center gap-3 flex-1 min-w-0"
+                className="group flex min-w-0 flex-1 items-center gap-3 rounded-lg"
             >
                 <Avatar user={user} />
                 <UserInfo user={user} isFollowing={isFollowing} isFollower={isFollower} showFollowsYou={showFollowsYou} />
@@ -442,41 +441,37 @@ function Avatar({ user }) {
         return (
             <img
                 src={user.avatar}
-                alt={user.username}
+                alt=""
                 onError={() => setHasImageError(true)}
-                className="w-11 h-11 rounded-xl object-cover border-2 border-gray-700 group-hover:border-accent/50 transition-colors shrink-0"
+                className="h-10 w-10 shrink-0 rounded-full bg-[var(--ink-2)] object-cover"
                 loading="lazy"
             />
         );
     }
 
     return (
-        <div className="ui-avatar-fallback h-11 w-11 shrink-0">
-            <User className="w-6 h-6 text-gray-500/80" />
+        <div aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--signature-soft)] text-sm font-semibold uppercase text-[var(--signature)]">
+            {user.username?.charAt(0) || '?'}
         </div>
     );
 }
 
 function UserInfo({ user, isFollowing, isFollower, showFollowsYou }) {
     const isMutual = isFollowing && isFollower;
+    const note = isMutual ? 'Follows each other' : (isFollower && showFollowsYou ? 'Follows you' : null);
 
     return (
-        <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-                <p className="font-medium text-white truncate group-hover:text-accent transition-colors text-sm">
-                    {user.username}
+        <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-medium text-[var(--text-1)] transition-colors group-hover:text-[var(--signature)]">
+                {user.display_name?.trim() || user.username}
+            </p>
+            {(user.display_name?.trim() || note) && (
+                <p className="truncate text-[13px] text-[var(--text-3)]">
+                    {user.display_name?.trim() ? `@${user.username}` : null}
+                    {user.display_name?.trim() && note ? ' · ' : null}
+                    {note}
                 </p>
-                {isMutual && (
-                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 font-medium">
-                        Moot
-                    </span>
-                )}
-                {!isMutual && isFollower && showFollowsYou && (
-                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-400 font-medium">
-                        Follows you
-                    </span>
-                )}
-            </div>
+            )}
         </div>
     );
 }
@@ -524,52 +519,28 @@ function ModalFollowButton({ username, isFollowing, isFollower, onToggle }) {
         }
     };
 
-    const getIcon = () => {
-        if (isPending) return <Loader2 className="w-4 h-4 animate-spin" />;
-        if (isFriends) return <Users className="w-4 h-4" />;
-        if (isFollowing) return <UserMinus className="w-4 h-4" />;
-        if (isFollowBack) return <UserCheck className="w-4 h-4" />;
-        return <UserPlus className="w-4 h-4" />;
-    };
-
-    const getLabel = () => {
-        if (isFriends) return 'Friends';
-        if (isFollowing) return 'Following';
-        if (isFollowBack) return 'Follow Back';
-        return 'Follow';
-    };
-
-    const getStyles = () => {
-        if (isFriends) {
-            return 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50';
-        }
-        if (isFollowing) {
-            return 'bg-gray-700/50 text-gray-300 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50 border border-gray-600';
-        }
-        if (isFollowBack) {
-            return 'bg-accent-dark/85 text-white hover:bg-accent-dark border border-accent';
-        }
-        return 'bg-accent-dark text-white hover:bg-accent-dark/85';
-    };
+    const label = isFriends ? 'Friends' : isFollowing ? 'Following' : isFollowBack ? 'Follow back' : 'Follow';
+    // Following someone is the settled state: a quiet button. Following
+    // (back) is the action: filled in the profile's colour.
+    const filled = !isFollowing;
 
     return (
         <button
             type="button"
             onClick={handleClick}
-            disabled={isPending}
-            aria-label={`${getLabel()} ${username}`}
+            aria-disabled={isPending || undefined}
+            aria-label={`${label} ${username}`}
             aria-pressed={Boolean(isFollowing)}
             aria-busy={isPending || undefined}
-            className={`
-                flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium
-                transition-colors shrink-0
-                ${getStyles()}
-                disabled:opacity-50 disabled:cursor-not-allowed
-            `}
-            title={isFriends ? 'Friends (click to unfollow)' : isFollowing ? 'Unfollow' : isFollowBack ? 'Follow Back' : 'Follow'}
+            title={isFollowing ? 'Unfollow' : label}
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm font-medium transition-colors ${
+                filled
+                    ? 'bg-[var(--signature)] text-[var(--on-signature)] hover:bg-[var(--signature-hover)]'
+                    : 'bg-white/[0.06] text-[var(--text-1)] hover:bg-white/[0.1]'
+            }`}
         >
-            {getIcon()}
-            <span className="hidden sm:inline">{getLabel()}</span>
+            {isPending && <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />}
+            {label}
         </button>
     );
 }

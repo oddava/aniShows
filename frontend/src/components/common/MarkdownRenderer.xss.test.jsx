@@ -86,7 +86,7 @@ describe('MarkdownRenderer markdown mode: no raw HTML at all', () => {
 // failing test pass: a diff here means G1 bios (and old forum rows) render differently.
 const LEGACY_PINS = {
     bio: "<div class=\"markdown-preview max-w-none \"><p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\">Hi, I am <strong class=\"font-bold text-white\">Rin</strong> &amp; I like <em class=\"italic text-gray-200\">mecha</em>.</p><div class=\"my-4 text-center\"><p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\">Centered <strong class=\"font-bold text-white\">bold</strong> text</p></div><ul class=\"list-disc list-outside ml-6 mb-4 text-gray-200 space-y-1\"><li class=\"\">one</li><li class=\"\">two</li></ul><a class=\"text-accent-light hover:text-accent transition-colors\" target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://example.com\">site</a></div>",
-    quote: "<div class=\"markdown-preview max-w-none \"><blockquote class=\"border-l-4 border-accent/40 px-4 py-1.5 italic text-gray-300 my-4 bg-accent/5 rounded-r-lg inline-block [&amp;>p]:mb-0\">\n<p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\">a quote line</p>\n</blockquote>\n<p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\">after</p></div>",
+    quote: "<div class=\"markdown-preview max-w-none \"><blockquote class=\"rounded-lg bg-white/[0.04] px-4 py-2 italic text-gray-300 my-4 inline-block [&amp;>p]:mb-0\">\n<p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\">a quote line</p>\n</blockquote>\n<p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\">after</p></div>",
     spoiler: "<div class=\"markdown-preview max-w-none \"><p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\">before <span class=\"cursor-pointer rounded px-2 py-0.5 mx-0.5 transition-all duration-300 bg-[#1e1f22] text-[#1e1f22] select-none hover:bg-[#2b2d31] hover:text-[#2b2d31]\" title=\"Click to reveal spoiler\">secret</span> after</p></div>",
     mixed: "<div class=\"markdown-preview max-w-none \"><p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\">Hey <a class=\"text-accent-light hover:text-accent font-medium transition-colors\" href=\"/u/rin\" data-discover=\"true\">@rin</a> see <a class=\"text-accent-light hover:text-accent transition-colors\" target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://example.com\">example.com</a> and <img class=\"max-w-full h-auto rounded-xl my-4 block mx-auto\" style=\"width: 200px;\" alt=\"pic\" src=\"https://img.example/a.png\"></p>\n<p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\"><span class=\"block relative w-full max-w-3xl aspect-video rounded-xl overflow-hidden my-4 border border-gray-800\"><iframe src=\"https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ\" title=\"YouTube video player\" allow=\"fullscreen\" allowfullscreen=\"\" class=\"absolute top-0 left-0 w-full h-full\"></iframe></span></p>\n<pre class=\"inline-block bg-dark p-4 rounded-xl text-sm font-mono text-gray-200 overflow-x-auto border border-gray-800 my-4 max-w-full\"><code class=\"text-gray-200\">if (a &amp;lt; b) {}\n</code></pre></div>",
     escaped: "<div class=\"markdown-preview max-w-none \"><p class=\"mb-4 last:mb-0 text-gray-200 leading-relaxed\">escaped &amp; html</p></div>",
@@ -117,12 +117,13 @@ describe('MarkdownRenderer legacy mode is byte-for-byte unchanged', () => {
 const md = (content) => renderMarkdown(content, 'markdown');
 
 describe('MarkdownRenderer markdown mode rendering', () => {
-    it('renders a line-start "> quote" as a blockquote with the legacy classes', async () => {
+    it('renders a line-start "> quote" as a soft quote panel, with no left strip', async () => {
         const container = await md('> a quote line\n\nafter');
         const quote = container.querySelector('blockquote');
         expect(quote).not.toBeNull();
         expect(quote.textContent.trim()).toBe('a quote line');
-        expect(quote.className).toContain('border-l-4 border-accent/40');
+        expect(quote.className).toContain('rounded-lg bg-white/[0.04]');
+        expect(quote.className).not.toMatch(/border-l/);
     });
 
     it('shows a typed "&gt; quote" as text, not a blockquote (text is shown as typed)', async () => {

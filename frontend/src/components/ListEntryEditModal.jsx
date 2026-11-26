@@ -200,7 +200,7 @@ export default function ListEntryEditModal({
     // Portalled above the header and tab bar (z 1000/1001), like BottomSheet.
     return createPortal(
         <div
-            className="sheet-backdrop fixed inset-0 z-[1100] flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+            className="sheet-backdrop fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 p-3 sm:p-4"
             data-state={closing ? 'closing' : 'open'}
             onClick={handleBackdropClick}
             role="dialog"
@@ -209,7 +209,7 @@ export default function ListEntryEditModal({
         >
             <div
                 ref={modalRef}
-                className="sheet-panel modal-panel flex max-h-[calc(100dvh-env(safe-area-inset-top,0px)-0.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-[20px] bg-[var(--ink-1)] shadow-[var(--shadow-pop)] sm:max-h-[min(90dvh,48rem)] sm:rounded-[var(--radius-lg)]"
+                className="sheet-panel modal-panel flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[var(--radius-lg)] bg-[var(--ink-1)] shadow-[var(--shadow-pop)] sm:max-h-[min(90dvh,48rem)]"
             >
                 <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5">
                     <div className="min-w-0">

@@ -1,40 +1,25 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 
-const CLOSE_MS = 220;
-const DISMISS_DRAG_PX = 90;
-// A quick flick closes it too, even a short one (px per ms).
-const DISMISS_VELOCITY = 0.5;
-const FLICK_MIN_PX = 24;
-// A flick only counts if the finger was still moving when it lifted.
-const FLICK_RECENT_MS = 80;
-const BACKDROP_FADE_PX = 420;
-const backdropOpacity = (drag) => Math.max(0.25, 1 - drag / BACKDROP_FADE_PX);
+const CLOSE_MS = 160;
 
 /**
- * A sheet that rises from the bottom edge (touch screens: menus and filters).
- * Escape, the backdrop or a downward drag on the handle closes it; focus is
- * trapped inside and returns to the opener. Motion is a 200 ms slide that
- * reduced-motion turns into a plain swap.
+ * A small centred dialog for menus and quick choices (it was a sheet that
+ * rose from the bottom edge; the name stays so callers don't change).
+ * Escape or the backdrop closes it; focus is trapped inside and returns to
+ * the opener. It fades and settles in (.modal-panel), a plain swap with
+ * reduced motion.
  */
 export default function BottomSheet({ open, onClose, title, children, footer, labelledBy }) {
     const [mounted, setMounted] = useState(open);
     const [closing, setClosing] = useState(false);
-    const [drag, setDrag] = useState(0);
-    // Where the finger let go: the closing slide continues from there.
-    const [releaseAt, setReleaseAt] = useState(0);
-    const [dragging, setDragging] = useState(false);
-    const dragStart = useRef(null);
-    const lastMove = useRef({ y: 0, t: 0, v: 0 });
     const headingId = useId();
 
     useEffect(() => {
         if (open) {
             setMounted(true);
             setClosing(false);
-            setDrag(0);
-            setReleaseAt(0);
             return undefined;
         }
         if (!mounted) return undefined;
@@ -46,8 +31,8 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
         return () => clearTimeout(timer);
     }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // No page scroll behind an open sheet, and toasts move to the top of the
-    // screen so they never sit on the sheet's controls (index.css).
+    // No page scroll behind an open dialog, and toasts move to the top of
+    // the screen so they never sit on its controls (index.css).
     useEffect(() => {
         if (!open) return undefined;
         const root = document.documentElement;
@@ -65,74 +50,25 @@ export default function BottomSheet({ open, onClose, title, children, footer, la
 
     if (!mounted || typeof document === 'undefined') return null;
 
-    const onTouchStart = (event) => {
-        dragStart.current = event.touches[0].clientY;
-        lastMove.current = { y: event.touches[0].clientY, t: event.timeStamp, v: 0 };
-        setDragging(true);
-    };
-    const onTouchMove = (event) => {
-        if (dragStart.current === null) return;
-        const y = event.touches[0].clientY;
-        const dy = y - dragStart.current;
-        const prev = lastMove.current;
-        const dt = event.timeStamp - prev.t;
-        if (dt > 0) lastMove.current = { y, t: event.timeStamp, v: (y - prev.y) / dt };
-        // Upward pulls give a little and stop (rubber band); downward follows the finger.
-        setDrag(dy >= 0 ? dy : -Math.min(12, Math.sqrt(-dy) * 1.5));
-    };
-    const onTouchEnd = (event) => {
-        const recent = event.timeStamp - lastMove.current.t <= FLICK_RECENT_MS;
-        const flicked = recent && lastMove.current.v > DISMISS_VELOCITY && drag > FLICK_MIN_PX;
-        if (drag > DISMISS_DRAG_PX || flicked) {
-            setReleaseAt(Math.max(0, drag));
-            onClose?.();
-        } else {
-            setDrag(0);
-        }
-        dragStart.current = null;
-        setDragging(false);
-    };
-    // The system took the touch (a call, a gesture): no dismiss, snap back.
-    const onTouchCancel = () => {
-        dragStart.current = null;
-        setDragging(false);
-        setDrag(0);
-    };
-    let backdropStyle;
-    if (closing) backdropStyle = releaseAt ? { '--backdrop-from': backdropOpacity(releaseAt) } : undefined;
-    else if (drag > 0) backdropStyle = { opacity: backdropOpacity(drag), transition: dragging ? 'none' : undefined };
-    let panelStyle;
-    if (closing) panelStyle = releaseAt ? { '--sheet-from': `${releaseAt}px` } : undefined;
-    else if (drag) panelStyle = { transform: `translateY(${drag}px)`, transition: dragging ? 'none' : undefined };
-
     return createPortal(
-        <div className="fixed inset-0 z-[1100]" data-state={closing ? 'closing' : 'open'}>
+        <div
+            className="fixed inset-0 z-[1100] flex items-center justify-center p-4"
+            data-state={closing ? 'closing' : 'open'}
+        >
             <div
                 aria-hidden="true"
                 onClick={() => onClose?.()}
                 className="sheet-backdrop absolute inset-0 bg-black/60"
-                style={backdropStyle}
             />
             <div
                 ref={trapRef}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={labelledBy || (title ? headingId : undefined)}
-                className="sheet-panel absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-[20px] bg-[var(--ink-2)] pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-pop)]"
-                style={panelStyle}
+                className="sheet-panel modal-panel relative max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-[var(--radius-lg)] bg-[var(--ink-2)] py-3 shadow-[var(--shadow-pop)]"
             >
-                <div
-                    className="flex justify-center pt-3 pb-2 cursor-grab touch-none"
-                    onTouchStart={onTouchStart}
-                    onTouchMove={onTouchMove}
-                    onTouchEnd={onTouchEnd}
-                    onTouchCancel={onTouchCancel}
-                    aria-hidden="true"
-                >
-                    <span className="h-1 w-10 rounded-full bg-white/20" />
-                </div>
                 {title && (
-                    <h2 id={headingId} className="px-5 pb-2 text-base font-semibold text-white line-clamp-2">
+                    <h2 id={headingId} className="line-clamp-2 px-5 pb-2 pt-1 text-base font-semibold text-[var(--text-1)]">
                         {title}
                     </h2>
                 )}

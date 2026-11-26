@@ -112,7 +112,7 @@ export default function ProfileHeader({
                         username={username}
                         className="relative h-24 w-24 border-4 border-[var(--ink-0)] text-4xl sm:h-36 sm:w-36 sm:text-5xl"
                     />
-                    <div className="profile-accent-scope flex items-center gap-2 pb-1">
+                    <div className="flex items-center gap-2 pb-1">
                         <HeroActions displayUser={displayUser} isPublicView={isPublicView} targetUsername={targetUsername} />
                     </div>
                 </div>
@@ -170,14 +170,14 @@ export default function ProfileHeader({
                                 onClick={() => onOpenFollowersModal('following')}
                                 className="min-h-10 transition-colors hover:text-[var(--text-1)] md:min-h-0"
                             >
-                                <strong className="font-semibold text-[var(--text-1)]">{following.toLocaleString()}</strong> Following
+                                <strong className="font-semibold text-[var(--signature)]">{following.toLocaleString()}</strong> Following
                             </button>
                             <button
                                 type="button"
                                 onClick={() => onOpenFollowersModal('followers')}
                                 className="min-h-10 transition-colors hover:text-[var(--text-1)] md:min-h-0"
                             >
-                                <strong className="font-semibold text-[var(--text-1)]">{followers.toLocaleString()}</strong> {followers === 1 ? 'Follower' : 'Followers'}
+                                <strong className="font-semibold text-[var(--signature)]">{followers.toLocaleString()}</strong> {followers === 1 ? 'Follower' : 'Followers'}
                             </button>
                         </p>
                     </div>

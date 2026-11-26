@@ -268,9 +268,10 @@ const markdownComponents = {
         />
     ),
     li: ({ node, ...props }) => <li className="" {...props} />,
+    // A quote is a soft panel in italics; no left accent strip (owner rule).
     blockquote: ({ node, ...props }) => (
         <blockquote
-            className="border-l-4 border-accent/40 px-4 py-1.5 italic text-gray-300 my-4 bg-accent/5 rounded-r-lg inline-block [&>p]:mb-0"
+            className="rounded-lg bg-white/[0.04] px-4 py-2 italic text-gray-300 my-4 inline-block [&>p]:mb-0"
             {...props}
         />
     ),

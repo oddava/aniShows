@@ -48,7 +48,7 @@ export default function ProfileTabs({ activeTab, onTabChange, displayUser }) {
 
     return (
         <>
-            <div ref={sentinelRef} aria-hidden="true" className="h-px" />
+            <div ref={sentinelRef} aria-hidden="true" data-profile-tabs-top className="h-px" />
             <nav
                 ref={navRef}
                 aria-label="Profile sections"
@@ -77,7 +77,7 @@ export default function ProfileTabs({ activeTab, onTabChange, displayUser }) {
                                         onClick={() => onTabChange(tab.id)}
                                         aria-current={isActive ? 'page' : undefined}
                                         className={`inline-flex min-h-[2.75rem] shrink-0 items-center whitespace-nowrap rounded-lg px-3 text-[15px] sm:px-3.5 font-medium transition-colors duration-150 ${isActive
-                                            ? 'text-[var(--text-1)]'
+                                            ? 'text-[var(--signature)]'
                                             : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'
                                             }`}
                                     >

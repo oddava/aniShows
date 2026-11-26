@@ -69,3 +69,46 @@ describe('ScrollToTop', () => {
         expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
     });
 });
+
+function ProfileHarness() {
+    const navigate = useNavigate();
+    const location = useLocation();
+    return (
+        <>
+            <ScrollToTop />
+            <div data-testid="pathname">{location.pathname}</div>
+            <button type="button" onClick={() => navigate('/u/rin/anime_list')}>List tab</button>
+            <button type="button" onClick={() => navigate('/u/kai')}>Other profile</button>
+        </>
+    );
+}
+
+describe('ScrollToTop on profiles', () => {
+    beforeEach(() => {
+        window.scrollTo = vi.fn();
+    });
+
+    const renderAt = (path) => render(
+        <MemoryRouter initialEntries={[path]}>
+            <Routes>
+                <Route path="*" element={<ProfileHarness />} />
+            </Routes>
+        </MemoryRouter>
+    );
+
+    it('keeps the scroll when switching tabs on the same profile', async () => {
+        renderAt('/u/rin');
+        vi.mocked(window.scrollTo).mockClear();
+        fireEvent.click(screen.getByRole('button', { name: 'List tab' }));
+        await waitFor(() => expect(screen.getByTestId('pathname')).toHaveTextContent('/u/rin/anime_list'));
+        expect(window.scrollTo).not.toHaveBeenCalled();
+    });
+
+    it('starts at the top on another profile', async () => {
+        renderAt('/u/rin/anime_list');
+        vi.mocked(window.scrollTo).mockClear();
+        fireEvent.click(screen.getByRole('button', { name: 'Other profile' }));
+        await waitFor(() => expect(screen.getByTestId('pathname')).toHaveTextContent('/u/kai'));
+        expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
+    });
+});

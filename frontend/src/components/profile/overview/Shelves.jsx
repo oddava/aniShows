@@ -6,7 +6,8 @@ import { knownEpisodeTotal } from '../../../utils/episodes';
 /*
  * The overview's picture rows: one row of whole covers, never a cut-off
  * one. Six across from sm up; phones show the first three ("See all" has
- * the rest). No overlays, badges or bars on the art.
+ * the rest). No overlays, badges or bars on the art, and hovering leaves
+ * the art alone: the title lights in the profile's colour instead.
  */
 const ROW = 'grid grid-cols-3 gap-3 sm:grid-cols-6 sm:gap-4 max-sm:[&>li:nth-child(n+4)]:hidden';
 
@@ -19,11 +20,11 @@ function Cover({ anime, children, reserveTwoLines = false }) {
                     kind="cover"
                     size="medium"
                     alt={anime.title}
-                    className="h-full w-full object-cover transition-opacity duration-200 group-hover:opacity-85"
+                    className="h-full w-full object-cover"
                 />
             </span>
             {/* With counts under the titles, two lines are reserved so the counts line up. */}
-            <span className={`mt-2 line-clamp-2 text-[13px] font-medium leading-5 text-[var(--text-1)] sm:text-sm ${reserveTwoLines ? 'min-h-[2.5rem]' : ''}`}>
+            <span className={`mt-2 line-clamp-2 text-[13px] font-medium leading-5 text-[var(--text-1)] transition-colors duration-200 group-hover:text-[var(--signature)] sm:text-sm ${reserveTwoLines ? 'min-h-[2.5rem]' : ''}`}>
                 {anime.title}
             </span>
             {children}

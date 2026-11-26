@@ -274,7 +274,7 @@ export default function OverviewTab({
                                 type="button"
                                 onClick={() => onTabChange?.('activity')}
                                 aria-label="See all activity"
-                                className="-my-2 inline-flex min-h-[2.75rem] items-center gap-0.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:text-[var(--text-1)]"
+                                className="-my-2 inline-flex min-h-[2.75rem] items-center gap-0.5 text-sm font-medium text-[var(--signature)] transition-colors hover:text-[var(--signature-hover)]"
                             >
                                 See all
                                 <ChevronRight aria-hidden="true" className="h-4 w-4" />

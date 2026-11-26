@@ -14,7 +14,7 @@ import {
 import {
     DEFAULT_PROFILE_PRIMARY_COLOR,
     decodeHtmlEntities,
-    getResponsiveBannerAspect,
+    BANNER_ASPECT,
     getSocialLinkDuplicateKey,
     normalizeProfilePrimaryColor,
     socialLinksChanged,
@@ -69,10 +69,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
         sourceMimeType: '',
         type: 'avatar' // 'avatar' or 'banner'
     });
-    const [bannerCropAspect, setBannerCropAspect] = useState(() => {
-        if (typeof window === 'undefined') return getResponsiveBannerAspect(1280);
-        return getResponsiveBannerAspect(window.innerWidth);
-    });
+    const bannerCropAspect = BANNER_ASPECT;
     // Temporary ObjectURLs for previewing without storing in memory permanently
     const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null);
     const [bannerPreviewUrl, setBannerPreviewUrl] = useState(null);
@@ -127,16 +124,6 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             setExpression(expressionFrom(user));
         }
     }, [user]);
-
-    useEffect(() => {
-        const handleResize = () => {
-            setBannerCropAspect(getResponsiveBannerAspect(window.innerWidth));
-        };
-
-        handleResize();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
 
     const savedBio = decodeHtmlEntities(user?.bio || '');
     const isBioEdited = bio !== savedBio;
