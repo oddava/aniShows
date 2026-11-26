@@ -51,6 +51,8 @@ class ProfileSharePreviewViewTests(TestCase):
         content = response.content.decode()
         self.assertIn("Profile Not Found | AniShows", content)
         self.assertIn("could not be found", content)
+        # The 1200x630 link-preview card, not the square app icon.
+        self.assertIn('content="http://testserver/og-image.png"', content)
 
     def test_telegram_crawler_preview_does_not_include_redirect(self):
         user = User.objects.create_user(username="tguser", password="pw")

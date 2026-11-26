@@ -146,7 +146,7 @@ class ProfileSharePreviewView(View):
         return value[: limit - 1].rstrip() + "…"
 
     def _default_image_url(self, request) -> str:
-        return request.build_absolute_uri("/anishows-icon-512.png")
+        return request.build_absolute_uri("/og-image.png")
 
     def _absolute_url(self, request, value: str) -> str:
         if value.startswith("//"):
