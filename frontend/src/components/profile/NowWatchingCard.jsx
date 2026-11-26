@@ -32,10 +32,11 @@ export default function NowWatchingCard({ username }) {
         : watched ? `Episode ${watched}` : 'Just started';
 
     return (
+        // Named by its visible text ("Watching now Vinland Saga Episode 4 of
+        // 24 · 3h ago"); an aria-label left the time out (WCAG 2.5.3, RA-004).
         <Link
             to={`/anime/${anime.slug}`}
             className="group flex items-center gap-4 self-start rounded-[var(--radius-lg)] bg-[var(--ink-1)] p-3 pr-5 lg:self-stretch lg:gap-5 lg:p-4 lg:pr-6"
-            aria-label={`Watching now: ${anime.title}, ${progress}`}
         >
             <AnimeMediaImage
                 anime={anime}
