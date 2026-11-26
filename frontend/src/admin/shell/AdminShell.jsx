@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { ArrowUpRight, Home, LogOut, Menu as MenuIcon, Search, X } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
+import Logo from '../../components/Logo';
 import RouteProgress from '../../components/common/RouteProgress';
 import useAdminFocusTrap from '../useFocusTrap';
 import { useScrollLock } from '../ui/Overlay';
@@ -62,8 +63,8 @@ function Sidebar({ sections, pathname, moderationCount, onOpenSearch, onNavigate
     return (
         <div className="flex h-full flex-col">
             <div className="flex h-16 shrink-0 items-center gap-2 px-5">
-                <Link to="/admin" onClick={onNavigate} className="flex items-baseline gap-2 rounded-md">
-                    <span className="text-[1.1875rem] font-semibold leading-none tracking-[-0.02em] text-[var(--text-1)]">AniShows</span>
+                <Link to="/admin" onClick={onNavigate} className="flex items-center gap-2 rounded-md" aria-label="AniShows admin home">
+                    <Logo />
                     <span className="text-sm font-medium text-[var(--text-3)]">Admin</span>
                 </Link>
             </div>
@@ -248,8 +249,8 @@ export default function AdminShell() {
                 >
                     <MenuIcon className="h-5 w-5" aria-hidden="true" />
                 </button>
-                <Link to="/admin" className="flex min-w-0 flex-1 items-baseline gap-2 px-1">
-                    <span className="text-[1.0625rem] font-semibold tracking-[-0.02em] text-[var(--text-1)]">AniShows</span>
+                <Link to="/admin" className="flex min-w-0 flex-1 items-center gap-2 px-1" aria-label="AniShows admin home">
+                    <Logo textClassName="text-[1.0625rem] text-[var(--text-1)]" />
                     <span className="truncate text-sm font-medium text-[var(--text-3)]">{current?.label || 'Admin'}</span>
                 </Link>
                 <button
