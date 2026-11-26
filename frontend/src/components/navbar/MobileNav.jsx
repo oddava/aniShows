@@ -11,7 +11,8 @@ const MAIN_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/profile',
 /**
  * The phone tab bar (M5): Home, Browse, Schedule, My list and Notifications
  * when signed in; the list is one tap away from everywhere. Account items
- * live behind the avatar in the top bar. Guests get Sign in instead of the
+ * live behind the avatar in the top bar (MobileTopBar: your profile, one
+ * tap from any page). Guests get Sign in instead of the
  * last two. Every tab is at least 44 px tall (M3); pages reserve room for
  * the bar (body padding in index.css, M1).
  */
