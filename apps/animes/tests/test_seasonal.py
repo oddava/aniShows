@@ -471,12 +471,14 @@ class SeasonalAnimeTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should have pagination metadata
         self.assertIn("count", response.data or {})
-        self.assertIsNone(response.data.get("count"))
+        # A bounded count (BUG-009): every winter 2024 title, never null.
+        self.assertIsInstance(response.data.get("count"), int)
+        self.assertFalse(response.data.get("count_capped"))
         self.assertIn("next", response.data or {})
         self.assertIn("results", response.data or {})
 
-    def test_page_number_pagination_without_total_count_still_exposes_navigation_links(self):
-        """Browse pagination should avoid total counts but still expose next/previous links."""
+    def test_page_number_pagination_counts_and_exposes_navigation_links(self):
+        """Browse pagination gives a bounded count (BUG-009) and next/previous links."""
         Anime.objects.create(
             title="Winter Extra One",
             slug="winter-extra-one",
@@ -505,7 +507,8 @@ class SeasonalAnimeTests(APITestCase):
 
         self.assertEqual(first_page.status_code, status.HTTP_200_OK)
         self.assertEqual(second_page.status_code, status.HTTP_200_OK)
-        self.assertIsNone(first_page.data.get("count"))
+        self.assertEqual(first_page.data.get("count"), second_page.data.get("count"))
+        self.assertGreaterEqual(first_page.data.get("count"), 3)
         self.assertIsNotNone(first_page.data.get("next"))
         self.assertIsNotNone(second_page.data.get("previous"))
 
