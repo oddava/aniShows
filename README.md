@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/public/logo.png" alt="AniShows" width="96">
+  <img src="frontend/public/anishows-icon-192.png" alt="AniShows" width="96">
 </p>
 
 <h1 align="center">AniShows</h1>

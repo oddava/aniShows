@@ -4,7 +4,7 @@ const defaultSEO = {
   title: 'AniShows - Discover & Track Anime | Anime Database & Community',
   description: 'AniShows is your ultimate anime discovery platform. Track your favorite anime, discover new series, write reviews, and join a passionate community of anime fans.',
   canonical: 'https://anishows.com',
-  ogImage: 'https://anishows.com/icon.svg?v=2',
+  ogImage: 'https://anishows.com/anishows-icon-512.png',
   ogType: 'website',
 };
 
