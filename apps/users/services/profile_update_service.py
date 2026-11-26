@@ -14,6 +14,7 @@ from ...core.services.social_links_service import SocialLinksService
 from ...shared.logger import logger
 from ..models import UserProfile
 from .cache import invalidate_user_caches
+from .profile_expression import EXPRESSION_FIELDS
 from .user_queryset import filter_username_ci
 from .username_sanitizer import validate_username
 
@@ -87,6 +88,10 @@ def update_user_profile(user, validated_data, ip_address: str | None = None) -> 
         if "profile_primary_color" in validated_data:
             profile.profile_primary_color = validated_data["profile_primary_color"]
             update_fields.append("profile_primary_color")
+        for field in EXPRESSION_FIELDS:
+            if field in validated_data:
+                setattr(profile, field, validated_data[field])
+                update_fields.append(field)
         if "preferred_timezone" in validated_data:
             profile.preferred_timezone = validated_data["preferred_timezone"]
             update_fields.append("preferred_timezone")
