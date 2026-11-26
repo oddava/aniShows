@@ -50,6 +50,15 @@ from ..services.auth_service import (
     revoke_other_sessions,
     token_auth_time,
 )
+from ..services.device_sessions import (
+    CurrentSessionError,
+    SessionNotFoundError,
+    begin_device_session,
+    end_device_session,
+    list_device_sessions,
+    revoke_device_session,
+    rotate_device_session,
+)
 from ..services.email_service import EmailService
 from ..services.ws_ticket_service import TICKET_TTL_SECONDS, issue_ws_ticket
 
@@ -150,7 +159,17 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             raise
         # Only this attempt's slot: earlier failures expire with the window.
         _release_login_attempt(identifier_throttle)
+        _begin_session_from(request, response)
         return move_refresh_to_cookie(response)
+
+
+def _begin_session_from(request, response) -> None:
+    """A sign-in response carries a new refresh token: record this device (BUG-008)."""
+    data = getattr(response, "data", None)
+    if getattr(response, "status_code", None) == 200 and isinstance(data, dict):
+        refresh = data.get("refresh")
+        if isinstance(refresh, str) and refresh:
+            begin_device_session(request, refresh)
 
 
 def _release_login_attempt(identifier_throttle) -> None:
@@ -281,7 +300,9 @@ class AuthViewSet(ViewSet):
                 status_code=exc.status_code,
             )
 
-        return move_refresh_to_cookie(Response(result.payload, status=result.status_code))
+        response = Response(result.payload, status=result.status_code)
+        _begin_session_from(request, response)
+        return move_refresh_to_cookie(response)
 
     @action(detail=False, methods=["post"])
     def resend_verification(self, request):
@@ -363,7 +384,15 @@ class LoggingTokenRefreshSerializer(TokenRefreshSerializer):
                 OutstandingToken.objects.select_for_update().filter(
                     jti=token[jwt_settings.JTI_CLAIM]
                 ).first()
-                return super().validate(attrs)
+                data = super().validate(attrs)
+                if data.get("refresh"):
+                    # The device's row follows its token (BUG-008).
+                    rotate_device_session(
+                        self.context.get("request"),
+                        str(token[jwt_settings.JTI_CLAIM]),
+                        data["refresh"],
+                    )
+                return data
         except User.DoesNotExist:
             logger.warning(
                 "Token refresh failed",
@@ -455,6 +484,7 @@ class LogoutView(APIView):
             # An invalid, expired or already-blacklisted token needs no revoking.
             with contextlib.suppress(TokenError):
                 RefreshToken(refresh_token).blacklist()
+            end_device_session(refresh_token)
 
         end_django_session(request)
         return clear_refresh_cookie(Response(status=status.HTTP_204_NO_CONTENT))
@@ -503,21 +533,52 @@ class _CookieSessionView(APIView):
 
 
 class SessionsView(_CookieSessionView):
-    """``{active, current_since}``: devices signed in to this account (A20, P1-11)."""
+    """``{active, current_since, sessions}``: devices signed in to this account.
+
+    ``sessions`` lists each device (label, signed in, last active, which one
+    is this one), so one can be signed out on its own (A20, P1-11, BUG-008).
+    """
 
     def get(self, request):
         token, user, error = self._session_or_error(request)
         if error is not None:
             return error
         auth_time = token_auth_time(token)
+        sessions = list_device_sessions(user, str(token[jwt_settings.JTI_CLAIM]))
         return Response(
             {
-                "active": live_refresh_tokens(user).count(),
+                "active": len(sessions),
                 "current_since": (
                     datetime.fromtimestamp(auth_time, tz=UTC).isoformat() if auth_time else None
                 ),
+                "sessions": sessions,
             }
         )
+
+
+class RevokeSessionView(_CookieSessionView):
+    """Sign out one other device (BUG-008). This device signs out with Log out."""
+
+    def post(self, request, session_id: int):
+        token, user, error = self._session_or_error(request)
+        if error is not None:
+            return error
+        try:
+            revoke_device_session(user, session_id, str(token[jwt_settings.JTI_CLAIM]))
+        except SessionNotFoundError:
+            return error_response(
+                "That device is not signed in.",
+                code="session_not_found",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+        except CurrentSessionError:
+            return error_response(
+                "This is the device you are using; sign out instead.",
+                code="current_session",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        logger.info("Signed out one device", extra={"user_id": user.pk})
+        return Response({"active": live_refresh_tokens(user).count()})
 
 
 class RevokeOtherSessionsView(_CookieSessionView):

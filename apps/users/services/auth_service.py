@@ -11,12 +11,13 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework_simplejwt.settings import api_settings as jwt_settings
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.services.admin_settings_service import is_email_verification_required
 from ..authentication import SESSION_VERSION_CLAIM
-from ..models import UserProfile
+from ..models import UserProfile, UserSession
 from ..tokens import email_verification_token_generator
 from .user_queryset import filter_username_ci, get_annotated_user_queryset
 
@@ -123,6 +124,7 @@ def revoke_other_sessions(user, keep_jti: str) -> int | None:
         BlacklistedToken.objects.bulk_create(
             [BlacklistedToken(token=token) for token in others], ignore_conflicts=True
         )
+        UserSession.objects.filter(user=user).exclude(jti=keep_jti).delete()
     return len(others)
 
 
@@ -137,6 +139,10 @@ def flush_expired_tokens(batch_size: int = 5000) -> int:
             ]
         )
         if not ids:
+            # Devices idle longer than a refresh token lives are signed out.
+            UserSession.objects.filter(
+                last_seen_at__lte=now - jwt_settings.REFRESH_TOKEN_LIFETIME
+            ).delete()
             return deleted
         OutstandingToken.objects.filter(id__in=ids).delete()
         deleted += len(ids)
@@ -161,6 +167,7 @@ def revoke_all_sessions(user) -> None:
             ],
             ignore_conflicts=True,
         )
+        UserSession.objects.filter(user=user).delete()
         type(user)._default_manager.filter(pk=user.pk).update(
             session_version=F("session_version") + 1
         )

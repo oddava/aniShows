@@ -17,6 +17,7 @@ from ..services.account_management_service import (
     resend_email_change,
 )
 from ..services.auth_service import issue_refresh_token, require_recent_auth, token_auth_time
+from ..services.device_sessions import begin_device_session
 from ..services.email_service import EmailService
 from .auth import request_body
 
@@ -66,6 +67,7 @@ class AccountManagementViewSet(ViewSet):
         # Every refresh token was revoked; keep this device signed in, keeping
         # the sign-in time this session already had.
         refresh = issue_refresh_token(request.user, auth_time=token_auth_time(request.auth))
+        begin_device_session(request, str(refresh))
         response = api_response(
             {**result.payload, "access": str(refresh.access_token)},
             status_code=result.status_code,

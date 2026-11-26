@@ -34,6 +34,7 @@ __all__ = [
     "CustomUser",
     "SocialLinkChangeLog",
     "UserProfile",
+    "UserSession",
 ]
 
 
@@ -112,3 +113,25 @@ class SocialLinkChangeLog(CreatedAtMixin, Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.action} at {self.created_at}"
+
+
+class UserSession(Model):
+    """One signed-in device: what Settings lists and can sign out (BUG-008).
+
+    ``jti`` is the device's current refresh token; rotation moves it to the
+    new token (services/device_sessions.py), so the row follows the device
+    across refreshes. ``device`` is a short label from the User-Agent
+    ("Firefox on Windows"); nothing else about the client is stored.
+    """
+
+    user = ForeignKey("users.CustomUser", CASCADE, related_name="device_sessions")
+    jti = CharField(max_length=255, unique=True)
+    device = CharField(max_length=80, blank=True, default="")
+    created_at = DateTimeField(auto_now_add=True)
+    last_seen_at = DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        indexes = [Index(fields=["user", "-last_seen_at"], name="users_session_user_seen")]
+
+    def __str__(self):
+        return f"{self.user_id}: {self.device or 'device'}"

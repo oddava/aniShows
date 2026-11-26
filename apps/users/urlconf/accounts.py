@@ -14,7 +14,7 @@ from ..views import (
     UserStatsView,
     WebSocketTicketView,
 )
-from ..views.auth import RevokeOtherSessionsView, SessionsView
+from ..views.auth import RevokeOtherSessionsView, RevokeSessionView, SessionsView
 from ..views.google import GoogleLogin
 
 router_routes = [
@@ -42,6 +42,11 @@ urlpatterns = [
         "auth/refresh/sessions/revoke-others/",
         RevokeOtherSessionsView.as_view(),
         name="auth_sessions_revoke_others",
+    ),
+    path(
+        "auth/refresh/sessions/<int:session_id>/revoke/",
+        RevokeSessionView.as_view(),
+        name="auth_session_revoke",
     ),
     path("auth/ws-ticket/", WebSocketTicketView.as_view(), name="ws_ticket"),
     path("auth/register/", RegisterView.as_view(), name="register"),
