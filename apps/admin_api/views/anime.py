@@ -1,15 +1,22 @@
 from django.db import transaction
+from django.db.models import Q
 from django.utils.decorators import method_decorator
-from django_filters import CharFilter, FilterSet
+from django_filters import BooleanFilter, CharFilter, ChoiceFilter, FilterSet, NumberFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from rest_framework.decorators import action
-from rest_framework.mixins import DestroyModelMixin, ListModelMixin, RetrieveModelMixin
+from rest_framework.mixins import (
+    DestroyModelMixin,
+    ListModelMixin,
+    RetrieveModelMixin,
+    UpdateModelMixin,
+)
 from rest_framework.response import Response
 from rest_framework.serializers import BooleanField, Serializer
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 
 from ...animes.admin_serializers import (
+    AdminAnimeDetailSerializer,
     AdminAnimeSerializer,
     AdminCharacterSerializer,
     AdminGenreSerializer,
@@ -22,7 +29,7 @@ from ...animes.services.offline_sync import OfflineSyncService
 from ...core.models import AuditLog
 from ..permissions import AdminPolicyMixin
 from ..services.anime_admin_service import (
-    apply_default_genre_slug,
+    AnimeTaskError,
     delete_genre,
     delete_studio,
     get_admin_anime_queryset,
@@ -32,19 +39,39 @@ from ..services.anime_admin_service import (
     get_admin_staff_queryset,
     get_admin_studio_queryset,
     mark_merge_target,
+    queue_anime_image_refetch,
+    queue_anime_refresh,
     set_ids_and_retry,
 )
 from ..services.audit import record_admin_action
 from .audit_mixins import AuditedModelViewSetMixin
 
+MISSING_FILTERS = {
+    "cover": Q(cover_image="") | Q(cover_image__isnull=True),
+    "synopsis": Q(synopsis="") | Q(synopsis__isnull=True),
+    "anilist_id": Q(anilist_id__isnull=True),
+    "studio": Q(studio_links__isnull=True),
+}
+
 
 class AnimeFilter(FilterSet):
     status = CharFilter(field_name="status")
     type = CharFilter(field_name="anime_type")
+    is_adult = BooleanFilter(field_name="is_adult")
+    season = CharFilter(field_name="season")
+    season_year = NumberFilter(field_name="season_year")
+    anilist_id = NumberFilter(field_name="anilist_id")
+    missing = ChoiceFilter(choices=[(key, key) for key in MISSING_FILTERS], method="filter_missing")
 
     class Meta:
         model = Anime
-        fields = ["status", "anime_type"]
+        fields = ["status", "anime_type", "is_adult", "season", "season_year", "anilist_id"]
+
+    def filter_missing(self, queryset, name, value):
+        missing = MISSING_FILTERS[value]
+        if value == "cover":
+            missing &= Q(cover_image_external_url="")
+        return queryset.filter(missing)
 
 
 class ForceQuerySerializer(Serializer):
@@ -56,20 +83,50 @@ class AdminAnimeViewSet(
     AuditedModelViewSetMixin,
     ListModelMixin,
     RetrieveModelMixin,
+    UpdateModelMixin,
     DestroyModelMixin,
     GenericViewSet,
 ):
-    """Anime management for admins utilizing DRF GenericViewSet."""
+    """Anime: staff read; superusers edit the SEO text, refresh from AniList, delete."""
 
     serializer_class = AdminAnimeSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AnimeFilter
     search_fields = ["title", "title_jp"]
-    ordering_fields = ["title", "created_at", "rating", "release_date"]
+    ordering_fields = [
+        "title",
+        "created_at",
+        "updated_at",
+        "rating",
+        "release_date",
+        "popularity_rank",
+        "member_count",
+    ]
     ordering = ["-created_at"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return get_admin_anime_queryset()
+        return get_admin_anime_queryset(detail=self.action != "list")
+
+    def get_serializer_class(self):
+        return AdminAnimeSerializer if self.action == "list" else AdminAnimeDetailSerializer
+
+    def _queue(self, operation, anime):
+        try:
+            payload = operation(self.request, anime)
+        except AnimeTaskError as exc:
+            return Response({"detail": exc.message}, status=exc.status_code)
+        return Response(payload, status=202)
+
+    @action(detail=True, methods=["post"])
+    def refresh(self, request, pk=None):
+        """Queue an AniList metadata refresh of this anime."""
+        return self._queue(queue_anime_refresh, self.get_object())
+
+    @action(detail=True, methods=["post"])
+    def refetch_images(self, request, pk=None):
+        """Download the cover and banner again from their external URLs."""
+        return self._queue(queue_anime_image_refetch, self.get_object())
 
     def destroy(self, request, *args, **kwargs):
         """Delete an anime."""
@@ -88,10 +145,6 @@ class AdminGenreViewSet(AdminPolicyMixin, AuditedModelViewSetMixin, ModelViewSet
 
     def get_queryset(self):
         return get_admin_genre_queryset()
-
-    def perform_create(self, serializer):
-        apply_default_genre_slug(serializer)
-        super().perform_create(serializer)
 
     def destroy(self, request, *args, **kwargs):
         """Delete a genre. Checks for existing anime references."""

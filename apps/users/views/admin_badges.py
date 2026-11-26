@@ -14,6 +14,7 @@ from ..models import Badge, UserBadge
 from ..serializers.badges import BadgeSerializer
 from ..services.avatar_service import get_user_avatar_url
 from ..services.badge_service import grant_badge, revoke_badge
+from ..services.profile_update_service import delete_files_on_commit
 
 User = get_user_model()
 
@@ -37,7 +38,12 @@ def _clean_user_ids(raw):
 
 
 def _badge_snapshot(badge) -> dict:
-    return {field: getattr(badge, field) for field in BADGE_AUDIT_FIELDS if hasattr(badge, field)}
+    snapshot = {
+        field: getattr(badge, field) for field in BADGE_AUDIT_FIELDS if hasattr(badge, field)
+    }
+    # The stored file name, so adding or removing a picture shows in the diff.
+    snapshot["image"] = badge.image.name if badge.image else ""
+    return snapshot
 
 
 class AdminBadgeViewSet(AdminPolicyMixin, ModelViewSet):
@@ -85,7 +91,14 @@ class AdminBadgeViewSet(AdminPolicyMixin, ModelViewSet):
     @transaction.atomic
     def perform_update(self, serializer):
         previous = _badge_snapshot(serializer.instance)
-        badge = serializer.save()
+        # ``remove_image`` drops the uploaded picture so the badge shows its icon again.
+        remove_image = str(self.request.data.get("remove_image", "")).lower() in {"1", "true"}
+        old_image = serializer.instance.image  # keeps its storage and name after the save
+        if remove_image and "image" not in serializer.validated_data:
+            badge = serializer.save(image=None)
+            delete_files_on_commit([old_image])
+        else:
+            badge = serializer.save()
         self._audit(
             AuditLog.ActionType.UPDATE, badge, previous=previous, new=_badge_snapshot(badge)
         )

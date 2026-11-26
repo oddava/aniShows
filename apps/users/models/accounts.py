@@ -11,6 +11,7 @@ from django.db.models import (
     JSONField,
     Model,
     OneToOneField,
+    PositiveIntegerField,
     Q,
     TextChoices,
     UniqueConstraint,
@@ -37,6 +38,10 @@ __all__ = [
 
 
 class CustomUser(AbstractUser):
+    # Bumped by "sign out everywhere" (and suspension, password changes):
+    # tokens carry the version they were issued under, and older ones are refused.
+    session_version = PositiveIntegerField(default=0)
+
     class Meta(AbstractUser.Meta):
         constraints = [
             # One account per address, whatever its case. Blank emails (some

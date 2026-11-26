@@ -14,7 +14,14 @@ from .views.anime import (
     AdminStaffViewSet,
     AdminStudioViewSet,
 )
+from .views.announcements import AdminAnnouncementViewSet
 from .views.dashboard import AdminDashboardView, AdminStatsExportView
+from .views.forums import (
+    AdminForumCategoryViewSet,
+    AdminForumPostViewSet,
+    AdminForumTagViewSet,
+    AdminForumThreadViewSet,
+)
 from .views.logs import AdminAuditLogViewSet, AdminSystemLogViewSet
 from .views.moderation import (
     AdminModerationForumViewSet,
@@ -23,8 +30,10 @@ from .views.moderation import (
 )
 from .views.reports import AdminBulkOperationsView, AdminReportsView
 from .views.reviews import AdminReviewViewSet
+from .views.search import AdminSearchView
 from .views.settings import AdminSettingsView
 from .views.system import AdminSystemBeatRunView, AdminSystemView
+from .views.user_imports import AdminUserImportViewSet
 from .views.users import AdminFavoritesStatsViewSet, AdminUserViewSet
 
 # SimpleRouter: no browsable root view listing every admin endpoint.
@@ -44,6 +53,14 @@ admin_router.register(
 )
 admin_router.register(r"favorites", AdminFavoritesStatsViewSet, basename="admin-favorites")
 admin_router.register(r"import-jobs", AdminImportJobViewSet, basename="admin-import-jobs")
+admin_router.register(r"user-imports", AdminUserImportViewSet, basename="admin-user-imports")
+admin_router.register(
+    r"forum-categories", AdminForumCategoryViewSet, basename="admin-forum-categories"
+)
+admin_router.register(r"forum-tags", AdminForumTagViewSet, basename="admin-forum-tags")
+admin_router.register(r"forum-threads", AdminForumThreadViewSet, basename="admin-forum-threads")
+admin_router.register(r"forum-posts", AdminForumPostViewSet, basename="admin-forum-posts")
+admin_router.register(r"announcements", AdminAnnouncementViewSet, basename="admin-announcements")
 admin_router.register(r"logs", AdminSystemLogViewSet, basename="admin-logs")
 admin_router.register(r"audit-logs", AdminAuditLogViewSet, basename="admin-audit-logs")
 admin_router.register(
@@ -64,6 +81,7 @@ urlpatterns = [
     ),
     path("", include(admin_router.urls)),
     path("dashboard/", AdminDashboardView.as_view(), name="admin-dashboard"),
+    path("search/", AdminSearchView.as_view(), name="admin-search"),
     path("stats/export/", AdminStatsExportView.as_view(), name="admin-stats-export"),
     path("bulk/", AdminBulkOperationsView.as_view(), name="admin-bulk"),
     path("reports/", AdminReportsView.as_view(), name="admin-reports"),

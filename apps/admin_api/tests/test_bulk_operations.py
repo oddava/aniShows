@@ -134,6 +134,7 @@ class BulkOperationTests(TestCase):
                     "entity_type": "reviews",
                     "entity_ids": [review.id],
                     "confirm": "1",
+                    "reason": "Spam wave",
                 },
                 format="json",
             )

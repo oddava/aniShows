@@ -79,8 +79,15 @@ class AdminAuditTrailTests(TestCase):
         ReviewReport.objects.create(review=reported, reporter=author, reason="spam")
         client = self._client(self.staff)
 
-        self.assertEqual(client.delete(f"/api/v1/admin/reviews/{review.id}/").status_code, 200)
-        self.assertEqual(self._only_row().action, AuditLog.ActionType.DELETE)
+        url = f"/api/v1/admin/reviews/{review.id}/"
+        self.assertEqual(client.delete(url).status_code, 400)  # a reason is required
+        self.assertEqual(
+            client.delete(url, {"reason": "Spam links"}, format="json").status_code, 200
+        )
+        row = self._only_row()
+        self.assertEqual(
+            (row.action, row.metadata.get("reason")), (AuditLog.ActionType.DELETE, "Spam links")
+        )
 
         AuditLog.objects.all().delete()
         response = client.post(

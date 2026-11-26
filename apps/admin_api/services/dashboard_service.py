@@ -5,15 +5,28 @@ from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
-from ...animes.models import Anime, Genre, Review, Studio, UserFavorite, UserHistory
-from ...users.models import UserAnimeList, UserProfile
+from ...animes.models import (
+    Anime,
+    Genre,
+    OfflineAnimeSyncState,
+    Review,
+    ReviewReport,
+    Studio,
+    UserFavorite,
+    UserHistory,
+)
+from ...core.models import CeleryTaskResult
+from ...users.models import UserAnimeList, UserImportJob, UserProfile
+from ...users.services.avatar_service import get_user_avatar_url
 from .media import poster_url
+from .moderation_service import OPEN_STATUSES
 
 User = get_user_model()
 
 
 def build_admin_dashboard_payload():
     now = timezone.now()
+    last_24_hours = now - timedelta(hours=24)
     last_7_days = now - timedelta(days=7)
     last_30_days = now - timedelta(days=30)
     user_queryset = User.objects.all()
@@ -26,6 +39,14 @@ def build_admin_dashboard_payload():
         total=Count("id"),
         new_7d=Count("id", filter=Q(date_joined__gte=last_7_days)),
         new_30d=Count("id", filter=Q(date_joined__gte=last_30_days)),
+        suspended=Count("id", filter=Q(is_active=False)),
+    )
+    profile_stats = profile_queryset.aggregate(
+        verified=Count("id", filter=Q(email_verified=True)),
+        active_7d=Count("id", filter=Q(last_activity__gte=last_7_days)),
+    )
+    report_stats = ReviewReport.objects.filter(status__in=OPEN_STATUSES).aggregate(
+        open_reports=Count("id"), open_reviews=Count("review_id", distinct=True)
     )
     content_stats = anime_queryset.aggregate(
         total_anime=Count("id"),
@@ -39,6 +60,13 @@ def build_admin_dashboard_payload():
     user_growth = (
         user_queryset.filter(date_joined__gte=last_30_days)
         .annotate(date=TruncDate("date_joined"))
+        .values("date")
+        .annotate(count=Count("id"))
+        .order_by("date")
+    )
+    reviews_30d = (
+        review_queryset.filter(created_at__gte=last_30_days)
+        .annotate(date=TruncDate("created_at"))
         .values("date")
         .annotate(count=Count("id"))
         .order_by("date")
@@ -61,9 +89,20 @@ def build_admin_dashboard_payload():
         }
         for review in recent_reviews
     ]
-    recent_users = user_queryset.order_by("-date_joined")[:5].values(
-        "id", "username", "email", "date_joined", "is_active", "is_staff"
-    )
+    recent_users = user_queryset.select_related("userprofile").order_by("-date_joined")[:5]
+    recent_users_data = [
+        {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "date_joined": user.date_joined,
+            "is_active": user.is_active,
+            "is_staff": user.is_staff,
+            # Local avatars only: a Google picture would cost a query per row.
+            "avatar": get_user_avatar_url(_without_social(user)) or None,
+        }
+        for user in recent_users
+    ]
 
     return {
         "statistics": {
@@ -71,7 +110,8 @@ def build_admin_dashboard_payload():
                 "total": user_stats["total"],
                 "new_7d": user_stats["new_7d"],
                 "new_30d": user_stats["new_30d"],
-                "verified": profile_queryset.filter(email_verified=True).count(),
+                "verified": profile_stats["verified"],
+                "active_7d": profile_stats["active_7d"],
             },
             "content": {
                 "total_anime": content_stats["total_anime"],
@@ -84,7 +124,19 @@ def build_admin_dashboard_payload():
                 "total_list_entries": list_entry_queryset.count(),
             },
         },
-        "charts": {"user_growth": list(user_growth)},
+        "charts": {"user_growth": list(user_growth), "reviews_30d": list(reviews_30d)},
+        "attention": {
+            "open_reports": report_stats["open_reports"],
+            "open_reviews": report_stats["open_reviews"],
+            "failed_tasks_24h": CeleryTaskResult.objects.filter(
+                status=CeleryTaskResult.TaskStatus.FAILURE, date_created__gte=last_24_hours
+            ).count(),
+            "quarantined_sync": OfflineAnimeSyncState.objects.filter(quarantined=True).count(),
+            "failed_user_imports_24h": UserImportJob.objects.filter(
+                status=UserImportJob.ImportStatus.failed, created_at__gte=last_24_hours
+            ).count(),
+            "suspended_users": user_stats["suspended"],
+        },
         "popular_anime": [
             {
                 "id": item["id"],
@@ -96,8 +148,13 @@ def build_admin_dashboard_payload():
             for item in popular_anime
         ],
         "recent_reviews": recent_reviews_data,
-        "recent_users": list(recent_users),
+        "recent_users": recent_users_data,
     }
+
+
+def _without_social(user):
+    user._prefetched_social_accounts = []
+    return user
 
 
 def build_admin_stats_export_payload():

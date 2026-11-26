@@ -1,0 +1,270 @@
+/*
+ * Admin styles. The admin wears the site's design system (index.css): slate
+ * ink surfaces, one periwinkle accent, DM Sans, sentence case, soft panels and
+ * fills instead of lines, focus as a lighter fill. Only what Tailwind
+ * utilities cannot say lives here.
+ */
+
+/* On :root (not .admin-root) so portalled dialogs and menus see them too.
+   This file only loads with the admin chunk. */
+:root {
+  --admin-sidebar: 15.5rem;
+  --admin-content-max: 76rem;
+  --danger-soft: rgb(242 135 143 / 0.12);
+  --success-soft: rgb(134 204 144 / 0.12);
+  --warning-soft: rgb(233 196 106 / 0.12);
+  --violet: #b8a5ff;
+  --violet-soft: rgb(184 165 255 / 0.12);
+}
+
+.admin-root {
+  min-height: 100dvh;
+  background: var(--ink-0);
+  color: var(--text-1);
+}
+
+/* Form controls live in the components layer, like Tailwind's own: any
+   utility on the element (max-md:hidden, w-auto, pl-10) then wins over them
+   without needing "!". */
+@layer components {
+  /* Text fields: the site's soft fill, 44 px tall. */
+  .admin-input {
+    display: block;
+    width: 100%;
+    min-height: var(--tap);
+    border-radius: var(--radius-md);
+    background-color: rgb(255 255 255 / 0.06);
+    padding: 0.625rem 0.875rem;
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--text-1);
+    transition: background-color var(--dur-fast) ease;
+  }
+
+  .admin-input::placeholder {
+    color: var(--text-3);
+  }
+
+  .admin-input:hover:not(:focus-visible):not(:disabled) {
+    background-color: rgb(255 255 255 / 0.08);
+  }
+
+  .admin-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  textarea.admin-input {
+    min-height: 6rem;
+    resize: vertical;
+  }
+
+  /* Native select with the site's look; the OS menu follows color-scheme: dark. */
+  .admin-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a3abb6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  /* Checkbox: a soft square that fills with the accent. */
+  .admin-check {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    flex-shrink: 0;
+    width: 1.125rem;
+    height: 1.125rem;
+    border-radius: 5px;
+    background: rgb(255 255 255 / 0.1);
+    cursor: pointer;
+    transition: background-color var(--dur-fast) ease;
+  }
+
+  /* A 44 px hit area around the 18 px box (the box itself stays small). */
+  .admin-check::before {
+    content: "";
+    position: absolute;
+    inset: -13px;
+  }
+
+  .admin-check:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.16);
+  }
+
+  .admin-check:checked,
+  .admin-check:indeterminate {
+    background: var(--signature);
+  }
+
+  .admin-check:checked::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 2.5px;
+    width: 5px;
+    height: 10px;
+    border: solid var(--on-signature);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .admin-check:indeterminate::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    top: 50%;
+    height: 2px;
+    margin-top: -1px;
+    border-radius: 1px;
+    background: var(--on-signature);
+  }
+
+  .admin-check:focus-visible {
+    outline: 2px solid var(--signature);
+    outline-offset: 2px;
+  }
+}
+
+/* Table rows: no rules between them; a soft fill on hover and selection. */
+.admin-table td {
+  transition: background-color var(--dur-fast) ease;
+}
+
+.admin-table tbody tr:hover td {
+  background: rgb(255 255 255 / 0.03);
+}
+
+.admin-table tbody tr[data-selected="true"] td {
+  background: var(--signature-soft);
+}
+
+.admin-table tbody td:first-child {
+  border-top-left-radius: var(--radius-md);
+  border-bottom-left-radius: var(--radius-md);
+}
+
+.admin-table tbody td:last-child {
+  border-top-right-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+}
+
+.admin-table tbody tr[data-clickable="true"] {
+  cursor: pointer;
+}
+
+/* Overlays: a short fade (and a small rise for dialogs); off under reduced motion. */
+@keyframes admin-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes admin-rise-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes admin-slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.admin-backdrop {
+  animation: admin-fade-in var(--dur-base) var(--ease-out) backwards;
+}
+
+.admin-backdrop[data-closing="true"],
+.admin-dialog[data-closing="true"],
+.admin-drawer[data-closing="true"] {
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.admin-dialog {
+  animation: admin-rise-in var(--dur-slow) var(--ease-out) backwards;
+}
+
+.admin-drawer {
+  animation: admin-slide-in var(--dur-slow) var(--ease-out) backwards;
+}
+
+.admin-popover {
+  animation: admin-fade-in var(--dur-fast) ease backwards;
+}
+
+/* The sidebar nav fades at an edge that hides more items (AdminShell). */
+.admin-nav-scroll[data-fade-bottom] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+}
+
+.admin-nav-scroll[data-fade-top] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 32px);
+  mask-image: linear-gradient(to bottom, transparent, #000 32px);
+}
+
+.admin-nav-scroll[data-fade-top][data-fade-bottom] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 32px, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 32px, #000 calc(100% - 40px), transparent);
+}
+
+/* The phone sidebar slides in from the left. */
+/* Closing: slide out, then hide (visibility waits for the slide). Opening:
+   visible at once, so focus can move into the sheet straight away. */
+.admin-sidebar-sheet {
+  transition: transform var(--dur-slow) var(--ease-out), visibility 0s linear var(--dur-slow);
+}
+
+.admin-sidebar-sheet[data-open="true"] {
+  transition: transform var(--dur-slow) var(--ease-out), visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-backdrop,
+  .admin-dialog,
+  .admin-drawer,
+  .admin-popover {
+    animation: none;
+  }
+
+  .admin-sidebar-sheet,
+  .admin-table td {
+    transition: none;
+  }
+}
+
+/* A field that sits on its own surface (the search palette): no focus fill.
+   index.css lifts focused inputs with !important inside @layer base, and a
+   layered !important beats an unlayered one, so this lives in the same layer
+   and wins on specificity (it also loads later). */
+@layer base {
+  input.admin-bare-input[type="text"],
+  input.admin-bare-input[type="text"]:focus-visible {
+    background-color: transparent !important;
+  }
+}
+
+/* Long ids, paths and payloads. */
+.admin-mono {
+  font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+
+.admin-code {
+  font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: var(--radius-md);
+  background: var(--ink-0);
+  padding: 0.875rem 1rem;
+  color: var(--text-2);
+  max-height: 24rem;
+  overflow: auto;
+}

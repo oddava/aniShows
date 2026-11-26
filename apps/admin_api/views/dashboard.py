@@ -12,7 +12,7 @@ from ..services.dashboard_service import (
 )
 from .query_params import wants_refresh
 
-DASHBOARD_CACHE_KEY = "admin:dashboard:v1"
+DASHBOARD_CACHE_KEY = "admin:dashboard:v2"
 DASHBOARD_CACHE_SECONDS = 60
 
 

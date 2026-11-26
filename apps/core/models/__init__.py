@@ -7,6 +7,7 @@ Import models from ``apps.core.models`` as before. A group adds a model to its o
 module and to that module's ``__all__``; this file never needs to change.
 """
 
+from .announcements import *  # noqa: F403
 from .celery import *  # noqa: F403
 from .logs import *  # noqa: F403
 from .notifications import *  # noqa: F403

@@ -90,6 +90,7 @@ app.conf.task_routes = {
     # NOTIFICATIONS QUEUE - Email/push
     # =========================================================================
     "apps.users.services.email_service.*": {"queue": "notifications"},
+    "apps.core.tasks.notifications.broadcast_announcement_task": {"queue": "notifications"},
     # =========================================================================
     # ANALYTICS QUEUE - Statistics and reporting
     # =========================================================================

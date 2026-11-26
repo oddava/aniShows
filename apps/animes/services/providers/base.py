@@ -54,13 +54,21 @@ def with_creation_defaults(anime_data: dict) -> dict:
     return filled
 
 
+# Fields an admin can take over; each has a ``<field>_locked`` flag on Anime.
+# While locked, syncs leave the value as the admin wrote it.
+ADMIN_LOCKABLE_FIELDS = frozenset({"meta_description"})
+
+
 def merge_for_update(anime: Anime, anime_data: dict) -> dict:
     """Drop values the provider did not know, so they keep what is stored.
 
     ``provider_ids`` is merged, not replaced: each provider only knows its own.
+    Fields in ``ADMIN_LOCKABLE_FIELDS`` are skipped while an admin has locked them.
     """
     merged = {}
     for field, value in anime_data.items():
+        if field in ADMIN_LOCKABLE_FIELDS and getattr(anime, f"{field}_locked", False):
+            continue
         if field in CLEARABLE_FIELDS:
             merged[field] = value
         elif _is_unknown(field, value):

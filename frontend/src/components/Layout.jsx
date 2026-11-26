@@ -3,6 +3,7 @@ import React, { Suspense } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import VerificationBanner from './VerificationBanner';
+import AnnouncementBanner from './AnnouncementBanner';
 import PageLoader from './common/PageLoader';
 import RouteProgress from './common/RouteProgress';
 
@@ -26,6 +27,8 @@ export default function Layout() {
             </Suspense>
             {!isFlushPage && <div aria-hidden="true" className="h-14 md:h-16 shrink-0" />}
             <VerificationBanner />
+            {/* Flush pages start under the fixed navbar, so the banner clears it. */}
+            <AnnouncementBanner className={isFlushPage ? 'mt-14 md:mt-16' : ''} />
             <main
                 id="main-content"
                 tabIndex={-1}

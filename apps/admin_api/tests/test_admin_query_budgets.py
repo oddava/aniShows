@@ -24,7 +24,8 @@ BUDGETS = {
     "/api/v1/admin/audit-logs/": 3,
 }
 REQUEST_OVERHEAD = 2
-DASHBOARD_BUDGET = 12
+# 12 + the attention block (reports, failed tasks, sync, imports) and reviews_30d.
+DASHBOARD_BUDGET = 15
 SYSTEM_BUDGET = 6
 
 
