@@ -35,9 +35,6 @@ from django.db import transaction
 
 from ..shared.logger import logger
 
-# The offline catalog's adult marker, used only until AniList reports (see above).
-OFFLINE_PROVISIONAL_ADULT_TAG = "hentai"
-
 
 def anilist_is_adult(item) -> bool | None:
     """AniList's ``isAdult`` from a payload: True/False, or None when the payload lacks it."""
@@ -45,18 +42,6 @@ def anilist_is_adult(item) -> bool | None:
         return None
     value = item.get("isAdult")
     return value if isinstance(value, bool) else None
-
-
-def offline_entry_is_provisionally_adult(tags) -> bool:
-    """Hide a new offline-catalog row until AniList reports, when its entry is tagged hentai."""
-    if isinstance(tags, str):
-        tags = [tags]
-    if not isinstance(tags, list | tuple):
-        return False
-    return any(
-        isinstance(tag, str) and tag.strip().casefold() == OFFLINE_PROVISIONAL_ADULT_TAG
-        for tag in tags
-    )
 
 
 def apply_anilist_adult_flags(payloads: Iterable[dict], *, using: str = "default") -> dict:

@@ -20,7 +20,6 @@ from apps.animes.models import (
     AnimeStaff,
     Character,
     Genre,
-    OfflineAnimeSyncState,
     Staff,
     UserFavoriteCharacter,
     UserFavoriteStaff,
@@ -56,7 +55,7 @@ STAFF_KEYS = [
 
 @pytest.fixture(autouse=True)
 def _clean(monkeypatch):
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *a, **k: None)
     cache.clear()
     yield
     cache.clear()
@@ -70,13 +69,7 @@ def people(db):
     adult.genres.add(hentai)
     Anime.objects.filter(pk=adult.pk).update(is_adult=True)  # AniList's isAdult
     hidden = Anime.objects.create(title="Hidden Show", slug="hidden-show", synopsis="x")
-    OfflineAnimeSyncState.objects.create(
-        anime=hidden,
-        metadata_status=OfflineAnimeSyncState.StageStatus.QUARANTINED,
-        franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
-        quarantined=True,
-        quarantine_reason="test",
-    )
+    Anime.objects.filter(pk=hidden.pk).update(catalog_excluded="country:CN")
     character = Character.objects.create(name="Shared Character", description="About her.")
     staff = Staff.objects.create(name="Shared Staff", description="About them.")
     for anime in (public, adult, hidden):

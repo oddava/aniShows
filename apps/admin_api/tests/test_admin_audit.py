@@ -21,7 +21,7 @@ CLIENT_IP = "203.0.113.50"
 
 class AdminAuditTrailTests(TestCase):
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        patcher = patch("apps.animes.signals.request_hydrate", return_value=None)
         patcher.start()
         self.addCleanup(patcher.stop)
         # Requests arrive through one trusted proxy, as behind Caddy.
@@ -186,16 +186,20 @@ class AdminAuditTrailTests(TestCase):
         row = self._only_row()
         self.assertEqual(row.metadata["user_ids"], [self.target.id])
 
-    @patch("apps.core.services.admin_import_jobs_service.current_app.send_task")
-    def test_import_trigger(self, send_task):
-        send_task.return_value = SimpleNamespace(id="audit-task")
+    @patch("apps.animes.tasks.catalog.run_catalog_lane.apply_async")
+    def test_catalog_lane_trigger(self, apply_async):
+        apply_async.return_value = SimpleNamespace(id="audit-task")
 
         response = self._client(self.root).post(
-            "/api/v1/admin/import-jobs/trigger/", {"source": "trending"}, format="json"
+            "/api/v1/admin/catalog/lanes/trending/run/", {}, format="json"
         )
 
         self.assertEqual(response.status_code, 202)
-        self.assertEqual(self._only_row().action, AuditLog.ActionType.TRIGGER)
+        row = self._only_row()
+        self.assertEqual(row.action, AuditLog.ActionType.TRIGGER)
+        self.assertEqual(row.entity_type, "CatalogLane")
+        apply_async.assert_called_once()
+        self.assertEqual(apply_async.call_args.kwargs["queue"], "high_priority")
 
     def test_failed_requests_write_nothing(self):
         client = self._client(self.staff)

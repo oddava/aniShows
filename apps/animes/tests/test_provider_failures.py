@@ -23,7 +23,6 @@ from ...shared.public_cache import (
 from ..models import Anime, Genre
 from ..services.anilist import AniListService
 from ..services.franchise_import import FranchiseImportError, FranchiseImportService
-from ..services.offline_sync_policy import OfflineSyncPolicy, StageResult
 from ..services.watch_episodes import AnimeWatchEpisodeService
 
 RECOMMENDATIONS = "apps.animes.services.public_anime_service.AniListService"
@@ -201,18 +200,7 @@ class FranchiseImportWhenAniListFailsTests(TestCase):
         self.assertEqual(response.json()["code"], "provider_unavailable")
 
 
-class ProviderProblemsNeverQuarantineTests(TestCase):
-    def test_transient_reasons_keep_retrying(self):
-        policy = OfflineSyncPolicy()
-        for code in ("rate_limited", "transport_error", "query_rejected"):
-            result = StageResult(status="transient_error", reason_code=code, transient=True)
-            self.assertFalse(policy._should_quarantine(result=result, attempts=500), code)
-
-    def test_problems_with_the_row_still_quarantine(self):
-        policy = OfflineSyncPolicy()
-        blocked = StageResult(status="blocked_identity", reason_code="identity_conflict")
-        self.assertTrue(policy._should_quarantine(result=blocked, attempts=2))
-
+class ProviderLookupTests(TestCase):
     def test_resolving_stops_after_a_rate_limited_lookup(self):
         anime = Anime.objects.create(
             title="Show", slug="show-x", synopsis="x", anilist_id=8, mal_id=9

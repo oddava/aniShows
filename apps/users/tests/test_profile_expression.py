@@ -142,9 +142,9 @@ def test_few_scores_cap_below_super():
     assert compatibility_label(score) == "high"
 
 
-@patch("apps.animes.signals.enrich_metadata")
+@patch("apps.animes.signals.request_hydrate", return_value=None)
 @patch("apps.animes.signals.generate_recommendations")
-def test_compatibility_endpoint(_recs, _enrich):
+def test_compatibility_endpoint(_recs, _hydrate):
     viewer = _user("viewer")
     target = _user("target")
     shows = [

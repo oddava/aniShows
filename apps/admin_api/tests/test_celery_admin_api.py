@@ -8,7 +8,7 @@ from rest_framework.test import APITestCase
 from ...core.models import AuditLog, CeleryTaskResult
 from .helpers import bearer_client, make_user
 
-SYNC_TASK = "apps.animes.tasks.sync.sync_anime_catalog"
+SYNC_TASK = "apps.animes.tasks.franchises.sync_franchises"
 
 
 class CeleryAdminApiTests(APITestCase):
@@ -30,7 +30,7 @@ class CeleryAdminApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         item = response.data["results"][0]
-        self.assertEqual(item["task_name_short"], "sync_anime_catalog")
+        self.assertEqual(item["task_name_short"], "sync_franchises")
         self.assertEqual(item["status_display"], "Failure")
         self.assertEqual(item["triggered_by"]["username"], self.staff.username)
         self.assertEqual(len(item["error_message"]), 200)
@@ -43,7 +43,7 @@ class CeleryAdminApiTests(APITestCase):
         staff = bearer_client(self.staff)
         trigger = staff.post(
             "/api/v1/admin/celery/tasks/trigger/",
-            {"task": SYNC_TASK, "kwargs": {"sync_type": "trending"}},
+            {"task": SYNC_TASK, "kwargs": {"mode": "backfill"}},
             format="json",
         )
         control = staff.post(
@@ -61,7 +61,7 @@ class CeleryAdminApiTests(APITestCase):
 
         response = self.root.post(
             "/api/v1/admin/celery/tasks/trigger/",
-            {"task": SYNC_TASK, "kwargs": {"sync_type": "trending"}, "queue": "typo-queue"},
+            {"task": SYNC_TASK, "kwargs": {"mode": "backfill"}, "queue": "typo-queue"},
             format="json",
         )
 
@@ -79,7 +79,7 @@ class CeleryAdminApiTests(APITestCase):
 
         response = self.root.post(
             "/api/v1/admin/celery/tasks/trigger/",
-            {"task": SYNC_TASK, "kwargs": {"sync_type": "trending"}},
+            {"task": SYNC_TASK, "kwargs": {"mode": "backfill"}},
             format="json",
         )
 
@@ -93,7 +93,7 @@ class CeleryAdminApiTests(APITestCase):
 
         response = self.root.post(
             "/api/v1/admin/celery/tasks/trigger/",
-            {"task": SYNC_TASK, "kwargs": {"sync_type": "trending"}},
+            {"task": SYNC_TASK, "kwargs": {"mode": "backfill"}},
             format="json",
         )
 

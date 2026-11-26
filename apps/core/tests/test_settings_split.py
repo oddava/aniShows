@@ -19,10 +19,6 @@ SNAPSHOT_PATH = Path(__file__).parent / "snapshots" / "beat_schedule_and_jazzmin
 
 # Pin the tuning settings the schedule reads, so a local .env cannot change it.
 SCHEDULE_ENV = {
-    "OFFLINE_RECONCILE_BATCH_SIZE": "25",
-    "OFFLINE_RECONCILE_CHUNK_SIZE": "100",
-    "OFFLINE_RECONCILE_MAX_ROUNDS": "4",
-    "OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES": "15",
     "MEDIA_SELF_HEAL_BATCH_SIZE": "25",
 }
 SETTINGS_ENV = {
@@ -86,23 +82,7 @@ class SettingsSplitTests(SimpleTestCase):
     def test_schedule_kwargs_follow_the_tuning_settings(self):
         from root.settings.celery_schedule import build_beat_schedule
 
-        schedule = build_beat_schedule(
-            offline_reconcile_batch_size=1,
-            offline_reconcile_chunk_size=2,
-            offline_reconcile_max_rounds=3,
-            offline_reconcile_round_interval_minutes=4,
-            media_self_heal_batch_size=5,
-        )
-        reconcile = schedule["reconcile-offline-catalog-sync-hourly"]["kwargs"]
-        self.assertEqual(
-            (
-                reconcile["batch_size"],
-                reconcile["chunk_size"],
-                reconcile["max_rounds"],
-                reconcile["round_interval_minutes"],
-            ),
-            (1, 2, 3, 4),
-        )
+        schedule = build_beat_schedule(media_self_heal_batch_size=5)
         self.assertEqual(schedule["heal-missing-media-30min"]["kwargs"], {"batch_size": 5})
 
 

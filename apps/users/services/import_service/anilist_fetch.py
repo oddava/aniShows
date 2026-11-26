@@ -21,11 +21,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 import httpx
 from django.conf import settings
 
-from ....animes.services.providers.anilist.client import (
-    DEFAULT_ANILIST_API_URL,
-    MEDIA_FIELDS,
-    AniListClient,
-)
+from ....animes.catalog.queries import LEAN_FIELDS, PAGE_SIZE
+from ....animes.services.providers.anilist.client import DEFAULT_ANILIST_API_URL
 from ....animes.services.rate_limiting import AniListRateLimiter
 from ....shared.logger import logger
 from ....shared.retry import retry_after_seconds
@@ -38,7 +35,8 @@ REQUEST_TIMEOUT_SECONDS = 30.0
 MAX_BACKOFF_SECONDS = 60.0
 MAX_RATE_LIMIT_WAIT_SECONDS = 120.0
 LIST_PAGE_SIZE = 50
-MEDIA_PAGE_SIZE = AniListClient.FULL_MEDIA_PER_PAGE  # 25: full payloads nest cast and staff
+# Lean payloads (no cast): the catalog's details lane fills those in afterwards.
+MEDIA_PAGE_SIZE = PAGE_SIZE
 
 ENTRY_FIELDS = """
     mediaId status score(format: POINT_100) progress repeat notes updatedAt
@@ -69,7 +67,7 @@ def _media_query(argument: str) -> str:
     return f"""
 query ImportMediaByIds($ids: [Int], $perPage: Int) {{
     Page(page: 1, perPage: $perPage) {{
-        media({argument}: $ids, type: ANIME) {{ {MEDIA_FIELDS} }}
+        media({argument}: $ids, type: ANIME) {{ {LEAN_FIELDS} }}
     }}
 }}
 """
@@ -270,7 +268,7 @@ class AniListFetcher:
     def fetch_media_by_ids(
         self, *, anilist_ids: Iterable[int] = (), mal_ids: Iterable[int] = ()
     ) -> Iterable[list[dict]]:
-        """Full media payloads in pages of 25; yields one page at a time (so a caller can stop)."""
+        """Lean media payloads in pages of 50; yields one page at a time (so a caller can stop)."""
         for argument, ids in (("id_in", anilist_ids), ("idMal_in", mal_ids)):
             unique = list(dict.fromkeys(i for i in ids if i))
             query = _media_query(argument)

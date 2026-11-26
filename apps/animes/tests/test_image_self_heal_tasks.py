@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
+from django.utils import timezone
 
 from ..models import Anime
 from ..tasks.images import (
@@ -33,7 +34,7 @@ class ImageTaskOutageDetectionTests(TestCase):
 
 class ImageTaskSelfHealTests(TestCase):
     def setUp(self):
-        enrich_patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        enrich_patcher = patch("apps.animes.signals.request_hydrate")
         self.mock_enrich_delay = enrich_patcher.start()
         self.addCleanup(enrich_patcher.stop)
 
@@ -155,6 +156,14 @@ class ImageTaskSelfHealTests(TestCase):
             cover_image_external_url="https://cdn.myanimelist.net/images/anime/1/cover2.jpg",
             banner_image_external_url="https://cdn.myanimelist.net/images/anime/1/banner2.jpg",
             mal_id=1234,
+            hydrated_at=timezone.now(),
+        )
+        # Not hydrated: served from AniList's CDN, never copied by the self-heal.
+        self._create_anime(
+            title="Lean Row",
+            slug="lean-row",
+            cover_image_external_url="https://cdn.myanimelist.net/images/anime/1/cover3.jpg",
+            mal_id=1235,
         )
 
         result = heal_missing_anime_media.run(batch_size=10)

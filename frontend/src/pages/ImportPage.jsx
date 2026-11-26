@@ -57,6 +57,9 @@ const UNMATCHED_REASON_LABELS = {
     invalid: 'Invalid entry',
 };
 
+/** Titles left out on purpose: AniShows lists Japanese anime only, without music videos. */
+const OUTSIDE_CATALOG = 'outside_catalog';
+
 /** Sources whose import can be started again from the username alone. */
 const RERUNNABLE_SOURCES = ['mal_api', 'anilist'];
 
@@ -557,7 +560,9 @@ function ImportJobCard({ job, expanded, onToggle, onCancel, cancelling, onRunAga
     const active = isActiveJob(job);
     const canRunAgain = !active && RERUNNABLE_SOURCES.includes(job.source) && !!job.source_identifier;
     const progress = Math.min(Math.max(Number(job.progress_percentage) || 0, 0), 100);
-    const unmatched = Array.isArray(job.unmatched) ? job.unmatched : [];
+    const allUnmatched = Array.isArray(job.unmatched) ? job.unmatched : [];
+    const leftOut = allUnmatched.filter((item) => item.reason === OUTSIDE_CATALOG);
+    const unmatched = allUnmatched.filter((item) => item.reason !== OUTSIDE_CATALOG);
 
     return (
         <div className="p-3 sm:p-4" data-testid={`import-job-${job.id}`}>
@@ -688,8 +693,26 @@ function ImportJobCard({ job, expanded, onToggle, onCancel, cancelling, onRunAga
                     )}
                     {job.skipped_entries > 0 && (
                         <p className="text-xs text-gray-500 mb-2">
-                            Skipped entries were unchanged, or edited here more recently than on the source.
+                            Skipped entries were unchanged, edited here more recently than on the source, or titles AniShows does not list.
                         </p>
+                    )}
+
+                    {leftOut.length > 0 && (
+                        <details className="mt-2">
+                            <summary className="text-sm font-medium text-gray-300 cursor-pointer">
+                                {leftOut.length} {leftOut.length === 1 ? 'title' : 'titles'} left out
+                            </summary>
+                            <p className="mt-2 text-xs text-gray-500">
+                                AniShows lists Japanese anime. Animation made elsewhere (donghua, Korean animation) and music videos are not added to your list.
+                            </p>
+                            <ul className="mt-2 space-y-1 text-sm text-gray-400">
+                                {leftOut.map((item, idx) => (
+                                    <li key={`${item.anilist_id || item.mal_id || item.title}-${idx}`} className="text-gray-300">
+                                        {item.title || 'Untitled'}
+                                    </li>
+                                ))}
+                            </ul>
+                        </details>
                     )}
 
                     {unmatched.length > 0 && (

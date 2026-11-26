@@ -45,7 +45,7 @@ def local_image_storage(monkeypatch, tmp_path):
 
 @pytest.fixture(autouse=True)
 def queued_image_fetches(monkeypatch):
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *a, **k: None)
     calls = []
     monkeypatch.setattr(
         "apps.animes.tasks.images._queue_image_fetch", lambda **kwargs: calls.append(kwargs)

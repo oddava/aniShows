@@ -54,7 +54,7 @@ from ..models import (
     UserFavorite,
     UserRecommendation,
 )
-from .offline_catalog import PLACEHOLDER_SYNOPSIS
+from .metadata_health import PLACEHOLDER_SYNOPSIS
 from .public_query.fields import QueryFieldsMixin
 
 User = get_user_model()
@@ -919,8 +919,8 @@ class RecommendationService:
         if can_view_adult is None:
             can_view_adult = can_view_adult_content(user)
 
-        queryset = UserRecommendation.objects.filter(user_id=user.id, is_dismissed=False).exclude(
-            anime__offline_sync_state__quarantined=True
+        queryset = UserRecommendation.objects.filter(
+            user_id=user.id, is_dismissed=False, anime__catalog_excluded=""
         )
         if not can_view_adult:
             # Covers rows generated before the user switched adult content off.

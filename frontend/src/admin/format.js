@@ -85,7 +85,7 @@ export function humanize(value, fallback = '—') {
     return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** The last dotted segment of a task path: apps.animes.tasks.sync.sync_anime_catalog → sync_anime_catalog. */
+/** The last dotted segment of a task path: apps.animes.tasks.catalog.run_catalog_lane → run_catalog_lane. */
 export function shortTaskName(name = '') {
     return String(name).split('.').pop() || name;
 }

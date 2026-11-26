@@ -15,12 +15,12 @@ import pytest
 from celery._state import _task_stack
 from celery.exceptions import Retry
 
-from apps.animes.models import Anime, AnimeCharacter, ThemeSong
+from apps.animes.models import Anime, AnimeCharacter, CatalogRun, ThemeSong
 from apps.animes.services.anilist import AniListService
 from apps.animes.tasks import (
     enrich_metadata,
+    run_catalog_lane,
     sync_airing_workflow,
-    sync_anime_catalog,
     sync_franchises,
 )
 from apps.animes.tests.provider_testing import AniListGraphQL, load_fixture
@@ -31,7 +31,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture(autouse=True)
 def quiet_side_effects(monkeypatch):
     """Keep follow-up tasks (signals, image queueing) from running inline."""
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *a, **k: None)
     monkeypatch.setattr("apps.animes.tasks.images._queue_image_fetch", lambda **kwargs: None)
 
 
@@ -73,6 +73,7 @@ def anilist_http(monkeypatch):
     return AniListGraphQL(
         {
             "GetAnime": "anilist/page_trending.json",
+            "CatalogTrending": "anilist/page_trending.json",
             "GetAnimeById": media_by_id,
             "SearchByMalId": {"Media": frieren()},
         }
@@ -90,28 +91,19 @@ def make_anime(**fields):
     return Anime.objects.create(**defaults)
 
 
-def test_trending_sync_saves_and_ranks_the_trending_page(anilist_http, sleeps):
-    result = sync_anime_catalog.apply(kwargs={"sync_type": "trending", "limit": 3}).get()
+def test_trending_lane_task_keeps_old_ranks_on_a_too_small_result(anilist_http, sleeps):
+    """The Celery task runs the lane; the lanes themselves are in ``test_catalog_engine``.
 
-    assert result["status"] == "success"
-    assert result["fetched"] == 3
-    # The untitled, ID-less row in the fixture is skipped.
-    assert result["matched"] == 2
-    assert set(Anime.objects.values_list("anilist_id", flat=True)) == {171018, 21}
-    assert list(
-        Anime.objects.order_by("trending_rank").values_list("anilist_id", "trending_rank")
-    ) == [(171018, 1), (21, 2)]
-    assert anilist_http.operations() == [
-        ("GetAnime", {"sort": ["TRENDING_DESC"], "page": 1, "perPage": 3})
-    ]
+    Three rows are below the trending minimum, so nothing changes.
+    """
+    result = run_catalog_lane.apply(kwargs={"lane": "trending"}).get()
 
-
-def test_trending_sync_rejects_a_too_small_result(anilist_http, sleeps):
-    result = sync_anime_catalog.apply(kwargs={"sync_type": "trending", "limit": 10}).get()
-
-    assert result["status"] == "source_unhealthy"
-    assert result["reason"] == "provider_result_set_too_small"
+    assert result["status"] == CatalogRun.Status.FAILED
     assert not Anime.objects.exists()
+    run = CatalogRun.objects.get()
+    assert run.lane == "trending"
+    assert run.detail["kept_old_ranks"] is True
+    assert [name for name, _ in anilist_http.operations()] == ["CatalogTrending"]
 
 
 def test_enrich_metadata_hydrates_the_row(anilist_http, sleeps):

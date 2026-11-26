@@ -4,8 +4,11 @@ Each source only implements ``load_entries()``. The rest is common:
 
 - **Resolution.** Local catalog rows are looked up in bulk by AniList id, then MAL id;
   a title is used only for an entry that has no stable id at all. Unknown ids are
-  fetched from AniList 25 per request through the shared background budget, at most
-  ``MAX_UNKNOWN_FETCHES`` per job; the rest are reported as ``not_in_catalog_yet``.
+  fetched from AniList 50 per request (lean payloads) through the shared background
+  budget, at most ``MAX_UNKNOWN_FETCHES`` per job; the rest are reported as
+  ``not_in_catalog_yet``. A title outside the catalog's scope (``animes.catalog.scope``)
+  is never created and its entry is reported as ``outside_catalog``; one already stored
+  but hidden is reported the same way. New titles ask the details lane for their cast.
 - **Merge (non-destructive).** New entries are created. An existing entry takes the
   remote values only when the remote changed after the local edit
   (``remote_updated_at > updated_at``); without a remote timestamp (MAL XML) only empty
@@ -31,7 +34,9 @@ from django.core.cache import cache
 from django.db import InterfaceError, OperationalError, transaction
 from django.utils import timezone
 
+from ....animes.catalog.hooks import bulk_catalog_write, request_hydrate
 from ....animes.models import Anime
+from ....animes.services.providers.anilist.persistence import OutOfCatalogScopeError
 from ....shared.errors import CACHE_ERRORS, ENQUEUE_ERRORS
 from ....shared.logger import logger
 from ...models import UserAnimeList, UserImportJob
@@ -41,6 +46,7 @@ from .entries import (
     REASON_INVALID,
     REASON_NOT_FOUND,
     REASON_NOT_IN_CATALOG_YET,
+    REASON_OUTSIDE_CATALOG,
     REASON_UNKNOWN_STATUS,
     ImportedEntry,
 )
@@ -152,6 +158,8 @@ class BaseImporter:
             from ....animes.services.anilist import AniListService
 
             self._persistence = AniListService(enable_caching=True, enable_rate_limiting=True)
+            # Images and cast come later, from the catalog's details lane.
+            self._persistence.mirror_images = False
         return self._persistence
 
     def _cleanup(self) -> None:
@@ -166,7 +174,10 @@ class BaseImporter:
         self._persistence = None
 
     def _record_unmatched(self, entry: ImportedEntry, reason: str) -> None:
-        self.failed_count += 1
+        if reason == REASON_OUTSIDE_CATALOG:
+            self.skipped_count += 1  # left out on purpose, not a failure
+        else:
+            self.failed_count += 1
         if reason in RETRY_REASONS:
             self.retry_entries.append(entry)
         if len(self.unmatched) < self.MAX_UNMATCHED_STORED:
@@ -252,6 +263,7 @@ class BaseImporter:
 
         resolved: dict[tuple, Anime] = {}
         unknown: list[ImportedEntry] = []
+        reasons: dict[tuple, str] = {}
         for entry in entries:
             anime = by_anilist.get(entry.anilist_id) or by_mal.get(entry.mal_id)
             if anime is None and not entry.anilist_id and not entry.mal_id and entry.title:
@@ -259,12 +271,13 @@ class BaseImporter:
                 anime = Anime.objects.filter(title__iexact=entry.title).order_by("id").first()
                 if anime is None:
                     continue
-            if anime is not None:
+            if anime is not None and anime.catalog_excluded:
+                reasons[entry.key()] = REASON_OUTSIDE_CATALOG
+            elif anime is not None:
                 resolved[entry.key()] = anime
             elif entry.anilist_id or entry.mal_id:
                 unknown.append(entry)
 
-        reasons: dict[tuple, str] = {}
         if unknown:
             self._fetch_unknown(unknown, resolved, reasons)
         return resolved, reasons
@@ -296,31 +309,10 @@ class BaseImporter:
             elif candidate.mal_id:
                 by_mal[candidate.mal_id] = candidate
         pages = self.fetcher.fetch_media_by_ids(anilist_ids=list(by_anilist), mal_ids=list(by_mal))
+        fetched_ids: list[int] = []
         try:
-            for page in pages:
-                for item in page:
-                    match = by_anilist.get(item.get("id") or 0) or by_mal.get(
-                        item.get("idMal") or 0
-                    )
-                    if match is None or match.key() in resolved:
-                        continue
-                    entry = match
-                    try:
-                        with transaction.atomic():
-                            resolved[entry.key()] = save_media(self._get_persistence(), item)
-                        self.fetched_count += 1
-                    except (SoftTimeLimitExceeded, *RETRYABLE_DB_ERRORS):
-                        # The time limit, or the database dropping out (the task retries):
-                        # neither is the title's fault, so it must not be marked invalid.
-                        raise
-                    except Exception:
-                        logger.warning(
-                            "Could not store an imported title",
-                            extra={"anilist_id": item.get("id"), "job_id": self.job.pk},
-                            exc_info=True,
-                        )
-                        reasons[entry.key()] = REASON_INVALID
-                self.flush(force=True)
+            with bulk_catalog_write():
+                self._save_fetched(pages, by_anilist, by_mal, resolved, reasons, fetched_ids)
         except AniListFetchError as exc:
             # AniList is busy: keep what resolved, the rest waits for "Run it again".
             logger.warning("Catalog fetch stopped during import: %s", exc.code)
@@ -329,11 +321,48 @@ class BaseImporter:
                 if entry.key() not in resolved:
                     reasons.setdefault(entry.key(), REASON_NOT_IN_CATALOG_YET)
             return
+        finally:
+            request_hydrate(fetched_ids)
 
         missing = [e for e in candidates if e.key() not in resolved and e.key() not in reasons]
         for entry in missing:
             reasons[entry.key()] = REASON_NOT_FOUND
         self._remember_missing(missing)
+
+    def _save_fetched(self, pages, by_anilist, by_mal, resolved, reasons, fetched_ids) -> None:
+        persistence = self._get_persistence()
+        for page in pages:
+            for item in page:
+                match = by_anilist.get(item.get("id") or 0) or by_mal.get(item.get("idMal") or 0)
+                if match is None or match.key() in resolved:
+                    continue
+                entry = match
+                try:
+                    with transaction.atomic():
+                        anime = save_media(persistence, item)
+                except OutOfCatalogScopeError:
+                    reasons[entry.key()] = REASON_OUTSIDE_CATALOG
+                    continue
+                except (SoftTimeLimitExceeded, *RETRYABLE_DB_ERRORS):
+                    # The time limit, or the database dropping out (the task retries):
+                    # neither is the title's fault, so it must not be marked invalid.
+                    raise
+                except Exception:
+                    logger.warning(
+                        "Could not store an imported title",
+                        extra={"anilist_id": item.get("id"), "job_id": self.job.pk},
+                        exc_info=True,
+                    )
+                    reasons[entry.key()] = REASON_INVALID
+                    continue
+                if anime.catalog_excluded:
+                    # Already stored, and hidden: the payload's origin says so.
+                    reasons[entry.key()] = REASON_OUTSIDE_CATALOG
+                    continue
+                resolved[entry.key()] = anime
+                fetched_ids.append(anime.id)
+                self.fetched_count += 1
+            self.flush(force=True)
 
     # ------------------------------------------------------------------ merge
 

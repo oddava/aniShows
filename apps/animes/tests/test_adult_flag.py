@@ -7,9 +7,6 @@ the offline catalog's ``hentai`` tag on a newly created row.
 """
 
 import importlib
-import json
-import tempfile
-from pathlib import Path
 
 import pytest
 from django.apps import apps as django_apps
@@ -19,12 +16,10 @@ from apps.animes import adult_content
 from apps.animes.adult_content import (
     anilist_is_adult,
     apply_anilist_adult_flags,
-    offline_entry_is_provisionally_adult,
     sync_adult_flags_from_anilist,
 )
 from apps.animes.models import Anime, Genre
 from apps.animes.services.anilist import AniListService
-from apps.animes.services.offline_catalog import OfflineCatalogImportService
 from apps.animes.services.public_anime_service import AnimeQueryService
 from apps.animes.tests.provider_testing import resolve
 
@@ -33,7 +28,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture(autouse=True)
 def _no_side_effect_tasks(monkeypatch):
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *a, **k: None)
 
 
 def flagged_ids() -> set[int]:
@@ -338,85 +333,6 @@ def test_management_command_and_task_run_the_sync(monkeypatch):
     with mock.patch.object(sync_adult_flags, "apply_async") as apply_async:
         call_command("sync_adult_flags", "--enqueue")
     apply_async.assert_called_once_with(queue="low_priority")
-
-
-# ------------------------------------------------------- offline catalog
-
-
-@pytest.mark.parametrize(
-    ("tags", "expected"),
-    [
-        (["drama", "hentai"], True),
-        (["drama", " Hentai "], True),
-        ("hentai", True),
-        (["prostitution", "nsfw", "sex"], False),
-        (None, False),
-        ([1, None], False),
-    ],
-)
-def test_offline_provisional_flag_reads_only_the_hentai_tag(tags, expected):
-    assert offline_entry_is_provisionally_adult(tags) is expected
-
-
-def _offline_entry(**overrides):
-    payload = {
-        "sources": ["https://anilist.co/anime/880001", "https://myanimelist.net/anime/880001"],
-        "title": "Offline Flag Show",
-        "type": "TV",
-        "episodes": 12,
-        "status": "FINISHED",
-        "animeSeason": {"season": "FALL", "year": 2006},
-        "picture": "https://cdn.example.com/p.jpg",
-        "thumbnail": "https://cdn.example.com/t.jpg",
-        "duration": {"value": 1440, "unit": "SECONDS"},
-        "score": {"arithmeticGeometricMean": 7.1},
-        "synonyms": [],
-        "studios": [],
-        "producers": [],
-        "relatedAnime": [],
-        "tags": ["drama"],
-    }
-    payload.update(overrides)
-    return payload
-
-
-def _run_offline_import(*entries):
-    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as handle:
-        handle.write(json.dumps({"lastUpdate": "2026-03-23"}) + "\n")
-        for entry in entries:
-            handle.write(json.dumps(entry) + "\n")
-    try:
-        OfflineCatalogImportService(batch_size=10).run_import(
-            source_path=handle.name, asset_name="anime-offline-database.jsonl"
-        )
-    finally:
-        Path(handle.name).unlink(missing_ok=True)
-
-
-def test_offline_import_hides_hentai_until_anilist_reports_and_never_overrides_it():
-    _run_offline_import(
-        _offline_entry(tags=["drama", "prostitution"]),
-        _offline_entry(
-            title="Offline Explicit Show",
-            sources=["https://anilist.co/anime/880002", "https://myanimelist.net/anime/880002"],
-            tags=["hentai"],
-        ),
-    )
-    general = Anime.objects.get(anilist_id=880001)
-    explicit = Anime.objects.get(anilist_id=880002)
-    assert flagged_ids() == {explicit.pk}
-
-    # AniList reports: its flag wins, and a later offline update keeps it.
-    apply_anilist_adult_flags([{"id": 880001, "isAdult": True}, {"id": 880002, "isAdult": False}])
-    _run_offline_import(
-        _offline_entry(tags=["drama"]),
-        _offline_entry(
-            title="Offline Explicit Show",
-            sources=["https://anilist.co/anime/880002", "https://myanimelist.net/anime/880002"],
-            tags=["hentai"],
-        ),
-    )
-    assert flagged_ids() == {general.pk}
 
 
 # ------------------------------------------------------- migration and reads

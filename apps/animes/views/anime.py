@@ -123,7 +123,7 @@ class AnimeViewSet(ReadOnlyModelViewSet):
 
     def _get_action_anime(self, slug: str) -> Anime:
         anime = get_object_or_404(
-            Anime.public_queryset().only(*self.query_service.ACTION_ANIME_ONLY_FIELDS),
+            Anime.reachable_queryset().only(*self.query_service.ACTION_ANIME_ONLY_FIELDS),
             slug=slug,
         )
         if anime.is_adult and not self.query_service.can_view_adult_content(self.request.user):

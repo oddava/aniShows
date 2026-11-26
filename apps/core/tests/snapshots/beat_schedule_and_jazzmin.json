@@ -10,6 +10,77 @@
       "schedule": "<crontab: 30 8,20 * * * (m/h/dM/MY/d)>",
       "task": "apps.animes.tasks.themes.backfill_theme_youtube_urls"
     },
+    "catalog-airing-hourly": {
+      "kwargs": {
+        "lane": "airing"
+      },
+      "options": {
+        "queue": "high_priority"
+      },
+      "schedule": "<crontab: 30 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.catalog.run_catalog_lane"
+    },
+    "catalog-delta-15min": {
+      "kwargs": {
+        "lane": "delta"
+      },
+      "options": {
+        "queue": "default"
+      },
+      "schedule": "<crontab: 7,22,37,52 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.catalog.run_catalog_lane"
+    },
+    "catalog-details-10min": {
+      "kwargs": {
+        "lane": "hydrate"
+      },
+      "options": {
+        "queue": "low_priority"
+      },
+      "schedule": "<crontab: */10 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.catalog.run_catalog_lane"
+    },
+    "catalog-seasons-6h": {
+      "kwargs": {
+        "lane": "seasons"
+      },
+      "options": {
+        "queue": "default"
+      },
+      "schedule": "<crontab: 12 */6 * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.catalog.run_catalog_lane"
+    },
+    "catalog-sweep-continue-hourly": {
+      "kwargs": {
+        "lane": "seed"
+      },
+      "options": {
+        "queue": "batch"
+      },
+      "schedule": "<crontab: 40 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.catalog.run_catalog_lane"
+    },
+    "catalog-sweep-weekly": {
+      "kwargs": {
+        "lane": "seed",
+        "restart": true
+      },
+      "options": {
+        "queue": "batch"
+      },
+      "schedule": "<crontab: 10 4 * * 2 (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.catalog.run_catalog_lane"
+    },
+    "catalog-trending-hourly": {
+      "kwargs": {
+        "lane": "trending"
+      },
+      "options": {
+        "queue": "high_priority"
+      },
+      "schedule": "<crontab: 5 * * * * (m/h/dM/MY/d)>",
+      "task": "apps.animes.tasks.catalog.run_catalog_lane"
+    },
     "check-new-episodes": {
       "options": {
         "queue": "default"
@@ -37,28 +108,6 @@
       },
       "schedule": "<crontab: 0 1 * * * (m/h/dM/MY/d)>",
       "task": "apps.core.tasks.cleanup_tasks.cleanup_old_task_results"
-    },
-    "derive-airing-hourly": {
-      "kwargs": {
-        "limit": 500,
-        "sync_type": "airing"
-      },
-      "options": {
-        "queue": "high_priority"
-      },
-      "schedule": "<crontab: 30 * * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.sync.sync_anime_catalog"
-    },
-    "enrich-metadata-daily": {
-      "kwargs": {
-        "batch_size": 100,
-        "mode": "backfill"
-      },
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: 0 3 * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.metadata.enrich_metadata"
     },
     "flush-forum-view-counts-minute": {
       "options": {
@@ -94,21 +143,6 @@
       "schedule": "<crontab: 15 * * * * (m/h/dM/MY/d)>",
       "task": "apps.core.tasks.cleanup_tasks.health_check_workers"
     },
-    "reconcile-offline-catalog-sync-hourly": {
-      "kwargs": {
-        "anime_ids": [],
-        "batch_size": 25,
-        "chunk_size": 100,
-        "max_rounds": 4,
-        "round_interval_minutes": 15,
-        "strict": false
-      },
-      "options": {
-        "queue": "batch"
-      },
-      "schedule": "<crontab: 45 * * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync"
-    },
     "replay-public-cache-invalidations": {
       "options": {
         "queue": "default"
@@ -129,64 +163,6 @@
       },
       "schedule": "<crontab: 40 3 * * 3 (m/h/dM/MY/d)>",
       "task": "apps.animes.tasks.adult_content.sync_adult_flags"
-    },
-    "sync-airing-schedule-daily": {
-      "kwargs": {
-        "phases": [
-          "sync",
-          "cleanup",
-          "backfill"
-        ]
-      },
-      "options": {
-        "queue": "high_priority"
-      },
-      "schedule": "<crontab: 45 1 * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.airing.sync_airing_workflow"
-    },
-    "sync-popular-weekly": {
-      "kwargs": {
-        "limit": 500,
-        "sync_type": "airing"
-      },
-      "options": {
-        "queue": "low_priority"
-      },
-      "schedule": "<crontab: 0 2 * * 1 (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.sync.sync_anime_catalog"
-    },
-    "sync-seasonal-daily": {
-      "kwargs": {
-        "limit": 100,
-        "sync_type": "seasonal"
-      },
-      "options": {
-        "queue": "default"
-      },
-      "schedule": "<crontab: 0 2 * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.sync.sync_anime_catalog"
-    },
-    "sync-trending-hourly": {
-      "kwargs": {
-        "limit": 50,
-        "sync_type": "trending"
-      },
-      "options": {
-        "queue": "high_priority"
-      },
-      "schedule": "<crontab: 5 * * * * (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.sync.sync_anime_catalog"
-    },
-    "sync-upcoming-weekly": {
-      "kwargs": {
-        "limit": 100,
-        "sync_type": "next_season"
-      },
-      "options": {
-        "queue": "default"
-      },
-      "schedule": "<crontab: 30 3 * * 0 (m/h/dM/MY/d)>",
-      "task": "apps.animes.tasks.sync.sync_anime_catalog"
     },
     "sync-watch-episodes-airing-every-6-hours": {
       "kwargs": {

@@ -334,7 +334,11 @@ class CatalogProviderBase:
             "synonyms": item.get("synonyms") or [],
             "producers": item.get("producers") or [],
             "provider_ids": item.get("providerIds") or {},
-            "source_urls": item.get("sourceUrls") or [],
+            "country_of_origin": str(item.get("countryOfOrigin") or "").upper()[:2],
+            "anilist_format": str(item.get("format") or "").upper()[:16],
+            "anilist_updated_at": datetime.fromtimestamp(item["updatedAt"], tz=UTC)
+            if isinstance(item.get("updatedAt"), int) and item["updatedAt"] > 0
+            else None,
         }
         # The adult rule is AniList's own flag (adult_content.py), both ways.
         # A payload without it leaves the stored flag alone.

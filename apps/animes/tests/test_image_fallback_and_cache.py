@@ -92,7 +92,7 @@ class AniListPrepareAnimeDataTests(SimpleTestCase):
 
 
 class AnimeDetailCacheInvalidationSignalTests(TestCase):
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_post_save_invalidates_anime_detail_cache(self, _mock_delay):
         anime = Anime.objects.create(
             title="Cache Test Anime",
@@ -113,7 +113,7 @@ class AnimeDetailCacheInvalidationSignalTests(TestCase):
 
         self.assertIsNone(cache.get(cache_key))
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_post_delete_invalidates_anime_detail_cache(self, _mock_delay):
         anime = Anime.objects.create(
             title="Cache Delete Anime",
@@ -134,7 +134,7 @@ class AnimeDetailCacheInvalidationSignalTests(TestCase):
 
 
 class AnimeDetailCacheSelfHealTests(APITestCase):
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_retrieve_refreshes_stale_cached_payload_without_cover(self, _mock_delay):
         anime = Anime.objects.create(
             title="Cached No Cover Anime",
@@ -183,7 +183,7 @@ class AnimeDetailCacheSelfHealTests(APITestCase):
         )
 
     @override_settings(ALLOWED_HOSTS=["testserver", "localhost", "ani.example"])
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_retrieve_refreshes_cached_payload_with_internal_media_host(self, _mock_delay):
         anime = Anime.objects.create(
             title="Cached Internal Host Anime",
@@ -239,7 +239,7 @@ class AnimeDetailCacheSelfHealTests(APITestCase):
         IMAGEKIT_CACHEFILE_DIR="CACHE/images-v2",
         IMAGEKIT_LEGACY_CACHEFILE_DIRS=("CACHE/images",),
     )
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_retrieve_refreshes_cached_payload_with_legacy_thumbnail_prefix(self, _mock_delay):
         anime = Anime.objects.create(
             title="Cached Legacy Prefix Anime",
@@ -339,7 +339,7 @@ class AnimeListImageFieldFallbackTests(APITestCase):
     def setUp(self):
         cache.clear()
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_list_uses_external_cover_when_local_images_missing(self, _mock_delay):
         anime = Anime.objects.create(
             title="External Image Fallback Anime",
@@ -362,7 +362,7 @@ class AnimeListImageFieldFallbackTests(APITestCase):
             "https://img.anilist.co/external-cover.jpg",
         )
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_list_strips_browse_only_fields_to_keep_payloads_small(self, _mock_delay):
         anime = Anime.objects.create(
             title="External Image Field Anime",
@@ -386,7 +386,7 @@ class AnimeListImageFieldFallbackTests(APITestCase):
         self.assertNotIn("banner_image_external_url", payload)
         self.assertNotIn("synopsis", payload)
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_list_response_includes_cache_status_header(self, _mock_delay):
         Anime.objects.create(
             title="Cache Header Anime",
@@ -405,7 +405,7 @@ class AnimeListImageFieldFallbackTests(APITestCase):
         self.assertEqual(first["X-Cache-Status"], "miss")
         self.assertEqual(second["X-Cache-Status"], "hit")
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_trending_shelf_exposes_banner_and_synopsis_for_home_hero(self, _mock_delay):
         anime = Anime.objects.create(
             title="Hero Shelf Anime",

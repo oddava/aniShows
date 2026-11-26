@@ -316,9 +316,14 @@ def heal_missing_anime_media(self, batch_size: int | None = None):
             & Q(banner_image_external_url__isnull=False)
             & ~Q(banner_image_external_url="")
         )
-        queryset = Anime.objects.filter(missing_cover | missing_banner).order_by(
-            "-member_count", "id"
-        )[:resolved_batch_size]
+        # Only hydrated rows get their own copies; the rest of the catalog is served
+        # from AniList's CDN (see apps.animes.catalog), or storage would fill up
+        # with covers for tens of thousands of titles nobody opens.
+        queryset = (
+            Anime.objects.filter(missing_cover | missing_banner)
+            .filter(hydrated_at__isnull=False)
+            .order_by("-member_count", "id")[:resolved_batch_size]
+        )
 
         inspected = 0
         queued = 0

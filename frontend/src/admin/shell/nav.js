@@ -1,6 +1,6 @@
 import {
     Activity, Award, BarChart3, Building2, ClipboardList, DatabaseZap, Film, Flag, History, LayoutDashboard,
-    ListChecks, Megaphone, MessagesSquare, Mic, ScrollText, Settings, Star, Tags, UploadCloud, Users, Users2,
+    ListChecks, Megaphone, MessagesSquare, Mic, ScrollText, Settings, Star, Tags, Users, Users2,
 } from 'lucide-react';
 
 /**
@@ -39,8 +39,7 @@ export const NAV_SECTIONS = [
     {
         title: 'Data',
         items: [
-            { to: '/admin/imports', label: 'Catalog imports', icon: UploadCloud },
-            { to: '/admin/sync-health', label: 'Sync health', icon: DatabaseZap },
+            { to: '/admin/catalog-sync', label: 'Catalog sync', icon: DatabaseZap },
             { to: '/admin/list-imports', label: 'List imports', icon: ListChecks },
         ],
     },

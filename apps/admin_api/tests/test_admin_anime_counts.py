@@ -10,7 +10,7 @@ from .helpers import bearer_client, make_user
 
 class AdminAnimeCountsTests(TestCase):
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        patcher = patch("apps.animes.signals.request_hydrate", return_value=None)
         patcher.start()
         self.addCleanup(patcher.stop)
 

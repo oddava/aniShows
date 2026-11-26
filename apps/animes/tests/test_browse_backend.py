@@ -3,17 +3,11 @@ from datetime import date
 import pytest
 from django.core.cache import cache
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework.test import APIClient
 
+from apps.animes.catalog.lanes import refresh_trending_ranks
 from apps.animes.models import Anime, Genre, Studio
-from apps.animes.services.catalog_sync import CatalogSyncService
-from apps.animes.services.offline_catalog import (
-    OfflineCatalogEntry,
-    OfflineCatalogImportService,
-)
-from apps.animes.tasks.sync import SyncAnimeCatalogTask
 
 
 def create_anime(**overrides):
@@ -50,7 +44,7 @@ def clear_browse_cache():
 
 @pytest.fixture(autouse=True)
 def stub_metadata_enrichment(monkeypatch):
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *args, **kwargs: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *args, **kwargs: None)
 
 
 @pytest.fixture
@@ -62,8 +56,7 @@ def api_client():
 def test_browse_rows_cache_refreshes_after_trending_rank_sync(api_client):
     first = create_anime(title="Trending Alpha")
     second = create_anime(title="Trending Beta")
-    sync_service = CatalogSyncService()
-    sync_service.refresh_trending_ranks([first.id, second.id])
+    refresh_trending_ranks([first.id, second.id])
 
     initial_response = api_client.get(reverse("anime-browse-rows"))
     initial_trending = next(row for row in initial_response.data if row["key"] == "trending")
@@ -71,62 +64,13 @@ def test_browse_rows_cache_refreshes_after_trending_rank_sync(api_client):
 
     assert initial_titles[:2] == [first.title, second.title]
 
-    sync_service.refresh_trending_ranks([second.id, first.id])
+    refresh_trending_ranks([second.id, first.id])
 
     refreshed_response = api_client.get(reverse("anime-browse-rows"))
     refreshed_trending = next(row for row in refreshed_response.data if row["key"] == "trending")
     refreshed_titles = [anime["title"] for anime in refreshed_trending["anime_list"]]
 
     assert refreshed_titles[:2] == [second.title, first.title]
-
-
-@pytest.mark.django_db
-def test_offline_catalog_flush_invalidates_current_detail_cache(api_client):
-    anime = create_anime(
-        title="Offline Cache Target",
-        slug="offline-cache-target",
-        anilist_id=321,
-        rating=None,
-    )
-
-    first_response = api_client.get(reverse("anime-detail", args=[anime.slug]))
-    assert first_response.status_code == 200
-    assert first_response.data["rating"] is None
-
-    entry = OfflineCatalogEntry(
-        raw={"title": anime.title},
-        title=anime.title,
-        base_slug=anime.slug,
-        anime_type=anime.anime_type,
-        status=anime.status,
-        episode_count=anime.episode_count,
-        duration_minutes=anime.duration_minutes,
-        rating=8.5,
-        season="SPRING",
-        season_year=2026,
-        release_date=date(2026, 4, 1),
-        cover_url="https://cdn.example/anime/cover.webp",
-        banner_url="https://cdn.example/anime/banner.webp",
-        primary_studio=None,
-        anilist_id=anime.anilist_id,
-        mal_id=anime.mal_id,
-        provider_ids={"anilist": anime.anilist_id},
-        synonyms=[],
-        producers=[],
-        tags=[],
-        source_urls=[],
-    )
-
-    OfflineCatalogImportService(batch_size=1)._flush_batch(
-        [entry],
-        last_update=date(2026, 4, 2),
-        seen_at=timezone.now(),
-    )
-
-    refreshed_response = api_client.get(reverse("anime-detail", args=[anime.slug]))
-
-    assert refreshed_response.status_code == 200
-    assert str(refreshed_response.data["rating"]) == "8.5"
 
 
 @pytest.mark.django_db
@@ -163,31 +107,23 @@ def test_filter_option_cache_refreshes_after_model_update(
     assert updated_name in refreshed_names
 
 
-@pytest.mark.django_db
 @pytest.mark.parametrize(
-    ("frozen_date", "expected_current", "expected_next"),
+    ("day", "expected_current", "expected_next"),
     [
-        ("2026-03-31 12:00:00", ("WINTER", 2026), ("SPRING", 2026)),
-        ("2026-12-15 12:00:00", ("FALL", 2026), ("WINTER", 2027)),
+        (date(2026, 3, 31), ("WINTER", 2026), ("SPRING", 2026)),
+        (date(2026, 12, 15), ("FALL", 2026), ("WINTER", 2027)),
     ],
 )
-def test_sync_task_season_windows_match_browse_logic(
-    monkeypatch, frozen_date, expected_current, expected_next
-):
-    task = SyncAnimeCatalogTask()
-    frozen_now = timezone.datetime.fromisoformat(frozen_date)
+def test_catalog_season_window_matches_browse_logic(day, expected_current, expected_next):
+    """The seasons lane fills exactly the seasons Browse's shelves read."""
+    from apps.animes.catalog.lanes import season_window
+    from apps.animes.services.public_anime_service import AnimeQueryService
 
-    class FrozenDateTime(timezone.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            if tz is not None:
-                return frozen_now.astimezone(tz)
-            return frozen_now
+    current, year, next_name, next_year = AnimeQueryService.season_window_for_date(day)
+    window = season_window(day)
 
-    monkeypatch.setattr("apps.animes.tasks.sync.datetime", FrozenDateTime)
-
-    assert task._get_season() == expected_current
-    assert task._get_season(next_season=True) == expected_next
+    assert window[1] == expected_current == (current.upper(), year)
+    assert window[2] == expected_next == (next_name.upper(), next_year)
 
 
 @pytest.mark.django_db
@@ -454,8 +390,6 @@ def test_trending_shelf_uses_cover_art_when_banner_is_missing(api_client):
 @pytest.mark.django_db
 def test_studios_lists_only_studios_with_a_public_non_adult_anime(api_client):
     """Browse's studio picker skips studios nobody can browse to (P2-2)."""
-    from apps.animes.models import OfflineAnimeSyncState
-
     listed = create_studio(name="Listed Studio")
     create_anime(title="Public Show").studios.add(listed)
     create_studio(name="Empty Studio")
@@ -467,13 +401,7 @@ def test_studios_lists_only_studios_with_a_public_non_adult_anime(api_client):
     hidden_only = create_studio(name="Hidden Studio")
     hidden = create_anime(title="Hidden Show")
     hidden.studios.add(hidden_only)
-    OfflineAnimeSyncState.objects.create(
-        anime=hidden,
-        metadata_status=OfflineAnimeSyncState.StageStatus.QUARANTINED,
-        franchise_status=OfflineAnimeSyncState.StageStatus.PENDING,
-        quarantined=True,
-        quarantine_reason="test",
-    )
+    type(hidden).objects.filter(pk=hidden.pk).update(catalog_excluded="country:CN")
 
     first = api_client.get(reverse("studio-list"))
     second = api_client.get(reverse("studio-list"))

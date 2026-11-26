@@ -129,7 +129,7 @@ export default function Anime() {
             Try fewer filters or a shorter title.
         </EmptyState>
     ) : (
-        <EmptyState title="The catalog is empty" actions={isSuperuser && <Button variant="primary" to="/admin/imports">Import the catalog</Button>} compact>
+        <EmptyState title="The catalog is empty" actions={isSuperuser && <Button variant="primary" to="/admin/catalog-sync">Open catalog sync</Button>} compact>
             Anime arrive through catalog imports and AniList syncs.
         </EmptyState>
     );

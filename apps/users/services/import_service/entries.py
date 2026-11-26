@@ -21,6 +21,9 @@ REASON_NOT_IN_CATALOG_YET = "not_in_catalog_yet"
 REASON_NOT_FOUND = "not_found"
 REASON_UNKNOWN_STATUS = "unknown_status"
 REASON_INVALID = "invalid"
+# Animation the catalog does not list (made outside Japan, a music video): the entry
+# is left out, and the title is never added to the catalog for it.
+REASON_OUTSIDE_CATALOG = "outside_catalog"
 
 ANILIST_STATUS = {
     "CURRENT": Status.watching,

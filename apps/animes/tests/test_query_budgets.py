@@ -56,9 +56,11 @@ BUDGETS = {
     "browse_rows": 8,
     "schedule": 4,
     # +1 for G3's cached site_status_counts aggregate (site_status_distribution, D-3).
-    "detail": 9,
+    # +1: a cold build of a title without details queues it for the catalog's
+    # details lane (one UPDATE, once per title; apps.animes.catalog.hooks).
+    "detail": 10,
     "public_profile": 5,  # +1: live list totals, one stats calculation (UX P1)
-    "detail_authenticated": 12,
+    "detail_authenticated": 13,  # +1: the details-lane request, as for "detail"
     "search_signed_in": 8,
     "trending_signed_in": 7,
     "browse_rows_signed_in": 11,
@@ -88,7 +90,7 @@ def _cold_query_count(client: APIClient, url: str) -> tuple[int, str]:
 
 @pytest.fixture(autouse=True)
 def _no_side_effect_tasks(monkeypatch):
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *a, **k: None)
     # The fixtures air in 2030; the schedule only ships the coming week (B7).
     freeze_schedule_now(monkeypatch)
     monkeypatch.setattr(

@@ -9,10 +9,8 @@ ENV_EXAMPLE = .env.example
 
 .PHONY: help up down restart build ps logs web-logs celery-logs beat-logs \
         front-logs db-logs mig migrate shell superuser test lint typecheck collectstatic \
-        msg icomp import-anime sync-catalog sync-airing sync-metadata \
-        sync-full sync-franchises sync-recs import-offline \
-        import-offline-async import-offline-resume import-offline-full import-offline-full-async \
-        offline-repair-run \
+        msg icomp catalog-status catalog-seasons catalog-sweep catalog-resweep catalog-rescope \
+        sync-franchises \
         backfill-urls backfill-youtube update-slugs thumbnails thumbnails-s3 \
         backfill-points user-stats remove-duplicates fix-counters seed-forums \
         clean prune cleanup-media backup backups backup-export backup-import exports \
@@ -116,69 +114,23 @@ icomp:                          ## Compile message translations
 	$(EXEC) compilemessages -i .venv
 
 # ============================================================================
-# Anime Sync (unified via sync_anime command)
+# Catalog engine (apps.animes.catalog, `manage.py catalog`)
 # ============================================================================
 
-sync-catalog:                   ## Sync anime catalog from AniList (--sync-type=trending)
-	$(EXEC) migrate
-	$(EXEC) sync_anime sync-catalog --async
+catalog-status:                 ## Catalog coverage, lanes and the sweep's position
+	$(EXEC) catalog status
 
-sync-airing:                    ## Sync airing schedule + backfill dates
-	$(EXEC) migrate
-	$(EXEC) sync_anime sync-airing --async
+catalog-seasons:                ## Refresh previous/current/next seasons from AniList
+	$(EXEC) catalog run seasons --async
 
-sync-metadata:                  ## Enrich anime metadata
-	$(EXEC) migrate
-	$(EXEC) sync_anime enrich-metadata --async
+catalog-sweep:                  ## Continue (or start) the full catalog sweep
+	$(EXEC) catalog run seed --async
 
-sync-recs:                      ## Generate recommendations for all users
-	$(EXEC) migrate
-	$(EXEC) sync_anime generate-recommendations --async
+catalog-resweep:                ## Start the full catalog sweep over
+	$(EXEC) catalog run seed --restart --async
 
-sync-full:                      ## Run full sync pipeline (catalog + airing + metadata + episodes + recs)
-	$(EXEC) migrate
-	$(EXEC) sync_anime full-sync --async
-
-import-offline:                 ## Import Anime Offline Database and reconcile enrichment (sync)
-	$(EXEC) migrate
-	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} \
-		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
-		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
-		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),)
-
-import-offline-async:           ## Queue Anime Offline Database import and reconcile enrichment
-	$(EXEC) migrate
-	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} --async --queue batch \
-		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
-		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
-		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),)
-
-import-offline-resume:          ## Resume latest incomplete Anime Offline Database import
-	$(EXEC) migrate
-	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} --resume \
-		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
-		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
-		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),)
-
-import-offline-full:            ## Import Anime Offline Database and queue enrichment jobs
-	$(EXEC) migrate
-	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} --enqueue-enrichment \
-		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
-		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
-		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),) \
-		$(if $(ENRICHMENT_CHUNK_SIZE),--enrichment-chunk-size $(ENRICHMENT_CHUNK_SIZE),)
-
-import-offline-full-async:      ## Queue offline import + enrichment in batch queue (recommended for large runs)
-	$(EXEC) migrate
-	$(EXEC) sync_anime import-offline-catalog --release-tag $${RELEASE:-latest} --enqueue-enrichment --async --queue batch \
-		$(if $(IMPORT_LIMIT),--import-limit $(IMPORT_LIMIT),) \
-		$(if $(SOURCE_PATH),--source-path $(SOURCE_PATH),) \
-		$(if $(SOURCE_URL),--source-url $(SOURCE_URL),) \
-		$(if $(ENRICHMENT_CHUNK_SIZE),--enrichment-chunk-size $(ENRICHMENT_CHUNK_SIZE),)
-
-offline-repair-run:             ## Reset and re-run offline enrichment pipeline for imported rows
-	$(EXEC) migrate
-	$(EXEC) sync_anime reconcile-offline-sync --reset-pipeline --batch-size $${BATCH_SIZE:-200} --async --queue batch
+catalog-rescope:                ## Re-apply the scope rule (JP, no music) to stored rows
+	$(EXEC) catalog rescope
 
 ## ============================================================================
 ## Data Population & Backfill
