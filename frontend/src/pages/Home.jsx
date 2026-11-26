@@ -155,6 +155,9 @@ export default function Home() {
                     <>
                     <AiringRibbon everyone />
 
+                    {/* Below the landing's featured banner (the page's largest
+                        paint): these posters load as they near the screen, so
+                        they do not compete with it for bandwidth (RA-002). */}
                     <AnimeShelf
                         revealRef={setRevealRef}
                         title="Trending now"
@@ -164,6 +167,7 @@ export default function Home() {
                         isError={trendingError}
                         onRetry={refetchTrending}
                         emptyText="No trending anime right now."
+                        eager={false}
                     />
 
                     <AnimeShelf
@@ -173,6 +177,7 @@ export default function Home() {
                         items={shelves.topRated}
                         isLoading={topRatedLoading}
                         hideWhenEmpty
+                        eager={false}
                     />
                     </>
                     )}
@@ -187,7 +192,7 @@ export default function Home() {
 const SHELF_ROW_CLASSES = 'flex md:grid md:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5 md:gap-6 overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0 snap-x snap-mandatory md:snap-none scroll-px-4 overscroll-x-contain';
 const SHELF_ITEM_CLASSES = 'flex-shrink-0 w-[42vw] max-w-[180px] xs:w-[160px] md:w-auto md:max-w-none h-full snap-start';
 
-function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, isError = false, onRetry, emptyText, hideWhenEmpty = false, renderItem }) {
+function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, isError = false, onRetry, emptyText, hideWhenEmpty = false, renderItem, eager = true }) {
     const headingId = `shelf-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
     if (!isLoading && !isError && hideWhenEmpty && !(items?.length > 0)) return null;
 
@@ -212,7 +217,7 @@ function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, i
                     ) : items?.length > 0 ? (
                         items.map((item, index) => (
                             <div key={item.id} className={SHELF_ITEM_CLASSES}>
-                                {renderItem ? renderItem(item, index) : <AnimeCard anime={item} index={index} showMeta />}
+                                {renderItem ? renderItem(item, index) : <AnimeCard anime={item} index={index} showMeta eagerFirstSix={eager} />}
                             </div>
                         ))
                     ) : (
