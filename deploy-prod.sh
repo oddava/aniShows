@@ -257,7 +257,7 @@ if [ "$DB_HOST" != db ] && [ -z "${DB_SSLMODE:-}" ]; then
     warn "External database ${DB_HOST} without DB_SSLMODE: libpq's default (prefer) may connect unencrypted."
 fi
 if [ "$ANALYTICS" = 1 ] && [ -z "${UMAMI_PUBLIC_ORIGIN:-}" ]; then
-    warn "UMAMI_PUBLIC_ORIGIN is unset; the CSP will block the Umami script."
+    warn "UMAMI_PUBLIC_ORIGIN is unset; it is read from the frontend build later, else the CSP blocks the Umami script."
 fi
 
 step "Compose configuration"
@@ -457,6 +457,21 @@ docker run --rm -v "${FRONTEND_VOLUME}:/srv/frontend" "$FRONTEND_IMAGE" sh -c '
     find /srv/frontend/assets -type f -mtime +7 -delete
     test -f /srv/frontend/index.html'
 ok "frontend files deployed"
+
+# The Umami script URL is baked into the frontend at build time (a CI secret),
+# so the server's .env may not name it. The build records the script's origin
+# (frontend/vite.config.js, csp-script-origins.txt); the SPA's CSP must allow
+# it or every page logs a violation and analytics never loads (BUG-001).
+if [ -z "${UMAMI_PUBLIC_ORIGIN:-}" ]; then
+    built_origin="$(docker run --rm "$FRONTEND_IMAGE" sh -c 'cat /app/dist/csp-script-origins.txt 2>/dev/null || true' | head -n1 | tr -d '\r')"
+    if [[ "$built_origin" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
+        UMAMI_PUBLIC_ORIGIN="$built_origin"
+        export UMAMI_PUBLIC_ORIGIN
+        ok "analytics origin from the frontend build: ${UMAMI_PUBLIC_ORIGIN}"
+    elif [ -n "$built_origin" ]; then
+        warn "ignoring malformed analytics origin from the frontend build: ${built_origin}"
+    fi
+fi
 
 step "Clearing application cache"
 "${COMPOSE[@]}" exec -T web python manage.py shell -c "from django.core.cache import cache; cache.clear()" \

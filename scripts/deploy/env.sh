@@ -130,8 +130,11 @@ resolve_deploy_mode() {
 
     # The SPA loads Umami's script from its own host, so the CSP must allow
     # that origin (ANISHOWS-001: left unset, every page blocked it). Derived
-    # from UMAMI_DOMAIN, then from the built script URL, when not given.
-    if [ "$ANALYTICS" = 1 ] && [ -z "${UMAMI_PUBLIC_ORIGIN:-}" ]; then
+    # from UMAMI_DOMAIN, then from the built script URL, when not given. Also
+    # when Umami runs outside this stack (ANALYTICS=0 but either is set):
+    # BUG-001, analytics.anishows.com was still blocked on live. deploy-prod.sh
+    # falls back to the origin the frontend build itself recorded.
+    if [ -z "${UMAMI_PUBLIC_ORIGIN:-}" ] && { [ "$ANALYTICS" = 1 ] || [ -n "${UMAMI_DOMAIN:-}${VITE_UMAMI_SCRIPT_URL:-}" ]; }; then
         local umami_host="${UMAMI_DOMAIN:-}"
         if [ -z "$umami_host" ] && [ -n "${VITE_UMAMI_SCRIPT_URL:-}" ]; then
             umami_host="${VITE_UMAMI_SCRIPT_URL#*://}"

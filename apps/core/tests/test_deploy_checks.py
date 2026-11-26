@@ -637,6 +637,18 @@ class ComposeWrapperTests(SimpleTestCase):
         )
         self.assertEqual(line, "umami: origin=https://cdn.example.com")
 
+    def test_external_analytics_origin_without_the_bundled_umami(self):
+        # BUG-001: Umami hosted outside this stack (ANALYTICS off) still needs
+        # its origin in the SPA's CSP, or the script is blocked on every page.
+        line = self._umami_line(
+            {
+                **SAFE_ENV,
+                "ANALYTICS_ENABLED": "0",
+                "VITE_UMAMI_SCRIPT_URL": "https://analytics.example.com/script.js",
+            }
+        )
+        self.assertEqual(line, "umami: origin=https://analytics.example.com")
+
     def test_no_analytics_no_origin(self):
         self.assertEqual(self._umami_line(SAFE_ENV), "umami: origin=")
 
