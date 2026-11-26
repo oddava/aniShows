@@ -17,9 +17,9 @@ from rest_framework.exceptions import ValidationError
 
 __all__ = [
     "EXPRESSION_FIELDS",
+    "SECTIONS",
     "TEXT_LIMITS",
     "clean_expression_text",
-    "SECTIONS",
     "clean_hidden_sections",
     "clean_status_emoji",
     "expression_payload",
@@ -36,7 +36,16 @@ TEXT_LIMITS = {
 TEXT_FIELDS = (*TEXT_LIMITS, "status_emoji")
 EXPRESSION_FIELDS = (*TEXT_FIELDS, "hidden_sections")
 # Overview sections an owner may hide.
-SECTIONS = ("now_watching", "stats", "watching", "favorites", "characters", "staff", "taste", "activity")
+SECTIONS = (
+    "now_watching",
+    "stats",
+    "watching",
+    "favorites",
+    "characters",
+    "staff",
+    "taste",
+    "activity",
+)
 
 # Zero-width joiner and variation selector 16: emoji sequences need them.
 _EMOJI_JOINERS = (chr(0x200D), chr(0xFE0F))
