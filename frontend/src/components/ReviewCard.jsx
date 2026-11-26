@@ -10,6 +10,7 @@ import { reviewApi } from '../api/client';
 import MiniProfileHoverCard from './common/MiniProfileHoverCard';
 import AnimeMediaImage from './common/AnimeMediaImage';
 import Spoiler from './common/Spoiler';
+import ReviewReactions from './ReviewReactions';
 import CustomSelect from './common/CustomSelect';
 import {
     applyReviewReaction,
@@ -692,26 +693,15 @@ export default function ReviewCard({ review, onEdit, onDelete, showAnime = false
                                 <span>Dislike</span>
                                 <span>({dislikeCount})</span>
                             </button>
-                        </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                            {reactionSummary.map((reaction) => (
-                                <button
-                                    key={reaction.type}
-                                    onClick={() => handleReaction(reaction.type)}
-                                    disabled={!isAuthenticated || isOwner || reactionMutation.isPending}
-                                    aria-label={`${reactionLabel(reaction)} (${reaction.count || 0})`}
-                                    aria-pressed={Boolean(reaction.active)}
-                                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${reaction.active
-                                        ? 'border-accent/40 bg-accent/10 text-white'
-                                        : 'border-gray-800/60 bg-dark-50/60 text-gray-400 hover:border-gray-700 hover:text-gray-200'
-                                        } ${(!isAuthenticated || isOwner) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-                                    title={!isAuthenticated ? 'Login to react' : isOwner ? 'Cannot react to your own review' : reactionLabel(reaction)}
-                                >
-                                    <span className="text-sm leading-none">{reaction.emoji}</span>
-                                    <span>{reaction.count || 0}</span>
-                                </button>
-                            ))}
+                            <ReviewReactions
+                                reactions={reactionSummary}
+                                onReact={handleReaction}
+                                canReact={isAuthenticated && !isOwner}
+                                pending={reactionMutation.isPending}
+                                disabledTitle={!isAuthenticated ? 'Login to react' : 'Cannot react to your own review'}
+                                labelFor={reactionLabel}
+                            />
                         </div>
                     </div>
                 </div>

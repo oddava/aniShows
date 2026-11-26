@@ -20,6 +20,7 @@ import { favoriteKeys, listKeys, profileKeys, userKeys } from '../api/queries/us
 import { DEFAULT_TAB_ID, TABS, getTabByPath, getTabHref } from '../components/animeDetail/animeDetailTabs';
 import TabButton from '../components/animeDetail/TabButton';
 import PosterColumn from '../components/animeDetail/PosterColumn';
+import HeroTint from '../components/animeDetail/HeroTint';
 import TitleSection from '../components/animeDetail/TitleSection';
 import AnimeDetailTabContent from '../components/animeDetail/AnimeDetailTabContent';
 import ReviewsSection from '../components/animeDetail/ReviewsSection';
@@ -214,24 +215,23 @@ export default function AnimeDetail() {
 
     const relationCoverFallback = location.state?.prefetchedRelationCover;
 
-    // Without a real banner the hero falls back to the portrait cover, which is
-    // a few hundred pixels wide; stretched across the page it turns to mush, so
-    // it is shown as a soft, blurred backdrop instead. The same goes for a
-    // banner that failed and fell back, or one too small for the page.
+    // The hero shows the show's real banner, sharp (the srcset includes the
+    // 1900px original), as AniList does. A show without one gets a shorter,
+    // plain header: stretching the portrait cover across the page only ever
+    // looked pixelated. The same applies when the banner fails to load or
+    // turns out to be no banner (portrait, or far too narrow for the hero).
     const hasBanner = Boolean(
         anime.banner_image_large || anime.banner_image_medium || anime.banner_image || anime.banner_image_external_url
     );
-    const softBanner = !hasBanner || softBannerSlug === slug;
-    const bannerUrl = getOptimizedImageUrl(anime, 'banner', 'large') ||
-        getOptimizedImageUrl(anime, 'cover', 'large') ||
-        relationCoverFallback ||
-        getImageUrl(null, anime.title);
+    const showBanner = hasBanner && softBannerSlug !== slug;
+    const bannerUrl = hasBanner ? getOptimizedImageUrl(anime, 'banner', 'large') : null;
     const coverUrl = getOptimizedImageUrl(anime, 'cover', 'large') ||
         relationCoverFallback ||
         getImageUrl(null, anime.title);
     const bannerSrcSet = getImageSrcSet(anime, 'banner');
     const coverSrcSet = getImageSrcSet(anime, 'cover');
-    const bannerFallbackUrl = getImageFallbackUrl(anime, 'banner');
+    // Banner-only fallback: never fall back to the cover here.
+    const bannerFallbackUrl = anime.banner_image_external_url || anime.banner_image || null;
     const coverFallbackUrl = getImageFallbackUrl(anime, 'cover');
 
     const tabsWithCounts = TABS.map(tab => ({
@@ -269,7 +269,12 @@ export default function AnimeDetail() {
             <AnimeDetailSEO anime={anime} />
 
             {/* Banner */}
-            <div className="relative h-[34vh] min-h-[260px] overflow-hidden bg-[var(--ink-1)] lg:h-[40vh] lg:min-h-[300px]">
+            <div
+                data-banner={showBanner ? 'image' : 'none'}
+                className={`relative overflow-hidden bg-[var(--ink-1)] ${showBanner ? 'h-[34vh] min-h-[260px] lg:h-[40vh] lg:min-h-[300px]' : 'h-[230px] lg:h-[260px]'}`}
+            >
+                {!showBanner && <HeroTint anime={anime} />}
+                {hasBanner && (
                 <div className="hero-drift absolute inset-0 origin-top">
                 <img
                     src={bannerUrl}
@@ -285,12 +290,16 @@ export default function AnimeDetail() {
                     }}
                     onError={(event) => {
                         setIsBannerLoaded(false);
+                        if (event.currentTarget.dataset.fallbackApplied === '1' || !bannerFallbackUrl) {
+                            setSoftBannerSlug(slug);
+                            return;
+                        }
                         applyImageFallback(event, bannerFallbackUrl);
                     }}
-                    data-soft={softBanner ? 'true' : undefined}
-                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${softBanner ? 'scale-110 blur-2xl' : ''} ${isBannerLoaded ? (softBanner ? 'opacity-70' : 'opacity-100') : 'opacity-0'}`}
+                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isBannerLoaded && showBanner ? 'opacity-100' : 'opacity-0'}`}
                 />
                 </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/50 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-dark/80 via-transparent to-transparent" />
             </div>

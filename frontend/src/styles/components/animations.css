@@ -11,10 +11,12 @@
   }
 }
 
-/* Skeletons: a soft light sweeps across, slower than a blink and calmer. */
-@keyframes skeleton-sweep {
-  from { background-position: 160% 0; }
-  to { background-position: -60% 0; }
+/* Skeletons breathe: one slow, even pulse; placeholders that mount together
+   pulse together (no light sweeping across each tile on its own clock).
+   Opacity only, so it stays on the compositor. */
+@keyframes skeleton-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 .shimmer,
@@ -24,9 +26,7 @@
 .shimmer-gradient,
 .shimmer-overlay {
   background-color: var(--color-overlay-base);
-  background-image: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.05) 50%, transparent 70%);
-  background-size: 220% 100%;
-  animation: skeleton-sweep 1.6s ease-in-out infinite;
+  animation: skeleton-breathe 1.8s ease-in-out infinite;
 }
 
 /* Panels fade in when they mount (opacity only: no transform is left on
@@ -36,16 +36,15 @@
   to { opacity: 1; }
 }
 
-/* Cards arrive with a short fade-up, a few at a time, instead of popping in.
-   The fill is "backwards", so no transform stays on the card afterwards. */
+/* Cards arrive together with a soft fade, not one after another across the
+   row. The fill is "backwards", so nothing stays on the card afterwards. */
 @keyframes card-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .card-enter {
-  animation: card-in 240ms var(--ease-out) backwards;
-  animation-delay: calc(min(var(--stagger, 0), 11) * 30ms);
+  animation: card-in 360ms var(--ease-out) backwards;
 }
 
 /* The small cover, blurred, holds the poster's place while the full image
@@ -306,14 +305,23 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Images fade in once decoded; the box is sized beforehand, so nothing shifts. */
+/* Images develop rather than pop: once decoded they come in from a soft blur
+   and a hair of scale into focus. The box is sized beforehand (and clips),
+   so nothing shifts. */
 .img-fade {
   opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-out), filter var(--dur-base) var(--ease-out);
+  filter: blur(10px);
+  transform: scale(1.03);
+  transition:
+    opacity 420ms var(--ease-out),
+    filter 560ms var(--ease-out),
+    transform 560ms var(--ease-out);
 }
 
 .img-fade[data-loaded="true"] {
   opacity: 1;
+  filter: none;
+  transform: none;
 }
 
 /* Card quick-add: hidden until hover/focus with a pointer, always shown on touch (T1). */

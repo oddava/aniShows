@@ -80,10 +80,14 @@ function AnimeCard({
         const img = imageRef.current;
         const card = cardRef.current;
         if (!img || !card) return;
-        coverAccent(img, imageUrl).then((color) => {
+        coverAccent(img, imageUrl, [
+            getOptimizedImageUrl(anime, 'cover', 'small'),
+            imageUrl,
+            getImageFallbackUrl(anime, 'cover'),
+        ]).then((color) => {
             if (color) card.style.setProperty('--cover-accent', color);
         });
-    }, [imageUrl]);
+    }, [anime, imageUrl]);
     const [imageLoaded, setImageLoaded] = useState(() => loadedCovers.has(imageUrl));
     const markLoaded = useCallback((event) => {
         const loadedFrom = event?.currentTarget?.currentSrc || loadedCovers.get(imageUrl) || imageUrl;
@@ -228,7 +232,7 @@ function AnimeCard({
             ref={cardRef}
             onPointerEnter={tintTitle}
             className="card-enter group relative flex h-full flex-col"
-            style={knownAccent ? { '--stagger': index % 12, '--cover-accent': knownAccent } : { '--stagger': index % 12 }}
+            style={knownAccent ? { '--cover-accent': knownAccent } : undefined}
             aria-label={displayTitle}
         >
             <div className="relative aspect-[2/3] shrink-0 rounded-[var(--radius-md)] bg-[var(--ink-2)] has-[a:focus-visible]:shadow-[0_0_0_2px_var(--signature)]">

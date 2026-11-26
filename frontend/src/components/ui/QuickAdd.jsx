@@ -18,14 +18,6 @@ const TOUCH_QUERY = '(hover: none), (pointer: coarse), (max-width: 639px)';
  *
  * Presentational: the card owns the writes (`onSelect`, `onScore`, `onRemove`).
  */
-/** The line under Completed: what it will do to progress, or nothing. */
-function completeHint(watched, total, aired) {
-    if (aired && (!total || aired < total)) {
-        return watched < aired ? `marks the ${aired} aired episodes watched` : null;
-    }
-    return total && watched < total ? `marks all ${total} watched` : null;
-}
-
 export default function QuickAdd({
     status,
     score = 0,
@@ -151,9 +143,6 @@ export default function QuickAdd({
                 onSelect={handleSelect}
                 onRemove={onRemove ? handleRemove : undefined}
                 autoFocus
-                // Say what Completed does to progress before it happens: every
-                // episode, or every aired one while the show is still airing.
-                completeHint={completeHint(watched, total, aired)}
             />
         );
 

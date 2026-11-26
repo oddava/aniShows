@@ -112,15 +112,21 @@ export function dominantTextColor(data) {
     return hslToHex(h, outS, outL);
 }
 
+// Throws when the canvas is tainted (cross-origin without CORS) or when the
+// draw came out blank (an image not decoded yet, or a stale element): both
+// mean "couldn't sample", unlike a null colour, which means "greyscale".
 function sampleImage(img) {
     const canvas = document.createElement('canvas');
     canvas.width = SAMPLE_W;
     canvas.height = SAMPLE_H;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return null;
+    if (!ctx) throw new Error('no 2d context');
     ctx.drawImage(img, 0, 0, SAMPLE_W, SAMPLE_H);
-    // Throws a SecurityError when the image is cross-origin without CORS.
-    return dominantTextColor(ctx.getImageData(0, 0, SAMPLE_W, SAMPLE_H).data);
+    const { data } = ctx.getImageData(0, 0, SAMPLE_W, SAMPLE_H);
+    let opaque = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] >= 128) opaque += 1;
+    if (opaque < (SAMPLE_W * SAMPLE_H) / 4) throw new Error('blank draw');
+    return dominantTextColor(data);
 }
 
 function loadWithCors(url) {
@@ -134,47 +140,56 @@ function loadWithCors(url) {
     });
 }
 
+const usable = (url) => typeof url === 'string' && url && !url.startsWith('data:');
+
 /** The cached colour for a cover key, or undefined when it hasn't been sampled yet. */
 export function cachedCoverAccent(key) {
     return key ? cache.get(key) : undefined;
 }
 
 /**
- * Resolve the hover colour for a cover. Uses the already-loaded <img> when it
- * can, so there's no extra request in the common (same-origin) case.
+ * Resolve the hover colour for a cover. Samples the card's own loaded <img>
+ * first (no request when it's same-origin), then loads the candidate URLs
+ * with CORS until one samples cleanly. Only a clean sample is cached, so a
+ * failure is retried on the next hover.
  *
- * @param {HTMLImageElement|null} img the card's loaded cover
- * @param {string} [key] stable cache key for this cover (defaults to the
- *   image URL); cards pass their cover URL so the srcset pick doesn't matter
+ * @param {HTMLImageElement|null} img the card's cover element
+ * @param {string} key stable cache key for this cover (the card's cover URL)
+ * @param {string[]} [fallbacks] more URLs for the same cover to try
  * @returns {Promise<string|null>}
  */
-export function coverAccent(img, key) {
-    const url = img?.currentSrc || img?.src;
-    const cacheKey = key || url;
-    if (!url || typeof document === 'undefined') return Promise.resolve(null);
+export function coverAccent(img, key, fallbacks = []) {
+    if (typeof document === 'undefined') return Promise.resolve(null);
+    const candidates = [...new Set([img?.currentSrc, img?.src, ...fallbacks].filter(usable))];
+    const cacheKey = key || candidates[0];
+    if (!cacheKey) return Promise.resolve(null);
     if (cache.has(cacheKey)) return Promise.resolve(cache.get(cacheKey));
     if (pending.has(cacheKey)) return pending.get(cacheKey);
 
     const job = (async () => {
-        let color = null;
         try {
-            if (img.complete && img.naturalWidth > 0) {
-                color = sampleImage(img);
-            } else {
-                color = sampleImage(await loadWithCors(url));
+            if (img?.complete && img.naturalWidth > 0) {
+                try {
+                    const color = sampleImage(img);
+                    cache.set(cacheKey, color);
+                    return color;
+                } catch {
+                    // Tainted or blank: load a CORS copy below.
+                }
             }
-        } catch {
-            // Tainted canvas: try a CORS copy once. The browser cache usually
-            // can't reuse the non-CORS response, so this is a real (small) fetch.
-            try {
-                color = sampleImage(await loadWithCors(url));
-            } catch {
-                color = null;
+            for (const url of candidates) {
+                try {
+                    const color = sampleImage(await loadWithCors(url));
+                    cache.set(cacheKey, color);
+                    return color;
+                } catch {
+                    // Next candidate.
+                }
             }
+            return null;
+        } finally {
+            pending.delete(cacheKey);
         }
-        cache.set(cacheKey, color);
-        pending.delete(cacheKey);
-        return color;
     })();
     pending.set(cacheKey, job);
     return job;
