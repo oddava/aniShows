@@ -20,6 +20,10 @@ export default function MobileTopBar() {
     const isStaff = Boolean(user?.is_staff || user?.is_superuser);
     const [scrolled, setScrolled] = useState(false);
     const [hidden, setHidden] = useState(false);
+    // Sticky bars further down (the profile tabs) sit under the bar while it shows.
+    useEffect(() => {
+        document.documentElement.dataset.mobileNav = hidden ? 'hidden' : 'shown';
+    }, [hidden]);
     const lastY = useRef(0);
 
     useEffect(() => {

@@ -189,7 +189,7 @@ function ActivityRow({ activity }) {
     const title = anime?.title || 'Unknown title';
 
     return (
-        <li className="flex items-center gap-4 py-3 ">
+        <li className="flex items-center gap-3.5 py-2">
             {anime?.slug ? (
                 <Link to={`/anime/${anime.slug}`} tabIndex={-1} aria-hidden="true" className="shrink-0">
                     <AnimeMediaImage
@@ -197,12 +197,12 @@ function ActivityRow({ activity }) {
                         kind="cover"
                         size="small"
                         alt=""
-                        className="h-14 w-10 rounded-md bg-[var(--ink-2)] object-cover"
+                        className="h-12 w-9 rounded-md bg-[var(--ink-2)] object-cover"
                         loading="lazy"
                     />
                 </Link>
             ) : (
-                <span aria-hidden="true" className="h-14 w-10 shrink-0 rounded-md bg-[var(--ink-2)]" />
+                <span aria-hidden="true" className="h-12 w-9 shrink-0 rounded-md bg-[var(--ink-2)]" />
             )}
             <div className="min-w-0 flex-1">
                 <p className="text-[15px] leading-snug text-[var(--text-2)]">
@@ -211,8 +211,8 @@ function ActivityRow({ activity }) {
                 {activity.notes && (
                     <p className="mt-1 line-clamp-2 text-sm italic text-[var(--text-2)]">“{activity.notes}”</p>
                 )}
+                <p className="mt-0.5 text-[13px] text-[var(--text-3)] tabular">{timeAgo(activity.created_at)}</p>
             </div>
-            <span className="shrink-0 text-sm text-[var(--text-3)] tabular">{timeAgo(activity.created_at)}</span>
         </li>
     );
 }

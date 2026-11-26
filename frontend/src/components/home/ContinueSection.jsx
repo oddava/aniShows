@@ -50,7 +50,7 @@ const ContinueRow = memo(function ContinueRow({ entry, now, onLive }) {
     }, [onLive, entry.id, entry.episodes_watched, state.kind, watched]);
 
     return (
-        <li className="card-enter -mx-3 grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03] sm:grid-cols-[3rem_minmax(0,1fr)_auto]">
+        <li className="card-enter -mx-3 grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 rounded-[var(--radius-md)] px-3 py-3 sm:grid-cols-[3rem_minmax(0,1fr)_auto]">
             <Link to={href} tabIndex={-1} aria-hidden="true" className="row-span-2 self-start sm:row-span-1 sm:self-center">
                 <img
                     src={getOptimizedImageUrl(anime, 'cover', 'small')}
@@ -160,7 +160,7 @@ function AiringSoonRow({ row, timezone }) {
     });
     const total = knownEpisodeTotal(anime);
     return (
-        <li className="-mx-3 flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 transition-colors hover:bg-white/[0.03]">
+        <li className="-mx-3 flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2">
             <Link to={`/anime/${anime.slug}`} className="group flex min-w-0 flex-1 items-center gap-4">
                 <img
                     src={getOptimizedImageUrl(anime, 'cover', 'small')}

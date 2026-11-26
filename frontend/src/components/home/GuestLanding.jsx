@@ -58,7 +58,7 @@ export default function GuestLanding() {
                             ))
                             : rows.map(({ anime, ...row }) => (
                                 <li key={anime.id}>
-                                    <Link to={`/anime/${anime.slug}`} className="group -mx-3 flex items-center gap-4 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03]">
+                                    <Link to={`/anime/${anime.slug}`} className="group -mx-3 flex items-center gap-4 rounded-[var(--radius-md)] px-3 py-3">
                                         <img
                                             src={getOptimizedImageUrl(anime, 'cover', 'small')}
                                             onError={(event) => applyImageFallback(event, getImageFallbackUrl(anime, 'cover'))}

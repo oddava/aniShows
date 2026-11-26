@@ -15,10 +15,6 @@
     transition: background-color var(--dur-fast) var(--ease-out);
   }
 
-  .forum-row:hover {
-    background: var(--ink-2);
-  }
-
   @media (width >= 48rem) {
     .forum-row {
       padding: 1.125rem 1.25rem;

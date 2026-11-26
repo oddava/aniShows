@@ -81,7 +81,7 @@ describe('SocialLinksEditor', () => {
             <SocialLinksEditor socialLinks={[]} setSocialLinks={setSocialLinks} isSavingProfile={false} />
         );
 
-        expect(screen.getByText('No social links added yet.')).toBeInTheDocument();
+        expect(screen.getByText('Links you add show under your name.')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
         expect(setSocialLinks).toHaveBeenCalledWith([{ platform: '', value: '' }]);
 

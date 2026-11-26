@@ -58,7 +58,7 @@ describe('ProfileTab', () => {
     it('says animated avatars are limited to 512x512', () => {
         render(<ProfileTab user={{ username: 'me' }} profile={profileState()} />);
 
-        expect(screen.getByText(/Animated GIFs stay animated up to 512×512/)).toBeInTheDocument();
+        expect(screen.getByText(/Animated GIF pictures stay animated up to 512×512/)).toBeInTheDocument();
     });
 
     it('labels the username field', () => {
@@ -67,23 +67,32 @@ describe('ProfileTab', () => {
         expect(screen.getByLabelText('Username')).toHaveAttribute('autocapitalize', 'none');
     });
 
-    it('offers "Remove avatar" for a saved avatar and flags it', () => {
+    it('says "Unsaved changes" by the Save button only while something changed', () => {
+        const { rerender } = render(<ProfileTab user={{ username: 'me' }} profile={profileState()} />);
+        expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+
+        rerender(<ProfileTab user={{ username: 'me' }} profile={profileState({ hasUnsavedChanges: true })} />);
+        expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save profile' })).not.toHaveAttribute('aria-disabled');
+    });
+
+    it('offers "Remove picture" for a saved avatar and flags it', () => {
         const profile = profileState();
         render(<ProfileTab user={{ username: 'me', avatar: '/a.png' }} profile={profile} />);
 
-        fireEvent.click(screen.getByRole('button', { name: 'Remove avatar' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Remove picture' }));
 
         expect(profile.setRemoveAvatar).toHaveBeenCalledWith(true);
         expect(profile.setAvatarFile).toHaveBeenCalledWith(null);
     });
 
-    it('hides "Remove avatar" when there is none and shows the pending notice with undo', () => {
+    it('hides "Remove picture" when there is none and shows the pending notice with undo', () => {
         const profile = profileState({ removeAvatar: true });
         const { rerender } = render(<ProfileTab user={{ username: 'me' }} profile={profileState()} />);
-        expect(screen.queryByRole('button', { name: 'Remove avatar' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Remove picture' })).not.toBeInTheDocument();
 
         rerender(<ProfileTab user={{ username: 'me', avatar: '/a.png' }} profile={profile} />);
-        expect(screen.getByText('Avatar will be removed on save')).toBeInTheDocument();
+        expect(screen.getByText('Picture will be removed on save.')).toBeInTheDocument();
         expect(screen.queryByAltText('Current')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
         expect(profile.setRemoveAvatar).toHaveBeenCalledWith(false);
