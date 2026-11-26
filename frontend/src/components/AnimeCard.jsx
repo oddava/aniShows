@@ -9,6 +9,7 @@ import {
     getOptimizedImageUrl,
 } from '../utils/imageUtils';
 import { statusMeta } from '../utils/listStatus';
+import { cachedCoverAccent, coverAccent } from '../utils/coverAccent';
 import { airedEpisodeCount, knownEpisodeTotal, progressPercent } from '../utils/episodes';
 import QuickAdd from './ui/QuickAdd';
 import ProgressStepper from './ui/ProgressStepper';
@@ -68,8 +69,21 @@ function AnimeCard({
     });
 
     const imageRef = useRef(null);
+    const cardRef = useRef(null);
 
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
+
+    // Hovering a card tints its title with the cover's dominant colour. It is
+    // sampled on first hover (from the loaded poster, so usually no request)
+    // and written straight to a CSS variable, so the card doesn't re-render.
+    const tintTitle = useCallback(() => {
+        const img = imageRef.current;
+        const card = cardRef.current;
+        if (!img || !card) return;
+        coverAccent(img, imageUrl).then((color) => {
+            if (color) card.style.setProperty('--cover-accent', color);
+        });
+    }, [imageUrl]);
     const [imageLoaded, setImageLoaded] = useState(() => loadedCovers.has(imageUrl));
     const markLoaded = useCallback((event) => {
         const loadedFrom = event?.currentTarget?.currentSrc || loadedCovers.get(imageUrl) || imageUrl;
@@ -136,12 +150,13 @@ function AnimeCard({
     const href = `/anime/${anime.slug}`;
     const smallUrl = getOptimizedImageUrl(anime, 'cover', 'small');
     const placeholderUrl = !lite && smallUrl && smallUrl !== imageUrl ? smallUrl : null;
+    const knownAccent = cachedCoverAccent(imageUrl);
 
     if (variant === 'row') {
         // The agenda row (Schedule): same facts and quick add, laid out like
         // oddava.me's list rows: thumb, title and what's next, action right.
         return (
-            <article className="group -mx-3 grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-4 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03]" aria-label={displayTitle}>
+            <article ref={cardRef} onPointerEnter={tintTitle} style={knownAccent ? { '--cover-accent': knownAccent } : undefined} className="group -mx-3 grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-4 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03]" aria-label={displayTitle}>
                 <Link to={href} tabIndex={-1} aria-hidden="true" className="relative block h-[72px] w-12 overflow-hidden rounded-md bg-[var(--ink-2)]">
                     <img
                         ref={imageRef}
@@ -157,7 +172,7 @@ function AnimeCard({
                 </Link>
                 <div className="min-w-0">
                     <Link to={href} className="flex items-start gap-1.5">
-                        <span className="line-clamp-2 text-base font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] group-hover:text-[var(--signature)]">{displayTitle}</span>
+                        <span className="line-clamp-2 text-base font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] group-hover:text-[var(--cover-accent,var(--signature))]">{displayTitle}</span>
                     </Link>
                     <p className="mt-0.5 text-sm text-[var(--text-2)] tabular">
                         {meta && <span className="sm:hidden" style={{ color: meta.color }}>{meta.label} · </span>}
@@ -209,7 +224,13 @@ function AnimeCard({
     }
 
     return (
-        <article className="card-enter group relative flex h-full flex-col" style={{ '--stagger': index % 12 }} aria-label={displayTitle}>
+        <article
+            ref={cardRef}
+            onPointerEnter={tintTitle}
+            className="card-enter group relative flex h-full flex-col"
+            style={knownAccent ? { '--stagger': index % 12, '--cover-accent': knownAccent } : { '--stagger': index % 12 }}
+            aria-label={displayTitle}
+        >
             <div className="relative aspect-[2/3] shrink-0 rounded-[var(--radius-md)] bg-[var(--ink-2)] has-[a:focus-visible]:shadow-[0_0_0_2px_var(--signature)]">
                 <Link
                     to={href}
@@ -240,7 +261,7 @@ function AnimeCard({
                         onLoad={markLoaded}
                         onError={handleImageError}
                         data-loaded={imageLoaded}
-                        className="img-fade relative h-full w-full object-cover transition-[opacity,filter] duration-300 ease-out [@media(hover:hover)]:group-hover:brightness-[1.08]"
+                        className="img-fade relative h-full w-full object-cover"
                     />
                 </Link>
 
@@ -287,7 +308,7 @@ function AnimeCard({
                             style={{ backgroundColor: meta.color }}
                         />
                     )}
-                    <span className="line-clamp-2 text-[13.5px] font-medium leading-[1.3] text-gray-200 transition-colors group-hover:text-white">
+                    <span className="line-clamp-2 text-[13.5px] font-medium leading-[1.3] text-gray-200 transition-colors duration-200 group-hover:text-[var(--cover-accent,#fff)]">
                         {displayTitle}
                     </span>
                 </span>

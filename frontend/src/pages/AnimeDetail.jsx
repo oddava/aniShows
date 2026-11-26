@@ -57,6 +57,9 @@ export default function AnimeDetail() {
     const isBannerLoaded = bannerLoadedSlug === slug;
     const isCoverLoaded = coverLoadedSlug === slug;
     const setIsBannerLoaded = useCallback((loaded) => setBannerLoadedSlug(loaded ? slug : null), [slug]);
+    // The slug whose hero image turned out not to be a usable banner (a cover
+    // fallback, or too small to fill the page): shown blurred, not stretched.
+    const [softBannerSlug, setSoftBannerSlug] = useState(null);
     const setIsCoverLoaded = useCallback((loaded) => setCoverLoadedSlug(loaded ? slug : null), [slug]);
     const [synopsisExpanded, setSynopsisExpanded] = useState(false);
     const containerRef = useRef(null);
@@ -211,6 +214,14 @@ export default function AnimeDetail() {
 
     const relationCoverFallback = location.state?.prefetchedRelationCover;
 
+    // Without a real banner the hero falls back to the portrait cover, which is
+    // a few hundred pixels wide; stretched across the page it turns to mush, so
+    // it is shown as a soft, blurred backdrop instead. The same goes for a
+    // banner that failed and fell back, or one too small for the page.
+    const hasBanner = Boolean(
+        anime.banner_image_large || anime.banner_image_medium || anime.banner_image || anime.banner_image_external_url
+    );
+    const softBanner = !hasBanner || softBannerSlug === slug;
     const bannerUrl = getOptimizedImageUrl(anime, 'banner', 'large') ||
         getOptimizedImageUrl(anime, 'cover', 'large') ||
         relationCoverFallback ||
@@ -266,12 +277,18 @@ export default function AnimeDetail() {
                     sizes="100vw"
                     alt={anime.title}
                     fetchPriority="high"
-                    onLoad={() => setIsBannerLoaded(true)}
+                    onLoad={(event) => {
+                        // Portrait (a cover) or far narrower than the hero it fills.
+                        const { naturalWidth: w, naturalHeight: h, clientWidth } = event.currentTarget;
+                        setSoftBannerSlug(w / Math.max(h, 1) < 1.4 || w < clientWidth * 0.7 ? slug : null);
+                        setIsBannerLoaded(true);
+                    }}
                     onError={(event) => {
                         setIsBannerLoaded(false);
                         applyImageFallback(event, bannerFallbackUrl);
                     }}
-                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isBannerLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    data-soft={softBanner ? 'true' : undefined}
+                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${softBanner ? 'scale-110 blur-2xl' : ''} ${isBannerLoaded ? (softBanner ? 'opacity-70' : 'opacity-100') : 'opacity-0'}`}
                 />
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/50 to-transparent" />
