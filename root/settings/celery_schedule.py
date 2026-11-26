@@ -13,64 +13,37 @@ re-checks the snapshot at every merge. Keys must be unique across the functions
 from celery.schedules import crontab
 
 
-def _catalog_entries(
-    *,
-    offline_reconcile_batch_size: int,
-    offline_reconcile_chunk_size: int,
-    offline_reconcile_max_rounds: int,
-    offline_reconcile_round_interval_minutes: int,
-    media_self_heal_batch_size: int,
-) -> dict:
-    """Catalog ingestion: AniList sync, airing, metadata, media. FROZEN: integrator only."""
+def _catalog_lane(lane: str, schedule, queue: str, **kwargs) -> dict:
     return {
-        "sync-trending-hourly": {
-            "task": "apps.animes.tasks.sync.sync_anime_catalog",
-            "schedule": crontab(minute=5),  # 5 min past hour
-            "kwargs": {"sync_type": "trending", "limit": 50},
-            "options": {"queue": "high_priority"},
-        },
-        "derive-airing-hourly": {
-            "task": "apps.animes.tasks.sync.sync_anime_catalog",
-            "schedule": crontab(minute=30),  # 30 min past hour
-            "kwargs": {"sync_type": "airing", "limit": 500},
-            "options": {"queue": "high_priority"},
-        },
-        "sync-airing-schedule-daily": {
-            "task": "apps.animes.tasks.airing.sync_airing_workflow",
-            "schedule": crontab(hour=1, minute=45),  # Daily before browse/schedule traffic ramps up
-            "kwargs": {"phases": ["sync", "cleanup", "backfill"]},
-            "options": {"queue": "high_priority"},
-        },
-        "sync-seasonal-daily": {
-            "task": "apps.animes.tasks.sync.sync_anime_catalog",
-            "schedule": crontab(hour=2, minute=0),  # 2:00 AM
-            "kwargs": {"sync_type": "seasonal", "limit": 100},
-            "options": {"queue": "default"},
-        },
-        "enrich-metadata-daily": {
-            "task": "apps.animes.tasks.metadata.enrich_metadata",
-            "schedule": crontab(hour=3, minute=0),  # 3:00 AM
-            "kwargs": {"mode": "backfill", "batch_size": 100},
-            "options": {"queue": "low_priority"},
-        },
+        "task": "apps.animes.tasks.catalog.run_catalog_lane",
+        "schedule": schedule,
+        "kwargs": {"lane": lane, **kwargs},
+        "options": {"queue": queue},
+    }
+
+
+def _catalog_entries(*, media_self_heal_batch_size: int) -> dict:
+    """Catalog engine lanes (apps.animes.catalog), then media and cache upkeep."""
+    return {
+        # Every title AniList changed: new announcements, dates, scores, new seasons.
+        "catalog-delta-15min": _catalog_lane("delta", crontab(minute="7,22,37,52"), "default"),
+        # Previous, current, next and following season in full: the Browse shelves.
+        "catalog-seasons-6h": _catalog_lane("seasons", crontab(hour="*/6", minute=12), "default"),
+        "catalog-trending-hourly": _catalog_lane("trending", crontab(minute=5), "high_priority"),
+        # Next-episode times for the shows on air (50 shows per request).
+        "catalog-airing-hourly": _catalog_lane("airing", crontab(minute=30), "high_priority"),
+        # Cast, staff and images for what people open, then the most popular titles.
+        "catalog-details-10min": _catalog_lane("hydrate", crontab(minute="*/10"), "low_priority"),
+        # The full sweep: continues an unfinished one, and starts over weekly.
+        "catalog-sweep-continue-hourly": _catalog_lane("seed", crontab(minute=40), "batch"),
+        "catalog-sweep-weekly": _catalog_lane(
+            "seed", crontab(day_of_week=2, hour=4, minute=10), "batch", restart=True
+        ),
         "sync-watch-episodes-airing-every-6-hours": {
             "task": "apps.animes.tasks.watch_episodes.sync_watch_episodes_batch",
             "schedule": crontab(hour="*/6", minute=15),
             "kwargs": {"statuses": ["Airing", "Upcoming"], "force": True},
             "options": {"queue": "low_priority"},
-        },
-        "reconcile-offline-catalog-sync-hourly": {
-            "task": "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync",
-            "schedule": crontab(minute=45),  # Hourly at :45
-            "kwargs": {
-                "anime_ids": [],
-                "batch_size": offline_reconcile_batch_size,
-                "chunk_size": offline_reconcile_chunk_size,
-                "strict": False,
-                "max_rounds": offline_reconcile_max_rounds,
-                "round_interval_minutes": offline_reconcile_round_interval_minutes,
-            },
-            "options": {"queue": "batch"},
         },
         # YouTube URL Backfill Task - Runs twice daily to catch missed themes
         "backfill-theme-youtube-urls-twice-daily": {
@@ -83,22 +56,6 @@ def _catalog_entries(
             "task": "apps.animes.tasks.images.heal_missing_anime_media",
             "schedule": crontab(minute="*/30"),
             "kwargs": {"batch_size": media_self_heal_batch_size},
-            "options": {"queue": "low_priority"},
-        },
-        "sync-upcoming-weekly": {
-            "task": "apps.animes.tasks.sync.sync_anime_catalog",
-            "schedule": crontab(day_of_week=0, hour=3, minute=30),  # Sunday 3:30 AM
-            "kwargs": {"sync_type": "next_season", "limit": 100},
-            "options": {"queue": "default"},
-        },
-        # Weekly: refresh a broader airing slice from local Anime fields
-        "sync-popular-weekly": {
-            "task": "apps.animes.tasks.sync.sync_anime_catalog",
-            "schedule": crontab(day_of_week=1, hour=2, minute=0),  # Monday 2:00 AM
-            "kwargs": {
-                "sync_type": "airing",
-                "limit": 500,
-            },
             "options": {"queue": "low_priority"},
         },
         # Re-read AniList's isAdult for the whole catalog (adult_content.py).
@@ -214,22 +171,9 @@ def _maintenance_entries() -> dict:
     }
 
 
-def build_beat_schedule(
-    *,
-    offline_reconcile_batch_size: int,
-    offline_reconcile_chunk_size: int,
-    offline_reconcile_max_rounds: int,
-    offline_reconcile_round_interval_minutes: int,
-    media_self_heal_batch_size: int,
-) -> dict:
+def build_beat_schedule(*, media_self_heal_batch_size: int) -> dict:
     parts = (
-        _catalog_entries(
-            offline_reconcile_batch_size=offline_reconcile_batch_size,
-            offline_reconcile_chunk_size=offline_reconcile_chunk_size,
-            offline_reconcile_max_rounds=offline_reconcile_max_rounds,
-            offline_reconcile_round_interval_minutes=offline_reconcile_round_interval_minutes,
-            media_self_heal_batch_size=media_self_heal_batch_size,
-        ),
+        _catalog_entries(media_self_heal_batch_size=media_self_heal_batch_size),
         _account_entries(),
         _recommendation_entries(),
         _list_entries(),

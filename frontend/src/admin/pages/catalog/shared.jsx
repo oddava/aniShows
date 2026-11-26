@@ -27,7 +27,6 @@ const KNOWN_MODELS = {
     'anime.Character': 'Characters',
     'anime.Staff': 'People',
     'anime.UserRecommendation': 'Recommendations',
-    'anime.OfflineAnimeSyncState': 'Sync states',
     'users.UserAnimeList': 'List entries',
     'users.UserActivity': 'Activity entries',
 };

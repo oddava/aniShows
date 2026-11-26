@@ -629,12 +629,15 @@
       }
     },
     "prepare_anime_data.154587": {
+      "anilist_format": "TV",
       "anilist_id": 154587,
+      "anilist_updated_at": null,
       "anime_type": "TV",
       "banner_image_external_url": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg",
       "broadcast_day": "",
       "broadcast_time": null,
       "broadcast_timezone": "",
+      "country_of_origin": "",
       "cover_image_external_url": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx154587-n1fmjRv4JQUd.jpg",
       "duration_minutes": 24,
       "end_date": "2024-03-22",
@@ -666,7 +669,6 @@
       "site_rank": 1,
       "slug": "frieren",
       "source_material": "Manga",
-      "source_urls": [],
       "status": "Finished",
       "status_distribution": {
         "COMPLETED": 230001,
@@ -685,12 +687,15 @@
       "title_jp": "葬送のフリーレン"
     },
     "prepare_anime_data.154587.airing": {
+      "anilist_format": "TV",
       "anilist_id": 154587,
+      "anilist_updated_at": null,
       "anime_type": "TV",
       "banner_image_external_url": "https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg",
       "broadcast_day": "Friday",
       "broadcast_time": "23:00:00",
       "broadcast_timezone": "Asia/Tokyo",
+      "country_of_origin": "",
       "cover_image_external_url": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx154587-n1fmjRv4JQUd.jpg",
       "duration_minutes": 24,
       "end_date": "2024-03-22",
@@ -722,7 +727,6 @@
       "site_rank": 1,
       "slug": "frieren",
       "source_material": "Manga",
-      "source_urls": [],
       "status": "Airing",
       "status_distribution": {
         "COMPLETED": 230001,
@@ -742,12 +746,15 @@
     },
     "prepare_anime_data.trending": [
       {
+        "anilist_format": "TV",
         "anilist_id": 171018,
+        "anilist_updated_at": null,
         "anime_type": "TV",
         "banner_image_external_url": "",
         "broadcast_day": "Friday",
         "broadcast_time": "00:56:00",
         "broadcast_timezone": "Asia/Tokyo",
+        "country_of_origin": "",
         "cover_image_external_url": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/medium/bx171018.jpg",
         "duration_minutes": 24,
         "end_date": null,
@@ -768,7 +775,6 @@
         "site_rank": null,
         "slug": "slug-171018",
         "source_material": "Manga",
-        "source_urls": [],
         "status": "Airing",
         "status_distribution": {
           "CURRENT": 150000
@@ -782,12 +788,15 @@
         "title_jp": "ダンダダン"
       },
       {
+        "anilist_format": "MUSIC",
         "anilist_id": 0,
+        "anilist_updated_at": null,
         "anime_type": "Special",
         "banner_image_external_url": "",
         "broadcast_day": "",
         "broadcast_time": null,
         "broadcast_timezone": "",
+        "country_of_origin": "",
         "cover_image_external_url": "",
         "duration_minutes": 0,
         "end_date": null,
@@ -808,7 +817,6 @@
         "site_rank": null,
         "slug": "slug-0",
         "source_material": "",
-        "source_urls": [],
         "status": "Finished",
         "status_distribution": {},
         "synonyms": [],
@@ -818,12 +826,15 @@
         "title_jp": "無題"
       },
       {
+        "anilist_format": "TV",
         "anilist_id": 21,
+        "anilist_updated_at": null,
         "anime_type": "TV",
         "banner_image_external_url": "https://cdn.myanimelist.net/images/anime/banner/21.png",
         "broadcast_day": "",
         "broadcast_time": null,
         "broadcast_timezone": "",
+        "country_of_origin": "",
         "cover_image_external_url": "",
         "duration_minutes": 24,
         "end_date": null,
@@ -844,7 +855,6 @@
         "site_rank": null,
         "slug": "slug-21",
         "source_material": "Manga",
-        "source_urls": [],
         "status": "Airing",
         "status_distribution": {},
         "synonyms": [],

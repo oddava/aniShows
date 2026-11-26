@@ -287,16 +287,17 @@ class AniListFetcherTests(TestCase):
         self.assertEqual(user_id, 77)
 
     @patch("apps.users.services.import_service.anilist_fetch.time.sleep")
-    def test_media_by_ids_fetches_pages_of_25(self, _sleep):
+    def test_media_by_ids_fetches_lean_pages_of_50(self, _sleep):
         def handler(query, variables):
             self.assertIn("id_in", query)
-            self.assertLessEqual(len(variables["ids"]), 25)
+            self.assertNotIn("characterPreview", query)  # the cast comes from the details lane
+            self.assertLessEqual(len(variables["ids"]), 50)
             return {"Page": {"media": [media_item(i) for i in variables["ids"]]}}
 
         fetcher, requests = graphql_transport(handler)
         pages = list(fetcher.fetch_media_by_ids(anilist_ids=list(range(1, 61))))
-        self.assertEqual(len(requests), 3)
-        self.assertEqual([len(page) for page in pages], [25, 25, 10])
+        self.assertEqual(len(requests), 2)
+        self.assertEqual([len(page) for page in pages], [50, 10])
 
     @patch("apps.users.services.import_service.anilist_fetch.time.sleep")
     def test_rate_limit_pauses_every_worker_and_retries(self, _sleep):

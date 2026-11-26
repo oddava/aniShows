@@ -159,15 +159,9 @@ def table_stats(_args) -> None:
     _print_table(
         *_rows(
             """
-            SELECT 'offline_db_payload' AS col,
-                   pg_size_pretty(sum(pg_column_size(offline_db_payload))) AS stored,
-                   round(avg(pg_column_size(offline_db_payload))) AS avg_bytes,
-                   count(*) FILTER (WHERE pg_column_size(offline_db_payload) > 2000)
-                     AS rows_over_2kb
+            SELECT 'synopsis' AS col, pg_size_pretty(sum(pg_column_size(synopsis))) AS stored,
+                   round(avg(pg_column_size(synopsis))) AS avg_bytes, NULL AS rows_over_2kb
             FROM anime_anime
-            UNION ALL
-            SELECT 'synopsis', pg_size_pretty(sum(pg_column_size(synopsis))),
-                   round(avg(pg_column_size(synopsis))), NULL FROM anime_anime
             UNION ALL
             SELECT 'tags', pg_size_pretty(sum(pg_column_size(tags))),
                    round(avg(pg_column_size(tags))), NULL FROM anime_anime

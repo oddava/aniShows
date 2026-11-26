@@ -8,9 +8,7 @@ from ...models import Genre, ThemeSong
 
 class QueryFieldsMixin:
     DETAIL_DEFER_FIELDS = (
-        "offline_db_payload",
         "provider_ids",
-        "source_urls",
         "synonyms",
         "producers",
         "meta_description",

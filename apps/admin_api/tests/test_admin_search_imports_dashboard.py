@@ -14,7 +14,7 @@ from .helpers import bearer_client, make_user
 
 class SearchTests(TestCase):
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        patcher = patch("apps.animes.signals.request_hydrate", return_value=None)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.client_ = bearer_client(make_user("mod", role="staff"))
@@ -87,7 +87,7 @@ class DashboardAttentionTests(TestCase):
         suspended = make_user("suspended")
         suspended.is_active = False
         suspended.save(update_fields=["is_active"])
-        with patch("apps.animes.signals.enrich_metadata.delay", return_value=None):
+        with patch("apps.animes.signals.request_hydrate", return_value=None):
             anime = Anime.objects.create(
                 title="A", slug="a", synopsis="x", status="Airing", anime_type="TV"
             )
@@ -105,7 +105,7 @@ class DashboardAttentionTests(TestCase):
                 "open_reports": 1,
                 "open_reviews": 1,
                 "failed_tasks_24h": 1,
-                "quarantined_sync": 0,
+                "failed_catalog_runs_24h": 0,
                 "failed_user_imports_24h": 1,
                 "suspended_users": 1,
             },

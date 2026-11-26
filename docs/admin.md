@@ -30,8 +30,7 @@ log (Logs → Audit log).
 | Announcements | `/admin/announcements` | Site-wide banners with a schedule, and in-app notices to all, recently active or staff members. |
 | Anime | `/admin/anime`, `/admin/anime/:id` | The catalog: refresh one title from AniList, re-download images, edit its SEO description, delete. |
 | Genres, Studios, Characters, People | `/admin/genres` … | Catalog records (People are the API's `staff`: voice actors, directors). |
-| Catalog imports | `/admin/imports` | Run and watch AniList and offline-database imports. |
-| Sync health | `/admin/sync-health` | Anime the offline-catalog sync is stuck on: retry, skip, fix ids, merge. |
+| Catalog sync | `/admin/catalog-sync` | The catalog engine: titles listed and hidden, each season against AniList, every lane's last run (superusers can run one), the full sweep's progress, and the run log. `/admin/imports` and `/admin/sync-health` redirect here. |
 | List imports | `/admin/list-imports` | Members' MAL/AniList list imports, for support. |
 | System | `/admin/system` | Health, queues, workers, scheduled jobs (run now), AniList budget, database size, recent failures. |
 | Task history | `/admin/tasks` | Celery task results (superuser). |

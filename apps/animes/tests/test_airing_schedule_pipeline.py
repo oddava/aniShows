@@ -14,7 +14,7 @@ from ..tasks.airing import AiringWorkflowTask
 class AiringScheduleTestMixin:
     def setUp(self):
         super().setUp()
-        self.enrich_patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        self.enrich_patcher = patch("apps.animes.signals.request_hydrate")
         self.watch_sync_patcher = patch(
             "apps.animes.signals.sync_watch_episodes_for_anime.apply_async"
         )

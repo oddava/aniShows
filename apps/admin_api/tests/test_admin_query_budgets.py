@@ -31,7 +31,7 @@ SYSTEM_BUDGET = 6
 
 @pytest.fixture(autouse=True)
 def _quiet_signals(monkeypatch):
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *a, **k: None)
 
 
 def _seed(rows: int, root):

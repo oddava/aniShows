@@ -107,12 +107,12 @@ class SystemPageTests(TestCase):
         self.assertNotIn("collect-queue-metrics-minute", beat)
 
     def test_last_run_is_matched_per_entry_not_per_task(self):
-        sync = "apps.animes.tasks.sync.sync_anime_catalog"
+        lane_task = "apps.animes.tasks.catalog.run_catalog_lane"
         CeleryTaskResult.objects.create(
-            task_id="tr-1", task_name=sync, task_kwargs={"sync_type": "trending", "limit": 50}
+            task_id="tr-1", task_name=lane_task, task_kwargs={"lane": "trending"}
         )
         old = CeleryTaskResult.objects.create(
-            task_id="up-1", task_name=sync, task_kwargs={"sync_type": "next_season", "limit": 100}
+            task_id="sw-1", task_name=lane_task, task_kwargs={"lane": "seed", "restart": True}
         )
         CeleryTaskResult.objects.filter(pk=old.pk).update(
             date_created=timezone.now() - timedelta(days=6)
@@ -120,10 +120,10 @@ class SystemPageTests(TestCase):
 
         beat = {row["name"]: row for row in self.staff_client.get(URL).data["beat"]}
 
-        trending, upcoming = beat["sync-trending-hourly"], beat["sync-upcoming-weekly"]
-        self.assertGreater(trending["last_run"], upcoming["last_run"])
+        trending, sweep = beat["catalog-trending-hourly"], beat["catalog-sweep-weekly"]
+        self.assertGreater(trending["last_run"], sweep["last_run"])
         self.assertFalse(trending["stale"])
-        self.assertNotEqual(beat["sync-seasonal-daily"]["last_run"], trending["last_run"])
+        self.assertNotEqual(beat["catalog-seasons-6h"]["last_run"], trending["last_run"])
 
     def test_a_missed_run_inside_the_retained_history_is_stale(self):
         stamp = CeleryTaskResult.objects.create(task_id="old-1", task_name=CLEANUP_TASK)
@@ -133,7 +133,7 @@ class SystemPageTests(TestCase):
 
         beat = {row["name"]: row for row in self.staff_client.get(URL).data["beat"]}
 
-        seasonal = beat["sync-seasonal-daily"]  # daily, never seen in 5 days of history
+        seasonal = beat["catalog-seasons-6h"]  # every 6 hours, never seen in 5 days of history
         self.assertIsNone(seasonal["last_run"])
         self.assertTrue(seasonal["stale"])
         self.assertFalse(beat["flush-forum-view-counts-minute"]["stale"])  # untracked

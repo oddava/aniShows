@@ -57,8 +57,8 @@ app.conf.task_routes = {
     # =========================================================================
     # HIGH PRIORITY - Important for user experience
     # =========================================================================
-    # Anime Catalog Sync Tasks
-    "apps.animes.tasks.sync.sync_anime_catalog": {"queue": "high_priority"},
+    # Catalog engine lanes: no route here, each caller names its lane's queue
+    # (apps.animes.catalog.runner.LANE_QUEUES; the beat entries match it).
     # Airing Workflow - affects schedule display
     "apps.animes.tasks.airing.sync_airing_workflow": {"queue": "high_priority"},
     # Franchise Sync - important for navigation
@@ -78,8 +78,6 @@ app.conf.task_routes = {
     # BATCH QUEUE - Import/export operations
     # =========================================================================
     "apps.animes.tasks.metadata.enrich_metadata": {"queue": "batch"},
-    "apps.animes.tasks.offline_catalog.import_offline_catalog": {"queue": "batch"},
-    "apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync": {"queue": "batch"},
     "apps.animes.tasks.watch_episodes.sync_watch_episodes_for_anime": {"queue": "batch"},
     # =========================================================================
     # IMAGES QUEUE - Image processing

@@ -74,8 +74,9 @@ Detail adds: `anilist_id, mal_id, season, season_year, source_material, is_adult
 popularity_rank, trending_rank, member_count, cover_image_external_url,
 banner_image_external_url, banner (displayable), next_airing_episode, next_airing_date,
 metadata_checked_at, list_entries_count, synonyms [str], external_links [obj], studios
-[{id,name}] (provider order), sync_state {id, metadata_status, franchise_status, quarantined,
-quarantine_reason, last_error_code} | null`. `sync_state.id` is the `offline-sync-states/` id.
+[{id,name}] (provider order), catalog {country_of_origin, format, excluded, hydrated_at,
+hydrate_requested_at, anilist_updated_at}`. `catalog.excluded` is why the title is outside the
+catalog's scope (`country:CN`, `format:MUSIC`, `legacy:quarantined`), empty when listed.
 
 ## Reviews — `reviews/`
 
@@ -179,8 +180,9 @@ Adds to the existing payload:
   report_total, reporter_count, first_reported_at, last_reported_at, signals}`;
   `POST moderation/reviews/{review_id}/resolve/` `{"outcome": "dismiss"|"remove_review"|"mark_spoiler", "notes"}`.
 - `bulk/` (SU) `{operation, entity_type, entity_ids, dry_run, confirm, force, reason}`.
-- `offline-sync-states/` (S read; SU `retry`, `mark_skipped {reason}`, `set_ids_and_retry {anilist_id, mal_id}`, `merge_target {target_anime_id}`); `?quarantined=true|false|all&reason=&stage=metadata|franchise&status=`.
-- `import-jobs/` (S read; SU `trigger`, `{id}/cancel/`).
+- `catalog/` (S) → `{totals {total, listed, hidden, hydrated, waiting_for_details}, hidden_reasons [{reason, count}], rules {countries, excluded_formats}, seasons [{season, year, label, role, listed, anilist}], sweep {phase, year?, page?, percent, started_at?, completed_at?}, changes_since, lanes [{lane, label, schedule, description, running, last_run, last_success_at, last_change_at}], can_run}`.
+- `catalog/runs/` (S) `?lane=&status=succeeded|partial|failed&changed=1` → paginated runs `{id, lane, lane_label, trigger, status, started_at, finished_at, duration_seconds, requests, fetched, created, updated, excluded, detail, error}`.
+- `POST catalog/lanes/{lane}/run/` (SU) `{restart?: true}` (seed only) → 202 `{lane, task_id}`; 409 while that lane runs. Audited as `CatalogLane`.
 - `celery/tasks/results/` (SU): filters `status` (PENDING|STARTED|SUCCESS|FAILURE|RETRY|REVOKED, case-insensitive), `task_name` (contains), `worker`, `queue`, `date_from`, `date_to`; `search`; `ordering`: `date_created, date_started, execution_time, task_name`. Row: `id, task_id, task_name, task_name_short, status, status_display, date_created, date_started, date_completed, execution_time, worker, queue, retries, error_message, triggered_by`. Detail adds `task_module, task_args, task_kwargs, result_data, result_summary, traceback`. `DELETE {id}/`; `POST bulk_delete/ {"ids": [...≤limit]}` or `{"days": N}` (older than N days) → `{message, deleted}`.
 - `celery/tasks/trigger/` (SU) `{task, kwargs}`; `celery/tasks/control/` (SU) `{task_id, action: "revoke", terminate}`.
 - `system/` (S; `can_run` tells the UI whether to show run buttons); `POST system/beat/{name}/run/` (SU) → 202.

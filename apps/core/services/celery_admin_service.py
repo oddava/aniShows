@@ -11,18 +11,6 @@ from django.utils import timezone
 from ..models import CeleryTaskResult
 
 AVAILABLE_TASKS = {
-    "apps.animes.tasks.sync.sync_anime_catalog": {
-        "name": "Refresh Anime Catalog Slice",
-        "description": "Refresh trending from AniList and other catalog slices from local Anime fields",
-        "args_schema": {
-            "sync_type": {
-                "type": "string",
-                "enum": ["trending", "seasonal", "next_season", "airing", "full_catalog"],
-                "required": True,
-            },
-            "limit": {"type": "integer", "default": 50, "min": 1, "max": 500},
-        },
-    },
     "apps.animes.tasks.metadata.enrich_metadata": {
         "name": "Enrich Metadata",
         "description": "Enrich anime metadata from AniList",

@@ -47,9 +47,12 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 
 ### Anime Tasks
 
-`apps.animes.tasks.sync.sync_anime_catalog`
-- Sync AniList catalog slices such as trending, seasonal, next season, and airing.
-- The `full_catalog` mode fetches a broader top 5000 slice for admin-triggered backfills.
+`apps.animes.tasks.catalog.run_catalog_lane`
+- Runs one lane of the catalog engine (`apps.animes.catalog`): `seasons`, `delta`,
+  `trending`, `airing`, `hydrate` or `seed` (the resumable full sweep). Every anime row
+  comes from AniList through these lanes; see the package docstring.
+- No route in `task_routes`: each caller names the lane's queue
+  (`apps.animes.catalog.runner.LANE_QUEUES`, which the beat entries match).
 
 `apps.animes.tasks.airing.sync_airing_workflow`
 - Runs airing-date sync, cleanup, and backfill phases.
@@ -74,12 +77,6 @@ Shared retry policies live in [apps/shared/celery.py](/home/oddava/Projects/aniS
 
 `apps.animes.tasks.images.heal_missing_anime_media`
 - Periodic self-heal for anime that are missing local media.
-
-`apps.animes.tasks.offline_catalog.import_offline_catalog`
-- Imports Anime Offline Database releases.
-
-`apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync`
-- Reconciles offline-imported anime through the metadata and franchise stages (AniList).
 
 `apps.animes.tasks.recommendations.generate_recommendations`
 - Generates recommendation rows for one user or all active users.
@@ -151,17 +148,17 @@ Beat schedules are defined in [root/settings/base.py](/home/oddava/Projects/aniS
 
 ### Hourly and Sub-Hourly
 
-`sync-trending-hourly`
-- `apps.animes.tasks.sync.sync_anime_catalog`
-- hourly at `:05`
+Catalog lanes (`apps.animes.tasks.catalog.run_catalog_lane`):
 
-`sync-airing-workflow-hourly`
-- `apps.animes.tasks.airing.sync_airing_workflow`
-- hourly at `:30`
-
-`reconcile-offline-catalog-sync-hourly`
-- `apps.animes.tasks.offline_catalog.reconcile_offline_catalog_sync`
-- hourly at `:45`
+| Entry | Lane | When | Queue |
+|---|---|---|---|
+| `catalog-delta-15min` | `delta` | `:07, :22, :37, :52` | `default` |
+| `catalog-trending-hourly` | `trending` | hourly at `:05` | `high_priority` |
+| `catalog-airing-hourly` | `airing` | hourly at `:30` | `high_priority` |
+| `catalog-details-10min` | `hydrate` | every 10 minutes | `low_priority` |
+| `catalog-seasons-6h` | `seasons` | every 6 hours at `:12` | `default` |
+| `catalog-sweep-continue-hourly` | `seed` | hourly at `:40` (no-op once done) | `batch` |
+| `catalog-sweep-weekly` | `seed` (`restart`) | Tuesdays at `04:10` | `batch` |
 
 `update-user-stats-5min`
 - `apps.users.tasks.update_all_user_stats`
@@ -188,18 +185,6 @@ Beat schedules are defined in [root/settings/base.py](/home/oddava/Projects/aniS
 - every minute
 
 ### Daily
-
-`sync-seasonal-daily`
-- `apps.animes.tasks.sync.sync_anime_catalog`
-- daily at `02:00`
-
-`enrich-metadata-daily`
-- `apps.animes.tasks.metadata.enrich_metadata`
-- daily at `03:00`
-
-`airing-workflow-cleanup-daily`
-- `apps.animes.tasks.airing.sync_airing_workflow`
-- daily at `04:00`
 
 `update-relation-slugs-daily`
 - `apps.animes.tasks.franchises.update_relation_slugs`
@@ -236,14 +221,6 @@ Beat schedules are defined in [root/settings/base.py](/home/oddava/Projects/aniS
 - daily at `01:00`
 
 ### Weekly
-
-`sync-upcoming-weekly`
-- `apps.animes.tasks.sync.sync_anime_catalog`
-- Sunday at `03:30`
-
-`sync-popular-weekly`
-- `apps.animes.tasks.sync.sync_anime_catalog`
-- Monday at `02:00`
 
 ### Other Existing Periodic Jobs
 

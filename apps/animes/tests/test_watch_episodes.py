@@ -274,7 +274,7 @@ class AnimeWatchEpisodeServiceTests(TestCase):
 
 
 class AnimeWatchEpisodesEndpointTests(APITestCase):
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     @patch("apps.animes.views.anime.AnimeWatchEpisodeService.get_for_anime")
     def test_watch_episodes_endpoint_returns_paginated_results(
         self, mock_get_for_anime, _mock_delay
@@ -312,7 +312,7 @@ class AnimeWatchEpisodesEndpointTests(APITestCase):
         self.assertEqual(response.data["results"][0]["rating_count"], 0)
         self.assertIsNone(response.data["results"][0]["user_rating"])
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     @patch("apps.animes.views.anime.EpisodeRatingSummaryService.get_for_anime")
     @patch("apps.animes.views.anime.AnimeWatchEpisodeService.get_for_anime")
     def test_watch_episodes_endpoint_only_loads_ratings_for_current_page(
@@ -409,7 +409,7 @@ class AnimeWatchEpisodeTaskTests(TestCase):
     ANIME_METADATA_AUTO_ENRICH_ENABLED=True,
 )
 class AnimeWatchEpisodeSignalTests(TestCase):
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     @patch("apps.animes.signals.sync_watch_episodes_for_anime.apply_async")
     def test_create_enqueues_watch_episode_sync_after_commit(
         self, mock_apply_async, mock_enrich_delay
@@ -425,10 +425,10 @@ class AnimeWatchEpisodeSignalTests(TestCase):
                 anilist_id=161001,
             )
 
-        mock_enrich_delay.assert_called_once_with(anime_id=anime.id, mode="single")
+        mock_enrich_delay.assert_called_once_with([anime.id])  # queued for the details lane
         mock_apply_async.assert_called_once_with(kwargs={"anime_id": anime.id, "force": False})
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     @patch("apps.animes.signals.AnimeWatchEpisodeService.invalidate_for_anime_version")
     @patch("apps.animes.signals.sync_watch_episodes_for_anime.apply_async")
     def test_identity_change_invalidates_old_cache_and_requeues(

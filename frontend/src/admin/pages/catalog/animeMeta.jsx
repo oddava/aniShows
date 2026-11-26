@@ -19,23 +19,3 @@ export function AnimeStatusChip({ status }) {
 
 /** TV and OVA stay upper case; everything else is sentence case. */
 export const typeLabel = (type) => (['TV', 'OVA', 'ONA'].includes(type) ? type : humanize(type, ''));
-
-export const SYNC_STATUSES = [
-    'pending', 'in_progress', 'synced', 'transient_error', 'blocked_identity', 'blocked_no_ids', 'quarantined',
-];
-
-const SYNC_TONES = {
-    synced: 'success',
-    pending: 'neutral',
-    in_progress: 'accent',
-    transient_error: 'warning',
-    blocked_identity: 'danger',
-    blocked_no_ids: 'danger',
-    quarantined: 'danger',
-};
-
-/** A sync stage status as a soft chip with its word. */
-export function SyncStatusChip({ value }) {
-    if (!value) return <span className="text-[var(--text-3)]">—</span>;
-    return <Chip tone={SYNC_TONES[value] || 'neutral'} dot>{humanize(value)}</Chip>;
-}

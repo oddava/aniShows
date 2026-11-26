@@ -3,18 +3,17 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from ..core.views.admin_import_jobs import AdminImportJobViewSet
 from ..core.views.celery_admin import CeleryAdminControlViewSet, CeleryTaskResultViewSet
 from ..users.views import AdminBadgeViewSet
 from .views.anime import (
     AdminAnimeViewSet,
     AdminCharacterViewSet,
     AdminGenreViewSet,
-    AdminOfflineAnimeSyncStateViewSet,
     AdminStaffViewSet,
     AdminStudioViewSet,
 )
 from .views.announcements import AdminAnnouncementViewSet
+from .views.catalog import AdminCatalogLaneRunView, AdminCatalogRunViewSet, AdminCatalogView
 from .views.dashboard import AdminDashboardView, AdminStatsExportView
 from .views.forums import (
     AdminForumCategoryViewSet,
@@ -46,14 +45,9 @@ admin_router.register(r"genres", AdminGenreViewSet, basename="admin-genres")
 admin_router.register(r"studios", AdminStudioViewSet, basename="admin-studios")
 admin_router.register(r"characters", AdminCharacterViewSet, basename="admin-characters")
 admin_router.register(r"staff", AdminStaffViewSet, basename="admin-staff")
-admin_router.register(
-    r"offline-sync-states",
-    AdminOfflineAnimeSyncStateViewSet,
-    basename="admin-offline-sync-states",
-)
 admin_router.register(r"favorites", AdminFavoritesStatsViewSet, basename="admin-favorites")
-admin_router.register(r"import-jobs", AdminImportJobViewSet, basename="admin-import-jobs")
 admin_router.register(r"user-imports", AdminUserImportViewSet, basename="admin-user-imports")
+admin_router.register(r"catalog/runs", AdminCatalogRunViewSet, basename="admin-catalog-runs")
 admin_router.register(
     r"forum-categories", AdminForumCategoryViewSet, basename="admin-forum-categories"
 )
@@ -86,6 +80,12 @@ urlpatterns = [
     path("bulk/", AdminBulkOperationsView.as_view(), name="admin-bulk"),
     path("reports/", AdminReportsView.as_view(), name="admin-reports"),
     path("settings/", AdminSettingsView.as_view(), name="admin-settings"),
+    path("catalog/", AdminCatalogView.as_view(), name="admin-catalog"),
+    path(
+        "catalog/lanes/<str:lane>/run/",
+        AdminCatalogLaneRunView.as_view(),
+        name="admin-catalog-lane-run",
+    ),
     path("system/", AdminSystemView.as_view(), name="admin-system"),
     path(
         "system/beat/<str:entry>/run/",

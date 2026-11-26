@@ -18,17 +18,17 @@ class CeleryAdminTaskValidationTests(SimpleTestCase):
     def test_rejects_unknown_kwargs(self):
         with self.assertRaisesMessage(CeleryTaskValidationError, "Unknown task argument"):
             validate_task_invocation(
-                task_path="apps.animes.tasks.sync.sync_anime_catalog",
+                task_path="apps.animes.tasks.franchises.sync_franchises",
                 args=[],
-                kwargs={"sync_type": "trending", "surprise": True},
+                kwargs={"mode": "backfill", "surprise": True},
             )
 
     def test_rejects_invalid_arg_containers(self):
         with self.assertRaisesMessage(CeleryTaskValidationError, "Task args must be a JSON list"):
             validate_task_invocation(
-                task_path="apps.animes.tasks.sync.sync_anime_catalog",
+                task_path="apps.animes.tasks.franchises.sync_franchises",
                 args="",
-                kwargs={"sync_type": "trending"},
+                kwargs={"mode": "backfill"},
             )
 
         with self.assertRaisesMessage(
@@ -36,24 +36,24 @@ class CeleryAdminTaskValidationTests(SimpleTestCase):
             "Task kwargs must be a JSON object",
         ):
             validate_task_invocation(
-                task_path="apps.animes.tasks.sync.sync_anime_catalog",
+                task_path="apps.animes.tasks.franchises.sync_franchises",
                 args=[],
                 kwargs="",
             )
 
     def test_rejects_invalid_enum_and_range_values(self):
-        with self.assertRaisesMessage(CeleryTaskValidationError, "sync_type must be one of"):
+        with self.assertRaisesMessage(CeleryTaskValidationError, "mode must be one of"):
             validate_task_invocation(
-                task_path="apps.animes.tasks.sync.sync_anime_catalog",
+                task_path="apps.animes.tasks.franchises.sync_franchises",
                 args=[],
-                kwargs={"sync_type": "everything"},
+                kwargs={"mode": "everything"},
             )
 
-        with self.assertRaisesMessage(CeleryTaskValidationError, "limit must be at most 500"):
+        with self.assertRaisesMessage(CeleryTaskValidationError, "batch_size must be at most 250"):
             validate_task_invocation(
-                task_path="apps.animes.tasks.sync.sync_anime_catalog",
+                task_path="apps.animes.tasks.franchises.sync_franchises",
                 args=[],
-                kwargs={"sync_type": "trending", "limit": 501},
+                kwargs={"mode": "backfill", "batch_size": 251},
             )
 
     def test_cleanup_task_cannot_target_new_accounts(self):
@@ -66,10 +66,10 @@ class CeleryAdminTaskValidationTests(SimpleTestCase):
 
     def test_valid_invocation_fills_defaults(self):
         args, kwargs = validate_task_invocation(
-            task_path="apps.animes.tasks.sync.sync_anime_catalog",
+            task_path="apps.animes.tasks.franchises.sync_franchises",
             args=[],
-            kwargs={"sync_type": "trending"},
+            kwargs={"mode": "backfill"},
         )
 
         self.assertEqual(args, [])
-        self.assertEqual(kwargs, {"sync_type": "trending", "limit": 50})
+        self.assertEqual(kwargs, {"mode": "backfill", "batch_size": 50})

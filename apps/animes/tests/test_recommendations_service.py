@@ -8,7 +8,7 @@ from rest_framework.test import APITestCase
 
 from ...users.models import UserAnimeList, UserProfile
 from ..models import Anime, AnimeRelation, Genre, Studio, UserRecommendation
-from ..services.offline_catalog import PLACEHOLDER_SYNOPSIS
+from ..services.metadata_health import PLACEHOLDER_SYNOPSIS
 from ..services.recommendations import FILLER_SCORE_CEILING, RecommendationService
 
 User = get_user_model()

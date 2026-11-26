@@ -9,7 +9,7 @@ from ..services.relation_links import set_relations
 
 
 class TopRatedEndpointTests(APITestCase):
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_top_rated_uses_browse_quality_thresholds(self, _mock_enrich_metadata):
         Anime.objects.create(
             title="Thin Duplicate",
@@ -54,7 +54,7 @@ class TopRatedEndpointTests(APITestCase):
         self.assertEqual(titles[:2], [strongest.title, runner_up.title])
         self.assertNotIn("Thin Duplicate", titles)
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_browse_rating_list_without_filters_uses_curated_thresholds(
         self, _mock_enrich_metadata
     ):
@@ -96,7 +96,7 @@ class TopRatedEndpointTests(APITestCase):
 
 
 class AnimeDetailExternalLinksTests(APITestCase):
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_detail_keeps_a_lone_mal_link_without_a_banner(self, _mock_enrich_metadata):
         """The Jikan-era rule that dropped a lone MyAnimeList link is gone (B29)."""
         anime = Anime.objects.create(
@@ -123,7 +123,7 @@ class AnimeDetailExternalLinksTests(APITestCase):
             [link["site"] for link in response.data["external_links"]], ["MyAnimeList"]
         )
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_detail_keeps_lone_mal_link_when_banner_exists(self, _mock_enrich_metadata):
         anime = Anime.objects.create(
             title="Bannered Entry",
@@ -149,7 +149,7 @@ class AnimeDetailExternalLinksTests(APITestCase):
         self.assertEqual(len(response.data["external_links"]), 1)
         self.assertEqual(response.data["external_links"][0]["site"], "MyAnimeList")
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_detail_backfills_relation_cover_from_linked_anime(self, _mock_enrich_metadata):
         related = Anime.objects.create(
             title="Steins;Gate 0",
@@ -214,7 +214,7 @@ class AnimeDetailExternalLinksTests(APITestCase):
 
 
 class BrowseRowsPopularShelfTests(APITestCase):
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_all_time_popular_row_excludes_low_member_count_entries(self, _mock_enrich_metadata):
         Anime.objects.create(
             title="Thin Popular Duplicate",
@@ -251,7 +251,7 @@ class BrowseRowsPopularShelfTests(APITestCase):
         self.assertIn(strong.title, titles)
         self.assertNotIn("Thin Popular Duplicate", titles)
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     def test_all_time_browse_deep_link_keeps_curated_thresholds_with_exclusions(
         self, _mock_enrich_metadata
     ):

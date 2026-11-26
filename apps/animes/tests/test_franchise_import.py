@@ -8,7 +8,7 @@ from ..services.relation_links import set_relations
 
 
 class FranchiseImportServiceTests(TestCase):
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     @patch("apps.animes.services.franchise_import.AniListService")
     def test_existing_anime_refreshes_when_images_missing(
         self, mock_service_cls, _mock_enrich_metadata
@@ -69,7 +69,7 @@ class FranchiseImportServiceTests(TestCase):
         mock_service.save_anime_to_db.assert_called_once_with(anilist_payload)
         mock_service.close.assert_called_once()
 
-    @patch("apps.animes.signals.enrich_metadata.delay")
+    @patch("apps.animes.signals.request_hydrate")
     @patch("apps.animes.services.franchise_import.AniListService")
     def test_existing_anime_skips_refresh_when_images_present(
         self, mock_service_cls, _mock_enrich_metadata
@@ -119,7 +119,7 @@ class FranchiseImportServiceTests(TestCase):
         mock_service_cls.assert_not_called()
 
 
-@patch("apps.animes.signals.enrich_metadata.delay")
+@patch("apps.animes.signals.request_hydrate")
 @patch("apps.animes.services.franchise_import.AniListService")
 class FranchiseImportNewAnimeTests(TestCase):
     def _service(self, mock_service_cls, *, by_id=None, by_mal=None):
