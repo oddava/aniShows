@@ -3,7 +3,7 @@ import { Pipette } from 'lucide-react';
 import RichTextEditor from '../forums/RichTextEditor';
 import CustomSelect from '../common/CustomSelect';
 import { AUTO_TIMEZONE_VALUE, normalizeTimeZonePreference } from '../../utils/dateUtils';
-import { PROFILE_COLOR_PRESETS, isGifFile, normalizeProfilePrimaryColor } from './settingsUtils';
+import { PROFILE_COLOR_PRESETS, isGifFile, normalizeProfilePrimaryColor, fitsBannerAspect } from './settingsUtils';
 import SocialLinksEditor from './SocialLinksEditor';
 import SettingsSwitch from './SettingsSwitch';
 import { toneProfileAccentColor } from '../../utils/profileAccent';
@@ -138,11 +138,25 @@ export default function ProfileTab({ user, profile }) {
     };
     const pickBanner = (e) => {
         const file = e.target.files?.[0];
-        if (file) {
-            setCropModal({ isOpen: true, imageSrc: URL.createObjectURL(file), sourceMimeType: file.type || '', type: 'banner' });
-            setRemoveBanner(false);
-        }
         e.target.value = null;
+        if (!file) return;
+        setRemoveBanner(false);
+        const url = URL.createObjectURL(file);
+        // A banner already in the 3:1 shape is used whole, with no crop step
+        // (and a GIF keeps its animation); anything else opens the cropper.
+        const probe = new Image();
+        probe.onload = () => {
+            if (fitsBannerAspect(probe.naturalWidth, probe.naturalHeight)) {
+                setBannerFile(file);
+                setBannerPreviewUrl(url);
+            } else {
+                setCropModal({ isOpen: true, imageSrc: url, sourceMimeType: file.type || '', type: 'banner' });
+            }
+        };
+        probe.onerror = () => {
+            setCropModal({ isOpen: true, imageSrc: url, sourceMimeType: file.type || '', type: 'banner' });
+        };
+        probe.src = url;
     };
     const dropAvatar = () => {
         // Only a saved avatar needs removing on the server; an unsaved pick is just discarded.

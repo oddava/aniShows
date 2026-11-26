@@ -9,7 +9,27 @@
  */
 
 .profile-page {
-  --pa: var(--profile-accent, var(--signature));
+  --pa: var(--profile-accent, #8db1ff);
+  /* On a profile the person's colour is the accent. Everything that would
+     use the site's periwinkle (links, the active tab, "See all", focus,
+     filled buttons, the follow list) takes their colour instead; the site
+     navbar sits outside this scope and keeps its own. The derived aliases
+     are re-pointed too: a custom property resolves where it is declared. */
+  --signature: var(--pa);
+  --signature-hover: color-mix(in srgb, var(--pa) 82%, white);
+  --signature-press: color-mix(in srgb, var(--pa) 88%, black);
+  --signature-soft: color-mix(in srgb, var(--pa) 14%, transparent);
+  --signature-line: color-mix(in srgb, var(--pa) 38%, transparent);
+  --color-accent: var(--pa);
+  --color-accent-light: color-mix(in srgb, var(--pa) 82%, white);
+  --color-accent-dark: var(--pa);
+  --color-accent-base: var(--pa);
+  --color-accent-text: var(--pa);
+  --color-accent-text-hover: color-mix(in srgb, var(--pa) 82%, white);
+  --color-accent-fill: var(--pa);
+  --color-accent-fill-hover: color-mix(in srgb, var(--pa) 82%, white);
+  --color-focus-ring: color-mix(in srgb, var(--pa) 30%, transparent);
+  --color-focus-ring-strong: var(--pa);
   /* The person's colour as a surface: the empty banner and the status strip
      use the same mix, so they read as one chosen colour. */
   --pa-surface: color-mix(in srgb, var(--pa) 28%, var(--ink-1));
@@ -28,7 +48,10 @@
 
 /* Tall, as on X (about 3:1 on wide screens). */
 .profile-hero__banner {
-  height: clamp(8.5rem, 28vw, 22rem);
+  /* A band of the 3:1 banner, centred, as on AniList: about 4.5:1 at
+     1600 px and 5:1 from 2000 px, so the header never dominates the page.
+     The whole picture is kept; wider screens just show less of its height. */
+  height: clamp(8.5rem, 22vw, 25rem);
   background: var(--ink-1);
 }
 
@@ -44,11 +67,6 @@
   background: var(--status-bg, color-mix(in srgb, var(--pa) 16%, var(--ink-1)));
 }
 
-/* The person's colour on their own page's main action (Follow). */
-.profile-accent-scope {
-  --color-accent-fill: var(--pa);
-  --color-accent-fill-hover: color-mix(in srgb, var(--pa) 82%, white);
-}
 
 .profile-hero__identity {
   margin-top: -2.5rem;
@@ -195,64 +213,117 @@
 }
 
 .profile-stat-value {
-  font-size: 1.75rem;
+  font-size: 1.375rem;
   line-height: 1.1;
   font-weight: 650;
   letter-spacing: -0.03em;
   color: var(--text-1);
 }
 
-/* A number's aura (statAura.js). The digits take their tier's colour and
-   breathe a glow in it; each tier glows wider and breathes faster. From
-   purple up, a light sheen also sweeps across the digits now and then. */
+@media (width >= 40rem) {
+  .profile-stat-value {
+    font-size: 1.75rem;
+  }
+}
+
+/* On a profile, a hovered card's title lights in the profile's colour
+   rather than the colour sampled from its cover (AnimeCard). */
+@media (hover: hover) {
+  .profile-page .group:hover .anime-card-title {
+    color: var(--signature);
+  }
+}
+
+/* A number's aura (statAura.js), as on a game lobby's counters: light
+   digits lit in the tier's colour, on a still round glow that hugs them,
+   with a soft prismatic rim round the glow (its hues drift slowly) and
+   sparks rising and fading (StatsStrip lights tier + 2). Everything climbs
+   with the tier; nothing pulses; reduced motion stills it. Tier 0 is plain. */
 .profile-stat-value[data-aura] {
-  --aura-text: color-mix(in srgb, var(--aura) 72%, white);
-  color: var(--aura-text);
-  filter: drop-shadow(0 0 var(--glow-lo) color-mix(in srgb, var(--aura) var(--glow-mix-lo), transparent));
-  animation: aura-breathe var(--aura-speed) ease-in-out infinite;
+  color: color-mix(in srgb, var(--aura) 18%, white);
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--aura) 75%, transparent),
+    0 0 20px color-mix(in srgb, var(--aura) var(--text-glow), transparent),
+    0 1px 0 rgb(0 0 0 / 0.35);
 }
 
-.profile-stat-value[data-aura="1"] { --aura-speed: 4.6s; --glow-lo: 3px; --glow-hi: 8px; --glow-mix-lo: 25%; --glow-mix-hi: 50%; }
-.profile-stat-value[data-aura="2"] { --aura-speed: 4s; --glow-lo: 4px; --glow-hi: 10px; --glow-mix-lo: 30%; --glow-mix-hi: 58%; }
-.profile-stat-value[data-aura="3"] { --aura-speed: 3.4s; --glow-lo: 5px; --glow-hi: 13px; --glow-mix-lo: 35%; --glow-mix-hi: 66%; }
-.profile-stat-value[data-aura="4"] { --aura-speed: 2.8s; --glow-lo: 5px; --glow-hi: 12px; --glow-mix-lo: 40%; --glow-mix-hi: 74%; }
-.profile-stat-value[data-aura="5"] { --aura-speed: 2.3s; --glow-lo: 5px; --glow-hi: 12px; --glow-mix-lo: 40%; --glow-mix-hi: 68%; }
-
-.profile-stat-value[data-aura="3"],
-.profile-stat-value[data-aura="4"],
-.profile-stat-value[data-aura="5"] {
-  background: linear-gradient(105deg, var(--aura-text) 40%, #fff 50%, var(--aura-text) 60%) 0 0 / 300% 100% no-repeat;
-  background-color: var(--aura-text);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation:
-    aura-breathe var(--aura-speed) ease-in-out infinite,
-    aura-sheen 4.2s ease-in-out infinite;
+.profile-aura {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
 }
 
-/* The top tier's sheen comes round twice as often. */
-.profile-stat-value[data-aura="5"] {
-  animation:
-    aura-breathe var(--aura-speed) ease-in-out infinite,
-    aura-sheen 2.6s ease-in-out infinite;
+.profile-aura::before,
+.profile-aura::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: none;
 }
 
-@keyframes aura-breathe {
-  0%, 100% {
-    filter: drop-shadow(0 0 var(--glow-lo) color-mix(in srgb, var(--aura) var(--glow-mix-lo), transparent));
-  }
-  50% {
-    filter:
-      drop-shadow(0 0 var(--glow-hi) color-mix(in srgb, var(--aura) var(--glow-mix-hi), transparent))
-      drop-shadow(0 0 2px color-mix(in srgb, var(--aura) 45%, transparent));
-  }
+/* The glow the number sits on, sized to it. */
+.profile-aura::before {
+  width: calc(100% + 1.3em);
+  height: 2em;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--aura) var(--orb), transparent) 0%, color-mix(in srgb, var(--aura) calc(var(--orb) * 0.5), transparent) 55%, transparent 100%);
+  filter: blur(3px);
 }
 
-/* The highlight crosses the digits, then rests off to the side. */
-@keyframes aura-sheen {
-  0% { background-position: 100% 0; }
-  55%, 100% { background-position: 0% 0; }
+/* Its prismatic rim: every hue on a soft ring just outside the glow. */
+.profile-aura::after {
+  width: calc(100% + 1.9em);
+  height: 2.6em;
+  background: conic-gradient(from var(--prism-angle), #ff6b8b, #ffb86b, #f5f07a, #7bf0a8, #6bd6ff, #a98bff, #ff6bd6, #ff6b8b);
+  -webkit-mask: radial-gradient(closest-side, transparent 56%, #000 74%, transparent 100%);
+  mask: radial-gradient(closest-side, transparent 56%, #000 74%, transparent 100%);
+  filter: blur(2.5px);
+  opacity: var(--prism);
+  animation: aura-prism 20s linear infinite;
+}
+
+/* The hues travel round the rim; its shape stays put. */
+@property --prism-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes aura-prism {
+  to { --prism-angle: 1turn; }
+}
+
+.profile-stat-value[data-aura="1"] { --orb: 30%; --prism: 0.14; --text-glow: 28%; }
+.profile-stat-value[data-aura="2"] { --orb: 36%; --prism: 0.18; --text-glow: 34%; }
+.profile-stat-value[data-aura="3"] { --orb: 42%; --prism: 0.22; --text-glow: 40%; }
+.profile-stat-value[data-aura="4"] { --orb: 48%; --prism: 0.26; --text-glow: 46%; }
+.profile-stat-value[data-aura="5"] { --orb: 54%; --prism: 0.3; --text-glow: 52%; }
+
+.profile-aura__spark {
+  position: absolute;
+  left: var(--x);
+  bottom: 12%;
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  /* Tinted, so a spark still reads where it crosses the light digits. */
+  background: color-mix(in srgb, var(--aura) 45%, white);
+  box-shadow:
+    0 0 3px 1px color-mix(in srgb, var(--aura) 85%, white),
+    0 0 9px 2px color-mix(in srgb, var(--aura) 75%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  animation: aura-spark var(--d, 2.8s) ease-out var(--delay, 0s) infinite;
+}
+
+@keyframes aura-spark {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  12% { opacity: 1; transform: translate(0, -4px) scale(1); }
+  65% { opacity: 0.85; }
+  100% { opacity: 0; transform: translate(var(--dx, 4px), -32px) scale(0.4); }
 }
 
 /* No trailing space under the last block of a folded or short bio. */
@@ -264,6 +335,7 @@
 /* -------------------------------------------------------------- Tabs */
 
 .profile-tabs {
+  --pill-bg: var(--signature-soft);
   background: var(--ink-0);
   transition: transform 200ms var(--ease-out), background-color var(--dur-base) ease;
 }
@@ -339,9 +411,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .profile-stat-value[data-aura] {
+  .profile-aura__spark {
+    display: none;
+  }
+
+  .profile-aura::after {
     animation: none;
-    background-position: 50% 0;
   }
 
   .profile-tabs,

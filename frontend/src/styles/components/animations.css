@@ -221,45 +221,34 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Bottom sheet */
+/* Dialogs (.sheet-panel; .modal-panel is the same now): centred on every
+   screen, a short fade-and-settle in and out. Nothing slides up from the
+   bottom edge. */
 .sheet-backdrop {
   animation: fade-in var(--dur-base) ease-out;
   transition: opacity var(--dur-base) ease-out;
 }
 
 .sheet-panel {
-  animation: sheet-up var(--dur-slow) var(--ease-out);
-  transition: transform var(--dur-glide) var(--ease-glide);
+  animation: modal-in var(--dur-base) var(--ease-out);
 }
 
 [data-state="closing"] .sheet-backdrop {
   animation: backdrop-out var(--dur-base) ease-out forwards;
 }
 
-/* A backdrop let go mid-drag fades out from how dim it already was. */
 @keyframes backdrop-out {
-  from { opacity: var(--backdrop-from, 1); }
+  from { opacity: 1; }
   to { opacity: 0; }
 }
 
 [data-state="closing"] .sheet-panel {
-  animation: sheet-down var(--dur-base) var(--ease-out) forwards;
+  animation: modal-out var(--dur-fast) ease-in forwards;
 }
 
 /* Overlays on their way out take no clicks. */
 [data-state="closing"] {
   pointer-events: none;
-}
-
-/* Centred dialogs (desktop): a short fade-and-settle instead of the sheet slide. */
-@media (min-width: 640px) {
-  .sheet-panel.modal-panel {
-    animation: modal-in var(--dur-base) var(--ease-out);
-  }
-
-  [data-state="closing"] .sheet-panel.modal-panel {
-    animation: modal-out var(--dur-fast) ease-in forwards;
-  }
 }
 
 @keyframes modal-in {
@@ -270,17 +259,6 @@
 @keyframes modal-out {
   from { opacity: 1; transform: none; }
   to { opacity: 0; transform: translateY(6px) scale(0.98); }
-}
-
-@keyframes sheet-up {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-
-@keyframes sheet-down {
-  /* A sheet let go mid-drag closes from where the finger left it. */
-  from { transform: translateY(var(--sheet-from, 0px)); }
-  to { transform: translateY(100%); }
 }
 
 /* Popover menus */
@@ -548,11 +526,6 @@
 /* Toasts arrive with a little give. */
 .ui-toast[data-visible="true"] {
   animation: toast-in var(--dur-pop) var(--ease-pop);
-}
-
-/* Bottom sheets rise on the glide spring. */
-.sheet-panel {
-  animation: sheet-up 380ms var(--ease-glide);
 }
 
 /* Detail page backdrop: drifts and dims as the page scrolls (scroll-driven,

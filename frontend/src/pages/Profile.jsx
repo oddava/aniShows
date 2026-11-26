@@ -104,7 +104,14 @@ export default function Profile({ forcedUsername }) {
         const nextPath = normalizedTab === 'overview' ? basePath : `${basePath}/${normalizedTab}`;
 
         if (nextPath !== location.pathname) {
+            // Read below the tab bar? Then the new tab starts right under the
+            // stuck bar, not mid-page; above it, nothing moves.
+            const anchor = document.querySelector('[data-profile-tabs-top]');
+            const barTop = anchor ? anchor.getBoundingClientRect().top + window.scrollY : null;
             navigate(nextPath, { replace });
+            if (barTop != null && window.scrollY > barTop) {
+                requestAnimationFrame(() => window.scrollTo({ top: barTop }));
+            }
         }
     }, [targetUsername, location.pathname, navigate]);
 

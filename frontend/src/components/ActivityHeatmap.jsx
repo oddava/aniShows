@@ -27,9 +27,6 @@ function toRgba(hex, alpha) {
 const WEEKS = 52;
 const WEEK_COLUMNS = { gridTemplateColumns: `repeat(${WEEKS}, minmax(12px, 1fr))` };
 const EDGE_FADE_PX = 28;
-// Fewer active days than this and the year is a field of empty squares:
-// the sentence says it all.
-export const MIN_ACTIVE_DAYS_FOR_GRID = 14;
 
 const DAY_LABEL = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
 
@@ -137,7 +134,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
 
         return { totalActivity, activeDays, currentStreak };
     }, [activityData]);
-    const showGrid = stats.activeDays >= MIN_ACTIVE_DAYS_FOR_GRID;
+    const showGrid = stats.totalActivity > 0;
 
     // Keep the newest weeks visible when the year overflows: pinned to the
     // right edge (again on every resize, since the width can settle after

@@ -45,7 +45,7 @@ export default function NowWatchingCard({ username }) {
                 className="h-[4.5rem] w-12 shrink-0 rounded-[var(--radius-sm)] bg-[var(--ink-2)] object-cover sm:h-24 sm:w-16 lg:h-[7.5rem] lg:w-20"
             />
             <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-[var(--text-3)]">Watching now</p>
+                <p className="text-[13px] font-medium text-[var(--signature)]">Watching now</p>
                 <p className="mt-0.5 line-clamp-2 text-[15px] font-semibold leading-snug sm:mt-1 sm:text-[17px] tracking-[-0.01em] text-[var(--text-1)]">
                     {anime.title}
                 </p>

@@ -47,7 +47,7 @@ function renderActivityDescription(activity) {
             pushRange(
                 titleIndex,
                 titleIndex + animeTitle.length,
-                'font-medium text-[var(--text-1)]',
+                'font-medium text-[var(--signature)]',
                 3,
                 animeSlug ? `/anime/${animeSlug}` : null
             );
@@ -83,7 +83,7 @@ function renderActivityDescription(activity) {
                 <Link
                     key={`${start}-${end}`}
                     to={winner.linkTo}
-                    className={`${winner.className} transition-colors hover:text-[var(--signature)]`}
+                    className={`${winner.className} transition-colors hover:text-[var(--signature-hover)]`}
                 >
                     {text}
                 </Link>

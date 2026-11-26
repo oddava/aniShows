@@ -59,66 +59,100 @@ export function AboutCard({ bio, className = '' }) {
 /* ------------------------------------------------------------------ Taste */
 
 /**
- * Taste in words and one small chart: the top genres with how many shows
- * each, and how they score (ten columns, the most common score in their
- * colour).
+ * Taste, at a glance: the genre they watch most as a headline, the rest as
+ * bars in the profile's colour (longest = most shows, deepest tint = most
+ * watched), then their scores: the average, how many they rated, the score
+ * they give most, and a 1-10 chart tinted by how often each is used.
  */
 export function TasteCard({ summary, user, className = '' }) {
     const { mean, rated } = profileScore(user, summary);
-    const genres = (summary?.top_genres || []).filter((genre) => genre?.name && genre.count > 0).slice(0, 6);
+    // Most watched first: the headline and the bar scale both read the top.
+    const genres = (summary?.top_genres || [])
+        .filter((genre) => genre?.name && genre.count > 0)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6);
     const histogram = summary?.score_histogram || {};
     // Always the full 1-10 scale, so charts compare across profiles.
     const scores = Array.from({ length: 10 }, (_, index) => Number(histogram[String(index + 1)]) || 0);
     const maxScore = Math.max(...scores);
     if (genres.length === 0 && maxScore === 0) return null;
+    const maxGenre = genres[0]?.count || 1;
+    const usual = maxScore > 0 ? scores.indexOf(maxScore) + 1 : null;
 
     return (
         <ProfileCard title="Taste" className={className}>
             {genres.length > 0 && (
-                <ul className="grid grid-cols-2 gap-2">
-                    {genres.map((genre) => (
-                        <li key={genre.slug || genre.name} className="min-w-0">
-                            <Link
-                                to={genre.slug ? `/browse?genre=${encodeURIComponent(genre.slug)}` : '/browse'}
-                                className="flex min-h-9 items-center justify-between gap-2 rounded-lg bg-white/[0.05] px-3 text-sm text-[var(--text-1)] transition-colors hover:bg-white/[0.09]"
-                            >
-                                {genre.name}
-                                <span className="text-[var(--text-3)] tabular">{genre.count.toLocaleString()}</span>
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
+                <>
+                    <p className="text-[13px] text-[var(--text-3)]">Mostly watches</p>
+                    <p className="text-xl font-semibold tracking-[-0.02em] text-[var(--signature)]">{genres[0].name}</p>
+                    <ul className="mt-3 space-y-1">
+                        {genres.map((genre, index) => (
+                            <li key={genre.slug || genre.name}>
+                                <Link
+                                    to={genre.slug ? `/browse?genre=${encodeURIComponent(genre.slug)}` : '/browse'}
+                                    className="group grid min-h-8 grid-cols-[5.75rem_minmax(0,1fr)_2.25rem] items-center gap-3 text-sm"
+                                >
+                                    <span className="truncate text-[var(--text-2)] transition-colors group-hover:text-[var(--text-1)]">{genre.name}</span>
+                                    <span aria-hidden="true" className="h-2 overflow-hidden rounded-full bg-white/[0.05]">
+                                        <span
+                                            className="block h-full rounded-full"
+                                            style={{
+                                                width: `${Math.max(6, (genre.count / maxGenre) * 100)}%`,
+                                                backgroundColor: `color-mix(in srgb, var(--pa) ${100 - index * 11}%, var(--ink-3))`,
+                                            }}
+                                        />
+                                    </span>
+                                    <span className="text-right text-[var(--text-3)] tabular">{genre.count.toLocaleString()}</span>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </>
             )}
 
             {maxScore > 0 && (
                 <div className={genres.length > 0 ? 'mt-4 border-t border-[var(--line-1)] pt-4' : ''}>
-                    <p className="mb-3 flex items-baseline justify-between gap-3 text-[13px] text-[var(--text-3)]">
-                        Scores
-                        {mean != null && (
-                            <span className="tabular">
-                                Mean <span className="font-semibold text-[var(--text-1)]">{mean}</span> of {rated.toLocaleString()}
-                            </span>
-                        )}
-                    </p>
+                    <div className="mb-3 flex items-end justify-between gap-3">
+                        <div>
+                            <p className="text-[13px] text-[var(--text-3)]">Average score</p>
+                            {mean != null && (
+                                <p className="text-xl font-semibold tracking-[-0.02em] text-[var(--signature)] tabular">
+                                    {mean}
+                                    <span className="text-sm font-normal text-[var(--text-3)]"> / 10</span>
+                                </p>
+                            )}
+                        </div>
+                        <p className="text-right text-[13px] leading-snug text-[var(--text-3)] tabular">
+                            {rated.toLocaleString()} rated
+                            {usual != null && <><br />most often {usual}</>}
+                        </p>
+                    </div>
                     <div
                         role="img"
                         aria-label={`Scores: ${scores.map((count, index) => `${index + 1}: ${count}`).join(', ')}`}
-                        className="flex h-14 items-end gap-1.5 border-b border-[var(--line-2)]"
+                        className="flex h-14 items-end gap-1.5"
                     >
                         {scores.map((count, index) => (
                             <span
                                 key={index}
-                                className="mx-auto w-full max-w-6 flex-1 rounded-t-[3px]"
+                                className="mx-auto w-full max-w-6 flex-1 rounded-[3px]"
                                 style={{
                                     height: count ? `max(4px, ${(count / maxScore) * 100}%)` : '3px',
-                                    backgroundColor: count === maxScore ? 'var(--pa)' : count ? '#505864' : '#2f3542',
+                                    backgroundColor: count
+                                        ? `color-mix(in srgb, var(--pa) ${Math.round(35 + 65 * (count / maxScore))}%, var(--ink-3))`
+                                        : 'var(--ink-3)',
                                 }}
                             />
                         ))}
                     </div>
                     <div aria-hidden="true" className="mt-1.5 flex gap-1.5 text-center text-xs tabular">
-                        {scores.map((_, index) => (
-                            <span key={index} className="mx-auto w-full max-w-6 flex-1 text-[var(--text-3)]">{index + 1}</span>
+                        {scores.map((count, index) => (
+                            <span
+                                key={index}
+                                className={`mx-auto w-full max-w-6 flex-1 ${index + 1 === usual ? 'font-semibold text-[var(--signature)]' : 'text-[var(--text-3)]'}`}
+                            >
+                                {index + 1}
+                            </span>
                         ))}
                     </div>
                 </div>

@@ -38,7 +38,7 @@ export default function ProfilePreview({
 
     return (
         <figure className="overflow-hidden rounded-[var(--radius-lg)] bg-[var(--ink-0)]" aria-label="Preview of your profile header">
-            <div className="relative aspect-[4/1] min-h-24 bg-[var(--ink-2)]">
+            <div className="relative aspect-[9/2] min-h-24 bg-[var(--ink-2)]">
                 {bannerUrl ? (
                     <img src={bannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
