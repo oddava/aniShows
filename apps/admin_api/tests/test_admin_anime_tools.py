@@ -133,7 +133,6 @@ class ReviewToolsTests(TestCase):
 
         self.assertEqual((first.data["has_spoilers"], second.data["has_spoilers"]), (True, False))
         self.assertEqual(AuditLog.objects.count(), 2)
-        self.assertEqual(
-            AuditLog.objects.order_by("id").first().changes,
-            {"has_spoilers": {"old": False, "new": True}},
-        )
+        first_log = AuditLog.objects.order_by("id").first()
+        assert first_log is not None
+        self.assertEqual(first_log.changes, {"has_spoilers": {"old": False, "new": True}})

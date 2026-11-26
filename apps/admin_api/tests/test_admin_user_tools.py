@@ -195,7 +195,7 @@ class JoinedSinceFilterTests(TestCase):
         early.save(update_fields=["date_joined"])
 
         rows = client.get(
-            "/api/v1/admin/users/", {"joined_since": "2026-11-26T00:00:00+05:00", "page_size": 50}
+            "/api/v1/admin/users/", {"joined_since": "2026-11-26T00:00:00+05:00", "page_size": "50"}
         ).data["results"]
         names = {row["username"] for row in rows}
         self.assertIn("late-joiner", names)

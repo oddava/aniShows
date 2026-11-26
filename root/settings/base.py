@@ -6,6 +6,7 @@ Common settings shared across all environments.
 
 import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -307,7 +308,7 @@ SEARCH_WORD_SIMILARITY_THRESHOLD = min(
 )
 DB_CONNECTION_OPTIONS = f"-c pg_trgm.word_similarity_threshold={SEARCH_WORD_SIMILARITY_THRESHOLD}"
 
-DATABASES = {
+DATABASES: dict[str, Any] = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": DB_NAME,
@@ -522,7 +523,7 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "AniShows <onboarding@resen
 # DJANGO REST FRAMEWORK
 # =============================================================================
 
-REST_FRAMEWORK = {
+REST_FRAMEWORK: dict[str, Any] = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "apps.users.authentication.RevocableJWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
@@ -565,7 +566,7 @@ REST_FRAMEWORK = {
 
 from datetime import timedelta
 
-SIMPLE_JWT = {
+SIMPLE_JWT: dict[str, Any] = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
     "ROTATE_REFRESH_TOKENS": True,

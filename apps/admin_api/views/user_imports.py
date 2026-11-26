@@ -43,7 +43,9 @@ class AdminUserImportSerializer(ModelSerializer):
 
 
 class AdminUserImportDetailSerializer(AdminUserImportSerializer):
-    errors = SerializerMethodField()
+    # A field named like Serializer.errors: DRF's metaclass moves declared
+    # fields off the class, so the property is untouched at runtime.
+    errors = SerializerMethodField()  # type: ignore[assignment]
     unmatched = SerializerMethodField()
 
     class Meta(AdminUserImportSerializer.Meta):

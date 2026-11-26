@@ -3,7 +3,10 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 
-from .services.auth_service import SESSION_VERSION_CLAIM
+# The JWT claim carrying the user's session version. Defined here, not in
+# auth_service: settings name this module (DEFAULT_AUTHENTICATION_CLASSES), so
+# it must stay light and never import the services graph back into settings.
+SESSION_VERSION_CLAIM = "sv"
 
 
 def token_session_version(token) -> int:
@@ -25,6 +28,6 @@ class RevocableJWTAuthentication(JWTAuthentication):
 
     def get_user(self, validated_token):
         user = super().get_user(validated_token)
-        if token_session_version(validated_token) < user.session_version:
+        if token_session_version(validated_token) < getattr(user, "session_version", 0):
             raise AuthenticationFailed("This session has been signed out.", code="token_revoked")
         return user

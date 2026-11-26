@@ -15,6 +15,7 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.services.admin_settings_service import is_email_verification_required
+from ..authentication import SESSION_VERSION_CLAIM
 from ..models import UserProfile
 from ..tokens import email_verification_token_generator
 from .user_queryset import filter_username_ci, get_annotated_user_queryset
@@ -29,7 +30,6 @@ VERIFY_INVALID = "invalid"
 # Epoch seconds of the sign-in that started this token chain. Rotation copies
 # custom claims, so it survives refreshes; only a new sign-in moves it forward.
 AUTH_TIME_CLAIM = "auth_time"
-SESSION_VERSION_CLAIM = "sv"
 REAUTH_MAX_AGE_SECONDS = 600
 
 
