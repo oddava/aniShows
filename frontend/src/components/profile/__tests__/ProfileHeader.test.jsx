@@ -6,6 +6,7 @@ import ProfileHeader from '../ProfileHeader';
 
 vi.mock('../NowWatchingCard', () => ({ default: () => null }));
 vi.mock('../../FollowButton', () => ({ default: () => <button type="button">Follow</button> }));
+vi.mock('../../../api/client', () => ({ authApi: { updateProfile: vi.fn() } }));
 
 const USER = {
     username: 'oddava',
@@ -39,5 +40,18 @@ describe('ProfileHeader', () => {
         expect(row.className).not.toMatch(/grid|justify-between|justify-around/);
         const links = within(row).getAllByRole('link');
         expect(links.map((link) => link.textContent)).toEqual(['@oddava', 'Website']);
+    });
+
+    it('lets the owner edit the status from the pill', () => {
+        renderHeader({ isPublicView: false });
+
+        expect(screen.getByRole('button', { name: /chilling, edit status/ })).toBeInTheDocument();
+    });
+
+    it('shows visitors a plain status pill', () => {
+        renderHeader({ isPublicView: true });
+
+        expect(screen.getByText('chilling')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /edit status/ })).not.toBeInTheDocument();
     });
 });

@@ -5,6 +5,7 @@ import ProfileAvatar from './ProfileAvatar';
 import UserBadges from './UserBadges';
 import NowWatchingCard from './NowWatchingCard';
 import ShareProfileButton from './ShareProfileButton';
+import StatusPill from './StatusPill';
 import { PlatformIcon } from './SocialLinks';
 
 function linkHref(link) {
@@ -103,12 +104,13 @@ export default function ProfileHeader({
                             </div>
                         )}
 
-                        {(displayUser.status_emoji || displayUser.status_text) && (
-                            <p className="profile-status mt-3 flex w-fit max-w-full items-start gap-2 rounded-xl px-3.5 py-2 text-[15px] leading-snug text-[var(--text-1)] sm:mt-4 sm:max-w-2xl">
-                                {displayUser.status_emoji && <span aria-hidden="true">{displayUser.status_emoji}</span>}
-                                <span className="min-w-0 break-words">{displayUser.status_text}</span>
-                            </p>
-                        )}
+                        {/* Your own status is editable in place; visitors see a plain pill. */}
+                        <StatusPill
+                            emoji={displayUser.status_emoji || ''}
+                            text={displayUser.status_text || ''}
+                            editable={!isPublicView}
+                            username={username}
+                        />
 
                         {(displayUser.location || links.length > 0) && (
                         // One wrapping row, left-aligned, at every width: on phones a

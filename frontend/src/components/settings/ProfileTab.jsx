@@ -10,13 +10,13 @@ import { toneProfileAccentColor } from '../../utils/profileAccent';
 import ProfilePreview from './ProfilePreview';
 import useAdultContentPreference from '../../hooks/useAdultContentPreference';
 import logger from '../../utils/logger';
+// Quick picks for the status emoji (shared with the profile's pill editor); any emoji can be typed instead.
+import { STATUS_EMOJIS } from '../profile/statusOptions';
 
 // A field's label and its quiet help line.
 const LABEL = 'block text-sm font-medium text-[var(--text-1)] mb-2';
 const HELP = 'text-sm text-[var(--text-3)] mt-2';
 
-// Quick picks for the status emoji; any emoji can be typed instead.
-const STATUS_EMOJIS = ['📺', '🍿', '🔥', '😭', '💤', '🎧', '📚', '🎮', '✨', '🌸', '🍜', '💀'];
 // Overview sections an owner can hide (keys match the API's hidden_sections),
 // grouped as the profile lays them out. A row without a key is a group label.
 const PROFILE_SECTIONS = [
