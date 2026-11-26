@@ -25,6 +25,12 @@ from ...animes.serializers_mixins import BadgesMixin, UserProfileMixin
 from ...shared.logger import logger
 from ...shared.text import HEX_COLOR_PATTERN, decode_escaped_html_entities
 from ..services.auth_service import AuthService
+from ..services.profile_expression import (
+    clean_expression_text,
+    clean_hidden_sections,
+    clean_status_emoji,
+    expression_payload,
+)
 from ..services.username_sanitizer import validate_username
 from ..utils.image_processing import ProfileImageError, normalize_profile_image
 
@@ -117,7 +123,16 @@ def sanitize_bio(value: str | None) -> str:
     )
 
 
-class UserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
+class _ExpressionFieldsMixin:
+    """Adds the header's self-expression fields (display name, status...)."""
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data.update(expression_payload(getattr(instance, "userprofile", None)))
+        return data
+
+
+class UserSerializer(_ExpressionFieldsMixin, UserProfileMixin, BadgesMixin, ModelSerializer):
     avatar = SerializerMethodField()
     banner = SerializerMethodField()
     bio = SerializerMethodField()
@@ -245,7 +260,7 @@ class UserLightweightSerializer(UserProfileMixin, ModelSerializer):
         ]
 
 
-class PublicUserSerializer(UserProfileMixin, BadgesMixin, ModelSerializer):
+class PublicUserSerializer(_ExpressionFieldsMixin, UserProfileMixin, BadgesMixin, ModelSerializer):
     """Limited serializer for public profile view"""
 
     avatar = SerializerMethodField()
@@ -337,9 +352,33 @@ class UserProfileUpdateSerializer(Serializer):
     show_adult_content = BooleanField(required=False)
     profile_primary_color = CharField(required=False, max_length=7)
     preferred_timezone = CharField(required=False, allow_blank=True, max_length=64)
+    display_name = CharField(required=False, allow_blank=True, trim_whitespace=False)
+    pronouns = CharField(required=False, allow_blank=True, trim_whitespace=False)
+    location = CharField(required=False, allow_blank=True, trim_whitespace=False)
+    status_emoji = CharField(required=False, allow_blank=True)
+    status_text = CharField(required=False, allow_blank=True, trim_whitespace=False)
+    hidden_sections = JSONField(required=False)
 
     def validate_bio(self, value):
         return sanitize_bio(value)
+
+    def validate_display_name(self, value):
+        return clean_expression_text("display_name", value)
+
+    def validate_pronouns(self, value):
+        return clean_expression_text("pronouns", value)
+
+    def validate_location(self, value):
+        return clean_expression_text("location", value)
+
+    def validate_status_text(self, value):
+        return clean_expression_text("status_text", value)
+
+    def validate_status_emoji(self, value):
+        return clean_status_emoji(value)
+
+    def validate_hidden_sections(self, value):
+        return clean_hidden_sections(value)
 
     def validate(self, attrs):
         for field in ("avatar", "banner"):

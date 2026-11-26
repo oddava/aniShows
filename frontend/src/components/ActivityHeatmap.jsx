@@ -21,11 +21,11 @@ function toRgba(hex, alpha) {
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
-// Week columns share the width (at least 14 px each, 4 px apart), so the
+// Week columns share the width (at least 12 px each, 3 px apart), so the
 // year spans the panel; narrower than that it scrolls. The scroller fades
 // its edges over 28 px (.scroll-fade in index.css).
 const WEEKS = 52;
-const WEEK_COLUMNS = { gridTemplateColumns: `repeat(${WEEKS}, minmax(14px, 1fr))` };
+const WEEK_COLUMNS = { gridTemplateColumns: `repeat(${WEEKS}, minmax(12px, 1fr))` };
 const EDGE_FADE_PX = 28;
 // Fewer active days than this and the year is a field of empty squares:
 // the sentence says it all.
@@ -139,31 +139,54 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
     }, [activityData]);
     const showGrid = stats.activeDays >= MIN_ACTIVE_DAYS_FOR_GRID;
 
-    // Keep the newest weeks visible by default when horizontal overflow exists.
+    // Keep the newest weeks visible when the year overflows: pinned to the
+    // right edge (again on every resize, since the width can settle after
+    // mount) until the person scrolls it themselves.
     useEffect(() => {
         const el = scrollRef.current;
         if (!el) return undefined;
-        const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
-        el.scrollLeft = maxScrollLeft;
+        let pinned = true;
+        let ignoreScroll = false;
+        const pinToEnd = () => {
+            if (!pinned) return;
+            const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+            if (Math.abs(el.scrollLeft - maxScrollLeft) > 1) {
+                ignoreScroll = true;
+                el.scrollLeft = maxScrollLeft;
+            }
+        };
+        pinToEnd();
 
         const updateFirstVisible = () => {
             const stride = el.scrollWidth / WEEKS;
             const hidden = el.scrollLeft > 1 ? el.scrollLeft + EDGE_FADE_PX : 0;
             setFirstVisibleWeek(hidden > 0 && stride > 0 ? Math.ceil(hidden / stride) : 0);
         };
+        const onScroll = () => {
+            if (ignoreScroll) ignoreScroll = false;
+            else pinned = false;
+            updateFirstVisible();
+        };
+        const onResize = () => {
+            pinToEnd();
+            updateFirstVisible();
+        };
         updateFirstVisible();
-        el.addEventListener('scroll', updateFirstVisible, { passive: true });
-        const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateFirstVisible) : null;
+        el.addEventListener('scroll', onScroll, { passive: true });
+        const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
         resizeObserver?.observe(el);
+        if (el.firstElementChild) resizeObserver?.observe(el.firstElementChild);
         return () => {
-            el.removeEventListener('scroll', updateFirstVisible);
+            el.removeEventListener('scroll', onScroll);
             resizeObserver?.disconnect();
         };
     }, [weeks, showGrid]);
 
     // Get color intensity based on count - using inline styles for better theme support
     const getColorStyle = (count) => {
-        if (count === 0) return { backgroundColor: 'rgba(255, 255, 255, 0.05)' };
+        // Empty days use one neutral surface for every accent colour.
+        if (count === 0) return { backgroundColor: 'var(--ink-3)' };
+        // Four clearly separate steps of the profile colour.
         if (isPastel) {
             if (count <= 1) return { backgroundColor: 'rgba(232, 90, 156, 0.2)' };
             if (count <= 3) return { backgroundColor: 'rgba(232, 90, 156, 0.4)' };
@@ -171,15 +194,14 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
             if (count <= 7) return { backgroundColor: 'rgba(232, 90, 156, 0.8)' };
             return { backgroundColor: 'rgb(232, 90, 156)' };
         }
-        if (count <= 1) return { backgroundColor: toRgba(profileAccentColor, 0.2) };
-        if (count <= 3) return { backgroundColor: toRgba(profileAccentColor, 0.4) };
-        if (count <= 5) return { backgroundColor: toRgba(profileAccentColor, 0.6) };
-        if (count <= 7) return { backgroundColor: toRgba(profileAccentColor, 0.8) };
+        if (count <= 2) return { backgroundColor: toRgba(profileAccentColor, 0.28) };
+        if (count <= 4) return { backgroundColor: toRgba(profileAccentColor, 0.5) };
+        if (count <= 6) return { backgroundColor: toRgba(profileAccentColor, 0.75) };
         return { backgroundColor: profileAccentColor };
     };
 
     const getHoverStyle = (count) => {
-        if (count === 0) return { backgroundColor: 'rgba(255, 255, 255, 0.13)' };
+        if (count === 0) return { backgroundColor: 'var(--ink-4)' };
         if (isPastel) {
             if (count <= 1) return { backgroundColor: 'rgba(232, 90, 156, 0.4)' };
             if (count <= 3) return { backgroundColor: 'rgba(232, 90, 156, 0.6)' };
@@ -225,7 +247,7 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
             <div ref={setScrollEl} className="scroll-fade overflow-x-auto scrollbar-hide">
                 <div className="min-w-max py-1 sm:min-w-0">
                     {/* Month labels */}
-                    <div className="mb-1 grid h-5 gap-[4px] text-xs text-[var(--text-2)]" style={WEEK_COLUMNS}>
+                    <div className="mb-1 grid h-5 gap-[3px] text-xs text-[var(--text-2)]" style={WEEK_COLUMNS}>
                         {weeks.map((week, i) => {
                             const firstDay = new Date(week[0].date);
                             // A label needs about two columns; one that starts
@@ -246,9 +268,9 @@ export default function ActivityHeatmap({ activityData = [], accentColor, hideWh
                     </div>
 
                     {/* Cells Grid */}
-                    <div className="grid gap-[4px]" style={WEEK_COLUMNS}>
+                    <div className="grid gap-[3px]" style={WEEK_COLUMNS}>
                         {weeks.map((week, weekIndex) => (
-                            <div key={weekIndex} className="flex flex-col gap-[4px]">
+                            <div key={weekIndex} className="flex flex-col gap-[3px]">
                                 {week.map((day) => (
                                     <div
                                         key={day.date}

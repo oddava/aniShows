@@ -8,6 +8,8 @@ export const authApi = {
     getWsTicket: () => api.post('/auth/ws-ticket/'),
     getProfile: (full = false) => api.get('/users/me/', { params: { full } }),
     getByUsername: (username) => api.get(`/users/${username}/`),
+    /** How close the signed-in viewer's taste is to `username`'s (0-100 plus shared shows). */
+    getCompatibility: (username) => api.get(`/users/${encodeURIComponent(username)}/compatibility/`),
     getStats: () => api.get('/users/me/stats/'),
     updateProfile: (data) => {
         const isFormData = data instanceof FormData;

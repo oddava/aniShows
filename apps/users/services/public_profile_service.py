@@ -10,6 +10,7 @@ from ...shared.text import normalize_bio, normalize_primary_color
 from ..serializers.accounts import PublicUserSerializer
 from .avatar_service import get_user_avatar_url
 from .cache import get_public_profile_cache_key
+from .profile_expression import expression_payload, normalize_expression_payload
 from .profile_service import build_profile_user_queryset, get_featured_badges, with_live_list_stats
 from .user_queryset import filter_username_ci, get_annotated_user_queryset
 
@@ -109,6 +110,7 @@ def _get_public_profile(username: str, viewer=None, request=None) -> PublicProfi
                 "favorites_count": stats.favorites_count,
                 "reviews_count": stats.reviews_count,
                 "resonance_count": stats.resonance_count,
+                **expression_payload(user.userprofile),
             }
 
             data["is_following"] = bool(getattr(user, "_is_following", False))
@@ -157,4 +159,4 @@ def _normalize_public_profile_payload(data):
     normalized["profile_primary_color"] = normalize_primary_color(
         normalized.get("profile_primary_color")
     )
-    return normalized
+    return normalize_expression_payload(normalized)

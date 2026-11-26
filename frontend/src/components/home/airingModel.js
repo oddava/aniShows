@@ -62,21 +62,24 @@ export function tonightFrom(airings, now = Date.now(), timezone) {
 }
 
 /**
- * Your week as an agenda: only the days with a listed show, today first.
- * Past airings today stay, marked `aired`.
+ * The week, all seven days from today, each with the shows that air on it
+ * (timed ones in time order, untimed last): only the ones on your list
+ * unless `listedOnly` is false. Past airings today stay, marked `aired`.
+ * `weekday` is the short name ("Fri"), `day` the date number.
  */
-export function weekAgenda(scheduleDays, timezone, now = Date.now()) {
+export function weekColumns(scheduleDays, timezone, now = Date.now(), { listedOnly = true } = {}) {
     const { days } = bucketScheduleByDate(scheduleDays || {}, timezone, new Date(now));
     const today = getZonedCalendarToday(timezone, new Date(now));
     return Array.from({ length: SCHEDULE_DAYS }, (_, offset) => {
         const date = new Date(today.getTime() + offset * DAY_MS);
         const shows = (days[offset] || [])
-            .filter((anime) => LISTED.has(anime.user_list_status?.status))
+            .filter((anime) => !listedOnly || LISTED.has(anime.user_list_status?.status))
             .map((anime) => {
                 const at = Date.parse(anime.next_airing_date);
                 const timed = Number.isFinite(at);
                 return { anime, at: timed ? at : null, aired: timed && at <= now };
-            });
+            })
+            .sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
         return {
             offset,
             label: offset === 0
@@ -84,10 +87,17 @@ export function weekAgenda(scheduleDays, timezone, now = Date.now()) {
                 : offset === 1
                     ? 'Tomorrow'
                     : date.toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' }),
+            weekday: date.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }),
+            day: date.getUTCDate(),
             date: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
             shows,
         };
-    }).filter((day) => day.shows.length > 0);
+    });
+}
+
+/** Your week as an agenda: only the days with a listed show, today first. */
+export function weekAgenda(scheduleDays, timezone, now = Date.now()) {
+    return weekColumns(scheduleDays, timezone, now).filter((day) => day.shows.length > 0);
 }
 
 /**

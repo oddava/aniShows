@@ -9,13 +9,14 @@ const ICON_MAP = {
     'crown': Crown,
 };
 
+// Only the icon carries the badge's colour; the chip itself stays neutral.
 const COLOR_MAP = {
-    'blue': 'text-blue-400 bg-blue-500/20 border-blue-500/30',
-    'green': 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30',
-    'yellow': 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30',
-    'purple': 'text-purple-400 bg-purple-500/20 border-purple-500/30',
-    'amber': 'text-amber-400 bg-amber-500/20 border-amber-500/30',
-    'red': 'text-red-400 bg-red-500/20 border-red-500/30',
+    'blue': 'text-[var(--signature)]',
+    'green': 'text-[var(--status-watching)]',
+    'yellow': 'text-[var(--status-on-hold)]',
+    'purple': 'text-[var(--status-completed)]',
+    'amber': 'text-[var(--status-on-hold)]',
+    'red': 'text-[var(--status-dropped)]',
 };
 
 export default function UserBadges({ user, className = '' }) {
@@ -32,13 +33,13 @@ export default function UserBadges({ user, className = '' }) {
                 return (
                     <div
                         key={badge.id || index}
-                        className={`inline-flex items-center shrink-0 gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${colorClasses}`}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-white/[0.06] px-2 py-1 text-[13px] text-[var(--text-2)]"
                         title={badge.description}
                     >
                         {badge.image ? (
-                            <img src={badge.image} alt={badge.name} className="w-3 h-3 rounded-sm object-cover shrink-0" />
+                            <img src={badge.image} alt="" className="h-3.5 w-3.5 shrink-0 rounded-sm object-cover" />
                         ) : (
-                            <Icon className="w-3 h-3 shrink-0" />
+                            <Icon aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 ${colorClasses}`} />
                         )}
                         <span className="whitespace-nowrap">{badge.name}</span>
                     </div>

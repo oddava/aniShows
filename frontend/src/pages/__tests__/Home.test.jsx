@@ -104,11 +104,12 @@ describe('Home', () => {
         // The header offers Sign in; the hero does not ask twice.
         expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
         expect(screen.getByRole('link', { name: /import from mal or anilist/i })).toHaveAttribute('href', '/import');
-        expect(screen.getByRole('heading', { name: 'Airing today' })).toBeInTheDocument();
 
-        await waitFor(() => {
-            expect(screen.getAllByText('Demon Slayer').length).toBeGreaterThan(0);
-        });
+        // Beside the headline: this week's most trending show, from the
+        // same request as the Trending shelf.
+        const featured = await screen.findByRole('article', { name: 'Demon Slayer' });
+        expect(within(featured).getByText('Trending this week')).toBeInTheDocument();
+        expect(animeApi.getTrending).toHaveBeenCalledTimes(1);
     });
 
     it('opens on Continue for members, not a trending carousel (L2)', async () => {
@@ -119,8 +120,11 @@ describe('Home', () => {
         render(<Home />, { wrapper: createWrapper() });
 
         expect(screen.getByRole('heading', { level: 1, name: 'megumin' })).toBeInTheDocument();
-        expect(await screen.findByRole('region', { name: 'Continue watching' })).toBeInTheDocument();
-        expect(await screen.findByText(/Nothing in progress/)).toBeInTheDocument();
+        // A list with nothing in progress gets the empty state: what the
+        // feature is for, one primary action and one plain link.
+        expect(await screen.findByRole('region', { name: 'Start tracking a show' })).toBeInTheDocument();
+        expect(screen.getByText('Nothing in progress yet.')).toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'Continue watching' })).not.toBeInTheDocument();
         // One primary action and one plain link, no "or" between them.
         expect(screen.getByRole('link', { name: 'Find something to watch' })).toHaveClass('btn-primary');
         expect(screen.getByRole('link', { name: 'Import a list' })).toHaveAttribute('href', '/import');
@@ -191,14 +195,29 @@ describe('Home - Continue and the airing ribbon (members)', () => {
         await within(section).findByText('Behind By One');
         const titles = within(section).getAllByRole('link').map((link) => link.textContent).filter((text) => ['Behind By One', 'All Watched', 'Up To Date'].includes(text));
         expect(titles).toEqual(['Behind By One', 'All Watched', 'Up To Date']);
-        expect(within(section).getByText('Episode 8 is out')).toBeInTheDocument();
-        expect(within(section).getAllByText(/^Episode 4 in 2h 2[01]m$/).length).toBeGreaterThan(0);
-        // The left column lists what airs tonight (or the next airing show).
-        expect(within(section).getByRole('heading', { name: 'Tonight' })).toBeInTheDocument();
-        expect(within(section).getByText('1 of your shows has a new episode waiting.')).toBeInTheDocument();
-        expect(within(section).getByRole('button', { name: 'One episode more of Behind By One' })).toBeInTheDocument();
+        // The first one is the large spotlight, with one button for the
+        // episode waiting; the rest are cards.
+        const spotlight = within(section).getByRole('article', { name: 'Behind By One' });
+        expect(within(spotlight).getByText('Episode 8 is out')).toBeInTheDocument();
+        expect(within(spotlight).getByRole('button', { name: 'Watched episode 8' })).toBeInTheDocument();
+        expect(within(spotlight).getByRole('button', { name: 'One episode more of Behind By One' })).toBeInTheDocument();
+        expect(within(section).getByText(/^Episode 4 in 2h 2[01]m$/)).toBeInTheDocument();
+        expect(within(section).getByRole('button', { name: 'One episode more of Up To Date' })).toBeInTheDocument();
+        expect(screen.getByText('1 of your shows has a new episode waiting.')).toBeInTheDocument();
         // A finished show asks for a score instead of +1.
         expect(within(section).getByRole('radiogroup', { name: 'Score All Watched' })).toBeInTheDocument();
+    });
+
+    it('says the shows failed to load instead of claiming there are none', async () => {
+        listApi.getAll.mockRejectedValue(Object.assign(new Error('Server error'), { response: { status: 500 } }));
+
+        render(<Home />, { wrapper: createWrapper() });
+
+        const section = await screen.findByRole('region', { name: 'Continue watching' });
+        expect(await within(section).findByText('Your shows didn’t load')).toBeInTheDocument();
+        expect(within(section).getByRole('button', { name: /retry/i })).toBeInTheDocument();
+        expect(screen.queryByText('Nothing in progress yet.')).not.toBeInTheDocument();
+        expect(screen.queryByRole('region', { name: 'Start tracking a show' })).not.toBeInTheDocument();
     });
 
     it('shows your listed shows across the week in the airing ribbon', async () => {
@@ -258,7 +277,7 @@ describe('Home - Continue and the airing ribbon (members)', () => {
             authState.user = { username: 'megumin' };
         });
 
-        it('says the episode is out in Continue and Your week; Tonight lists what is still to come', async () => {
+        it('says the episode is out in Continue and in Your week, beside what is still to come today', async () => {
             listApi.getAll.mockResolvedValue({
                 data: {
                     results: [
@@ -273,21 +292,18 @@ describe('Home - Continue and the airing ribbon (members)', () => {
 
             const section = await screen.findByRole('region', { name: 'Continue watching' });
             expect(await within(section).findByText('Episode 9 is out')).toBeInTheDocument();
-            expect(within(section).getByText('1 of your shows has a new episode waiting.')).toBeInTheDocument();
-            // Tonight: in time order, the aired one included.
-            // Already out: named in Continue, not again under Tonight.
-            expect(within(section).queryByText('10:04 · Episode 9 is out')).not.toBeInTheDocument();
-            expect(within(section).getByText('12:43 · Episode 4 · in 2h 8m')).toBeInTheDocument();
-            expect(within(section).queryByText(/Nothing from your list airs today/)).not.toBeInTheDocument();
+            expect(screen.getByText('1 of your shows has a new episode waiting.')).toBeInTheDocument();
+            expect(within(section).getByText('Episode 4 in 2h 8m')).toBeInTheDocument();
 
+            // Today's column of the week: in time order, the aired one
+            // included and marked out.
             const week = await screen.findByRole('region', { name: 'Your week' });
-            const today = await within(week).findByRole('region', { name: /Today/ });
-            expect(within(today).getByText('The Apothecary Diaries')).toBeInTheDocument();
-            expect(within(today).getByText('Episode 9 · out')).toBeInTheDocument();
-            expect(within(today).getByText('Episode 4')).toBeInTheDocument();
+            const today = (await within(week).findByRole('heading', { name: /^Today/ })).closest('li');
+            const shows = within(today).getAllByRole('link').map((link) => link.textContent);
+            expect(shows).toEqual(['10:04 · Ep 9 · outThe Apothecary Diaries', '12:43 · Ep 4Later Today']);
         });
 
-        it('does not repeat a Continue show as Next up when nothing airs today', async () => {
+        it('shows a single show as the spotlight alone, without an empty card row', async () => {
             const sunday = { ...later, next_airing_date: '2026-11-22T15:43:00Z' };
             listApi.getAll.mockResolvedValue({
                 data: { results: [{ id: 32, status: 'Watching', episodes_watched: 3, score: 0, updated_at: '2026-11-20T09:00:00Z', anime: sunday }] },
@@ -297,14 +313,14 @@ describe('Home - Continue and the airing ribbon (members)', () => {
             render(<Home />, { wrapper: createWrapper() });
 
             const section = await screen.findByRole('region', { name: 'Continue watching' });
-            // Its Continue row already says when the next episode comes, so
-            // neither Tonight nor a Next up line repeats it.
-            await within(section).findByText('Later Today');
-            expect(within(section).queryByRole('link', { name: /^Next up/ })).not.toBeInTheDocument();
-            expect(within(section).queryByRole('heading', { name: 'Tonight' })).not.toBeInTheDocument();
+            const spotlight = await within(section).findByRole('article', { name: 'Later Today' });
+            // Up to date: when the next episode airs, and no "watched" button.
+            expect(within(spotlight).getByText('Episode 4 in 1d 5h')).toBeInTheDocument();
+            expect(within(spotlight).queryByRole('button', { name: /Watched episode/ })).not.toBeInTheDocument();
+            expect(within(section).queryAllByRole('listitem')).toHaveLength(0);
         });
 
-        it('fills the guest panel with upcoming episodes and leaves out aired ones', async () => {
+        it('shows visitors the whole week, aired episodes today marked out', async () => {
             authState.isAuthenticated = false;
             window.localStorage.setItem('AniShows.userTimezonePreference', 'UTC');
             animeApi.getSchedule.mockResolvedValue({
@@ -321,9 +337,15 @@ describe('Home - Continue and the airing ribbon (members)', () => {
 
             render(<Home />, { wrapper: createWrapper() });
 
-            expect(await screen.findByText('Tomorrow 09:43')).toBeInTheDocument();
-            expect(screen.queryByText('Aired 10:04')).not.toBeInTheDocument();
-            expect(screen.queryByText('Time TBA')).not.toBeInTheDocument();
+            const week = await screen.findByRole('region', { name: 'Airing this week' });
+            const today = within(week).getByRole('heading', { name: /^Today/ }).closest('li');
+            expect(within(today).getAllByRole('link').map((link) => link.textContent)).toEqual([
+                '10:04 · Ep 9 · outThe Apothecary Diaries',
+                'TBANo Time Yet',
+            ]);
+            const tomorrow = within(week).getByRole('heading', { name: /Tomorrow/ }).closest('li');
+            expect(within(tomorrow).getByText('09:43 · Ep 4')).toBeInTheDocument();
+            expect(within(tomorrow).getByText('Sunday Show')).toBeInTheDocument();
             window.localStorage.removeItem('AniShows.userTimezonePreference');
         });
     });

@@ -3,6 +3,7 @@
 @import "./styles/components/cards.css";
 @import "./styles/components/animations.css";
 @import "./styles/pages/forums.css";
+@import "./styles/pages/profile.css";
 
 /*
  * Design tokens (docs/ux-overhaul-plan.md).
@@ -263,21 +264,16 @@
   textarea:focus-visible,
   select:focus-visible,
   .input:focus-visible {
-    /* Owner ruling: no rings or glow on fields. Focus lifts the fill. */
+    /* Owner ruling: no rings, glow or lighter fill on fields; the caret
+       (in the accent) shows where you are typing. */
     box-shadow: none !important;
-    background-color: rgb(255 255 255 / 0.12) !important;
     caret-color: var(--signature);
   }
 
-  /* A field with an error keeps its rose tint, lighter while focused. */
-  input[aria-invalid="true"]:not(:focus-visible),
-  textarea[aria-invalid="true"]:not(:focus-visible) {
+  /* A field with an error keeps its rose tint, focused or not. */
+  input[aria-invalid="true"],
+  textarea[aria-invalid="true"] {
     background-color: rgb(242 135 143 / 0.1) !important;
-  }
-
-  input[aria-invalid="true"]:focus-visible,
-  textarea[aria-invalid="true"]:focus-visible {
-    background-color: rgb(242 135 143 / 0.16) !important;
   }
 
   .richtext-editor-textarea:focus-visible,

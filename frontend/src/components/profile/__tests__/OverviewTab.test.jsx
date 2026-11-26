@@ -85,7 +85,7 @@ describe('OverviewTab with an empty list', () => {
 });
 
 describe('OverviewTab with a list', () => {
-    it('shows the year of activity and no genre column', async () => {
+    it('shows the year of activity, the numbers and the taste card', async () => {
         renderOverview({
             summary: { total: 7, top_genres: [{ name: 'Fantasy', count: 4 }] },
             watching: [{ id: 1, episodes_watched: 3, anime: { slug: 'blue-box', title: 'Blue Box', episodes: 12 } }],
@@ -94,8 +94,9 @@ describe('OverviewTab with a list', () => {
         expect(await screen.findByTestId('heatmap')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'Watching' })).toBeInTheDocument();
-        // Genres are a line in the header now, not a half-empty side column.
-        expect(screen.queryByRole('heading', { name: 'Top genres' })).not.toBeInTheDocument();
+        // Taste (top genres as bars) sits in the side column, beside the shows.
+        expect(screen.getByRole('heading', { name: 'Taste' })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Stats' })).toBeInTheDocument();
         expect(screen.queryByRole('heading', { name: 'Start your list' })).not.toBeInTheDocument();
     });
 });

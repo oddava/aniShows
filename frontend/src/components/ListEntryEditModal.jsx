@@ -438,7 +438,7 @@ function Field({ label, htmlFor, hint, error, wide = false, children }) {
 
 function InputShell({ children, invalid = false }) {
     return (
-        <div className={`flex min-h-11 items-center gap-3 rounded-xl px-4 py-2.5 transition-colors duration-150 ${invalid ? 'bg-[rgb(242_135_143/0.1)] focus-within:bg-[rgb(242_135_143/0.16)]' : 'bg-white/[0.06] focus-within:bg-white/[0.12]'}`}>
+        <div className={`flex min-h-11 items-center gap-3 rounded-xl px-4 py-2.5 transition-colors duration-150 ${invalid ? 'bg-[rgb(242_135_143/0.1)]' : 'bg-white/[0.06]'}`}>
             {children}
         </div>
     );

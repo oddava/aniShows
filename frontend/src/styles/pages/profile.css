@@ -1,0 +1,351 @@
+/*
+ * The profile page (components/profile).
+ *
+ * Flat, like the rest of the site: depth comes from the ink surface steps,
+ * never from shadows, glows or gradients. The person's colour
+ * (--profile-accent, set on :root by pages/Profile.jsx) is used sparingly:
+ * the banner when there is none, the heatmap, the current tab's count and
+ * a few hovers.
+ */
+
+.profile-page {
+  --pa: var(--profile-accent, var(--signature));
+  /* The person's colour as a surface: the empty banner and the status strip
+     use the same mix, so they read as one chosen colour. */
+  --pa-surface: color-mix(in srgb, var(--pa) 28%, var(--ink-1));
+}
+
+/* ---------------------------------------------------------------- Hero */
+
+/* Phones: the banner starts below the fixed top bar, so the bar's logo
+   and search never sit on busy artwork. From md up it runs under the
+   navbar, which has its own surface. */
+@media (width < 48rem) {
+  .profile-hero {
+    padding-top: calc(3.5rem + env(safe-area-inset-top));
+  }
+}
+
+/* Tall, as on X (about 3:1 on wide screens). */
+.profile-hero__banner {
+  height: clamp(8.5rem, 28vw, 22rem);
+  background: var(--ink-1);
+}
+
+/* No banner: the same frame, filled with one flat tint of the person's
+   colour, so the header's geometry never changes. */
+.profile-hero__banner--empty {
+  background: var(--pa-surface);
+}
+
+/* The status sits on its own strip of the profile colour. --status-bg is
+   the hook for cosmetic backgrounds later; today it is a flat tint. */
+.profile-status {
+  background: var(--status-bg, color-mix(in srgb, var(--pa) 16%, var(--ink-1)));
+}
+
+/* The person's colour on their own page's main action (Follow). */
+.profile-accent-scope {
+  --color-accent-fill: var(--pa);
+  --color-accent-fill-hover: color-mix(in srgb, var(--pa) 82%, white);
+}
+
+.profile-hero__identity {
+  margin-top: -2.5rem;
+}
+
+@media (width >= 40rem) {
+  .profile-hero__identity {
+    margin-top: -4.5rem;
+  }
+}
+
+.profile-hero__name {
+  font-size: 1.75rem;
+  line-height: 1.1;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  color: var(--text-1);
+}
+
+@media (width >= 40rem) {
+  .profile-hero__name {
+    font-size: 2.25rem;
+  }
+}
+
+.profile-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  border-radius: 0.5rem;
+  color: var(--text-1);
+  background: rgb(255 255 255 / 0.06);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.profile-icon-btn:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.profile-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  font-size: 0.9375rem;
+  color: var(--text-2);
+  transition: color var(--dur-fast) ease;
+}
+
+.profile-link:hover {
+  color: var(--text-1);
+}
+
+@media (width >= 48rem) {
+  .profile-link {
+    min-height: 0;
+  }
+}
+
+/* ------------------------------------------------------------- Cards */
+
+.profile-card {
+  background: var(--ink-1);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  /* Jumping to a card leaves it clear of the stuck tab bar. */
+  scroll-margin-top: 5rem;
+  animation: panel-in var(--dur-slow) var(--ease-out) backwards;
+}
+
+@media (width >= 40rem) {
+  .profile-card {
+    padding: 1.25rem;
+  }
+}
+
+@media (width >= 48rem) {
+  .profile-card {
+    padding: 1.5rem;
+  }
+}
+
+.profile-activity > section {
+  background: var(--ink-1);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+}
+
+@media (width >= 40rem) {
+  .profile-activity > section {
+    padding: 1.25rem;
+  }
+}
+
+@media (width >= 48rem) {
+  .profile-activity > section {
+    padding: 1.5rem;
+  }
+}
+
+/* One heading size for every overview card. */
+.profile-card-title {
+  font-size: 1.125rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-1);
+}
+
+/* The settings bio editor scrolls on a quiet, thin bar. */
+/* The writing surface is rounded on all four corners, like every other
+   field; the toolbar sits above it. Chromium draws the thin scrollbar from
+   the ::-webkit-scrollbar rules below (no arrow buttons); other engines use
+   the standard properties. */
+.settings-bio textarea {
+  border-radius: var(--radius-md);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .settings-bio textarea {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink-4) transparent;
+  }
+}
+
+.settings-bio textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-bio textarea::-webkit-scrollbar-button {
+  display: none;
+}
+
+.settings-bio textarea::-webkit-scrollbar-thumb {
+  background: var(--ink-4);
+  border-radius: 3px;
+}
+
+.settings-bio textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.profile-stat-value {
+  font-size: 1.75rem;
+  line-height: 1.1;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  color: var(--text-1);
+}
+
+/* A number's aura (statAura.js). The digits take their tier's colour and
+   breathe a glow in it; each tier glows wider and breathes faster. From
+   purple up, a light sheen also sweeps across the digits now and then. */
+.profile-stat-value[data-aura] {
+  --aura-text: color-mix(in srgb, var(--aura) 72%, white);
+  color: var(--aura-text);
+  filter: drop-shadow(0 0 var(--glow-lo) color-mix(in srgb, var(--aura) var(--glow-mix-lo), transparent));
+  animation: aura-breathe var(--aura-speed) ease-in-out infinite;
+}
+
+.profile-stat-value[data-aura="1"] { --aura-speed: 4.6s; --glow-lo: 3px; --glow-hi: 8px; --glow-mix-lo: 25%; --glow-mix-hi: 50%; }
+.profile-stat-value[data-aura="2"] { --aura-speed: 4s; --glow-lo: 4px; --glow-hi: 10px; --glow-mix-lo: 30%; --glow-mix-hi: 58%; }
+.profile-stat-value[data-aura="3"] { --aura-speed: 3.4s; --glow-lo: 5px; --glow-hi: 13px; --glow-mix-lo: 35%; --glow-mix-hi: 66%; }
+.profile-stat-value[data-aura="4"] { --aura-speed: 2.8s; --glow-lo: 5px; --glow-hi: 12px; --glow-mix-lo: 40%; --glow-mix-hi: 74%; }
+.profile-stat-value[data-aura="5"] { --aura-speed: 2.3s; --glow-lo: 5px; --glow-hi: 12px; --glow-mix-lo: 40%; --glow-mix-hi: 68%; }
+
+.profile-stat-value[data-aura="3"],
+.profile-stat-value[data-aura="4"],
+.profile-stat-value[data-aura="5"] {
+  background: linear-gradient(105deg, var(--aura-text) 40%, #fff 50%, var(--aura-text) 60%) 0 0 / 300% 100% no-repeat;
+  background-color: var(--aura-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation:
+    aura-breathe var(--aura-speed) ease-in-out infinite,
+    aura-sheen 4.2s ease-in-out infinite;
+}
+
+/* The top tier's sheen comes round twice as often. */
+.profile-stat-value[data-aura="5"] {
+  animation:
+    aura-breathe var(--aura-speed) ease-in-out infinite,
+    aura-sheen 2.6s ease-in-out infinite;
+}
+
+@keyframes aura-breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 var(--glow-lo) color-mix(in srgb, var(--aura) var(--glow-mix-lo), transparent));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 var(--glow-hi) color-mix(in srgb, var(--aura) var(--glow-mix-hi), transparent))
+      drop-shadow(0 0 2px color-mix(in srgb, var(--aura) 45%, transparent));
+  }
+}
+
+/* The highlight crosses the digits, then rests off to the side. */
+@keyframes aura-sheen {
+  0% { background-position: 100% 0; }
+  55%, 100% { background-position: 0% 0; }
+}
+
+/* No trailing space under the last block of a folded or short bio. */
+.profile-about .overview-about-markdown > :last-child,
+.profile-about .overview-about-markdown > div > :last-child {
+  margin-bottom: 0 !important;
+}
+
+/* -------------------------------------------------------------- Tabs */
+
+.profile-tabs {
+  background: var(--ink-0);
+  transition: transform 200ms var(--ease-out), background-color var(--dur-base) ease;
+}
+
+/* Stuck, the bar sits on its own slightly lifted surface, so the cards
+   scrolling under it read as tucked away rather than cut off. */
+/* Phone tabs: the chevron shows only while more tabs sit off to the right. */
+.profile-tabs__more {
+  display: none;
+  background: linear-gradient(to right, transparent, var(--ink-0) 45%);
+}
+
+.profile-tabs__scroller:has(> [data-fade-end]) > .profile-tabs__more {
+  display: flex;
+}
+
+@media (width >= 40rem) {
+  .profile-tabs__scroller:has(> [data-fade-end]) > .profile-tabs__more {
+    display: none;
+  }
+}
+
+/* Stuck, the bar and the site navbar above it are one solid layer in the
+   page colour: nothing scrolling under them tints the controls. */
+.profile-tabs[data-stuck] {
+  background: var(--ink-0);
+  box-shadow: 0 1px 0 var(--line-2);
+}
+
+:root:has(.profile-tabs[data-stuck]) nav[data-autohide-nav] {
+  background: var(--ink-0) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Stuck, the bar slides down under the site's navbar while that shows (it
+   comes back on scroll-up), with the navbar's own timing. */
+@media (width < 48rem) {
+  :root[data-mobile-nav="shown"] .profile-tabs[data-stuck] {
+    transform: translateY(calc(3.5rem + env(safe-area-inset-top)));
+    transition-duration: 300ms;
+  }
+}
+
+@media (width >= 48rem) {
+  :root[data-desktop-nav="shown"] .profile-tabs[data-stuck] {
+    transform: translateY(4rem);
+  }
+}
+
+/* The avatar and name slide in once the tab bar is stuck. */
+.profile-tabs__who {
+  max-width: 0;
+  opacity: 0;
+  margin-right: 0;
+  transition: max-width var(--dur-slow) var(--ease-out), opacity var(--dur-base) ease, margin-right var(--dur-slow) var(--ease-out);
+}
+
+.profile-tabs__who.is-shown {
+  max-width: 14rem;
+  opacity: 1;
+  margin-right: 1.5rem;
+}
+
+@media (width < 40rem) {
+  .profile-tabs__who.is-shown {
+    max-width: 2.5rem;
+  }
+
+  .profile-tabs__who span:last-child {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-stat-value[data-aura] {
+    animation: none;
+    background-position: 50% 0;
+  }
+
+  .profile-tabs,
+  .profile-tabs__who {
+    transition: none;
+  }
+}
