@@ -390,3 +390,32 @@ class ListSummaryTests(APITestCase):
             self.client.patch(f"{LISTS_URL}{entry.id}/", {"episodes_watched": 5}, format="json")
 
         self.assertEqual(self.client.get(SUMMARY_URL).data["episodes_watched"], 5)
+
+
+class ListArtworkTests(APITestCase):
+    """``?artwork=1`` adds banner art and synopsis to list rows (signed-in home)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="artful", email="a@example.com", password="x")
+        self.client.force_authenticate(user=self.user)
+        anime = Anime.objects.create(
+            title="Banner Show",
+            slug="banner-show",
+            episode_count=12,
+            synopsis="A show with a banner.",
+            banner_image_external_url="https://example.com/banner.jpg",
+        )
+        UserAnimeList.objects.create(user=self.user, anime=anime, status="Watching")
+
+    def test_rows_carry_banner_and_synopsis_only_when_asked(self):
+        plain = self.client.get("/api/v1/lists/", {"status": "Watching"}).json()["results"][0][
+            "anime"
+        ]
+        art = self.client.get("/api/v1/lists/", {"status": "Watching", "artwork": "1"}).json()[
+            "results"
+        ][0]["anime"]
+
+        self.assertNotIn("banner_image", plain)
+        self.assertNotIn("synopsis", plain)
+        self.assertEqual(art["synopsis"], "A show with a banner.")
+        self.assertEqual(art["banner_image"], "https://example.com/banner.jpg")

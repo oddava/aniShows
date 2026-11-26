@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { airingPreview, listedAirings, previewWhen, tonightFrom, weekAgenda } from '../airingModel';
+import { airingPreview, listedAirings, previewWhen, tonightFrom, weekAgenda, weekColumns } from '../airingModel';
 import { continueState } from '../continueModel';
 
 // Saturday 2026-11-21 10:35 UTC.
@@ -66,6 +66,27 @@ describe('weekAgenda', () => {
         expect(days.map((day) => day.label)).toEqual(['Today', 'Monday']);
         expect(days[0].shows.map((row) => [row.anime.id, row.aired])).toEqual([[1, true], [2, false]]);
         expect(days[1].date).toBe('23 Nov');
+    });
+});
+
+describe('weekColumns', () => {
+    const schedule = {
+        saturday: [anime(2, at(HOUR)), anime(1, at(-HOUR))],
+        tuesday: [anime(4, at(3 * DAY), { user_list_status: null })],
+    };
+
+    it('always has seven days from today, quiet ones empty, shows in time order', () => {
+        const days = weekColumns(schedule, 'UTC', NOW);
+        expect(days.map((day) => day.weekday)).toEqual(['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+        expect(days.map((day) => day.day)).toEqual([21, 22, 23, 24, 25, 26, 27]);
+        expect(days[0].shows.map((row) => row.anime.id)).toEqual([1, 2]);
+        // Only listed shows by default.
+        expect(days[3].shows).toEqual([]);
+    });
+
+    it('includes every show for visitors', () => {
+        const days = weekColumns(schedule, 'UTC', NOW, { listedOnly: false });
+        expect(days[3].shows.map((row) => row.anime.id)).toEqual([4]);
     });
 });
 
