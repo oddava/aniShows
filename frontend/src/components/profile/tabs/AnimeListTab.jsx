@@ -63,6 +63,8 @@ export default function AnimeListContent({
         isPublicView,
     });
     const [ordering, setOrdering] = useState(LIST_ORDERINGS[0].value);
+    // '' = every genre; the choices are the owner's top genres (list summary).
+    const [genre, setGenre] = useState('');
     const search = useDebouncedValue(searchQuery.trim(), SEARCH_DEBOUNCE_MS);
 
     const { data: summary } = useQuery({
@@ -81,11 +83,17 @@ export default function AnimeListContent({
         isError,
         refetch,
     } = useInfiniteQuery({
-        ...listQueries.paged(username, listStatusFilter, search, ordering),
+        ...listQueries.paged(username, listStatusFilter, search, ordering, genre),
         enabled: !!username,
         placeholderData: keepPreviousData,
         staleTime: LIST_STALE_TIME,
     });
+
+    const genreOptions = React.useMemo(() => {
+        const top = (summary?.top_genres || []).filter((row) => row?.slug && row?.name);
+        if (top.length === 0) return [];
+        return [{ value: '', label: 'All genres' }, ...top.map((row) => ({ value: row.slug, label: row.name }))];
+    }, [summary]);
 
     const items = React.useMemo(
         () => data?.pages?.flatMap((page) => page?.results || []) || [],
@@ -148,7 +156,17 @@ export default function AnimeListContent({
                     />
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    {genreOptions.length > 1 && (
+                        <CustomSelect
+                            value={genre}
+                            onChange={setGenre}
+                            options={genreOptions}
+                            triggerClassName="min-h-[2.75rem] rounded-lg !border-transparent bg-white/[0.04] px-3 py-2 text-[15px] text-[var(--text-2)]"
+                            menuClassName="z-[320]"
+                            ariaLabel="Genre"
+                        />
+                    )}
                     <CustomSelect
                         value={ordering}
                         onChange={setOrdering}
@@ -205,6 +223,7 @@ export default function AnimeListContent({
                     isPublicView={isPublicView}
                     canEdit={isOwnProfile}
                     searchQuery={search}
+                    isFiltered={Boolean(search || genre)}
                 />
             </ProfileErrorBoundary>
 
@@ -236,6 +255,7 @@ function AnimeListView({
     isPublicView,
     canEdit,
     searchQuery,
+    isFiltered = Boolean(searchQuery),
 }) {
     if (listsLoading) {
         return (
@@ -257,8 +277,8 @@ function AnimeListView({
     if (items.length === 0) {
         return (
             <p className=" pt-6 text-[17px] text-[var(--text-2)]">
-                {searchQuery ? 'Nothing here matches that search.' : `Nothing in ${statusLabel(listStatusFilter)} yet.`}
-                {!searchQuery && !isPublicView && (
+                {isFiltered ? 'Nothing here matches that search.' : `Nothing in ${statusLabel(listStatusFilter)} yet.`}
+                {!isFiltered && !isPublicView && (
                     <> <Link to="/browse" className="text-link">Find something to add</Link></>
                 )}
             </p>

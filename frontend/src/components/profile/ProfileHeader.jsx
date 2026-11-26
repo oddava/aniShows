@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import FollowButton from '../FollowButton';
+import ShareProfileButton from './ShareProfileButton';
 import ProfileAvatar from './ProfileAvatar';
 import UserBadges from './UserBadges';
 import { listQueries } from '../../api/queries/lists';
@@ -121,7 +122,7 @@ export default function ProfileHeader({
                             </button>
                         </p>
                     </div>
-                    <div className="col-span-2 sm:col-span-1 sm:col-start-3 sm:row-start-1">
+                    <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 sm:col-start-3 sm:row-start-1">
                         {!isPublicView ? (
                             <Link to="/settings" className="btn-secondary px-4 text-[15px]">
                                 Edit profile
@@ -136,6 +137,7 @@ export default function ProfileHeader({
                                 className="min-h-[2.75rem] px-5 text-[15px]"
                             />
                         )}
+                        {!isPrivate && <ShareProfileButton username={username} />}
                     </div>
                 </div>
             </div>

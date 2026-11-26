@@ -33,6 +33,7 @@ class UserAnimeListViewSet(ModelViewSet):
                 list_status=params.get("status"),
                 search=params.get("q"),
                 ordering=params.get("ordering"),
+                genre=params.get("genre"),
             )
         except ListQueryError as exc:
             raise ValidationError({exc.field: exc.message}) from exc

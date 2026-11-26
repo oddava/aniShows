@@ -80,6 +80,7 @@ def get_user_anime_list_queryset(
     *,
     search: str | None = None,
     ordering: str | None = None,
+    genre: str | None = None,
 ):
     if list_status and list_status not in Status.values:
         raise ListQueryError("status", f"Unknown status '{list_status}'.")
@@ -102,6 +103,10 @@ def get_user_anime_list_queryset(
         queryset = queryset.filter(
             Q(anime__title__icontains=search) | Q(anime__title_jp__icontains=search)
         )
+    genre = (genre or "").strip()
+    if genre:
+        # One genre slug: each entry's anime joins at most one matching row.
+        queryset = queryset.filter(anime__genres__slug=genre)
     if ordering == "-progress":
         queryset = queryset.annotate(
             progress_pct=ExpressionWrapper(
