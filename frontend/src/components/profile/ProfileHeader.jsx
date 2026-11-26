@@ -111,7 +111,10 @@ export default function ProfileHeader({
                         )}
 
                         {(displayUser.location || links.length > 0) && (
-                        <div className="mt-0.5 grid grid-cols-2 items-center gap-x-4 text-sm text-[var(--text-2)] md:mt-4 md:flex md:flex-wrap md:gap-x-5 md:gap-y-1">
+                        // One wrapping row, left-aligned, at every width: on phones a
+                        // two-column grid put the second link halfway across the
+                        // screen instead of next to the first.
+                        <div data-testid="profile-links" className="mt-0.5 flex flex-wrap items-center justify-start gap-x-4 text-sm text-[var(--text-2)] md:mt-4 md:gap-x-5 md:gap-y-1">
                             {displayUser.location && (
                                 <span className="inline-flex min-h-11 min-w-0 items-center gap-1.5 md:min-h-0">
                                     <MapPin aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--text-3)]" />
