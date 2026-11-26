@@ -66,6 +66,8 @@ export default function ProfileHeader({
                     <img
                         src={displayUser.banner}
                         alt={`${username}'s profile banner`}
+                        // The page's LCP element; the server preloads it too (apps/users/share_preview.py).
+                        fetchPriority="high"
                         className="h-full w-full object-cover"
                     />
                 </div>

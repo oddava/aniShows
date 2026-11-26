@@ -377,6 +377,24 @@
 
 }
 
+/* First page of a visit (html[data-boot], public/boot.js): no entry fades, so
+   the page's largest image counts as painted as soon as it is (RA-002). An
+   image still waits for its load before showing; it just does not fade. */
+html[data-boot] .page-enter,
+html[data-boot] .card-enter {
+  animation: none;
+}
+
+html[data-boot] .img-fade,
+html[data-boot] .fade-on-load {
+  transition: none;
+}
+
+html[data-boot] .img-fade {
+  filter: none;
+  transform: none;
+}
+
 /* Page change in progress (components/common/RouteProgress.jsx): a 2 px
    accent bar that eases towards 85 % while waiting, then completes and fades. */
 .route-progress {

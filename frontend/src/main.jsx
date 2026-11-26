@@ -66,7 +66,7 @@ async function bootstrap() {
     // chunk, instead of one after another (LCP, ANISHOWS-003).
     prefetchRoute(window.location.pathname)
     import('./app/bootData')
-      .then(({ startBootData }) => startBootData(window.location.pathname))
+      .then(({ startBootData }) => startBootData(window.location.pathname, window.location.search))
       .catch(() => {})
     const { default: App } = await import('./App.jsx')
     createRoot(rootElement).render(
