@@ -17,6 +17,8 @@ export const profileKeys = {
     own: ['ownProfile'],
     all: ['profile'],
     byUsername: (username) => ['profile', username],
+    /** Viewer-to-profile taste match; under ['profile'] so profile invalidations refresh it. */
+    compatibility: (username) => ['profile', username, 'compatibility'],
     /** Written optimistically by FollowButton; no query reads it today. */
     me: ['profile', 'me'],
 };
@@ -56,5 +58,10 @@ export const profileQueries = {
         queryKey: profileKeys.byUsername(username),
         retry: profileQueryRetry,
         queryFn: () => authApi.getByUsername(username).then((res) => res.data),
+    }),
+    compatibility: (username) => queryOptions({
+        queryKey: profileKeys.compatibility(username),
+        retry: profileQueryRetry,
+        queryFn: () => authApi.getCompatibility(username).then((res) => res.data),
     }),
 };

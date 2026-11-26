@@ -11,7 +11,7 @@ from ..tasks.metadata import MetadataEnrichmentTask
 
 class AniListIntegrityTests(TestCase):
     def setUp(self):
-        self.enrich_patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        self.enrich_patcher = patch("apps.animes.signals.request_hydrate")
         self.enrich_patcher.start()
         self.addCleanup(self.enrich_patcher.stop)
 

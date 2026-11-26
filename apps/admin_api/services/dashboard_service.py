@@ -7,8 +7,8 @@ from django.utils import timezone
 
 from ...animes.models import (
     Anime,
+    CatalogRun,
     Genre,
-    OfflineAnimeSyncState,
     Review,
     ReviewReport,
     Studio,
@@ -131,7 +131,9 @@ def build_admin_dashboard_payload():
             "failed_tasks_24h": CeleryTaskResult.objects.filter(
                 status=CeleryTaskResult.TaskStatus.FAILURE, date_created__gte=last_24_hours
             ).count(),
-            "quarantined_sync": OfflineAnimeSyncState.objects.filter(quarantined=True).count(),
+            "failed_catalog_runs_24h": CatalogRun.objects.filter(
+                status=CatalogRun.Status.FAILED, started_at__gte=last_24_hours
+            ).count(),
             "failed_user_imports_24h": UserImportJob.objects.filter(
                 status=UserImportJob.ImportStatus.failed, created_at__gte=last_24_hours
             ).count(),

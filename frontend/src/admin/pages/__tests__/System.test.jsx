@@ -21,8 +21,8 @@ const PAYLOAD = {
     beat: [
         {
             name: 'refresh-trending',
-            task: 'apps.animes.tasks.sync.sync_anime_catalog',
-            kwargs: { sync_type: 'trending' },
+            task: 'apps.animes.tasks.catalog.run_catalog_lane',
+            kwargs: { lane: 'trending' },
             schedule: 'every 6 hours',
             queue: 'default',
             last_run: new Date(Date.now() - 3600_000).toISOString(),

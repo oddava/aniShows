@@ -15,7 +15,7 @@ SUMMARY = "/api/v1/admin/moderation/summary/"
 
 class ModerationQueueTests(TestCase):
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        patcher = patch("apps.animes.signals.request_hydrate", return_value=None)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.staff = make_user("mod", role="staff")
@@ -111,7 +111,7 @@ class ModerationQueueTests(TestCase):
 
 class ModerationResolveTests(TestCase):
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        patcher = patch("apps.animes.signals.request_hydrate", return_value=None)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.staff = make_user("resolver", role="staff")

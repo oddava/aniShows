@@ -14,7 +14,8 @@ import {
     Button, Chip, ConfirmDialog, Dialog, ErrorState, Field, KeyValue, MetaLine, Notice, PageHeader, Panel, PanelSkeleton,
     Poster, Skeleton, StatCard, StatGrid, TextArea,
 } from '../ui';
-import { AnimeStatusChip, SyncStatusChip, typeLabel } from './catalog/animeMeta';
+import { AnimeStatusChip, typeLabel } from './catalog/animeMeta';
+import { exclusionLabel } from './catalog/catalogScope';
 
 const SEO_MAX = 160;
 
@@ -172,7 +173,7 @@ export default function AnimeDetail() {
     const posterSources = sources(anime.poster, anime.cover_image, anime.cover_image_external_url);
     const bannerSources = sources(anime.banner, anime.banner_image, anime.banner_image_external_url);
     const hasExternalImages = Boolean(anime.cover_image_external_url || anime.banner_image_external_url);
-    const sync = anime.sync_state;
+    const catalog = anime.catalog || {};
     const studios = anime.studios?.length ? anime.studios : anime.studio ? [anime.studio] : [];
     const metaFacts = [
         anime.episode_count ? `${formatNumber(anime.episode_count)} episodes` : null,
@@ -238,15 +239,9 @@ export default function AnimeDetail() {
                 </div>
             </div>
 
-            {sync?.quarantined && (
-                <Notice
-                    tone="warning"
-                    title="This anime is held back from syncing"
-                    className="mb-4"
-                    action={<Button variant="secondary" size="sm" to={`/admin/sync-health?quarantined=all&q=${encodeURIComponent(anime.slug || anime.title)}`}>Open in sync health</Button>}
-                >
-                    {sync.quarantine_reason ? humanize(sync.quarantine_reason) : 'No reason was recorded.'}
-                    {sync.last_error_code && ` Last error: ${sync.last_error_code}.`}
+            {catalog.excluded && (
+                <Notice tone="warning" title="Not listed on the site" className="mb-4">
+                    {exclusionLabel(catalog.excluded)}: outside the catalog&apos;s scope, so browse, search and shelves leave it out. Its page still opens for anyone who has it on their list.
                 </Notice>
             )}
 
@@ -331,23 +326,22 @@ export default function AnimeDetail() {
                             />
                         </Panel>
 
-                        <Panel
-                            title="Sync state"
-                            actions={sync && <Link to={`/admin/sync-health?quarantined=all&q=${encodeURIComponent(anime.slug || anime.title)}`} className="text-link !min-h-9 text-sm">Sync health</Link>}
-                        >
-                            {sync ? (
-                                <KeyValue
-                                    columns={1}
-                                    items={[
-                                        { label: 'Metadata', value: <SyncStatusChip value={sync.metadata_status} /> },
-                                        { label: 'Franchise', value: <SyncStatusChip value={sync.franchise_status} /> },
-                                        { label: 'Quarantined', value: sync.quarantined ? humanize(sync.quarantine_reason || 'yes') : 'No' },
-                                        { label: 'Last error', value: sync.last_error_code ? <span className="admin-mono">{sync.last_error_code}</span> : null },
-                                    ]}
-                                />
-                            ) : (
-                                <p className="text-sm text-[var(--text-3)]">Not tracked by the offline catalog sync.</p>
-                            )}
+                        <Panel title="Catalog" actions={<Link to="/admin/catalog-sync" className="text-link !min-h-9 text-sm">Catalog sync</Link>}>
+                            <KeyValue
+                                columns={1}
+                                items={[
+                                    { label: 'Listed', value: catalog.excluded ? exclusionLabel(catalog.excluded) : 'Yes' },
+                                    { label: 'Made in', value: catalog.country_of_origin || null },
+                                    { label: 'AniList format', value: catalog.format ? humanize(catalog.format.toLowerCase()) : null },
+                                    {
+                                        label: 'Details',
+                                        value: catalog.hydrated_at
+                                            ? `Cast and staff from ${formatRelative(catalog.hydrated_at)}`
+                                            : catalog.hydrate_requested_at ? 'Queued' : 'Not fetched yet',
+                                    },
+                                    { label: 'Edited on AniList', value: catalog.anilist_updated_at ? formatRelative(catalog.anilist_updated_at) : null },
+                                ]}
+                            />
                         </Panel>
 
                         <Panel

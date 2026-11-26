@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from ...animes.models import Anime, OfflineAnimeSyncState, Review, ReviewReport
+from ...animes.models import Anime, Review, ReviewReport
 from ...core.models import AuditLog, CeleryTaskResult
 from .helpers import bearer_client, make_user
 
@@ -12,7 +12,7 @@ from .helpers import bearer_client, make_user
 class AnimeToolsTests(TestCase):
     def setUp(self):
         for target in (
-            "apps.animes.signals.enrich_metadata.delay",
+            "apps.animes.signals.request_hydrate",
             "celery.app.base.Celery.send_task",
         ):
             patcher = patch(target, return_value=None)
@@ -53,16 +53,22 @@ class AnimeToolsTests(TestCase):
         response = self.staff_client.get("/api/v1/admin/anime/?search=Frieren")
         self.assertEqual(response.data["results"][0]["poster"], "https://img.example/cover.jpg")
 
-    def test_detail_has_identity_and_sync_state(self):
-        OfflineAnimeSyncState.objects.create(anime=self.anime, quarantined=True)
+    def test_detail_has_identity_and_catalog_state(self):
+        Anime.objects.filter(pk=self.anime.pk).update(
+            country_of_origin="CN", anilist_format="ONA", catalog_excluded="country:CN"
+        )
         response = self.staff_client.get(f"/api/v1/admin/anime/{self.anime.id}/")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["anilist_id"], 154587)
         self.assertEqual(response.data["list_entries_count"], 0)
-        self.assertTrue(response.data["sync_state"]["quarantined"])
-        self.assertIsNone(
-            self.staff_client.get(f"/api/v1/admin/anime/{self.bare.id}/").data["sync_state"]
+        self.assertEqual(response.data["catalog"]["excluded"], "country:CN")
+        self.assertEqual(response.data["catalog"]["country_of_origin"], "CN")
+        self.assertEqual(
+            self.staff_client.get(f"/api/v1/admin/anime/{self.bare.id}/").data["catalog"][
+                "excluded"
+            ],
+            "",
         )
 
     def test_patch_only_changes_meta_description(self):
@@ -106,7 +112,7 @@ class AnimeToolsTests(TestCase):
 
 class ReviewToolsTests(TestCase):
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        patcher = patch("apps.animes.signals.request_hydrate", return_value=None)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.staff_client = bearer_client(make_user("mod", role="staff"))

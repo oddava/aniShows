@@ -73,7 +73,7 @@ def shape_of(value):
 
 @pytest.fixture(autouse=True)
 def _no_side_effect_tasks(monkeypatch):
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *a, **k: None)
     # The fixtures air in 2030 and the schedule ships only the coming week (B7).
     freeze_schedule_now(monkeypatch)
 

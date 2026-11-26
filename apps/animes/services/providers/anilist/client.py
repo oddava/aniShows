@@ -45,6 +45,7 @@ class MediaSort(StrEnum):
 MEDIA_FIELDS = """
         id
         idMal
+        type countryOfOrigin updatedAt
         title { romaji english native }
         synonyms
         format status episodes averageScore popularity duration
@@ -93,6 +94,7 @@ MEDIA_FIELDS = """
 AIRING_FIELDS = """
         id
         idMal
+        countryOfOrigin
         title { romaji english native }
         format status episodes
         isAdult

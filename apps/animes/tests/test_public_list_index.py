@@ -21,7 +21,7 @@ INDEX_NAME = "anime_public_popular_list_idx"
 
 @pytest.fixture(autouse=True)
 def _no_side_effect_tasks(monkeypatch):
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *a, **k: None)
 
 
 def _list_sql(url: str) -> str:

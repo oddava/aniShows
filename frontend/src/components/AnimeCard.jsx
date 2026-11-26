@@ -176,7 +176,7 @@ function AnimeCard({
                 </Link>
                 <div className="min-w-0">
                     <Link to={href} className="flex items-start gap-1.5">
-                        <span className="line-clamp-2 text-base font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] group-hover:text-[var(--cover-accent,var(--signature))]">{displayTitle}</span>
+                        <span className="anime-card-title line-clamp-2 text-base font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] group-hover:text-[var(--cover-accent,var(--signature))]">{displayTitle}</span>
                     </Link>
                     <p className="mt-0.5 text-sm text-[var(--text-2)] tabular">
                         {meta && <span className="sm:hidden" style={{ color: meta.color }}>{meta.label} · </span>}
@@ -312,7 +312,7 @@ function AnimeCard({
                             style={{ backgroundColor: meta.color }}
                         />
                     )}
-                    <span className="line-clamp-2 text-[13.5px] font-medium leading-[1.3] text-gray-200 transition-colors duration-200 group-hover:text-[var(--cover-accent,#fff)]">
+                    <span className="anime-card-title line-clamp-2 text-[13.5px] font-medium leading-[1.3] text-gray-200 transition-colors duration-200 group-hover:text-[var(--cover-accent,#fff)]">
                         {displayTitle}
                     </span>
                 </span>

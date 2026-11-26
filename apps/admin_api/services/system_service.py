@@ -179,10 +179,10 @@ class RunHistory:
 def _kwargs_match(entry_kwargs: dict, row_kwargs) -> bool:
     """A result row belongs to an entry when it ran with (at least) the entry's kwargs.
 
-    Only used when several entries share one task (``sync_anime_catalog`` with
-    different ``sync_type``): the task name alone would credit an hourly run to a
-    weekly entry. Entries with identical kwargs (``derive-airing-hourly`` and
-    ``sync-popular-weekly``) cannot be told apart and share their last run.
+    Only used when several entries share one task (``run_catalog_lane`` with
+    different ``lane``): the task name alone would credit an hourly run to a
+    weekly entry. Entries with identical kwargs cannot be told apart and share
+    their last run.
     """
     if not isinstance(row_kwargs, dict):
         return not entry_kwargs

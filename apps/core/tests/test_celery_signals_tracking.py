@@ -59,7 +59,7 @@ class UntrackedTaskTests(TestCase):
         self.assertFalse(CeleryTaskResult.objects.exists())
 
     def test_tracked_task_args_are_capped(self):
-        task = _task("apps.animes.tasks.sync.sync_anime_catalog")
+        task = _task("apps.animes.tasks.catalog.run_catalog_lane")
         huge = ["x" * 5000]
 
         celery_signals.on_task_prerun(
@@ -72,11 +72,11 @@ class UntrackedTaskTests(TestCase):
         self.assertLessEqual(len(row.task_args[1]), 1024)
 
     def test_small_payloads_are_stored_as_is(self):
-        task = _task("apps.animes.tasks.sync.sync_anime_catalog")
+        task = _task("apps.animes.tasks.catalog.run_catalog_lane")
 
         celery_signals.on_task_prerun(
-            task_id="t-2", task=task, args=[1], kwargs={"sync_type": "trending"}
+            task_id="t-2", task=task, args=[1], kwargs={"lane": "trending"}
         )
 
         row = CeleryTaskResult.objects.get(task_id="t-2")
-        self.assertEqual((row.task_args, row.task_kwargs), ([1], {"sync_type": "trending"}))
+        self.assertEqual((row.task_args, row.task_kwargs), ([1], {"lane": "trending"}))

@@ -111,7 +111,10 @@ class AnimeQueryService(QueryFieldsMixin, ListFilterMixin, SortingMixin, ShelfMi
 
     def build_queryset(self, request, *, action: str, include_user_context: bool = True):
         is_list = action == "list"
-        queryset = Anime.public_queryset().prefetch_related(Anime.studios_prefetch())
+        # A title outside the catalog's scope is never listed, but its page still opens:
+        # it may be on someone's list.
+        base = Anime.reachable_queryset() if action == "retrieve" else Anime.public_queryset()
+        queryset = base.prefetch_related(Anime.studios_prefetch())
 
         if is_list:
             queryset = queryset.only(*self.LIST_FIELDS)
@@ -621,6 +624,12 @@ class AnimePublicPayloadService:
                     action="retrieve",
                     include_user_context=False,
                 ).get(slug=slug)
+                if instance.hydrated_at is None and instance.hydrate_requested_at is None:
+                    # Cast, staff and images come from the details lane, which takes
+                    # the titles people open first.
+                    from ..catalog.hooks import request_hydrate
+
+                    request_hydrate([instance.id])
                 serializer = AnimeDetailSerializer(instance, context={"request": request})
                 return cls.sanitize_public_user_fields(serializer.data)
 

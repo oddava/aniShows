@@ -26,8 +26,7 @@ const Genres = page(() => import('../../admin/pages/Genres'));
 const Studios = page(() => import('../../admin/pages/Studios'));
 const Characters = page(() => import('../../admin/pages/Characters'));
 const People = page(() => import('../../admin/pages/People'));
-const SyncHealth = page(() => import('../../admin/pages/SyncHealth'));
-const Imports = page(() => import('../../admin/pages/Imports'));
+const CatalogSync = page(() => import('../../admin/pages/CatalogSync'));
 const ListImports = page(() => import('../../admin/pages/ListImports'));
 const System = page(() => import('../../admin/pages/System'));
 const Tasks = page(() => import('../../admin/pages/Tasks'));
@@ -61,8 +60,7 @@ export const adminRoutes = (
         <Route path="studios" element={<Studios />} />
         <Route path="characters" element={<Characters />} />
         <Route path="people" element={<People />} />
-        <Route path="sync-health" element={<SyncHealth />} />
-        <Route path="imports" element={<Imports />} />
+        <Route path="catalog-sync" element={<CatalogSync />} />
         <Route path="list-imports" element={<ListImports />} />
         <Route path="system" element={<System />} />
         <Route path="tasks" element={<Tasks />} />
@@ -71,7 +69,9 @@ export const adminRoutes = (
 
         {/* Old admin addresses, so bookmarks keep working. */}
         <Route path="reports" element={<Navigate to="/admin/analytics" replace />} />
-        <Route path="import-jobs" element={<Navigate to="/admin/imports" replace />} />
+        <Route path="import-jobs" element={<Navigate to="/admin/catalog-sync" replace />} />
+        <Route path="imports" element={<Navigate to="/admin/catalog-sync" replace />} />
+        <Route path="sync-health" element={<Navigate to="/admin/catalog-sync" replace />} />
         <Route path="staff" element={<Navigate to="/admin/people" replace />} />
         <Route path="review-reports" element={<Navigate to="/admin/moderation" replace />} />
 

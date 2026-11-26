@@ -318,6 +318,13 @@
 	}
 
 	# Favicon and icon files
+	# Link-preview card (og:image): crawlers fetch it often.
+	handle /og-image.png {
+		root * /srv/frontend
+		file_server
+		header Cache-Control "public, max-age=86400"
+	}
+
 	handle /favicon.ico {
 		root * /srv/frontend
 		file_server

@@ -24,7 +24,7 @@ NOW = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)  # a Monday
 
 @pytest.fixture(autouse=True)
 def _frozen_schedule(monkeypatch):
-    monkeypatch.setattr("apps.animes.signals.enrich_metadata.delay", lambda *a, **k: None)
+    monkeypatch.setattr("apps.animes.signals.request_hydrate", lambda *a, **k: None)
     monkeypatch.setattr(AnimeQueryService, "schedule_now", staticmethod(lambda: NOW))
     cache.clear()
     yield

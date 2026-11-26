@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from ..permissions import VerifiedEmailForWrites
-from ..serializers.lists import UserAnimeListSerializer
+from ..serializers.lists import UserAnimeListArtworkSerializer, UserAnimeListSerializer
 from ..services.list_service import (
     ListQueryError,
     delete_user_anime_list_entry,
@@ -23,6 +23,13 @@ User = get_user_model()
 class UserAnimeListViewSet(ModelViewSet):
     serializer_class = UserAnimeListSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, VerifiedEmailForWrites]
+
+    def get_serializer_class(self):
+        # Home's "Continue watching" cards ask for banner art (?artwork=1);
+        # every other list read keeps the lighter rows.
+        if self.action == "list" and self.request.query_params.get("artwork") == "1":
+            return UserAnimeListArtworkSerializer
+        return super().get_serializer_class()
 
     def get_queryset(self):
         params = self.request.query_params

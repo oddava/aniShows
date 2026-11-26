@@ -154,8 +154,6 @@ class Anime(TimestampMixin, SlugMixin, Model):
     tags = JSONField(default=list, blank=True)
     # AniList's Media.isAdult (owner decision); see ``apps/animes/adult_content.py``.
     is_adult = BooleanField(default=False, editable=False)
-    source_urls = JSONField(default=list, blank=True)
-    offline_db_payload = JSONField(default=dict, blank=True)
 
     site_rank = IntegerField(null=True, blank=True)
     popularity_rank = IntegerField(null=True, blank=True)
@@ -191,11 +189,26 @@ class Anime(TimestampMixin, SlugMixin, Model):
     # Real provider IDs only. Rows from before D1 (Jikan) may have only mal_id.
     mal_id = IntegerField(null=True, blank=True, unique=True)
     anilist_id = IntegerField(null=True, blank=True, unique=True)
-    offline_db_last_seen_at = DateTimeField(null=True, blank=True, db_index=True)
     # When the daily backfills last tried this row, so each run moves on to
     # rows not tried recently instead of re-fetching the same ones.
     metadata_checked_at = DateTimeField(null=True, blank=True)
-    offline_db_last_update = DateField(null=True, blank=True)
+
+    # Catalog engine (apps.animes.catalog). AniList's own values, kept raw so the
+    # scope rule (Japanese animation, no music videos) can be re-applied to stored rows.
+    country_of_origin = CharField(max_length=2, blank=True)
+    anilist_format = CharField(max_length=16, blank=True)
+    # AniList's ``Media.updatedAt``: the delta lane's watermark for this row.
+    anilist_updated_at = DateTimeField(null=True, blank=True)
+    # When a full payload (cast, staff, relations) was last applied. Lean lanes
+    # (sweep, seasons, changes) leave it alone; the details lane fills it.
+    hydrated_at = DateTimeField(null=True, blank=True)
+    # Someone needs this row's details (opened it, added it to a list): the details
+    # lane takes these first.
+    hydrate_requested_at = DateTimeField(null=True, blank=True)
+    # Why the row is outside the catalog's scope ("country:CN", "format:MUSIC"),
+    # empty when it is in. Out-of-scope rows stay reachable by link (users' lists
+    # point at them) but are never listed: browse, search, shelves, schedule.
+    catalog_excluded = CharField(max_length=32, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-release_date", "-created_at"]
@@ -311,8 +324,17 @@ class Anime(TimestampMixin, SlugMixin, Model):
 
     @classmethod
     def public_queryset(cls):
-        """Anime visible on public user-facing surfaces."""
-        return cls.objects.exclude(offline_sync_state__quarantined=True)
+        """Anime listed on public surfaces: browse, search, shelves, schedule, sitemaps."""
+        return cls.objects.filter(catalog_excluded="")
+
+    @classmethod
+    def reachable_queryset(cls):
+        """Anime a direct link opens: every row, in scope or not.
+
+        A title outside the catalog's scope is not listed anywhere, but it may be on
+        someone's list, and that link must keep working.
+        """
+        return cls.objects.all()
 
 
 class AnimeStudio(Model):

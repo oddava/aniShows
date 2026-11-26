@@ -1,6 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
+// /u/<name>[/<tab>] or /profile[/<tab>]: switching a profile's tab keeps
+// the reader where they are (the profile places its own tab bar).
+const getProfileKey = (pathname) => {
+    const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+    const user = normalizedPath.match(/^\/u\/([^/]+)(?:\/[^/]+)?$/);
+    if (user) return `u:${user[1].toLowerCase()}`;
+    return /^\/profile(?:\/[^/]+)?$/.test(normalizedPath) ? 'own' : null;
+};
+
 const getAnimeDetailSlug = (pathname) => {
     const normalizedPath = pathname.replace(/\/+$/, '') || '/';
     const match = normalizedPath.match(/^\/anime\/([^/]+)(?:\/.*)?$/);
@@ -19,6 +28,11 @@ export default function ScrollToTop() {
         previousPathRef.current = pathname;
 
         if (previousAnimeSlug && previousAnimeSlug === currentAnimeSlug) {
+            return;
+        }
+
+        const previousProfile = previousPath ? getProfileKey(previousPath) : null;
+        if (previousProfile && previousProfile === getProfileKey(pathname)) {
             return;
         }
 

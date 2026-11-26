@@ -1,4 +1,5 @@
-import { Link2 } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Link2 } from 'lucide-react';
 import { notify, notifyError } from '../ui/toast';
 
 const SITE_ORIGIN = 'https://anishows.com';
@@ -9,17 +10,28 @@ export function profileShareUrl(username, origin = typeof window !== 'undefined'
 }
 
 /**
- * "Share": copies the profile link and says so ("Link copied"). Shared links
- * show this profile's own card (title, bio, banner), served with the page
- * (apps/users/share_preview.py).
+ * Share a profile: the system share sheet on touch screens, else copy the
+ * link and say so with a "Link copied" toast. Shared links show this
+ * profile's own card (apps/users/share_preview.py).
  */
-export default function ShareProfileButton({ username, className = '' }) {
+export default function ShareProfileButton({ username }) {
+    const [copied, setCopied] = useState(false);
     if (!username) return null;
 
-    const handleShare = async () => {
+    const share = async () => {
         const url = profileShareUrl(username);
+        if (navigator.share && window.matchMedia?.('(pointer: coarse)').matches) {
+            try {
+                await navigator.share({ title: `${username} on AniShows`, url });
+            } catch {
+                // The share sheet was dismissed: nothing to report.
+            }
+            return;
+        }
         try {
             await navigator.clipboard.writeText(url);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1800);
             notify('Link copied', { id: 'profile-share' });
         } catch {
             notifyError(`Couldn’t copy the link. It is ${url}`, { id: 'profile-share' });
@@ -29,12 +41,14 @@ export default function ShareProfileButton({ username, className = '' }) {
     return (
         <button
             type="button"
-            onClick={handleShare}
-            aria-label={`Share: copy the link to ${username}'s profile`}
-            className={`btn-secondary inline-flex min-h-[2.75rem] items-center gap-2 px-4 text-[15px] ${className}`}
+            onClick={share}
+            className="profile-icon-btn"
+            aria-label="Share profile"
+            title={copied ? 'Link copied' : 'Share profile'}
         >
-            <Link2 aria-hidden="true" className="h-4 w-4" />
-            Share
+            {copied
+                ? <Check aria-hidden="true" className="h-[18px] w-[18px]" />
+                : <Link2 aria-hidden="true" className="h-[18px] w-[18px]" />}
         </button>
     );
 }

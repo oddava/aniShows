@@ -6,6 +6,7 @@ from django.dispatch import receiver
 from ..shared.public_cache import invalidate_public_cache_keys
 from ..users.models import UserAnimeList
 from .adult_content import drop_public_caches_or_keep_for_replay
+from .catalog.hooks import in_bulk_catalog_write, request_hydrate
 from .models import Anime, Genre, Review, Studio, UserFavorite
 from .services.public_anime_service import AnimePublicPayloadService, invalidate_anime_detail
 from .services.user_list_side_effects import (
@@ -28,7 +29,6 @@ from .services.user_list_side_effects import (
 )
 from .services.watch_episodes import AnimeWatchEpisodeService
 from .tasks import (
-    enrich_metadata,
     generate_recommendations,
     sync_watch_episodes_for_anime,
 )
@@ -101,8 +101,17 @@ def capture_old_anime_watch_identity(sender, instance, **kwargs):
 
 @receiver(post_save, sender=Anime)
 def trigger_metadata_fetch(sender, instance, created, **kwargs):
-    if created and settings.ANIME_METADATA_AUTO_ENRICH_ENABLED:
-        transaction.on_commit(lambda: enrich_metadata.delay(anime_id=instance.id, mode="single"))
+    """A row created one at a time (a list import, an admin) asks for its details.
+
+    Queued for the details lane, not fetched here: it batches 25 titles per request.
+    Rows a catalog lane creates in bulk are left to that lane's own priorities.
+    """
+    if not created or not settings.ANIME_METADATA_AUTO_ENRICH_ENABLED:
+        return
+    if in_bulk_catalog_write() or instance.hydrated_at:
+        return
+    anime_id = instance.id
+    transaction.on_commit(lambda: request_hydrate([anime_id]))
 
 
 @receiver(post_save, sender=Anime)
@@ -118,7 +127,7 @@ def trigger_watch_episode_sync(sender, instance, created, **kwargs):
             instance.id, old_identity["updated_at"]
         )
 
-    if not _watch_episode_auto_sync_enabled():
+    if not _watch_episode_auto_sync_enabled() or in_bulk_catalog_write():
         return
     if not identity_changed or not (instance.mal_id or instance.anilist_id):
         return

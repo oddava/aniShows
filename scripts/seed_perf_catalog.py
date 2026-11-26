@@ -5,8 +5,8 @@ with ``--count`` anime that look like the real catalog: genres and studios,
 release years 1980-2027 with seasons, ~1.5% airing (with broadcast slots) and
 ~5% upcoming, scores on ~75% of rows, a long-tailed member count with the
 popularity and site ranks derived from it, ~4% adult rows (hentai/erotica genre
-or an explicit tag) and an ``offline_db_payload`` on ~90% of rows. Generation is
-deterministic for a given ``--seed``.
+or an explicit tag) and ~0.5% hidden as outside the catalog's scope. Generation
+is deterministic for a given ``--seed``.
 
     docker compose --profile test up -d test_db
     docker compose --profile test run --rm test python manage.py migrate
@@ -260,40 +260,6 @@ def _year(rng: random.Random) -> int:
     return min(2027, int(2027 - abs(rng.gauss(0, 13))))
 
 
-def _offline_payload(rng: random.Random, title: str, mal_id: int, anilist_id: int, tags):
-    synonyms = [_title(rng) for _ in range(rng.choice([0, 1, 2, 4, 8, 15]))]
-    sources = [
-        f"https://myanimelist.net/anime/{mal_id}",
-        f"https://anilist.co/anime/{anilist_id}",
-        f"https://kitsu.app/anime/{rng.randint(1, 50_000)}",
-        f"https://anidb.net/anime/{rng.randint(1, 20_000)}",
-        f"https://www.anime-planet.com/anime/{title.lower().replace(' ', '-')}",
-        f"https://anisearch.com/anime/{rng.randint(1, 20_000)}",
-        f"https://notify.moe/anime/{rng.getrandbits(40):x}",
-    ][: rng.randint(3, 7)]
-    related = [
-        f"https://myanimelist.net/anime/{rng.randint(1, 60_000)}"
-        for _ in range(rng.choice([0, 0, 1, 2, 3, 6, 12]))
-    ]
-    return {
-        "sources": sources,
-        "title": title,
-        "type": rng.choice(["TV", "MOVIE", "OVA", "ONA", "SPECIAL"]),
-        "episodes": rng.randint(1, 26),
-        "status": rng.choice(["FINISHED", "ONGOING", "UPCOMING"]),
-        "animeSeason": {"season": rng.choice(SEASONS), "year": _year(rng)},
-        "picture": f"https://cdn.myanimelist.net/images/anime/{rng.randint(1, 9999)}/{mal_id}.jpg",
-        "thumbnail": f"https://cdn.myanimelist.net/images/anime/{rng.randint(1, 9999)}/{mal_id}t.jpg",
-        "duration": {"value": rng.choice([300, 1440, 1500, 5400]), "unit": "SECONDS"},
-        "score": {"arithmeticGeometricMean": round(rng.uniform(4, 9), 3)},
-        "synonyms": synonyms,
-        "studios": [_word(rng) for _ in range(rng.randint(0, 2))],
-        "producers": [_word(rng) for _ in range(rng.randint(0, 5))],
-        "relatedAnime": related,
-        "tags": list(tags) + [rng.choice(TAGS) for _ in range(rng.randint(0, 10))],
-    }
-
-
 def _build_rows(rng: random.Random, count: int):
     from apps.animes.models import Anime
 
@@ -364,13 +330,8 @@ def _build_rows(rng: random.Random, count: int):
                     else None
                 ),
                 tags=tags,
-                offline_db_payload=(
-                    _offline_payload(rng, title, mal_id, anilist_id or 0, tags)
-                    if rng.random() < 0.9
-                    else {}
-                ),
                 synonyms=[_title(rng) for _ in range(rng.choice([0, 1, 2, 4]))],
-                source_urls=[f"https://myanimelist.net/anime/{mal_id}"],
+                country_of_origin="JP",
                 provider_ids={"mal": mal_id, "anilist": anilist_id},
                 broadcast_day=rng.choice(DAYS) if airing and rng.random() < 0.9 else "",
                 broadcast_time=time(rng.randint(0, 23), rng.choice([0, 30])) if airing else None,
@@ -419,7 +380,7 @@ def seed(count: int, seed_value: int, reset: bool) -> None:
     from django.contrib.auth import get_user_model
     from django.utils.text import slugify
 
-    from apps.animes.models import Anime, AnimeStudio, Genre, OfflineAnimeSyncState, Studio
+    from apps.animes.models import Anime, AnimeStudio, Genre, Studio
     from apps.users.models import UserAnimeList
 
     if reset:
@@ -441,7 +402,7 @@ def seed(count: int, seed_value: int, reset: bool) -> None:
     for start in range(0, len(rows), BATCH):
         created.extend(Anime.objects.bulk_create(rows[start : start + BATCH]))
 
-    genre_links, studio_links, sync_states = [], [], []
+    genre_links, studio_links, hidden_ids = [], [], []
     through = Anime.genres.through
     for anime, extra in zip(created, extras, strict=True):
         genre_links.extend(
@@ -451,13 +412,14 @@ def seed(count: int, seed_value: int, reset: bool) -> None:
             AnimeStudio(anime_id=anime.id, studio_id=studios[studio].id, position=position)
             for position, studio in enumerate(extra["studios"])
         )
-        if rng.random() < 0.8:
-            sync_states.append(
-                OfflineAnimeSyncState(anime_id=anime.id, quarantined=rng.random() < 0.005)
-            )
+        if rng.random() < 0.005:
+            hidden_ids.append(anime.id)
     through.objects.bulk_create(genre_links, batch_size=BATCH * 5)
     AnimeStudio.objects.bulk_create(studio_links, batch_size=BATCH * 5)
-    OfflineAnimeSyncState.objects.bulk_create(sync_states, batch_size=BATCH * 5)
+    # Outside the catalog's scope (apps.animes.catalog.scope): stored, never listed.
+    Anime.objects.filter(id__in=hidden_ids).update(
+        country_of_origin="CN", catalog_excluded="country:CN"
+    )
 
     # The adult flag is AniList's isAdult (apps/animes/adult_content.py), which
     # synthetic rows do not have: mark the Hentai-genre rows adult, as migration

@@ -22,7 +22,7 @@ def _anime(slug, **fields):
 
 class MetadataBackfillRotationTests(TestCase):
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        patcher = patch("apps.animes.signals.request_hydrate")
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -52,7 +52,7 @@ class ThemeYoutubeBackfillTests(TestCase):
     """Theme songs are no longer synced (AniList has none); stored ones keep their links."""
 
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        patcher = patch("apps.animes.signals.request_hydrate")
         patcher.start()
         self.addCleanup(patcher.stop)
 

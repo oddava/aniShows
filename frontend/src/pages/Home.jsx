@@ -11,6 +11,7 @@ import ErrorState from '../components/common/ErrorState';
 import GuestLanding from '../components/home/GuestLanding';
 import ContinueSection from '../components/home/ContinueSection';
 import AiringRibbon from '../components/home/AiringRibbon';
+import RankedList from '../components/home/RankedList';
 import { animeQueries } from '../api/queries/anime';
 import { hasSession } from '../api/httpClient';
 import { recommendationMutations, recommendationQueries } from '../api/queries/recommendations';
@@ -114,29 +115,56 @@ export default function Home() {
                 {!memberView && <GuestLanding />}
 
                 {/* Main Content Area */}
-                <div className="relative space-y-16 md:space-y-20 pb-16 md:pb-24">
+                <div className="relative space-y-14 md:space-y-20 pb-16 md:pb-24">
                     {memberView && <ContinueSection />}
                     {/* The shelves wait for the session (they depend on it);
                         a screen of space holds their place meanwhile. */}
-                    {restoring ? <div aria-hidden="true" className="min-h-[100dvh]" /> : (
+                    {restoring ? <div aria-hidden="true" className="min-h-[100dvh]" /> : isAuthenticated ? (
                     <>
-                    {isAuthenticated && <AiringRibbon />}
+                    <AiringRibbon />
 
-                    {/* Recommended For You Section */}
                     <RecommendedForYouSection revealRef={setRevealRef} />
 
-                    {!shelves.hideTrending && (
-                        <AnimeShelf
-                            revealRef={setRevealRef}
-                            title="Trending now"
-                            viewAllTo="/browse?sort=trending"
-                            items={shelves.trending}
-                            isLoading={trendingLoading}
-                            isError={trendingError}
-                            onRetry={refetchTrending}
-                            emptyText="No trending anime right now."
+                    {/* Members: the charts as two numbered lists side by
+                        side, after the poster shelf of their own picks. */}
+                    <div
+                        ref={setRevealRef}
+                        className={`reveal page-container grid gap-5 ${!shelves.hideTrending && (topRatedLoading || shelves.topRated.length > 0) ? 'lg:grid-cols-2' : ''}`}
+                    >
+                        {!shelves.hideTrending && (
+                            <RankedList
+                                id="chart-trending"
+                                title="Trending now"
+                                viewAllTo="/browse?sort=trending"
+                                items={shelves.trending}
+                                isLoading={trendingLoading}
+                                isError={trendingError}
+                                onRetry={refetchTrending}
+                            />
+                        )}
+                        <RankedList
+                            id="chart-top-rated"
+                            title="Top rated"
+                            viewAllTo="/browse?sort=rating"
+                            items={shelves.topRated}
+                            isLoading={topRatedLoading}
                         />
-                    )}
+                    </div>
+                    </>
+                    ) : (
+                    <>
+                    <AiringRibbon everyone />
+
+                    <AnimeShelf
+                        revealRef={setRevealRef}
+                        title="Trending now"
+                        viewAllTo="/browse?sort=trending"
+                        items={shelves.trending}
+                        isLoading={trendingLoading}
+                        isError={trendingError}
+                        onRetry={refetchTrending}
+                        emptyText="No trending anime right now."
+                    />
 
                     <AnimeShelf
                         revealRef={setRevealRef}

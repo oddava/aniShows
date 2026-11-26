@@ -80,6 +80,8 @@ class ProfileShellTests(TestCase):
         self.assertNotIn("7 anime", content)
         self.assertIn('<meta name="robots" content="noindex" />', content)
         self.assertEqual(_json_ld(content), [])
+        # The 1200x630 link-preview card, not the square app icon.
+        self.assertIn(f'<meta property="og:image" content="{ORIGIN}/og-image.png" />', content)
 
     def test_private_and_missing_profiles_look_the_same(self):
         user = User.objects.create_user(username="hidden", password="pw")

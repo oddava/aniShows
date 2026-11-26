@@ -1,6 +1,5 @@
 from django.db import transaction
 from django.db.models import Q
-from django.utils.decorators import method_decorator
 from django_filters import BooleanFilter, CharFilter, ChoiceFilter, FilterSet, NumberFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
@@ -20,13 +19,10 @@ from ...animes.admin_serializers import (
     AdminAnimeSerializer,
     AdminCharacterSerializer,
     AdminGenreSerializer,
-    AdminOfflineAnimeSyncStateSerializer,
     AdminStaffSerializer,
     AdminStudioSerializer,
 )
 from ...animes.models import Anime
-from ...animes.services.offline_sync import OfflineSyncService
-from ...core.models import AuditLog
 from ..permissions import AdminPolicyMixin
 from ..services.anime_admin_service import (
     AnimeTaskError,
@@ -35,15 +31,11 @@ from ..services.anime_admin_service import (
     get_admin_anime_queryset,
     get_admin_character_queryset,
     get_admin_genre_queryset,
-    get_admin_offline_sync_state_queryset,
     get_admin_staff_queryset,
     get_admin_studio_queryset,
-    mark_merge_target,
     queue_anime_image_refetch,
     queue_anime_refresh,
-    set_ids_and_retry,
 )
-from ..services.audit import record_admin_action
 from .audit_mixins import AuditedModelViewSetMixin
 
 MISSING_FILTERS = {
@@ -208,89 +200,3 @@ class AdminStaffViewSet(AdminPolicyMixin, AuditedModelViewSetMixin, ModelViewSet
 
     def get_queryset(self):
         return get_admin_staff_queryset()
-
-
-class AdminOfflineAnimeSyncStateViewSet(
-    AdminPolicyMixin,
-    ListModelMixin,
-    RetrieveModelMixin,
-    GenericViewSet,
-):
-    serializer_class = AdminOfflineAnimeSyncStateSerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["anime__title", "anime__slug", "quarantine_reason", "last_error_code"]
-    ordering_fields = [
-        "next_attempt_at",
-        "last_attempt_at",
-        "attempt_count",
-        "created_at",
-        "updated_at",
-    ]
-    ordering = ["next_attempt_at", "id"]
-
-    def _parse_int_or_none(self, value):
-        if value in (None, ""):
-            return None
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
-
-    def get_queryset(self):
-        return get_admin_offline_sync_state_queryset(self.request.query_params, self.ordering)
-
-    def _audited(self, state, operation: str, **metadata):
-        record_admin_action(
-            self.request,
-            action=AuditLog.ActionType.UPDATE,
-            entity_type="OfflineAnimeSyncState",
-            entity_id=state.pk,
-            entity_repr=f"{operation}: anime #{state.anime_id}",
-            metadata={"operation": operation, "anime_id": state.anime_id, **metadata},
-        )
-        return Response(self.get_serializer(state).data)
-
-    @action(detail=True, methods=["post"])
-    @method_decorator(transaction.atomic)
-    def retry(self, request, pk=None):
-        state = self.get_object()
-        OfflineSyncService().reset_for_retry(state)
-        state.refresh_from_db()
-        return self._audited(state, "retry")
-
-    @action(detail=True, methods=["post"])
-    @method_decorator(transaction.atomic)
-    def mark_skipped(self, request, pk=None):
-        state = self.get_object()
-        raw_reason = request.data.get("reason") or "marked_skipped"
-        if not isinstance(raw_reason, str):
-            return Response({"detail": "reason must be a string."}, status=400)
-        reason = raw_reason.strip()[:120] or "marked_skipped"
-        OfflineSyncService().mark_skipped(state, reason=reason)
-        state.refresh_from_db()
-        return self._audited(state, "mark_skipped", reason=reason)
-
-    @action(detail=True, methods=["post"])
-    @method_decorator(transaction.atomic)
-    def set_ids_and_retry(self, request, pk=None):
-        state = self.get_object()
-        anilist_id = self._parse_int_or_none(request.data.get("anilist_id"))
-        mal_id = self._parse_int_or_none(request.data.get("mal_id"))
-        result = set_ids_and_retry(state, anilist_id, mal_id)
-        if result.status_code != 200:
-            return Response(result.payload, status=result.status_code)
-        return self._audited(
-            result.payload["state"], "set_ids_and_retry", anilist_id=anilist_id, mal_id=mal_id
-        )
-
-    @action(detail=True, methods=["post"])
-    @method_decorator(transaction.atomic)
-    def merge_target(self, request, pk=None):
-        state = self.get_object()
-        target_anime_id = self._parse_int_or_none(request.data.get("target_anime_id"))
-        result = mark_merge_target(state, target_anime_id)
-        if result.status_code != 200:
-            return Response(result.payload, status=result.status_code)
-        return self._audited(
-            result.payload["state"], "merge_target", target_anime_id=target_anime_id
-        )

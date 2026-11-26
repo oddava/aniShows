@@ -4,7 +4,7 @@ const defaultSEO = {
   title: 'AniShows - Discover & Track Anime | Anime Database & Community',
   description: 'AniShows is your ultimate anime discovery platform. Track your favorite anime, discover new series, write reviews, and join a passionate community of anime fans.',
   canonical: 'https://anishows.com',
-  ogImage: 'https://anishows.com/anishows-icon-512.png',
+  ogImage: 'https://anishows.com/og-image.png',
   ogType: 'website',
 };
 
@@ -79,6 +79,8 @@ export function SEO({
       <meta property="og:url" content={canonicalUrl} />
       <meta property="og:type" content={ogType} />
       <meta property="og:image" content={ogImage || defaultSEO.ogImage} />
+      {!ogImage && <meta property="og:image:width" content="1200" />}
+      {!ogImage && <meta property="og:image:height" content="630" />}
       
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />

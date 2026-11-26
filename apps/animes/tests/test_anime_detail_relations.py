@@ -10,7 +10,7 @@ from ..models import Anime, AnimeCharacter, AnimeStaff, Character, Staff
 class AnimeDetailRelationPaginationTests(APITestCase):
     def setUp(self):
         cache.clear()
-        self.enrich_patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        self.enrich_patcher = patch("apps.animes.signals.request_hydrate")
         self.enrich_patcher.start()
         self.addCleanup(self.enrich_patcher.stop)
 

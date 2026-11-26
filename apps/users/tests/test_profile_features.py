@@ -41,7 +41,7 @@ class ProfileFeaturesTest(APITestCase):
             "users-detail", kwargs={"username": username}
         )
 
-    @patch("apps.animes.signals.enrich_metadata")
+    @patch("apps.animes.signals.request_hydrate")
     @patch("apps.animes.signals.generate_recommendations")
     def test_computed_statistics(self, mock_recommendations, mock_enrich):
         """Test mean_score, anime_count, days_watched calculation."""
@@ -88,7 +88,7 @@ class ProfileFeaturesTest(APITestCase):
         self.assertEqual(stats["days_watched"], 0.4)
         self.assertEqual(stats["resonance_count"], 0)
 
-    @patch("apps.animes.signals.enrich_metadata")
+    @patch("apps.animes.signals.request_hydrate")
     @patch("apps.animes.signals.generate_recommendations")
     def test_profile_includes_resonance_count(self, mock_recommendations, mock_enrich):
         anime = Anime.objects.create(

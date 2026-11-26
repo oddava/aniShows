@@ -121,22 +121,13 @@ USER_STATS_BACKSTOP_LOCK_SECONDS = max(_env_int("USER_STATS_BACKSTOP_LOCK_SECOND
 MEDIA_SELF_HEAL_BATCH_SIZE = max(_env_int("MEDIA_SELF_HEAL_BATCH_SIZE", 25), 1)
 MEDIA_SELF_HEAL_MAX_QUEUE_DEPTH = max(_env_int("MEDIA_SELF_HEAL_MAX_QUEUE_DEPTH", 100), 1)
 MEDIA_SELF_HEAL_LOCK_SECONDS = max(_env_int("MEDIA_SELF_HEAL_LOCK_SECONDS", 1800), 60)
-OFFLINE_RECONCILE_BATCH_SIZE = max(_env_int("OFFLINE_RECONCILE_BATCH_SIZE", 25), 1)
-OFFLINE_RECONCILE_CHUNK_SIZE = max(_env_int("OFFLINE_RECONCILE_CHUNK_SIZE", 100), 1)
-OFFLINE_RECONCILE_MAX_ROUNDS = max(_env_int("OFFLINE_RECONCILE_MAX_ROUNDS", 4), 1)
-OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES = max(
-    _env_int("OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES", 15),
-    1,
-)
-OFFLINE_RECONCILE_INTER_STAGE_DELAY_SECONDS = max(
-    _env_int("OFFLINE_RECONCILE_INTER_STAGE_DELAY_SECONDS", 60),
-    0,
-)
-OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS = max(
-    _env_int("OFFLINE_RECONCILE_WORKFLOW_LOCK_SECONDS", 7200),
-    60,
-)
-OFFLINE_IMPORT_TRENDING_RANK_LIMIT = _env_int("OFFLINE_IMPORT_TRENDING_RANK_LIMIT", 50)
+# Catalog engine (apps.animes.catalog): what the catalog holds. Japanese animation
+# only (AniList's countryOfOrigin), music videos left out. Titles outside this stay
+# reachable by link but are never listed.
+CATALOG_COUNTRIES = ["JP"]
+CATALOG_EXCLUDED_FORMATS = ["MUSIC"]
+# The full sweep's oldest release year.
+CATALOG_FIRST_YEAR = 1917
 
 # =============================================================================
 # APPLICATION DEFINITION
@@ -670,13 +661,7 @@ RETRY_BACKOFF_SCALE = 1.0
 
 from .celery_schedule import build_beat_schedule
 
-CELERY_BEAT_SCHEDULE = build_beat_schedule(
-    offline_reconcile_batch_size=OFFLINE_RECONCILE_BATCH_SIZE,
-    offline_reconcile_chunk_size=OFFLINE_RECONCILE_CHUNK_SIZE,
-    offline_reconcile_max_rounds=OFFLINE_RECONCILE_MAX_ROUNDS,
-    offline_reconcile_round_interval_minutes=OFFLINE_RECONCILE_ROUND_INTERVAL_MINUTES,
-    media_self_heal_batch_size=MEDIA_SELF_HEAL_BATCH_SIZE,
-)
+CELERY_BEAT_SCHEDULE = build_beat_schedule(media_self_heal_batch_size=MEDIA_SELF_HEAL_BATCH_SIZE)
 
 # =============================================================================
 # JAZZMIN SETTINGS

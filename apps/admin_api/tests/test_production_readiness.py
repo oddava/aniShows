@@ -84,7 +84,7 @@ class TestAdminSettingsAPI(APITestCase):
 class TestReviewReportFlow(APITestCase):
     def setUp(self):
         cache.clear()
-        self.enrich_patch = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        self.enrich_patch = patch("apps.animes.signals.request_hydrate", return_value=None)
         self.enrich_patch.start()
         self.addCleanup(self.enrich_patch.stop)
 
@@ -158,7 +158,7 @@ class TestReviewReportFlow(APITestCase):
 
 class TestBulkOperationSafety(APITestCase):
     def setUp(self):
-        self.enrich_patch = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        self.enrich_patch = patch("apps.animes.signals.request_hydrate", return_value=None)
         self.enrich_patch.start()
         self.addCleanup(self.enrich_patch.stop)
 
@@ -337,7 +337,7 @@ class TestReportsServiceCache(TestCase):
 class TestRuntimePolicyControls(APITestCase):
     def setUp(self):
         cache.clear()
-        self.enrich_patch = patch("apps.animes.signals.enrich_metadata.delay", return_value=None)
+        self.enrich_patch = patch("apps.animes.signals.request_hydrate", return_value=None)
         self.enrich_patch.start()
         self.addCleanup(self.enrich_patch.stop)
 

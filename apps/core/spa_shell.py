@@ -32,7 +32,10 @@ from ..shared.logger import logger
 HEAD_START = "<!-- route-head:start -->"
 HEAD_END = "<!-- route-head:end -->"
 SITE_NAME = "AniShows"
-DEFAULT_IMAGE_PATH = "/anishows-icon-512.png"
+# The 1200x630 link-preview card (frontend/public/og-image.png), for pages
+# without an image of their own.
+DEFAULT_IMAGE_PATH = "/og-image.png"
+DEFAULT_IMAGE_ALT = "AniShows: discover, track and talk about anime"
 DESCRIPTION_LIMIT = 190
 
 
@@ -100,7 +103,9 @@ def render_head(head: RouteHead) -> str:
         return escape(value, quote=True)
 
     canonical = f"{site_origin()}{head.canonical_path}"
-    image = absolute_url(head.image) or absolute_url(DEFAULT_IMAGE_PATH)
+    own_image = absolute_url(head.image)
+    image = own_image or absolute_url(DEFAULT_IMAGE_PATH)
+    image_alt = head.image_alt if own_image else DEFAULT_IMAGE_ALT
     lines = [
         f"<title>{escape(head.title, quote=False)}</title>",
         f'<meta name="description" content="{attr(head.description)}" />',
@@ -116,9 +121,15 @@ def render_head(head: RouteHead) -> str:
         f'<meta property="og:description" content="{attr(head.description)}" />',
         f'<meta property="og:image" content="{attr(image)}" />',
     ]
-    if head.image_alt:
-        lines.append(f'<meta property="og:image:alt" content="{attr(head.image_alt)}" />')
-    card = "summary_large_image" if head.large_image else "summary"
+    if not own_image:
+        lines += [
+            '<meta property="og:image:width" content="1200" />',
+            '<meta property="og:image:height" content="630" />',
+        ]
+    if image_alt:
+        lines.append(f'<meta property="og:image:alt" content="{attr(image_alt)}" />')
+    # Wide images (a banner, the default card) as large cards; covers and avatars small.
+    card = "summary_large_image" if head.large_image or not own_image else "summary"
     lines += [
         f'<meta name="twitter:card" content="{card}" />',
         f'<meta name="twitter:title" content="{attr(head.title)}" />',

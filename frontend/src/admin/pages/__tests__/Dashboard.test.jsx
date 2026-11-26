@@ -21,7 +21,7 @@ const PAYLOAD = {
         engagement: { total_favorites: 3000, total_list_entries: 25000 },
     },
     charts: { user_growth: [{ date: '2026-11-20', count: 3 }], reviews_30d: [] },
-    attention: { open_reports: 5, open_reviews: 3, failed_tasks_24h: 2, quarantined_sync: 0, failed_user_imports_24h: 0, suspended_users: 1 },
+    attention: { open_reports: 5, open_reviews: 3, failed_tasks_24h: 2, failed_catalog_runs_24h: 0, failed_user_imports_24h: 0, suspended_users: 1 },
     popular_anime: [{ id: 7, title: 'Frieren', slug: 'frieren', favorite_count: 88, poster: null }],
     recent_reviews: [{ id: 4, user: 'mika', anime: 'Frieren', anime_slug: 'frieren', rating: 9, has_spoilers: false, created_at: '2026-11-25T10:00:00Z' }],
     recent_users: [{ id: 9, username: 'sora', email: 's@example.com', date_joined: '2026-11-25T09:00:00Z', is_active: true, is_staff: false }],

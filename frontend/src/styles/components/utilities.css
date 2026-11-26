@@ -71,9 +71,9 @@ nav a:focus-visible {
 }
 
 .overview-about-markdown {
-  color: #9ca7b8;
-  font-size: 13px;
-  line-height: 1.72;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .overview-about-markdown p,
@@ -81,9 +81,9 @@ nav a:focus-visible {
 .overview-about-markdown blockquote,
 .overview-about-markdown em,
 .overview-about-markdown del {
-  color: #9ca7b8 !important;
-  font-size: 13px;
-  line-height: 1.72;
+  color: var(--text-2) !important;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .overview-about-markdown strong,

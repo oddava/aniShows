@@ -1,15 +1,18 @@
 import { normalizeUrl } from '../SmartLinkInput';
 
-export function getResponsiveBannerAspect(width) {
-    const safeWidth = Math.max(320, Number(width) || 320);
+/**
+ * Banners are kept at 3:1 (1500x500 is the usual size, as on X and
+ * Discord), so a banner made at that size is stored whole. The profile shows
+ * a centred band of it (wider than 3:1 on desktop), as AniList does.
+ */
+export const BANNER_ASPECT = 3;
 
-    // Keep this in sync with ProfileHeader + Settings banner preview classes.
-    if (safeWidth >= 1536) return 5.8;
-    if (safeWidth >= 1280) return 5.2;
-    if (safeWidth >= 1024) return 4.9;
-    if (safeWidth >= 768) return 4.6;
-    if (safeWidth >= 640) return 3.8;
-    return 3.2;
+/** A picture this close to 3:1 needs no crop: it is used as it is. */
+export const BANNER_ASPECT_TOLERANCE = 0.08;
+
+export function fitsBannerAspect(width, height) {
+    if (!width || !height) return false;
+    return Math.abs(width / height / BANNER_ASPECT - 1) <= BANNER_ASPECT_TOLERANCE;
 }
 
 export function decodeHtmlEntities(text = '') {

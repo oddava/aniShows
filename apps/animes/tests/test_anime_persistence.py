@@ -66,7 +66,7 @@ SPARSE_ITEM = {
 
 class SparseUpdateDoesNotClobberTests(TestCase):
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        patcher = patch("apps.animes.signals.request_hydrate")
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -166,7 +166,7 @@ class SparseUpdateDoesNotClobberTests(TestCase):
 
 class AniListCreateDoesNotHijackSlugTests(TestCase):
     def setUp(self):
-        patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        patcher = patch("apps.animes.signals.request_hydrate")
         patcher.start()
         self.addCleanup(patcher.stop)
 

@@ -10,6 +10,7 @@ from ..views import (
     LogoutView,
     PublicUserProfileViewSet,
     RegisterView,
+    UserCompatibilityView,
     UserProfileView,
     UserStatsView,
     WebSocketTicketView,
@@ -24,6 +25,11 @@ router_routes = [
 priority_urlpatterns = [
     path("users/me/", UserProfileView.as_view(), name="user_profile"),
     path("users/me/stats/", UserStatsView.as_view(), name="user_stats"),
+    path(
+        "users/<str:username>/compatibility/",
+        UserCompatibilityView.as_view(),
+        name="user_compatibility",
+    ),
     path(
         "users/<str:username>/",
         PublicUserProfileViewSet.as_view({"get": "retrieve"}),

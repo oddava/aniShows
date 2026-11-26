@@ -18,8 +18,7 @@ describe('ShareProfileButton', () => {
         Object.assign(navigator, { clipboard: { writeText } });
         render(<ShareProfileButton username="oddava" />);
 
-        // The name starts with the visible text (WCAG 2.5.3).
-        fireEvent.click(screen.getByRole('button', { name: /^Share: / }));
+        fireEvent.click(screen.getByRole('button', { name: 'Share profile' }));
 
         await waitFor(() => expect(notify).toHaveBeenCalledWith('Link copied', { id: 'profile-share' }));
         expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/u/oddava`);
@@ -29,7 +28,7 @@ describe('ShareProfileButton', () => {
         Object.assign(navigator, { clipboard: { writeText: vi.fn(() => Promise.reject(new Error('denied'))) } });
         render(<ShareProfileButton username="a b" />);
 
-        fireEvent.click(screen.getByRole('button', { name: /^Share: / }));
+        fireEvent.click(screen.getByRole('button', { name: 'Share profile' }));
 
         await waitFor(() => expect(notifyError).toHaveBeenCalled());
         expect(notifyError.mock.calls[0][0]).toContain('/u/a%20b');

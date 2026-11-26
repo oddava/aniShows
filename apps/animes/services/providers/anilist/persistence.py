@@ -4,9 +4,11 @@ from typing import TYPE_CHECKING
 
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from django.utils.text import slugify
 
 from .....shared.logger import logger
+from ....catalog import scope
 from ....models import (
     Anime,
     AnimeCharacter,
@@ -19,6 +21,15 @@ from ....models import (
 from ...relation_links import sync_relations_from_media
 from ..base import with_creation_defaults
 from . import mapper
+
+
+class OutOfCatalogScopeError(ValueError):
+    """A payload for a title the catalog does not hold (``catalog.scope``); nothing was created."""
+
+    def __init__(self, reason: str):
+        super().__init__(f"Outside the catalog's scope ({reason})")
+        self.reason = reason
+
 
 ROLE_MAP = {
     "MAIN": AnimeCharacter.Role.MAIN,
@@ -152,9 +163,39 @@ class AniListPersistence(_ClientBase):
     so the client methods it calls are known.
     """
 
+    # Queue cover/banner downloads into our storage. The lean catalog lanes turn this
+    # off: those rows are served from AniList's CDN until someone needs their details.
+    mirror_images = True
+
     if TYPE_CHECKING:
 
         def resolve_media_for_anime(self, anime: Anime) -> dict | None: ...
+
+    @staticmethod
+    def _apply_catalog_state(anime: Anime, item: dict) -> None:
+        """Scope verdict and hydration time for a row a payload was just applied to.
+
+        A full payload (it carries the cast preview) marks the row hydrated. A reason
+        the scope rule does not own (an admin's) is never overwritten.
+        """
+        fields: dict = {}
+        if scope.is_scope_reason(anime.catalog_excluded):
+            reason = scope.media_exclusion_reason(item)
+            if item.get("countryOfOrigin") is None and item.get("format") is None:
+                reason = anime.catalog_excluded  # the payload says nothing about scope
+            if reason != anime.catalog_excluded:
+                fields["catalog_excluded"] = reason
+        if "characterPreview" in item:
+            fields["hydrated_at"] = timezone.now()
+        if not fields:
+            return
+        Anime.objects.filter(pk=anime.pk).update(**fields)
+        for name, value in fields.items():
+            setattr(anime, name, value)
+        if "catalog_excluded" in fields:
+            from ...public_anime_service import AnimePublicPayloadService
+
+            AnimePublicPayloadService.bump_collection_cache_namespace()
 
     def process_media_list(self, media_list: list[dict], progress_callback=None):
         """Process a list of media items and save/update them in the database.
@@ -233,6 +274,7 @@ class AniListPersistence(_ClientBase):
             self._handle_relationships(anime, item)
             self._handle_extended_info(anime, item)
             self._download_and_save_images(anime, item)
+            self._apply_catalog_state(anime, item)
 
             return True
         except Exception:
@@ -271,6 +313,7 @@ class AniListPersistence(_ClientBase):
         anime_data = self._prepare_anime_data(item, title or anime.title, title_native, anime.slug)
         anime_data.pop("slug", None)
         self._update_anime(anime, anime_data)
+        self._apply_catalog_state(anime, item)
         return True
 
     def _resolve_manual_update_item(self, anime: Anime, item: dict) -> dict | None:
@@ -476,7 +519,10 @@ class AniListPersistence(_ClientBase):
             has_cover = bool(anime.cover_image)
             has_banner = bool(anime.banner_image)
 
-            if (cover_url and not has_cover) or (banner_url and not has_banner) or force_replace:
+            wants_images = (
+                (cover_url and not has_cover) or (banner_url and not has_banner) or force_replace
+            )
+            if wants_images and self.mirror_images:
                 from ....tasks.images import _queue_image_fetch
 
                 logger.info(f"Queueing background image fetch for {anime.title}")
@@ -531,6 +577,12 @@ class AniListPersistence(_ClientBase):
         # By AniList, then MAL ID; titles are not unique, so the slug is only
         # tried for a payload without IDs.
         existing = self._lookup_existing_anime(anilist_id=anilist_id, mal_id=mal_id, slug=base_slug)
+        if existing is None:
+            # Never create a row for a title outside the scope. One already stored is
+            # still updated below, and hidden by its new scope verdict.
+            reason = scope.media_exclusion_reason(item)
+            if reason:
+                raise OutOfCatalogScopeError(reason)
         if existing:
             logger.debug("Found anime %s for AniList ID %s", existing.id, anilist_id)
             self._update_anime_from_media(existing, item, title, title_native, existing.slug)
@@ -570,6 +622,7 @@ class AniListPersistence(_ClientBase):
         self._handle_relationships(anime, item)
         self._handle_extended_info(anime, item)
         self._download_and_save_images(anime, item)
+        self._apply_catalog_state(anime, item)
 
         return anime
 
@@ -585,3 +638,4 @@ class AniListPersistence(_ClientBase):
         self._handle_relationships(anime, item)
         self._handle_extended_info(anime, item)
         self._download_and_save_images(anime, item)
+        self._apply_catalog_state(anime, item)

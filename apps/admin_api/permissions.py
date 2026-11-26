@@ -92,16 +92,12 @@ ADMIN_ACTION_POLICY: Final[dict[str, dict[str, str]]] = {
     "AdminStudioViewSet": {**_READ, **_CATALOG_WRITES},
     "AdminCharacterViewSet": {**_READ, **_CATALOG_WRITES},
     "AdminStaffViewSet": {**_READ, **_CATALOG_WRITES},
-    "AdminOfflineAnimeSyncStateViewSet": {
-        **_READ,
-        "retry": SUPERUSER,
-        "mark_skipped": SUPERUSER,
-        "set_ids_and_retry": SUPERUSER,
-        "merge_target": SUPERUSER,
-    },
     "AdminFavoritesStatsViewSet": {"stats": STAFF},
-    "AdminImportJobViewSet": {**_READ, "trigger": SUPERUSER, "cancel": SUPERUSER},
     "AdminUserImportViewSet": dict(_READ),
+    # Catalog engine: anyone on staff reads it; running a lane spends AniList budget
+    "AdminCatalogView": {"get": STAFF},
+    "AdminCatalogRunViewSet": {"list": STAFF},
+    "AdminCatalogLaneRunView": {"post": SUPERUSER},
     # Logs: system logs carry IPs and user agents
     "AdminSystemLogViewSet": {"list": SUPERUSER, "retrieve": SUPERUSER, "stats": SUPERUSER},
     "AdminAuditLogViewSet": {**_READ, "entity_types": STAFF},

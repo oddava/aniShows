@@ -480,10 +480,10 @@ describe('queryOptions call the same endpoints as the inline queryFns did', () =
         expect(summaryToGenreRows(undefined)).toEqual([]);
     });
 
-    it('userQueries.watching asks for twelve Watching entries', async () => {
+    it('userQueries.watching asks for twelve Watching entries with banner art', async () => {
         mocks.listApi.getAll.mockResolvedValue({ data: { results: [{ id: 1 }] } });
         await expect(userQueries.watching().queryFn(fnContext)).resolves.toEqual([{ id: 1 }]);
-        expect(mocks.listApi.getAll).toHaveBeenLastCalledWith({ status: 'Watching', page_size: 12 });
+        expect(mocks.listApi.getAll).toHaveBeenLastCalledWith({ status: 'Watching', page_size: 12, artwork: 1 });
     });
 
     it('insightsQueries.watching is a ten-entry Watching preview', async () => {

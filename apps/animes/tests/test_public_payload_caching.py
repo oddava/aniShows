@@ -16,7 +16,7 @@ User = get_user_model()
 class AdultContentShelfTests(APITestCase):
     def setUp(self):
         cache.clear()
-        patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        patcher = patch("apps.animes.signals.request_hydrate")
         patcher.start()
         self.addCleanup(patcher.stop)
         hentai = Genre.objects.create(name="Hentai", slug="hentai")
@@ -78,7 +78,7 @@ class ScheduleDayTimezoneTests(APITestCase):
 class CoverlessDetailCacheTests(APITestCase):
     def setUp(self):
         cache.clear()
-        patcher = patch("apps.animes.signals.enrich_metadata.delay")
+        patcher = patch("apps.animes.signals.request_hydrate")
         patcher.start()
         self.addCleanup(patcher.stop)
 

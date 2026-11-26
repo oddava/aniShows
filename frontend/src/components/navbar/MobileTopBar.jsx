@@ -22,6 +22,10 @@ export default function MobileTopBar() {
     const isStaff = Boolean(user?.is_staff || user?.is_superuser);
     const [scrolled, setScrolled] = useState(false);
     const [hidden, setHidden] = useState(false);
+    // Sticky bars further down (the profile tabs) sit under the bar while it shows.
+    useEffect(() => {
+        document.documentElement.dataset.mobileNav = hidden ? 'hidden' : 'shown';
+    }, [hidden]);
     const lastY = useRef(0);
 
     useEffect(() => {
@@ -65,7 +69,7 @@ export default function MobileTopBar() {
     return (
         <header
             onFocus={() => setHidden(false)}
-            className={`md:hidden fixed inset-x-0 top-0 z-[1000] pt-[env(safe-area-inset-top)] transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${hidden ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'bg-dark/80 backdrop-blur-xl' : 'bg-gradient-to-b from-black/50 to-transparent'}`}
+            className={`md:hidden fixed inset-x-0 top-0 z-[1000] pt-[env(safe-area-inset-top)] transition-[translate,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${hidden ? '-translate-y-full' : 'translate-y-0'} ${scrolled ? 'bg-dark/80 backdrop-blur-xl' : 'bg-gradient-to-b from-black/50 to-transparent'}`}
         >
             <div className="h-14 px-2 flex items-center justify-between">
                 <div className="flex items-center min-w-0">

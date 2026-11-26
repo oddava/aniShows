@@ -17,6 +17,7 @@ from ...animes.models import (
 from ...animes.serializers.anime import (
     AnimeListSerializer,
     AnimeMinimalSerializer,
+    AnimeShelfSerializer,
 )
 from ..models import UserActivity, UserAnimeList
 from ..services.list_rules import ListRuleError, normalize_entry, user_today
@@ -31,6 +32,7 @@ STATUS_ALIASES = {
 
 __all__ = [
     "UserActivitySerializer",
+    "UserAnimeListArtworkSerializer",
     "UserAnimeListSerializer",
 ]
 
@@ -123,6 +125,16 @@ class UserAnimeListSerializer(ModelSerializer):
             return normalize_entry(self.instance, attrs, anime, today, strict=True)
         except ListRuleError as exc:
             raise ValidationError({exc.field: exc.message}) from exc
+
+
+class UserAnimeListArtworkSerializer(UserAnimeListSerializer):
+    """List rows whose anime carries banner art and synopsis (``?artwork=1``).
+
+    For the signed-in home, which shows what you're watching as wide cards. The
+    queryset already loads the whole anime row, so this costs no extra query.
+    """
+
+    anime = AnimeShelfSerializer(read_only=True)
 
 
 class UserActivitySerializer(ModelSerializer):

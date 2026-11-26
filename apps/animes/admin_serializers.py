@@ -8,7 +8,6 @@ from .models import (
     Anime,
     Character,
     Genre,
-    OfflineAnimeSyncState,
     Review,
     Staff,
     Studio,
@@ -143,7 +142,7 @@ class AdminAnimeDetailSerializer(AdminAnimeSerializer):
     banner = SerializerMethodField()
     studios = SerializerMethodField()
     list_entries_count = IntegerField(read_only=True, default=0)
-    sync_state = SerializerMethodField()
+    catalog = SerializerMethodField()
 
     class Meta(AdminAnimeSerializer.Meta):
         fields = [
@@ -167,7 +166,7 @@ class AdminAnimeDetailSerializer(AdminAnimeSerializer):
             "synonyms",
             "external_links",
             "studios",
-            "sync_state",
+            "catalog",
             "meta_description_locked",
         ]
         read_only_fields = [name for name in fields if name != "meta_description"]
@@ -188,18 +187,15 @@ class AdminAnimeDetailSerializer(AdminAnimeSerializer):
     def get_studios(self, obj):
         return [{"id": studio.id, "name": studio.name} for studio in obj.ordered_studios]
 
-    def get_sync_state(self, obj):
-        try:
-            state = obj.offline_sync_state
-        except OfflineAnimeSyncState.DoesNotExist:
-            return None
+    def get_catalog(self, obj):
+        """Where the row stands in the catalog engine (``apps.animes.catalog``)."""
         return {
-            "id": state.id,
-            "metadata_status": state.metadata_status,
-            "franchise_status": state.franchise_status,
-            "quarantined": state.quarantined,
-            "quarantine_reason": state.quarantine_reason,
-            "last_error_code": state.last_error_code,
+            "country_of_origin": obj.country_of_origin,
+            "format": obj.anilist_format,
+            "excluded": obj.catalog_excluded,
+            "hydrated_at": obj.hydrated_at,
+            "hydrate_requested_at": obj.hydrate_requested_at,
+            "anilist_updated_at": obj.anilist_updated_at,
         }
 
 
@@ -296,38 +292,3 @@ class AdminStaffSerializer(ModelSerializer):
             except ValueError:
                 return None
         return obj.image_url or None
-
-
-class AdminOfflineAnimeSyncStateSerializer(ModelSerializer):
-    anime = SerializerMethodField()
-
-    class Meta:
-        model = OfflineAnimeSyncState
-        fields = [
-            "id",
-            "anime",
-            "metadata_status",
-            "franchise_status",
-            "metadata_attempt_count",
-            "franchise_attempt_count",
-            "attempt_count",
-            "last_attempt_at",
-            "next_attempt_at",
-            "last_error_code",
-            "last_error_message",
-            "quarantined",
-            "quarantine_reason",
-            "quarantine_context",
-            "created_at",
-            "updated_at",
-        ]
-
-    def get_anime(self, obj):
-        anime = obj.anime
-        return {
-            "id": anime.id,
-            "title": anime.title,
-            "slug": anime.slug,
-            "anilist_id": anime.anilist_id,
-            "mal_id": anime.mal_id,
-        }

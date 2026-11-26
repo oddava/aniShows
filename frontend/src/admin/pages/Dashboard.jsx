@@ -47,10 +47,10 @@ function attentionItems(attention = {}, { isSuperuser }) {
             tone: 'danger',
         },
         {
-            key: 'quarantined',
-            count: attention.quarantined_sync,
-            label: (n) => `${n === 1 ? 'anime is' : 'anime are'} held back from syncing`,
-            to: '/admin/sync-health?quarantined=true',
+            key: 'catalog',
+            count: attention.failed_catalog_runs_24h,
+            label: (n) => `catalog ${n === 1 ? 'sync' : 'syncs'} failed today`,
+            to: '/admin/catalog-sync?status=failed',
             tone: 'warning',
         },
         {

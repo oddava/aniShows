@@ -10,10 +10,10 @@ This module provides a consolidated task system with:
 - Franchise/relations synchronization
 
 Usage:
-    from . import sync_anime_catalog, sync_airing_workflow
+    from . import run_catalog_lane, sync_airing_workflow
 
-    # Sync trending anime
-    sync_anime_catalog.delay(sync_type='trending', limit=50)
+    # Refresh trending from AniList (see apps.animes.catalog for every lane)
+    run_catalog_lane.delay(lane='trending')
 
     # Run full airing workflow
     sync_airing_workflow.delay()
@@ -31,14 +31,13 @@ Usage:
 # Import all task modules to ensure registration
 from .adult_content import replay_public_cache_invalidations, sync_adult_flags
 from .airing import sync_airing_workflow
+from .catalog import run_catalog_lane
 from .franchises import sync_franchises, update_relation_slugs
 
 # Import legacy tasks from tasks.py (kept for backward compatibility)
 from .images import generate_image_thumbnails, heal_missing_anime_media
 from .metadata import enrich_metadata
-from .offline_catalog import import_offline_catalog, reconcile_offline_catalog_sync
 from .recommendations import generate_recommendations
-from .sync import sync_anime_catalog
 from .themes import backfill_theme_youtube_urls
 from .watch_episodes import sync_watch_episodes_batch, sync_watch_episodes_for_anime
 
@@ -51,12 +50,10 @@ __all__ = [
     "generate_image_thumbnails",
     "generate_recommendations",
     "heal_missing_anime_media",
-    "import_offline_catalog",
-    "reconcile_offline_catalog_sync",
     "replay_public_cache_invalidations",
+    "run_catalog_lane",
     "sync_adult_flags",
     "sync_airing_workflow",
-    "sync_anime_catalog",
     "sync_franchises",
     "sync_watch_episodes_batch",
     "sync_watch_episodes_for_anime",
