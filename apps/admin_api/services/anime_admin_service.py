@@ -14,7 +14,23 @@ from ...animes.models import (
     UserFavorite,
 )
 from ...animes.services.offline_sync import OfflineSyncService
+from ...core.models import AuditLog
+from ...core.services.celery_admin_service import enqueue_tracked_task
+from ...shared.errors import ENQUEUE_ERRORS
+from ...shared.logger import logger
+from ...users.models import UserAnimeList
+from .audit import record_admin_action
 from .query_helpers import related_count
+
+METADATA_TASK = "apps.animes.tasks.metadata.enrich_metadata"
+IMAGES_TASK = "apps.animes.tasks.images.fetch_anime_images"
+
+
+class AnimeTaskError(Exception):
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
 
 
 @dataclass(slots=True)
@@ -23,9 +39,14 @@ class AdminAnimeActionResult:
     status_code: int
 
 
-def get_admin_anime_queryset():
+def get_admin_anime_queryset(*, detail: bool = False):
     # Correlated subqueries: two joined Counts would multiply each other (A13).
-    return Anime.objects.prefetch_related("genres", Anime.studios_prefetch()).annotate(
+    queryset = Anime.objects.prefetch_related("genres", Anime.studios_prefetch())
+    if detail:
+        queryset = queryset.select_related("offline_sync_state").annotate(
+            list_entries_count=related_count(UserAnimeList, "anime")
+        )
+    return queryset.annotate(
         favorites_count=related_count(UserFavorite, "anime"),
         reviews_count=related_count(Review, "anime"),
         avg_review_rating=Subquery(
@@ -40,13 +61,6 @@ def get_admin_anime_queryset():
 
 def get_admin_genre_queryset():
     return Genre.objects.annotate(anime_count=Count("anime")).order_by("name")
-
-
-def apply_default_genre_slug(serializer):
-    name = serializer.validated_data.get("name")
-    slug = serializer.validated_data.get("slug")
-    if not slug and name:
-        serializer.validated_data["slug"] = name.lower().replace(" ", "-")
 
 
 def delete_genre(genre, force) -> AdminAnimeActionResult:
@@ -190,3 +204,54 @@ def mark_merge_target(state, target_anime_id) -> AdminAnimeActionResult:
     )
     state.refresh_from_db()
     return AdminAnimeActionResult(payload={"state": state}, status_code=200)
+
+
+def _queue_anime_task(request, anime, *, task_path: str, kwargs: dict, operation: str) -> dict:
+    try:
+        job = enqueue_tracked_task(task_path=task_path, user=request.user, kwargs=kwargs)
+    except ENQUEUE_ERRORS:
+        logger.exception("Queueing an anime task failed", extra={"anime_id": anime.id})
+        raise AnimeTaskError("Failed to queue the task.", 503) from None
+    record_admin_action(
+        request,
+        action=AuditLog.ActionType.TRIGGER,
+        entity_type="Anime",
+        entity_id=anime.id,
+        entity_repr=f"{operation}: {anime.title}",
+        metadata={"operation": operation, "task": task_path, "task_id": job.task_id},
+    )
+    return {"task_id": job.task_id, "job_id": job.id}
+
+
+def queue_anime_refresh(request, anime) -> dict:
+    """Re-read this anime's metadata from AniList (the enrichment task, single mode)."""
+    if not anime.anilist_id:
+        raise AnimeTaskError("This anime has no AniList ID to refresh from.", 400)
+    queued = _queue_anime_task(
+        request,
+        anime,
+        task_path=METADATA_TASK,
+        kwargs={"anime_id": anime.id, "mode": "single"},
+        operation="refresh",
+    )
+    return {"message": f"Refresh of '{anime.title}' queued.", **queued}
+
+
+def queue_anime_image_refetch(request, anime) -> dict:
+    """Download the cover and banner again, replacing the stored files."""
+    cover, banner = anime.cover_image_external_url, anime.banner_image_external_url
+    if not cover and not banner:
+        raise AnimeTaskError("This anime has no external image URLs.", 400)
+    queued = _queue_anime_task(
+        request,
+        anime,
+        task_path=IMAGES_TASK,
+        kwargs={
+            "anime_id": anime.id,
+            "cover_url": cover or "",
+            "banner_url": banner or "",
+            "force_replace": True,
+        },
+        operation="refetch_images",
+    )
+    return {"message": f"Images of '{anime.title}' queued for download.", **queued}

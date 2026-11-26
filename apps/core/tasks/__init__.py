@@ -17,12 +17,14 @@ from .metadata import (
     fetch_multiple_link_metadata,
 )
 from .notifications import (
+    broadcast_announcement_task,
     check_new_episodes,
     cleanup_old_notifications_task,
     send_pending_notifications,
 )
 
 __all__ = [
+    "broadcast_announcement_task",
     "check_new_episodes",
     "cleanup_old_notifications_task",
     "cleanup_old_task_results",

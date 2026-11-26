@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import usePresence from '../../hooks/usePresence';
 import { Link, useLocation } from 'react-router-dom';
-import { Bell, ChevronDown, LogOut, Settings, User } from 'lucide-react';
+import { Bell, ChevronDown, LayoutDashboard, LogOut, Settings, User } from 'lucide-react';
 import useSignOut from '../auth/useSignOut';
 import { isAuthFlowPath } from '../auth/authPaths';
 
@@ -160,6 +160,16 @@ export default function UserMenu({
                                     <Settings aria-hidden="true" className="w-4 h-4" />
                                     <span className="text-sm font-medium">Settings</span>
                                 </Link>
+                                {(user?.is_staff || user?.is_superuser) && (
+                                    <Link
+                                        to="/admin"
+                                        onClick={() => setIsProfileOpen(false)}
+                                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+                                    >
+                                        <LayoutDashboard aria-hidden="true" className="w-4 h-4" />
+                                        <span className="text-sm font-medium">Admin</span>
+                                    </Link>
+                                )}
                                 <div className=" my-1.5 mx-2" />
                                 <button
                                     type="button"

@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Model
 
 from ...core.models import AuditLog
-from ..services.audit import record_admin_action
+from ..services.audit import mark_nothing_to_audit, record_admin_action
 
 if TYPE_CHECKING:
     from rest_framework.generics import GenericAPIView
@@ -73,19 +73,26 @@ class AuditedModelViewSetMixin(_ViewBase):
         fields = list(serializer.validated_data)
         previous = field_snapshot(serializer.instance, fields)
         instance = serializer.save()
-        self._audit(
-            AuditLog.ActionType.UPDATE,
-            instance,
-            previous=previous,
-            new=field_snapshot(instance, fields),
-        )
+        new = field_snapshot(instance, fields)
+        if new == previous:
+            # Saved without a change: nothing happened worth a row.
+            mark_nothing_to_audit(self.request)
+            return
+        self._audit(AuditLog.ActionType.UPDATE, instance, previous=previous, new=new)
 
     def audit_destroy(self, instance, extra: dict | None = None):
         """Write the delete row before the row is gone; call it inside the delete's transaction."""
+        # The editable fields as they were, so a mistaken delete can be redone by hand.
+        fields = getattr(self.get_serializer(instance), "fields", {})
+        editable = [
+            name
+            for name, field in fields.items()
+            if not field.read_only and hasattr(instance, name)
+        ]
         self._audit(
             AuditLog.ActionType.DELETE,
             instance,
-            previous={"repr": str(instance), **(extra or {})},
+            previous={"repr": str(instance), **field_snapshot(instance, editable), **(extra or {})},
         )
 
     @transaction.atomic

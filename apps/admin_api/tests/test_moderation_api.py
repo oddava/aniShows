@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from ...animes.models import Anime, Review, ReviewReport
-from ...core.models import AuditLog
+from ...core.models import AuditLog, Notification
 from ..services import moderation_service
 from .helpers import bearer_client, make_user
 
@@ -162,8 +162,14 @@ class ModerationResolveTests(TestCase):
         self.assertEqual(row.changes, {"has_spoilers": {"old": False, "new": True}})
 
     def test_remove_review_deletes_through_the_model(self):
-        with patch.object(Review, "delete", autospec=True, side_effect=Review.delete) as delete:
-            response = self._resolve("remove_review")
+        self.assertEqual(
+            self._resolve("remove_review").status_code, 400
+        )  # the author sees a reason
+        with (
+            patch.object(Review, "delete", autospec=True, side_effect=Review.delete) as delete,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            response = self._resolve("remove_review", notes="Spoils the ending")
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["review_deleted"])
@@ -174,6 +180,9 @@ class ModerationResolveTests(TestCase):
             (row.action, row.entity_id), (AuditLog.ActionType.RESOLVE, str(self.review.id))
         )
         self.assertEqual(row.metadata["report_reasons"], {"spoiler": 2})
+        notice = Notification.objects.get(user=self.review.user)
+        self.assertIn("was removed", notice.title)
+        self.assertIn("Spoils the ending", notice.message)
 
     def test_outcome_is_atomic(self):
         with patch.object(moderation_service, "record_admin_action", side_effect=RuntimeError):

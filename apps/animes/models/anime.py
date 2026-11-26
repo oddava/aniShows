@@ -162,6 +162,9 @@ class Anime(TimestampMixin, SlugMixin, Model):
     trending_rank = IntegerField(null=True, blank=True)
 
     meta_description = CharField(max_length=160, blank=True)
+    # Set when an admin writes meta_description: syncs then leave it alone.
+    # Clearing it in the admin hands it back to the syncs.
+    meta_description_locked = BooleanField(default=False)
 
     next_airing_episode = IntegerField(null=True, blank=True)
     next_airing_date = DateTimeField(null=True, blank=True)

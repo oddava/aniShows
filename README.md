@@ -97,6 +97,7 @@ Production uses the standalone `docker-compose.prod.yml` and is deployed by `dep
 
 ## Documentation
 
+- [Admin](docs/admin.md)
 - [Backups](docs/backups.md)
 - [Celery](docs/celery.md)
 - [API benchmarking](docs/api-benchmarking.md)

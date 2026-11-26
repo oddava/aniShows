@@ -1,60 +1,80 @@
-// Routes owned by G6 Admin. Composed by app/routes.jsx; only G6 edits this file.
+// Admin routes. Composed by app/routes.jsx. Everything under /admin is lazy, so
+// no admin code (or admin.css) ships in the public entry, and the shell only
+// loads once AdminGate has confirmed the user is staff.
 import React, { Suspense } from 'react';
 import { Navigate, Route } from 'react-router-dom';
 
 import PageLoader from '../../components/common/PageLoader';
 import lazyWithRetry from '../lazyWithRetry';
 
-// Admin shell: lazy so no admin code (or admin.css) ships in the public entry.
-// AdminLayout only loads after AdminRoute has confirmed the user is staff.
-const AdminRoute = lazyWithRetry(() => import('../../components/AdminRoute'));
-const AdminLayout = lazyWithRetry(() => import('../../components/AdminLayout'));
+const AdminGate = lazyWithRetry(() => import('../../admin/shell/AdminGate'));
+const AdminShell = lazyWithRetry(() => import('../../admin/shell/AdminShell'));
 
-const AdminDashboard = lazyWithRetry(() => import('../../pages/admin/AdminDashboard'));
-const AdminUsers = lazyWithRetry(() => import('../../pages/admin/AdminUsers'));
-const AdminBadges = lazyWithRetry(() => import('../../pages/admin/AdminBadges'));
-const AdminAnime = lazyWithRetry(() => import('../../pages/admin/AdminAnime'));
-const AdminReviews = lazyWithRetry(() => import('../../pages/admin/AdminReviews'));
-const AdminGenres = lazyWithRetry(() => import('../../pages/admin/AdminGenres'));
-const AdminStudios = lazyWithRetry(() => import('../../pages/admin/AdminStudios'));
-const AdminImportJobs = lazyWithRetry(() => import('../../pages/admin/AdminImportJobs'));
-const AdminReports = lazyWithRetry(() => import('../../pages/admin/AdminReports'));
-const AdminCharacters = lazyWithRetry(() => import('../../pages/admin/AdminCharacters'));
-const AdminStaff = lazyWithRetry(() => import('../../pages/admin/AdminStaff'));
-const AdminSettings = lazyWithRetry(() => import('../../pages/admin/AdminSettings'));
-const AdminLogs = lazyWithRetry(() => import('../../pages/admin/AdminLogs'));
-const AdminModeration = lazyWithRetry(() => import('../../pages/admin/AdminModeration'));
-const AdminSystem = lazyWithRetry(() => import('../../pages/admin/AdminSystem'));
+const page = (load) => lazyWithRetry(load);
+const Dashboard = page(() => import('../../admin/pages/Dashboard'));
+const Analytics = page(() => import('../../admin/pages/Analytics'));
+const Moderation = page(() => import('../../admin/pages/Moderation'));
+const Reviews = page(() => import('../../admin/pages/Reviews'));
+const Forums = page(() => import('../../admin/pages/Forums'));
+const Users = page(() => import('../../admin/pages/Users'));
+const UserDetail = page(() => import('../../admin/pages/UserDetail'));
+const Badges = page(() => import('../../admin/pages/Badges'));
+const Announcements = page(() => import('../../admin/pages/Announcements'));
+const Anime = page(() => import('../../admin/pages/Anime'));
+const AnimeDetail = page(() => import('../../admin/pages/AnimeDetail'));
+const Genres = page(() => import('../../admin/pages/Genres'));
+const Studios = page(() => import('../../admin/pages/Studios'));
+const Characters = page(() => import('../../admin/pages/Characters'));
+const People = page(() => import('../../admin/pages/People'));
+const SyncHealth = page(() => import('../../admin/pages/SyncHealth'));
+const Imports = page(() => import('../../admin/pages/Imports'));
+const ListImports = page(() => import('../../admin/pages/ListImports'));
+const System = page(() => import('../../admin/pages/System'));
+const Tasks = page(() => import('../../admin/pages/Tasks'));
+const Logs = page(() => import('../../admin/pages/Logs'));
+const Settings = page(() => import('../../admin/pages/Settings'));
+const AdminNotFound = page(() => import('../../admin/pages/AdminNotFound'));
 
 export const adminRoutes = (
-    <>
-        <Route
-            path="/admin"
-            element={(
-                <Suspense fallback={<PageLoader />}>
-                    <AdminRoute>
-                        <AdminLayout />
-                    </AdminRoute>
-                </Suspense>
-            )}
-        >
-            <Route index element={<AdminDashboard />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="badges" element={<AdminBadges />} />
-            <Route path="anime" element={<AdminAnime />} />
-            <Route path="reviews" element={<AdminReviews />} />
-            <Route path="genres" element={<AdminGenres />} />
-            <Route path="studios" element={<AdminStudios />} />
-            <Route path="import-jobs" element={<AdminImportJobs />} />
-            <Route path="reports" element={<AdminReports />} />
-            <Route path="characters" element={<AdminCharacters />} />
-            <Route path="staff" element={<AdminStaff />} />
-            <Route path="settings" element={<AdminSettings />} />
-            <Route path="logs" element={<AdminLogs />} />
-            <Route path="moderation" element={<AdminModeration />} />
-            <Route path="system" element={<AdminSystem />} />
-            {/* The old review-reports page became the moderation queue. */}
-            <Route path="review-reports" element={<Navigate to="/admin/moderation" replace />} />
-        </Route>
-    </>
+    <Route
+        path="/admin"
+        element={(
+            <Suspense fallback={<PageLoader />}>
+                <AdminGate>
+                    <AdminShell />
+                </AdminGate>
+            </Suspense>
+        )}
+    >
+        <Route index element={<Dashboard />} />
+        <Route path="analytics" element={<Analytics />} />
+        <Route path="moderation" element={<Moderation />} />
+        <Route path="reviews" element={<Reviews />} />
+        <Route path="forums" element={<Forums />} />
+        <Route path="users" element={<Users />} />
+        <Route path="users/:userId" element={<UserDetail />} />
+        <Route path="badges" element={<Badges />} />
+        <Route path="announcements" element={<Announcements />} />
+        <Route path="anime" element={<Anime />} />
+        <Route path="anime/:animeId" element={<AnimeDetail />} />
+        <Route path="genres" element={<Genres />} />
+        <Route path="studios" element={<Studios />} />
+        <Route path="characters" element={<Characters />} />
+        <Route path="people" element={<People />} />
+        <Route path="sync-health" element={<SyncHealth />} />
+        <Route path="imports" element={<Imports />} />
+        <Route path="list-imports" element={<ListImports />} />
+        <Route path="system" element={<System />} />
+        <Route path="tasks" element={<Tasks />} />
+        <Route path="logs" element={<Logs />} />
+        <Route path="settings" element={<Settings />} />
+
+        {/* Old admin addresses, so bookmarks keep working. */}
+        <Route path="reports" element={<Navigate to="/admin/analytics" replace />} />
+        <Route path="import-jobs" element={<Navigate to="/admin/imports" replace />} />
+        <Route path="staff" element={<Navigate to="/admin/people" replace />} />
+        <Route path="review-reports" element={<Navigate to="/admin/moderation" replace />} />
+
+        <Route path="*" element={<AdminNotFound />} />
+    </Route>
 );

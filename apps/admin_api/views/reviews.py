@@ -14,6 +14,7 @@ from ..permissions import AdminPolicyMixin
 from ..services.audit import record_admin_action
 from ..services.moderation_service import (
     LEGACY_OUTCOME_RESOLVE,
+    OPEN_STATUSES,
     OUTCOME_DISMISS,
     ModerationError,
     parse_queue_filters,
@@ -21,6 +22,9 @@ from ..services.moderation_service import (
     resolve_review,
     serialize_reported_page,
 )
+from ..services.query_helpers import related_count
+from ..services.review_removal import notify_review_removed
+from ..services.user_admin_service import AdminUserActionError, clean_reason
 
 
 class ReviewFilter(FilterSet):
@@ -28,10 +32,12 @@ class ReviewFilter(FilterSet):
     rating = NumberFilter(field_name="rating")
     min_rating = NumberFilter(field_name="rating", lookup_expr="gte")
     max_rating = NumberFilter(field_name="rating", lookup_expr="lte")
+    user = NumberFilter(field_name="user_id")
+    anime = NumberFilter(field_name="anime_id")
 
     class Meta:
         model = Review
-        fields = ["has_spoilers", "rating"]
+        fields = ["has_spoilers", "rating", "user", "anime"]
 
 
 class AdminReviewViewSet(
@@ -47,15 +53,45 @@ class AdminReviewViewSet(
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ReviewFilter
     search_fields = ["text", "user__username", "anime__title"]
-    ordering_fields = ["created_at", "rating"]
+    ordering_fields = ["created_at", "rating", "report_count"]
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        return Review.objects.select_related("user", "anime")
+        return Review.objects.select_related("user", "anime").annotate(
+            report_count=related_count(ReviewReport, "review", status__in=OPEN_STATUSES)
+        )
+
+    @action(detail=True, methods=["post"])
+    def toggle_spoiler(self, request, pk=None):
+        """Flip the spoiler flag (``save()``, so the review signals run)."""
+        pk = self.get_object().pk
+        with transaction.atomic():
+            review = (
+                Review.objects.select_for_update(of=("self",))
+                .select_related("user", "anime")
+                .get(pk=pk)
+            )
+            previous = review.has_spoilers
+            review.has_spoilers = not previous
+            review.save(update_fields=["has_spoilers", "updated_at"])
+            record_admin_action(
+                request,
+                action=AuditLog.ActionType.UPDATE,
+                entity_type="Review",
+                entity_id=review.id,
+                entity_repr=f"{review.user.username} on {review.anime.title}",
+                previous={"has_spoilers": previous},
+                new={"has_spoilers": review.has_spoilers},
+            )
+        return Response(self.get_serializer(self.get_queryset().get(pk=pk)).data)
 
     def destroy(self, request, *args, **kwargs):
-        """Delete a review (``Review.delete()``, so G5's signals run)."""
+        """Remove a review with a reason; the author is told (``Review.delete()``, so signals run)."""
         review = self.get_object()
+        try:
+            reason = clean_reason(request.data.get("reason"))
+        except AdminUserActionError as exc:
+            return Response({"detail": exc.message}, status=exc.status_code)
         review_id = review.id
         snapshot = {
             "author": review.user.username,
@@ -72,8 +108,10 @@ class AdminReviewViewSet(
                 entity_id=review_id,
                 entity_repr=f"{snapshot['author']} on {snapshot['anime']}",
                 previous=snapshot,
+                reason=reason,
             )
-        return Response({"message": f"Review {review_id} deleted successfully."})
+            notify_review_removed(review, reason)
+        return Response({"message": "Review removed. The author has been told why."})
 
     @action(detail=False, methods=["get"])
     def reports(self, request):

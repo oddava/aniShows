@@ -1,8 +1,8 @@
 from django.http import JsonResponse
 from rest_framework.exceptions import AuthenticationFailed
-from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
+from ...users.authentication import RevocableJWTAuthentication
 from ..services.admin_settings_service import is_maintenance_mode_enabled
 
 MAINTENANCE_RETRY_AFTER_SECONDS = "300"
@@ -44,6 +44,7 @@ class SiteControlMiddleware:
             "/api/v1/auth/password-reset-confirm/",
             "/api/v1/auth/resend-verification/",
             "/api/v1/users/me/",
+            "/api/v1/announcements/active/",
         }
 
     def __call__(self, request):
@@ -67,7 +68,7 @@ class SiteControlMiddleware:
     def _is_jwt_staff(self, request) -> bool:
         """Whether a valid Bearer token belongs to an active staff account."""
         try:
-            result = JWTAuthentication().authenticate(request)
+            result = RevocableJWTAuthentication().authenticate(request)
         except (AuthenticationFailed, InvalidToken, TokenError):
             return False
         if result is None:
