@@ -12,7 +12,12 @@ from .auth import (
 from .badges import UserBadgeViewSet
 from .follows import FollowViewSet
 from .lists import UserAnimeListViewSet
-from .users import PublicUserProfileViewSet, UserProfileView, UserStatsView
+from .users import (
+    PublicUserProfileViewSet,
+    UserCompatibilityView,
+    UserProfileView,
+    UserStatsView,
+)
 
 __all__ = [
     "AccountManagementViewSet",
@@ -27,6 +32,7 @@ __all__ = [
     "UserActivityViewSet",
     "UserAnimeListViewSet",
     "UserBadgeViewSet",
+    "UserCompatibilityView",
     "UserProfileView",
     "UserStatsView",
     "WebSocketTicketView",

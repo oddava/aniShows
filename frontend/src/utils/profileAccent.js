@@ -153,3 +153,4 @@ export function getProfileAccentTheme(value) {
 }
 
 export { DEFAULT_PROFILE_PRIMARY_COLOR };
+

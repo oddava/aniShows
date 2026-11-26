@@ -31,7 +31,7 @@ a:focus-visible {
   box-shadow: 0 0 0 4px var(--color-focus-ring) !important;
 }
 
-/* Fields are borderless; their focus is a lighter fill (index.css). */
+/* Fields are borderless and keep their fill while focused (index.css). */
 input:focus,
 textarea:focus,
 select:focus,

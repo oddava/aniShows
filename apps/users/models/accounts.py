@@ -73,6 +73,14 @@ class UserProfile(Model):
         default="#8b5cf6",
         help_text="Hex color for profile accent (e.g., #8b5cf6)",
     )
+    # Self-expression (the profile header): all optional, blank when unset.
+    display_name = CharField(max_length=40, blank=True, default="")
+    pronouns = CharField(max_length=30, blank=True, default="")
+    location = CharField(max_length=40, blank=True, default="")
+    status_emoji = CharField(max_length=16, blank=True, default="")
+    status_text = CharField(max_length=80, blank=True, default="")
+    # Overview sections the owner chose to hide (keys in profile_expression.SECTIONS).
+    hidden_sections = JSONField(default=list, blank=True)
     preferred_timezone = CharField(
         max_length=64,
         blank=True,

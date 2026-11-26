@@ -21,6 +21,23 @@ import {
     toComparableSocialLinks,
 } from './settingsUtils';
 
+export const EXPRESSION_FIELDS = [
+    'display_name',
+    'pronouns',
+    'location',
+    'status_emoji',
+    'status_text',
+];
+const EMPTY_EXPRESSION = { ...Object.fromEntries(EXPRESSION_FIELDS.map((field) => [field, ''])), hidden_sections: [] };
+
+/** The saved expression fields of `user`, blanks for missing ones. */
+function expressionFrom(user) {
+    return {
+        ...Object.fromEntries(EXPRESSION_FIELDS.map((field) => [field, String(user?.[field] || '').trim()])),
+        hidden_sections: Array.isArray(user?.hidden_sections) ? [...user.hidden_sections].sort() : [],
+    };
+}
+
 /**
  * Profile-tab form state for the Settings page: the editable fields, the image
  * crop modal, the timezone picker and the save/privacy handlers. It lives in
@@ -38,6 +55,9 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
     const [isPrivate, setIsPrivate] = useState(false);
     const [profilePrimaryColor, setProfilePrimaryColor] = useState(DEFAULT_PROFILE_PRIMARY_COLOR);
     const [preferredTimezone, setPreferredTimezone] = useState(AUTO_TIMEZONE_VALUE);
+    // Header self-expression: display name, pronouns, location, status, second colour.
+    const [expression, setExpression] = useState(EMPTY_EXPRESSION);
+    const setExpressionField = (field, value) => setExpression((current) => ({ ...current, [field]: value }));
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileError, setProfileError] = useState('');
     const [profileSuccess, setProfileSuccess] = useState('');
@@ -104,6 +124,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             setIsPrivate(user.is_private || false);
             setProfilePrimaryColor(normalizeProfilePrimaryColor(user.profile_primary_color));
             setPreferredTimezone(normalizeTimeZonePreference(user.preferred_timezone));
+            setExpression(expressionFrom(user));
         }
     }, [user]);
 
@@ -119,6 +140,52 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
 
     const savedBio = decodeHtmlEntities(user?.bio || '');
     const isBioEdited = bio !== savedBio;
+
+    // What differs from the saved profile. Save sends exactly this; the
+    // footer shows "Unsaved changes" while it is non-empty.
+    const pendingChanges = (nonEmptyLinks) => {
+        // Check if anything actually changed
+        const normalizedUserBio = decodeHtmlEntities(user.bio || '');
+        const normalizedCurrentProfileColor = normalizeProfilePrimaryColor(user.profile_primary_color);
+        const normalizedSelectedProfileColor = normalizeProfilePrimaryColor(profilePrimaryColor);
+        const normalizedCurrentTimezone = normalizeTimeZonePreference(user.preferred_timezone);
+        const normalizedSelectedTimezone = normalizeTimeZonePreference(preferredTimezone);
+        const linksChanged = socialLinksChanged(nonEmptyLinks, user.social_links);
+        const savedExpression = expressionFrom(user);
+        const changedExpression = EXPRESSION_FIELDS.filter(
+            (field) => (expression[field] || '').trim() !== savedExpression[field]
+        );
+        const hiddenSections = [...(expression.hidden_sections || [])].sort();
+        const sectionsChanged = hiddenSections.join(',') !== savedExpression.hidden_sections.join(',');
+        const hasChanges = (
+            changedExpression.length > 0 ||
+            sectionsChanged ||
+            bio !== normalizedUserBio ||
+            username.trim() !== user.username ||
+            linksChanged ||
+            isPrivate !== user.is_private ||
+            normalizedSelectedProfileColor !== normalizedCurrentProfileColor ||
+            normalizedSelectedTimezone !== normalizedCurrentTimezone ||
+            avatarFile !== null ||
+            bannerFile !== null ||
+            removeBanner ||
+            removeAvatar
+        );
+        return {
+            hasChanges,
+            normalizedUserBio,
+            linksChanged,
+            changedExpression,
+            sectionsChanged,
+            hiddenSections,
+            normalizedSelectedProfileColor,
+            normalizedSelectedTimezone,
+            normalizedCurrentTimezone,
+        };
+    };
+    const hasUnsavedChanges = Boolean(user) && pendingChanges(
+        socialLinks.filter((link) => link.platform?.trim() || link.value?.trim())
+    ).hasChanges;
 
     const handleSaveProfile = async () => {
         setIsSavingProfile(true);
@@ -147,25 +214,17 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             return;
         }
 
-        // Check if anything actually changed
-        const normalizedUserBio = decodeHtmlEntities(user.bio || '');
-        const normalizedCurrentProfileColor = normalizeProfilePrimaryColor(user.profile_primary_color);
-        const normalizedSelectedProfileColor = normalizeProfilePrimaryColor(profilePrimaryColor);
-        const normalizedCurrentTimezone = normalizeTimeZonePreference(user.preferred_timezone);
-        const normalizedSelectedTimezone = normalizeTimeZonePreference(preferredTimezone);
-        const linksChanged = socialLinksChanged(nonEmptyLinks, user.social_links);
-        const hasChanges = (
-            bio !== normalizedUserBio ||
-            username.trim() !== user.username ||
-            linksChanged ||
-            isPrivate !== user.is_private ||
-            normalizedSelectedProfileColor !== normalizedCurrentProfileColor ||
-            normalizedSelectedTimezone !== normalizedCurrentTimezone ||
-            avatarFile !== null ||
-            bannerFile !== null ||
-            removeBanner ||
-            removeAvatar
-        );
+        const {
+            hasChanges,
+            normalizedUserBio,
+            linksChanged,
+            changedExpression,
+            sectionsChanged,
+            hiddenSections,
+            normalizedSelectedProfileColor,
+            normalizedSelectedTimezone,
+            normalizedCurrentTimezone,
+        } = pendingChanges(nonEmptyLinks);
 
         if (!hasChanges) {
             setProfileSuccess('No changes to save');
@@ -190,6 +249,8 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             }
 
             if (isPrivate !== user.is_private) formData.append('is_private', isPrivate);
+            changedExpression.forEach((field) => formData.append(field, (expression[field] || '').trim()));
+            if (sectionsChanged) formData.append('hidden_sections', JSON.stringify(hiddenSections));
             // Always send the selected profile color so stale client state cannot drop the field.
             formData.append('profile_primary_color', normalizedSelectedProfileColor);
             if (normalizedSelectedTimezone !== normalizedCurrentTimezone) {
@@ -269,6 +330,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
         isPrivate,
         profilePrimaryColor, setProfilePrimaryColor,
         preferredTimezone, setPreferredTimezone,
+        expression, setExpressionField,
         isSavingProfile,
         profileError,
         profileSuccess,
@@ -281,6 +343,7 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
         resolvedTimezone,
         timezonePreview,
         isBioEdited,
+        hasUnsavedChanges,
         handleSaveProfile,
         handlePrivacyToggle,
     };

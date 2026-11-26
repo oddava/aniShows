@@ -11,6 +11,7 @@ from ...shared.text import normalize_bio, normalize_primary_color
 from ..models import UserBadge, UserStats
 from .avatar_service import get_user_avatar_url
 from .cache import get_user_profile_cache_key
+from .profile_expression import expression_payload, normalize_expression_payload
 
 User = get_user_model()
 
@@ -174,6 +175,7 @@ def _build_profile_data(user, stats_data):
         "pending_email": (profile.pending_email or None) if profile else None,
         "is_staff": user.is_staff,
         "is_superuser": user.is_superuser,
+        **expression_payload(profile),
     }
 
     if stats_data:
@@ -192,6 +194,7 @@ def _normalize_profile_payload(data):
         normalized.get("profile_primary_color")
     )
     normalized["show_adult_content"] = bool(normalized.get("show_adult_content", False))
+    normalize_expression_payload(normalized)
     normalized["preferred_timezone"] = _normalize_preferred_timezone(
         normalized.get("preferred_timezone")
     )

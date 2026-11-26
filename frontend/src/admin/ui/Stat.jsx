@@ -47,7 +47,7 @@ export function StatCard({ label, value, hint, change, invertChange = false, to:
 
     const classes = 'group block rounded-[var(--radius-lg)] bg-[var(--ink-1)] p-4 sm:p-5';
     if (to) {
-        return <Link to={to} className={`${classes} transition-colors hover:bg-[var(--ink-2)]`}>{body}</Link>;
+        return <Link to={to} className={classes}>{body}</Link>;
     }
     return <div className={classes}>{body}</div>;
 }

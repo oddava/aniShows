@@ -101,6 +101,7 @@ const RichTextEditor = ({
     showPreviewWhenEditing = false,
     showPreviewWhenDirty = false,
     isDirty = false,
+    showCharCount = true,
     editorMinRows = 10,
     editorMaxRows,
     editorTextClassName = "",
@@ -319,9 +320,11 @@ const RichTextEditor = ({
             </div>
 
             {/* Footer Status Bar: hidden on mobile if in preview mode (to save space), visible on desktop */}
-            <div className={`px-4 py-2 text-xs text-gray-500 flex justify-between items-center md:flex ${activeTab === 'write' ? 'flex' : 'hidden'}`}>
-                <span>{value.length} chars</span>
-            </div>
+            {showCharCount && (
+                <div className={`px-4 py-2 text-xs text-gray-500 flex justify-between items-center md:flex ${activeTab === 'write' ? 'flex' : 'hidden'}`}>
+                    <span>{value.length} chars</span>
+                </div>
+            )}
         </div>
     );
 };

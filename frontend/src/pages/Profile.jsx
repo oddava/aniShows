@@ -283,19 +283,25 @@ export default function Profile({ forcedUsername }) {
             selectedPrimaryColor || DEFAULT_PROFILE_PRIMARY_COLOR
         );
 
-        // The profile colour decorates the profile (banner, heatmap, charts);
-        // controls keep the fixed system colours.
-        root.style.setProperty('--profile-accent', baseColor);
-        root.style.setProperty('--profile-accent-light', lightColor);
-        root.style.setProperty('--profile-secondary', darkColor);
+        // The profile colour decorates the profile (banner fallback, heatmap,
+        // charts); controls keep the fixed system colours.
+        const vars = {
+            '--profile-accent': baseColor,
+            '--profile-accent-light': lightColor,
+            '--profile-secondary': darkColor,
+        };
+        Object.entries(vars).forEach(([name, value]) => root.style.setProperty(name, value));
 
         return () => {
-            const root = document.documentElement;
-            root.style.removeProperty('--profile-accent');
-            root.style.removeProperty('--profile-accent-light');
-            root.style.removeProperty('--profile-secondary');
+            Object.keys(vars).forEach((name) => root.style.removeProperty(name));
         };
     }, [selectedPrimaryColor]);
+
+    // The overview's status legend and "see all" open the list at a status.
+    const openListStatus = useCallback((status) => {
+        if (status) setListStatusFilter(status);
+        handleTabChange('anime_list');
+    }, [handleTabChange]);
 
     // Each tab switch fades the new tab in (opacity only).
     const tabFade = useSwitchFade(activeTab);
@@ -343,7 +349,9 @@ export default function Profile({ forcedUsername }) {
 
     return (
         <ProfileErrorBoundary username={targetUsername}>
-            <div className="min-h-screen overflow-x-hidden pb-20">
+            {/* overflow-x: clip, not hidden: a hidden overflow would make this
+                the tab bar's scroll container and stop it sticking. */}
+            <div className="profile-page min-h-screen overflow-x-clip pb-20">
                 <ProfileHeader
                     displayUser={displayUser}
                     isPublicView={isPublicView}
@@ -355,16 +363,19 @@ export default function Profile({ forcedUsername }) {
                 <ProfileTabs
                     activeTab={activeTab}
                     onTabChange={handleTabChange}
+                    displayUser={displayUser}
                 />
 
-                <div key={activeTab} className={`page-container mt-8 md:mt-10 ${tabFade}`}>
+                <div key={activeTab} className={`page-container mt-5 md:mt-6 ${tabFade}`}>
                     {activeTab === 'overview' ? (
                         <OverviewTab
                             displayUser={displayUser}
                             targetUsername={targetUsername}
                             isPrivate={isPrivate}
                             onTabChange={handleTabChange}
+                            onOpenListStatus={openListStatus}
                             isOwnProfile={isOwnProfile}
+                            viewerSignedIn={isAuthenticated}
                         />
                     ) : (
                         <ProfileContent
@@ -415,37 +426,38 @@ function ProfileSkeleton({ activeTab = 'overview' }) {
     const bar = 'rounded bg-[var(--ink-2)] animate-pulse';
 
     return (
-        <div className="min-h-screen overflow-x-hidden pb-20" aria-hidden="true">
-            <div className="page-container pt-24 md:pt-32">
-                <div className="flex items-start gap-4 sm:gap-6">
-                    <div className="h-16 w-16 shrink-0 rounded-full bg-[var(--ink-2)] animate-pulse sm:h-24 sm:w-24" />
-                    <div className="min-w-0 flex-1">
-                        <div className={`h-10 w-48 ${bar}`} />
-                        <div className={`mt-3 h-4 w-full max-w-md ${bar}`} />
-                        <div className={`mt-3 h-4 w-40 ${bar}`} />
+        <div className="profile-page min-h-screen overflow-x-clip pb-20" aria-hidden="true">
+            <div className="profile-hero__banner w-full bg-[var(--ink-1)] animate-pulse" />
+            <div className="page-container">
+                <div className="profile-hero__identity flex items-end gap-4 sm:gap-6">
+                    <div className="h-[6.5rem] w-[6.5rem] shrink-0 rounded-full border-4 border-[var(--ink-0)] bg-[var(--ink-2)] sm:h-[9.5rem] sm:w-[9.5rem] lg:h-[10.5rem] lg:w-[10.5rem]" />
+                    <div className="min-w-0 flex-1 pb-3">
+                        <div className={`h-9 w-56 max-w-full ${bar}`} />
+                        <div className={`mt-3 h-4 w-32 ${bar}`} />
                     </div>
                 </div>
+                <div className={`mt-5 h-9 w-72 max-w-full rounded-2xl ${bar}`} />
+                <div className={`mt-4 h-4 w-48 ${bar}`} />
             </div>
 
-            <div className="page-container mt-10 md:mt-12">
-                <div className="flex gap-6 py-3 md:gap-8">
-                    {['w-16', 'w-20', 'w-14', 'w-16', 'w-14'].map((width, index) => (
-                        <div key={index} className={`h-4 ${width} ${bar}`} />
+            <div className="page-container mt-8">
+                <div className="flex gap-2 py-2">
+                    {['w-24', 'w-28', 'w-24', 'w-20', 'w-20'].map((width, index) => (
+                        <div key={index} className={`h-10 ${width} rounded-lg bg-[var(--ink-1)] animate-pulse`} />
                     ))}
                 </div>
             </div>
 
-            <div className="page-container mt-8 md:mt-10">
+            <div className="page-container mt-5">
                 {activeTab === 'overview' ? (
-                    <div className="space-y-4">
-                        <div className="panel space-y-4">
-                            <div className={`h-5 w-24 ${bar}`} />
-                            {Array.from({ length: 4 }, (_, index) => (
-                                <div key={index} className="flex items-center gap-4 pb-4">
-                                    <div className="h-[72px] w-12 rounded-md bg-[var(--ink-2)] animate-pulse" />
-                                    <div className={`h-4 w-1/2 ${bar}`} />
-                                </div>
-                            ))}
+                    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_21rem] lg:gap-5 xl:grid-cols-[minmax(0,1fr)_23rem]">
+                        <div className="space-y-5">
+                            <div className="profile-card h-[9.5rem] animate-pulse" />
+                            <div className="profile-card h-72 animate-pulse" />
+                        </div>
+                        <div className="space-y-5">
+                            <div className="profile-card h-48 animate-pulse" />
+                            <div className="profile-card h-64 animate-pulse" />
                         </div>
                     </div>
                 ) : (

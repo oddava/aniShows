@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -50,6 +50,10 @@ export default function Navbar() {
 
     // Auto-hide navbar logic
     const isVisible = useNavbarAutoHide({ isSearchExpanded, isProfileOpen, showSuggestions, isSearching });
+    // Sticky bars further down (the profile tabs) sit under the bar while it shows.
+    useEffect(() => {
+        document.documentElement.dataset.desktopNav = isVisible ? 'shown' : 'hidden';
+    }, [isVisible]);
 
     const currentUserProfilePath = user?.username ? `/u/${user.username}` : '/profile';
 

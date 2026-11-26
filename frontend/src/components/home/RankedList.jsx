@@ -49,7 +49,7 @@ export default function RankedList({ id, title, viewAllTo, items, isLoading, isE
                             <li key={anime.id}>
                                 <Link
                                     to={`/anime/${anime.slug}`}
-                                    className="group -mx-3 flex items-center gap-4 rounded-[var(--radius-md)] px-3 py-2.5 transition-colors hover:bg-white/[0.03]"
+                                    className="group -mx-3 flex items-center gap-4 rounded-[var(--radius-md)] px-3 py-2.5"
                                 >
                                     <span className="w-5 shrink-0 text-right text-lg font-semibold text-[var(--text-3)] tabular">{index + 1}</span>
                                     <img

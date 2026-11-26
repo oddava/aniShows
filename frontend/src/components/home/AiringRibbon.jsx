@@ -92,7 +92,7 @@ export default function AiringRibbon({ everyone = false }) {
                                         <li key={anime.id}>
                                             <Link
                                                 to={`/anime/${anime.slug}`}
-                                                className={`group flex gap-2.5 rounded-[var(--radius-md)] p-1 transition-colors hover:bg-white/[0.05] ${aired ? 'opacity-60 hover:opacity-100' : ''}`}
+                                                className={`group flex gap-2.5 rounded-[var(--radius-md)] p-1 transition-opacity ${aired ? 'opacity-60 hover:opacity-100' : ''}`}
                                             >
                                                 <img
                                                     src={getOptimizedImageUrl(anime, 'cover', 'small')}

@@ -71,7 +71,7 @@ export default function GuestLanding() {
                                 onError={(event) => applyImageFallback(event, getImageFallbackUrl(featured, 'banner'))}
                                 alt=""
                                 fetchPriority="high"
-                                className="h-full w-full bg-[var(--ink-2)] object-cover transition-[filter] duration-200 hover:brightness-110"
+                                className="h-full w-full bg-[var(--ink-2)] object-cover"
                             />
                         </Link>
                         <div className="flex flex-col gap-1 p-5 sm:flex-row sm:items-end sm:justify-between sm:gap-6 md:px-6">

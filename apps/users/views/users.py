@@ -133,6 +133,37 @@ class UserProfileView(APIView):
         return self.get(request)
 
 
+class UserCompatibilityView(APIView):
+    """``GET users/<username>/compatibility/``: how close the viewer's taste is to theirs."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [throttling.PublicUserProfileRateThrottle]
+
+    def get(self, request, username):
+        from django.http import Http404
+
+        from ...animes.serializers.anime import AnimeMinimalSerializer
+        from ..services.compatibility_service import compute_compatibility
+        from ..services.profile_visibility import get_visible_user_or_404
+
+        try:
+            target = get_visible_user_or_404(username, request.user)
+        except Http404:
+            return error_response("User not found", code="user_not_found", status_code=404)
+        if target.pk == request.user.pk:
+            return error_response(
+                "Compatibility compares two different people.",
+                code="compatibility_self",
+                status_code=400,
+            )
+
+        def serialize(anime):
+            return AnimeMinimalSerializer(anime, many=True, context={"request": request}).data
+
+        result = compute_compatibility(request.user, target, serialize_anime=serialize)
+        return Response(result.data)
+
+
 class UserStatsView(APIView):
     """Get detailed user statistics (separate endpoint for heavy calculations)."""
 

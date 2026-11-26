@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import SmartLinkInput from '../SmartLinkInput';
 import { getSocialLinkDuplicateKey } from './settingsUtils';
 
@@ -6,26 +7,30 @@ export default function SocialLinksEditor({ socialLinks, setSocialLinks, isSavin
     return (
         <div>
             <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="flex items-baseline gap-2">
-                    <h3 className="text-sm font-medium text-[var(--text-1)]">Social links</h3>
-                    <span className="text-sm text-[var(--text-3)] tabular">
-                        {socialLinks.length}/5
-                    </span>
+                <h2 className="section-title">Social links</h2>
+                <div className="flex items-center gap-3">
+                    <span className="text-sm text-[var(--text-3)] tabular">{socialLinks.length}/5</span>
+                    {socialLinks.length < 5 && (
+                        <button
+                            type="button"
+                            onClick={() => setSocialLinks([...socialLinks, { platform: '', value: '' }])}
+                            className="btn-secondary text-sm"
+                        >
+                            Add link
+                        </button>
+                    )}
                 </div>
-                {socialLinks.length < 5 && (
-                    <button
-                        type="button"
-                        onClick={() => setSocialLinks([...socialLinks, { platform: '', value: '' }])}
-                        className="btn-secondary text-sm"
-                    >
-                        Add link
-                    </button>
-                )}
             </div>
 
-            <div className="space-y-6 max-w-2xl">
+            {socialLinks.length > 0 && (
+                <div aria-hidden="true" className="mb-1.5 hidden gap-3 text-xs font-medium text-[var(--text-3)] sm:flex">
+                    <span className="w-32 shrink-0">Platform</span>
+                    <span>Link</span>
+                </div>
+            )}
+            <div className="space-y-3">
                 {socialLinks.length === 0 ? (
-                    <p className="text-sm text-[var(--text-2)]">No social links added yet.</p>
+                    <p className="text-sm text-[var(--text-2)]">Links you add show under your name.</p>
                 ) : (
                     socialLinks.map((link, index) => {
                         const currentKey = getSocialLinkDuplicateKey(link);
@@ -36,25 +41,10 @@ export default function SocialLinksEditor({ socialLinks, setSocialLinks, isSavin
 
                         return (
                             <div key={index}>
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-sm text-[var(--text-2)]">
-                                        Link {index + 1}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (confirm('Remove this link?')) {
-                                                setSocialLinks(socialLinks.filter((_, i) => i !== index));
-                                            }
-                                        }}
-                                        className="btn-ghost -mr-3 text-sm"
-                                        aria-label={`Remove link ${index + 1}`}
-                                    >
-                                        Remove
-                                    </button>
-                                </div>
-
+                                <div className="flex items-start gap-2">
+                                <div className="min-w-0 flex-1">
                                 <SmartLinkInput
+                                    labelClassName="mb-1.5 block text-xs font-medium text-[var(--text-3)] sm:sr-only"
                                     platform={link.platform}
                                     value={link.value}
                                     onChange={(newValue) => {
@@ -69,6 +59,21 @@ export default function SocialLinksEditor({ socialLinks, setSocialLinks, isSavin
                                     }}
                                     disabled={isSavingProfile}
                                 />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (confirm('Remove this link?')) {
+                                            setSocialLinks(socialLinks.filter((_, i) => i !== index));
+                                        }
+                                    }}
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--text-3)] transition-colors hover:bg-white/[0.05] hover:text-[var(--danger)] max-sm:mt-6"
+                                    aria-label={`Remove link ${index + 1}`}
+                                    title="Remove link"
+                                >
+                                    <X aria-hidden="true" className="h-4 w-4" />
+                                </button>
+                                </div>
 
                                 {isDuplicate && (
                                     <p className="mt-2 text-sm text-[var(--danger)]">Duplicate link detected</p>

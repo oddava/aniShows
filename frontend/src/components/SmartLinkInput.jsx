@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Globe, Link2 } from 'lucide-react';
+import { AlertCircle, Globe } from 'lucide-react';
 
 // Platform icons as simple SVG components
 const PlatformIcons = {
@@ -168,7 +168,8 @@ const SmartLinkInput = ({
     onChange,
     onPlatformChange,
     placeholder = "Enter username or URL",
-    disabled = false
+    disabled = false,
+    labelClassName = 'block text-xs font-medium text-gray-400 mb-1.5',
 }) => {
     const [localValue, setLocalValue] = useState(value || '');
     const [localPlatform, setLocalPlatform] = useState(platform || '');
@@ -226,14 +227,13 @@ const SmartLinkInput = ({
 
     const normalizedUrl = normalizeUrl(localPlatform, localValue);
     const detectedPlatform = detectPlatform(normalizedUrl) || localPlatform?.toLowerCase();
-    const showPreview = normalizedUrl && isValidUrl(normalizedUrl);
 
     return (
         <div className="space-y-3">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-3">
                 {/* Platform Selector */}
                 <div className="w-full sm:w-32 shrink-0">
-                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                    <label className={labelClassName}>
                         Platform
                     </label>
                     <div className="relative">
@@ -255,7 +255,7 @@ const SmartLinkInput = ({
 
                 {/* URL Input */}
                 <div className="flex-1">
-                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                    <label className={labelClassName}>
                         Link
                     </label>
                     <div className="relative">
@@ -273,11 +273,7 @@ const SmartLinkInput = ({
 
                         {/* Validation icon */}
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                            {error ? (
-                                <AlertCircle className="w-4 h-4 text-red-400" />
-                            ) : showPreview ? (
-                                <Link2 className="w-4 h-4 text-green-400" />
-                            ) : null}
+                            {error && <AlertCircle className="w-4 h-4 text-red-400" />}
                         </div>
                     </div>
 
@@ -291,21 +287,6 @@ const SmartLinkInput = ({
                 </div>
             </div>
 
-            {/* Preview */}
-            {showPreview && (
-                <div className="p-3 bg-dark-100 rounded-lg">
-                    <div className="flex items-center gap-3">
-                        <div className="shrink-0 text-gray-400">
-                            {getPlatformIcon(detectedPlatform)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-xs text-gray-300 truncate">
-                                {normalizedUrl}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

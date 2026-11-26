@@ -49,7 +49,7 @@ function Banner({ anime, size, className = '', eager = false }) {
             alt=""
             loading={eager ? 'eager' : 'lazy'}
             fetchPriority={eager ? 'high' : undefined}
-            className={`h-full w-full bg-[var(--ink-2)] object-cover transition-[filter] duration-200 hover:brightness-110 ${className}`}
+            className={`h-full w-full bg-[var(--ink-2)] object-cover ${className}`}
         />
     );
 }
@@ -183,7 +183,7 @@ function AiringSoonRow({ row, timezone }) {
     });
     const total = knownEpisodeTotal(anime);
     return (
-        <li className="-mx-3 flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 transition-colors hover:bg-white/[0.03]">
+        <li className="-mx-3 flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2">
             <Link to={`/anime/${anime.slug}`} className="group flex min-w-0 flex-1 items-center gap-4">
                 <img
                     src={getOptimizedImageUrl(anime, 'cover', 'small')}
