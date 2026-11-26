@@ -24,5 +24,4 @@ export {
     badgeApi,
     staffFavoriteApi,
 } from './modules/user';
-export { adminBadgeApi } from './modules/admin';
 export { forumsApi } from './modules/forums';

@@ -27,7 +27,7 @@ export default function CategoryRow({
                 <div className="flex md:grid md:grid-cols-3 lg:grid-cols-6 anime-card-row-gap overflow-x-auto md:overflow-visible scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0 pb-4 md:pb-0 snap-x snap-mandatory md:snap-none scroll-px-4 overscroll-x-contain">
                     {isLoading ? (
                         Array(skeletonCount).fill(0).map((_, i) => (
-                            <div key={i} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full snap-start">
+                            <div key={`sk-${i}`} className="flex-shrink-0 w-[140px] xs:w-[160px] md:w-auto h-full snap-start">
                                 <AnimeCardSkeleton />
                             </div>
                         ))
@@ -37,7 +37,9 @@ export default function CategoryRow({
                                 <AnimeCard
                                     anime={anime}
                                     titleLanguage={titleLanguage}
+                                    index={index}
                                     priority={index < eagerCount}
+                                    eagerFirstSix={false}
                                     showMeta
                                 />
                             </div>

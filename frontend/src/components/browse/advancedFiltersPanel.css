@@ -1,0 +1,65 @@
+/* "More filters" (AdvancedFiltersPanel). Desktop: an overlay under the
+   toolbar that settles in from -6px and fades out, so the results under it
+   never move. Phones: a full-screen sheet that rises and sinks. Transform
+   and opacity only. Exit lengths match usePresence in the component
+   (desktop 140ms, phones 220ms). */
+.afp-panel {
+  animation: afp-in 240ms var(--ease-glide);
+}
+
+[data-state="closing"] > .afp-panel {
+  animation: afp-out 140ms ease-in forwards;
+}
+
+/* A closing panel never catches clicks meant for what is under it. */
+.afp-root[data-state="closing"] {
+  pointer-events: none;
+}
+
+@keyframes afp-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes afp-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (max-width: 639px) {
+  .afp-panel {
+    animation: afp-sheet-in 360ms var(--ease-glide);
+  }
+
+  [data-state="closing"] > .afp-panel {
+    animation: afp-sheet-out 220ms var(--ease-out) forwards;
+  }
+
+  /* The sheet's own page-coloured backdrop goes with it. */
+  .afp-root[data-state="closing"] {
+    animation: afp-out 220ms ease-in forwards;
+  }
+}
+
+@keyframes afp-sheet-in {
+  from { opacity: 0; transform: translateY(32px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes afp-sheet-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(32px); }
+}
+
+/* A select's menu on its way out lets clicks through. */
+.afp-menu[data-state="closing"] {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .afp-panel,
+  .afp-root,
+  .afp-menu {
+    animation: none !important;
+  }
+}

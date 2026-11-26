@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, Pencil, Plus, RotateCcw, Star } from 'lucide-react';
 import useListEntryMutation from '../../hooks/useListEntryMutation';
+import usePresence from '../../hooks/usePresence';
 import { LIST_STATUSES } from '../../utils/listStatus';
 import { airedEpisodeCount, knownEpisodeTotal } from '../../utils/episodes';
 import QuickAdd from '../ui/QuickAdd';
@@ -49,6 +50,10 @@ export default function TrackingPanel({
         // Scored, or no longer Completed (Keep watching, Undo): the prompt goes.
         if (entry.score > 0 || entry.status !== 'Completed') setJustCompleted(false);
     }, [entry.score, entry.status]);
+    const showScoreRow = scoreOpen || justCompleted;
+    // The score drawer stays mounted through its 250 ms close, then leaves
+    // the DOM, so nothing in it is reachable while it is shut.
+    const scoreDrawer = usePresence(showScoreRow, 140);
 
     if (!isAuthenticated) {
         return (
@@ -78,8 +83,7 @@ export default function TrackingPanel({
         setJustCompleted(false);
     };
 
-    const showScoreRow = scoreOpen || justCompleted;
-    const iconButton = 'flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-white/[0.07] text-gray-300 transition-colors hover:bg-white/[0.11] hover:text-white';
+    const iconButton = 'press flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-white/[0.07] text-gray-300 transition-colors hover:bg-white/[0.11] hover:text-white';
 
     return (
         <div className="space-y-2.5" data-title="Tracking">
@@ -106,7 +110,11 @@ export default function TrackingPanel({
                     title={isFavorite ? 'In your favourites' : 'Add to favourites'}
                     className={`${iconButton} ${isFavorite ? '!text-[var(--status-dropped)]' : ''}`}
                 >
-                    <Heart aria-hidden="true" className={`h-[18px] w-[18px] ${isFavorite ? 'fill-current' : ''}`} />
+                    <Heart
+                        key={isFavorite ? 'on' : 'off'}
+                        aria-hidden="true"
+                        className={`h-[18px] w-[18px] transition-colors ${isFavorite ? 'fill-current change-pop' : ''}`}
+                    />
                 </button>
                 {inList && (
                     <button
@@ -157,16 +165,26 @@ export default function TrackingPanel({
                             )}
                         </span>
                     </button>
-                    {showScoreRow && (
-                        <div className="px-2 pb-2">
-                            {justCompleted && (
-                                <p className="px-1.5 pb-2 text-xs text-gray-400">Finished? Score it in one tap, or skip.</p>
-                            )}
-                            <ScorePicker
-                                value={entry.score}
-                                onChange={handleScore}
-                                size="sm"
-                            />
+                    {scoreDrawer.mounted && (
+                        // Takes its full height at once (nothing animates layout);
+                        // the scores settle in and fade out on their own.
+                        <div
+                            inert={scoreDrawer.closing || undefined}
+                            data-state={scoreDrawer.closing ? 'closing' : 'open'}
+                            className="drawer-reveal"
+                        >
+                            <div>
+                                <div className="px-2 pb-2">
+                                    {justCompleted && (
+                                        <p className="px-1.5 pb-2 text-xs text-gray-400">Finished? Score it in one tap, or skip.</p>
+                                    )}
+                                    <ScorePicker
+                                        value={entry.score}
+                                        onChange={handleScore}
+                                        size="sm"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

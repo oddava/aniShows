@@ -13,6 +13,10 @@
 
   <!-- Font: DM Sans, self-hosted (@fontsource-variable/dm-sans in main.jsx). -->
 
+  <!-- Posters fall back to this host when a self-hosted copy is missing:
+       open the connection early. -->
+  <link rel="preconnect" href="https://cdn.myanimelist.net" />
+
   <!-- Critical CSS - prevents white flash -->
   <style>
     html, body {
@@ -51,10 +55,19 @@
       border: 3px solid rgba(141, 177, 255, 0.16);
       border-top-color: #8db1ff;
       border-radius: 50%;
-      animation: initial-spin 0.8s linear infinite;
+      /* Only a slow boot shows the spinner; a quick one goes straight from
+         the blank page colour to the page. */
+      opacity: 0;
+      animation: initial-spin 0.8s linear infinite, initial-show 0.2s ease-out 0.4s forwards;
     }
     @keyframes initial-spin {
       to { transform: rotate(360deg); }
+    }
+    @keyframes initial-show {
+      to { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .initial-loader::after { animation: initial-show 0.2s ease-out 0.4s forwards; }
     }
   </style>
 

@@ -4,6 +4,7 @@ import { initSentry } from './sentry'
 import '@fontsource-variable/dm-sans';
 import './index.css'
 import { clearAppRuntimeCaches } from './pwa/serviceWorker'
+import { prefetchRoute } from './app/routePrefetch'
 
 const BOOTSTRAP_RECOVERY_KEY = 'frontend_bootstrap_recovery'
 
@@ -61,6 +62,12 @@ async function bootstrap() {
   }
 
   try {
+    // The page's own code and first request start now, alongside the app
+    // chunk, instead of one after another (LCP, ANISHOWS-003).
+    prefetchRoute(window.location.pathname)
+    import('./app/bootData')
+      .then(({ startBootData }) => startBootData(window.location.pathname))
+      .catch(() => {})
     const { default: App } = await import('./App.jsx')
     createRoot(rootElement).render(
       <StrictMode>

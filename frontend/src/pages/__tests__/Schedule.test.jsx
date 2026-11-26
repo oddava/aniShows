@@ -480,7 +480,7 @@ describe('Schedule Component - preferred time zone far from the browser', () => 
     });
 
     const selected = screen.getByRole('button', { pressed: true });
-    expect(selected).toHaveAccessibleName(/^Tuesday 17,/);
+    expect(selected).toHaveAccessibleName(/^\S+ 17 .*\(Tuesday, /);
     const heading = screen.getByRole('heading', { level: 2, name: /Tuesday/ });
     expect(heading).toHaveTextContent('17 Nov');
   });
@@ -500,7 +500,12 @@ describe('Schedule Component - calendar dates and My list', () => {
     user_list_status: null,
     ...extra,
   });
-  const dayButton = (name) => screen.getByRole('button', { name: new RegExp(`^${name},`) });
+  // Names start with the visible text ("Today 16 1 ep", "Wed 18 1 ep"), then
+  // spell it out: "(Monday, 1 episode)".
+  const dayButton = (label) => {
+    const [weekday, date] = label.split(' ');
+    return screen.getByRole('button', { name: new RegExp(`^\\S+ ${date} .*\\(${weekday}, `) });
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -536,9 +541,9 @@ describe('Schedule Component - calendar dates and My list', () => {
     expect(screen.getByText('1 more airs later')).toBeInTheDocument();
 
     // Label and count of each column come from the same date.
-    expect(dayButton('Monday 16')).toHaveAccessibleName('Monday 16, 1 episode');
-    expect(dayButton('Wednesday 18')).toHaveAccessibleName('Wednesday 18, 1 episode');
-    expect(dayButton('Thursday 19')).toHaveAccessibleName('Thursday 19, 1 episode');
+    expect(dayButton('Monday 16')).toHaveAccessibleName(/^\S+ 16 \d+ ep \(Monday, 1 episode\)$/);
+    expect(dayButton('Wednesday 18')).toHaveAccessibleName(/^\S+ 18 \d+ ep \(Wednesday, 1 episode\)$/);
+    expect(dayButton('Thursday 19')).toHaveAccessibleName(/^\S+ 19 \d+ ep \(Thursday, 1 episode\)$/);
     expect(dayButton('Monday 16')).not.toHaveAccessibleName(/2 episodes/);
 
     fireEvent.click(dayButton('Wednesday 18'));
@@ -599,12 +604,12 @@ describe('Schedule Component - calendar dates and My list', () => {
     expect(screen.queryByText('Completed Show')).not.toBeInTheDocument();
     expect(screen.queryByText('Dropped Show')).not.toBeInTheDocument();
     expect(screen.queryByText('Not Listed')).not.toBeInTheDocument();
-    expect(dayButton('Monday 16')).toHaveAccessibleName('Monday 16, 2 episodes');
+    expect(dayButton('Monday 16')).toHaveAccessibleName(/^\S+ 16 \d+ ep \(Monday, 2 episodes\)$/);
 
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
 
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getAllByTestId('anime-card')).toHaveLength(5);
-    expect(dayButton('Monday 16')).toHaveAccessibleName('Monday 16, 5 episodes');
+    expect(dayButton('Monday 16')).toHaveAccessibleName(/^\S+ 16 \d+ ep \(Monday, 5 episodes\)$/);
   });
 });

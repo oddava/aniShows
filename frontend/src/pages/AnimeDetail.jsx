@@ -20,10 +20,12 @@ import { favoriteKeys, listKeys, profileKeys, userKeys } from '../api/queries/us
 import { DEFAULT_TAB_ID, TABS, getTabByPath, getTabHref } from '../components/animeDetail/animeDetailTabs';
 import TabButton from '../components/animeDetail/TabButton';
 import PosterColumn from '../components/animeDetail/PosterColumn';
+import HeroTint from '../components/animeDetail/HeroTint';
 import TitleSection from '../components/animeDetail/TitleSection';
 import AnimeDetailTabContent from '../components/animeDetail/AnimeDetailTabContent';
 import ReviewsSection from '../components/animeDetail/ReviewsSection';
 import RecommendationsSidebar from '../components/animeDetail/RecommendationsSidebar';
+import useActivePill from '../hooks/useActivePill';
 import useAnimeDetailTabData from '../components/animeDetail/useAnimeDetailTabData';
 import useNearViewport from '../components/animeDetail/useNearViewport';
 import useAnimeReviews from '../components/animeDetail/useAnimeReviews';
@@ -48,13 +50,24 @@ export default function AnimeDetail() {
     const [isLargeViewport, setIsLargeViewport] = useState(() => (
         typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : false
     ));
-    const [isBannerLoaded, setIsBannerLoaded] = useState(false);
-    const [isCoverLoaded, setIsCoverLoaded] = useState(false);
+    // Loaded flags belong to one show: they are stored with its slug, so a new
+    // show starts unloaded without a reset effect racing the image's own load
+    // event (a cached poster used to load first and then get blanked).
+    const [bannerLoadedSlug, setBannerLoadedSlug] = useState(null);
+    const [coverLoadedSlug, setCoverLoadedSlug] = useState(null);
+    const isBannerLoaded = bannerLoadedSlug === slug;
+    const isCoverLoaded = coverLoadedSlug === slug;
+    const setIsBannerLoaded = useCallback((loaded) => setBannerLoadedSlug(loaded ? slug : null), [slug]);
+    // The slug whose hero image turned out not to be a usable banner (a cover
+    // fallback, or too small to fill the page): shown blurred, not stretched.
+    const [softBannerSlug, setSoftBannerSlug] = useState(null);
+    const setIsCoverLoaded = useCallback((loaded) => setCoverLoadedSlug(loaded ? slug : null), [slug]);
     const [synopsisExpanded, setSynopsisExpanded] = useState(false);
     const containerRef = useRef(null);
     const activeTabConfig = useMemo(() => getTabByPath(tabPath), [tabPath]);
     const activeTab = activeTabConfig?.id || DEFAULT_TAB_ID;
     const tabStripRef = useScrollFade();
+    const tabPill = useActivePill();
     const animeDetailQueryKey = useMemo(() => animeKeys.detail(slug, user?.id), [slug, user?.id]);
 
     // Queries
@@ -102,6 +115,10 @@ export default function AnimeDetail() {
     // Handlers
     const handleFavorite = useCallback(async () => {
         if (!isAuthenticated) return;
+        // Optimistic: the heart answers the click at once; the server's answer
+        // (or a failure) settles it.
+        const previous = isFavorite;
+        setIsFavorite(!previous);
         try {
             const response = await favoriteApi.toggle(anime.id);
             setIsFavorite(response.data.is_favorite);
@@ -112,9 +129,10 @@ export default function AnimeDetail() {
                 queryClient.invalidateQueries({ queryKey: favoriteKeys.overview(user.username) });
             }
         } catch (error) {
+            setIsFavorite(previous);
             logger.error('Error toggling favorite:', error);
         }
-    }, [isAuthenticated, anime?.id, user, queryClient]);
+    }, [isAuthenticated, isFavorite, anime?.id, user, queryClient]);
 
 
     useEffect(() => {
@@ -154,11 +172,6 @@ export default function AnimeDetail() {
         queryClient.invalidateQueries({ queryKey: listKeys.all });
         queryClient.invalidateQueries({ queryKey: profileKeys.own });
     }, [anime?.id, animeDetailQueryKey, queryClient]);
-
-    useEffect(() => {
-        setIsBannerLoaded(false);
-        setIsCoverLoaded(false);
-    }, [slug]);
 
     useEffect(() => {
         if (tabPath && !activeTabConfig) {
@@ -202,16 +215,23 @@ export default function AnimeDetail() {
 
     const relationCoverFallback = location.state?.prefetchedRelationCover;
 
-    const bannerUrl = getOptimizedImageUrl(anime, 'banner', 'large') ||
-        getOptimizedImageUrl(anime, 'cover', 'large') ||
-        relationCoverFallback ||
-        getImageUrl(null, anime.title);
+    // The hero shows the show's real banner, sharp (the srcset includes the
+    // 1900px original), as AniList does. A show without one gets a shorter,
+    // plain header: stretching the portrait cover across the page only ever
+    // looked pixelated. The same applies when the banner fails to load or
+    // turns out to be no banner (portrait, or far too narrow for the hero).
+    const hasBanner = Boolean(
+        anime.banner_image_large || anime.banner_image_medium || anime.banner_image || anime.banner_image_external_url
+    );
+    const showBanner = hasBanner && softBannerSlug !== slug;
+    const bannerUrl = hasBanner ? getOptimizedImageUrl(anime, 'banner', 'large') : null;
     const coverUrl = getOptimizedImageUrl(anime, 'cover', 'large') ||
         relationCoverFallback ||
         getImageUrl(null, anime.title);
     const bannerSrcSet = getImageSrcSet(anime, 'banner');
     const coverSrcSet = getImageSrcSet(anime, 'cover');
-    const bannerFallbackUrl = getImageFallbackUrl(anime, 'banner');
+    // Banner-only fallback: never fall back to the cover here.
+    const bannerFallbackUrl = anime.banner_image_external_url || anime.banner_image || null;
     const coverFallbackUrl = getImageFallbackUrl(anime, 'cover');
 
     const tabsWithCounts = TABS.map(tab => ({
@@ -249,19 +269,37 @@ export default function AnimeDetail() {
             <AnimeDetailSEO anime={anime} />
 
             {/* Banner */}
-            <div className="relative h-[34vh] min-h-[260px] overflow-hidden bg-[var(--ink-1)] lg:h-[40vh] lg:min-h-[300px]">
+            <div
+                data-banner={showBanner ? 'image' : 'none'}
+                className={`relative overflow-hidden bg-[var(--ink-1)] ${showBanner ? 'h-[34vh] min-h-[260px] lg:h-[40vh] lg:min-h-[300px]' : 'h-[230px] lg:h-[260px]'}`}
+            >
+                {!showBanner && <HeroTint anime={anime} />}
+                {hasBanner && (
+                <div className="hero-drift absolute inset-0 origin-top">
                 <img
                     src={bannerUrl}
                     srcSet={bannerSrcSet}
                     sizes="100vw"
                     alt={anime.title}
-                    onLoad={() => setIsBannerLoaded(true)}
+                    fetchPriority="high"
+                    onLoad={(event) => {
+                        // Portrait (a cover) or far narrower than the hero it fills.
+                        const { naturalWidth: w, naturalHeight: h, clientWidth } = event.currentTarget;
+                        setSoftBannerSlug(w / Math.max(h, 1) < 1.4 || w < clientWidth * 0.7 ? slug : null);
+                        setIsBannerLoaded(true);
+                    }}
                     onError={(event) => {
                         setIsBannerLoaded(false);
+                        if (event.currentTarget.dataset.fallbackApplied === '1' || !bannerFallbackUrl) {
+                            setSoftBannerSlug(slug);
+                            return;
+                        }
                         applyImageFallback(event, bannerFallbackUrl);
                     }}
-                    className={`w-full h-full object-cover text-transparent transition-opacity duration-700 ease-out ${isBannerLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isBannerLoaded && showBanner ? 'opacity-100' : 'opacity-0'}`}
                 />
+                </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/50 to-transparent" />
                 <div className="absolute inset-0 bg-gradient-to-r from-dark/80 via-transparent to-transparent" />
             </div>
@@ -293,16 +331,19 @@ export default function AnimeDetail() {
                                 className={`scroll-fade -mx-4 mb-4 flex items-center gap-1 overflow-x-auto scrollbar-hide px-4 md:mx-0 md:pl-0 md:pr-6 ${isRetro ? 'retro-window !rounded-none !bg-dark-100 !backdrop-blur-none pb-2 pt-8' : ''}`}
                                 data-title="Navigation"
                             >
-                                {tabsWithCounts.map((tab) => (
-                                    <TabButton
-                                        key={tab.id}
-                                        tab={tab}
-                                        isActive={activeTab === tab.id}
-                                        to={getTabHref(slug, tab.id)}
-                                        accentColor={mappedAccent}
-                                        count={tab.count}
-                                    />
-                                ))}
+                                <div ref={tabPill.hostRef} className="pill-host flex shrink-0 items-center gap-1">
+                                    <span ref={tabPill.pillRef} aria-hidden="true" className="active-pill" />
+                                    {tabsWithCounts.map((tab) => (
+                                        <TabButton
+                                            key={tab.id}
+                                            tab={tab}
+                                            isActive={activeTab === tab.id}
+                                            to={getTabHref(slug, tab.id)}
+                                            accentColor={mappedAccent}
+                                            count={tab.count}
+                                        />
+                                    ))}
+                                </div>
                             </nav>
 
                             {/* Tab Content */}

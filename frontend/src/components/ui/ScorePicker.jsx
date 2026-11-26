@@ -63,7 +63,7 @@ export default function ScorePicker({
                             disabled={disabled}
                             onClick={() => pick(score)}
                             onKeyDown={(event) => onKeyDown(event, index)}
-                            className={`flex flex-1 items-center justify-center rounded-[var(--radius-sm)] font-semibold tabular transition-colors duration-150 touch-manipulation disabled:opacity-40 ${small ? 'h-11 min-w-9 text-sm' : 'h-11 min-w-9 text-[15px]'} ${checked
+                            className={`press flex flex-1 items-center justify-center rounded-[var(--radius-sm)] font-semibold tabular transition-colors duration-150 touch-manipulation disabled:opacity-40 ${small ? 'h-11 min-w-9 text-sm' : 'h-11 min-w-9 text-[15px]'} ${checked
                                 ? 'bg-[var(--signature)] text-[var(--on-signature)]'
                                 : filled
                                     ? 'bg-[var(--signature-soft)] text-[var(--signature)]'
@@ -80,7 +80,7 @@ export default function ScorePicker({
                     onClick={() => onChange?.(0)}
                     disabled={disabled}
                     aria-label="Clear score"
-                    className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-gray-400 hover:bg-white/[0.06] hover:text-white h-11 w-11`}
+                    className={`press flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-gray-400 hover:bg-white/[0.06] hover:text-white h-11 w-11`}
                 >
                     <X aria-hidden="true" className="h-4 w-4" />
                 </button>

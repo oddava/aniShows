@@ -32,9 +32,11 @@ class ReportResult:
     status_code: int
 
 
-def _percent_change(current: int | float, previous: int | float) -> float:
+def _percent_change(current: int | float, previous: int | float) -> float | None:
+    # From nothing there is no meaningful percentage ("+100%" would mislead):
+    # None, and the UI shows the plain number.
     if previous == 0:
-        return 100.0 if current > 0 else 0.0
+        return None if current > 0 else 0.0
     return round(((current - previous) / previous) * 100, 2)
 
 
@@ -207,12 +209,18 @@ def _overview_payload(days: int) -> dict:
     activity_logs = activity_log_queryset.order_by("-timestamp")[:20]
     recent_activity = [
         {
+            "id": log.id,
             "type": log.action,
+            "actor": log.user.username if log.user else "System",
+            "operation": (log.metadata or {}).get("operation", ""),
+            "entity_type": log.entity_type,
+            "entity_id": log.entity_id,
+            "entity_repr": log.entity_repr,
             "text": (
                 f"{log.user.username if log.user else 'System'} "
                 f"{log.action.lower()} "
-                f"{log.entity_type}"
-                f"{f' #{log.entity_id}' if log.entity_id else ''}"
+                f"{log.entity_repr or log.entity_type}"
+                f"{f' #{log.entity_id}' if log.entity_id and not log.entity_repr else ''}"
             ),
             "time": log.timestamp.isoformat(),
         }

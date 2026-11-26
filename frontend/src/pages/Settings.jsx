@@ -3,6 +3,7 @@ import { Navigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import SEO from "../components/SEO";
+import useSwitchFade from "../hooks/useSwitchFade";
 import ImageCropModal from "../components/ImageCropModal";
 import SettingsTabs, {
   settingsPanelId,
@@ -16,6 +17,7 @@ import NotificationsTab from "../components/settings/NotificationsTab";
 import useProfileSettings from "../components/settings/useProfileSettings";
 import useAccountSettings from "../components/settings/useAccountSettings";
 import useNotificationPreferences from "../components/settings/useNotificationPreferences";
+import PageLoader from '../components/common/PageLoader';
 
 export default function Settings() {
   const { user, isAuthenticated, loading, refreshProfile, logout } = useAuth();
@@ -57,17 +59,23 @@ export default function Settings() {
     setBannerFile,
     setBannerPreviewUrl,
   } = profile;
+  const tabFade = useSwitchFade(activeTab);
 
   if (loading) {
+    // A full viewport, like PageLoader, so the footer does not jump when the
+    // page lands; the spinner only shows if the wait passes 300 ms.
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-[var(--signature)] border-t-transparent rounded-full animate-spin motion-reduce:animate-none" />
+      <div role="status" className="min-h-[100dvh] flex items-center justify-center">
+        <div aria-hidden="true" className="delayed-show">
+          <div className="w-10 h-10 border-2 border-[var(--signature)] border-t-transparent rounded-full animate-spin motion-reduce:animate-none" />
+        </div>
+        <span className="sr-only">Loading settings</span>
       </div>
     );
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <><PageLoader /><Navigate to="/login" replace /></>;
   }
 
   return (
@@ -89,10 +97,11 @@ export default function Settings() {
           />
 
           <div
+            key={activeTab}
             role="tabpanel"
             id={settingsPanelId(activeTab)}
             aria-labelledby={settingsTabId(activeTab)}
-            className="mt-6"
+            className={`mt-6 ${tabFade}`}
           >
             {activeTab === "profile" && (
               <ProfileTab user={user} profile={profile} />

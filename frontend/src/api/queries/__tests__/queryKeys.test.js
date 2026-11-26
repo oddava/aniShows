@@ -39,7 +39,6 @@ import {
     userQueries,
 } from '../user';
 import { forumKeys, forumQueries } from '../forums';
-import { adminBadgeKeys } from '../admin';
 
 const mocks = vi.hoisted(() => ({
     animeApi: {
@@ -71,7 +70,6 @@ vi.mock('../../client', () => ({
     recommendationsApi: {},
     reviewApi: {},
     staffFavoriteApi: {},
-    adminBadgeApi: {},
 }));
 
 const fnContext = { signal: undefined, pageParam: 1, queryKey: [], meta: undefined };
@@ -159,11 +157,6 @@ describe('query keys keep the shapes the app used before the factory', () => {
         [forumKeys.posts('9', 3), ['forumPosts', '9', 3]],
         [forumKeys.postSubtree('9', 41), ['forumPosts', '9', 'root', 41, 1]],
         [forumKeys.postSubtree('9', 41, 3), ['forumPosts', '9', 'root', 41, 3]],
-        [adminBadgeKeys.all, ['adminBadges']],
-        [adminBadgeKeys.list(1, ''), ['adminBadges', 1, '']],
-        [adminBadgeKeys.holdersAll(4), ['adminBadgeHolders', 4]],
-        [adminBadgeKeys.holders(4, 2), ['adminBadgeHolders', 4, 2]],
-        [adminBadgeKeys.userSearch('al'), ['adminUsersSearch', 'al']],
     ])('%j', (actual, expected) => {
         expect(actual).toEqual(expected);
     });

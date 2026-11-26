@@ -246,13 +246,23 @@ export const getImageSrcSet = (anime, type = 'cover') => {
         },
     };
 
-    const images = sizeMap[type] || sizeMap.cover;
+    const images = { ...(sizeMap[type] || sizeMap.cover) };
+    // Banners fill the full width of the page, which is wider than the 1200px
+    // variant on most desktops, so offer the original too. AniList banners are
+    // 1900px wide; that's the width we declare for it.
+    if (type === 'banner') {
+        const original = coerceUrl(anime.banner_image) || coerceUrl(anime.banner_image_external_url);
+        if (original) images.original = { url: original, width: 1900 };
+    }
 
+    const seen = new Set();
     Object.values(images).forEach(({ url, width }) => {
         const normalized = coerceUrl(url);
-        if (normalized) {
-            urls.push(`${getImageUrl(url)} ${width}w`);
-        }
+        if (!normalized) return;
+        const resolved = getImageUrl(normalized);
+        if (seen.has(resolved)) return;
+        seen.add(resolved);
+        urls.push(`${resolved} ${width}w`);
     });
 
     return urls.join(', ');

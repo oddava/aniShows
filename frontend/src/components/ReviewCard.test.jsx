@@ -160,6 +160,35 @@ describe('ReviewCard', () => {
         });
     });
 
+    it('shows only used reactions; the rest come from one picker button', async () => {
+        const user = userEvent.setup();
+        renderReviewCard();
+
+        // 😮 and 😢 have no reactions yet: no chips for them.
+        expect(screen.queryByText('😮')).not.toBeInTheDocument();
+        const add = screen.getByRole('button', { name: 'Add a reaction' });
+        expect(add).toHaveAttribute('aria-expanded', 'false');
+
+        await user.click(add);
+        const picker = screen.getByRole('group', { name: 'Reactions' });
+        await user.click(within(picker).getByRole('button', { name: 'Surprised' }));
+
+        await waitFor(() => expect(reviewApi.react).toHaveBeenCalledWith(7, 'surprised'));
+        expect(screen.queryByRole('group', { name: 'Reactions' })).not.toBeInTheDocument();
+        expect(add).toHaveFocus();
+    });
+
+    it('closes the reaction picker on Escape and returns focus', async () => {
+        const user = userEvent.setup();
+        renderReviewCard();
+
+        await user.click(screen.getByRole('button', { name: 'Add a reaction' }));
+        await user.keyboard('{Escape}');
+
+        expect(screen.queryByRole('group', { name: 'Reactions' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Add a reaction' })).toHaveFocus();
+    });
+
     it('renders review text exactly as typed, markup and entities included', () => {
         const typed = `I don't <3 it, <img src=x onerror="alert(1)"> &lt;literal&gt;`;
         const { container } = renderReviewCard({ text: typed });

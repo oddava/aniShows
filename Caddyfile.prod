@@ -338,7 +338,7 @@
 		# Debug header to identify deployment
 		header X-Deployment-Time "{http.request.time}"
 		# Content Security Policy for the React Frontend
-		header Content-Security-Policy "default-src 'self'; script-src 'self' {$UMAMI_PUBLIC_ORIGIN}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: {$UMAMI_PUBLIC_ORIGIN} https://fonts.googleapis.com https://fonts.gstatic.com wss:; media-src 'self' https:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com;"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' {$UMAMI_PUBLIC_ORIGIN} https://static.cloudflareinsights.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: {$UMAMI_PUBLIC_ORIGIN} https://fonts.googleapis.com https://fonts.gstatic.com wss:; media-src 'self' https:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com;"
 	}
 
 	import access_log access.log

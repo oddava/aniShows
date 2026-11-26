@@ -11,6 +11,7 @@ import ProgressStepper from '../ui/ProgressStepper';
 import ScorePicker from '../ui/ScorePicker';
 import Skeleton from '../ui/Skeleton';
 import QuickAdd from '../ui/QuickAdd';
+import useChangeKey from '../../hooks/useChangeKey';
 import { continueState, countdown, sortForContinue } from './continueModel';
 import { airingPreview, clockTime, dayOffset, listedAirings, previewWhen, tonightFrom, useMinuteClock } from './airingModel';
 import { formatDate } from '../../utils/dateUtils';
@@ -200,15 +201,33 @@ function AiringSoonRow({ row, timezone }) {
  * who you are and one line about tonight on the left; your shows on the
  * right, ready ones first, with what's next and +1.
  */
+/** One number under the home greeting, linking to the list it counts. */
+function ListStat({ label, value, to }) {
+    const change = useChangeKey(value);
+    return (
+        <div className="flex flex-col-reverse">
+            <dt className="mt-1 text-sm text-[var(--text-3)]">{label}</dt>
+            <dd>
+                <Link to={to} className="group inline-flex rounded-md text-[1.75rem] font-semibold leading-none tracking-[-0.02em] text-[var(--text-1)] tabular transition-colors hover:text-[var(--signature)]">
+                    <span key={change.key} className={change.changed ? `count-${change.direction}` : undefined}>{value}</span>
+                </Link>
+            </dd>
+        </div>
+    );
+}
+
 export default function ContinueSection() {
     const now = useMinuteClock();
     const { user, isAuthenticated } = useAuth();
     const timezone = user?.preferred_timezone;
+    // Rendered while a returning member's session is still being restored
+    // (Home): the rows wait for it and the skeleton holds their place.
     const { data: watching, isPending } = useQuery({
         ...userQueries.watching(),
+        enabled: isAuthenticated,
         staleTime: 60 * 1000,
     });
-    const { data: summary } = useQuery({
+    const { data: summary, isPending: summaryQueryPending } = useQuery({
         ...listQueries.summary(user?.username),
         enabled: Boolean(user?.username),
         staleTime: 60 * 1000,
@@ -260,6 +279,7 @@ export default function ContinueSection() {
         () => (rows.length === 0 ? airingPreview(scheduleDays, timezone, now, 8).filter((row) => !row.aired).slice(0, 4) : []),
         [rows.length, scheduleDays, timezone, now],
     );
+    const summaryPending = !isAuthenticated || (Boolean(user?.username) && summaryQueryPending);
     const summaryLine = isPending
         ? ''
         : rows.length === 0
@@ -273,11 +293,44 @@ export default function ContinueSection() {
             <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-[minmax(0,5fr)_minmax(0,8fr)] md:gap-16">
                 <div className="min-w-0">
                     <h1 className="page-title break-words">{user?.username || 'Welcome back'}</h1>
-                    <p className="mt-3 max-w-sm text-[17px] leading-relaxed text-[var(--text-2)]">{summaryLine}</p>
-                    {summary?.total > 0 && (
-                        <p className="mt-3 text-[15px] text-[var(--text-3)] tabular">
-                            {summary.total} on your list · {(summary.episodes_watched || 0) + episodeDelta} episodes watched
-                        </p>
+                    {/* Two lines are held for the summary and one for the
+                        counts while they load, so nothing below moves when
+                        they land (most of the text fits in that space). */}
+                    <p className="mt-3 min-h-[3.25em] max-w-sm text-[17px] leading-relaxed text-[var(--text-2)]">
+                        {isPending ? (
+                            <span aria-hidden="true" className="block">
+                                <span className="block py-[0.3em]"><span className="skeleton-shimmer block h-[1.025em] w-[90%] rounded-md" /></span>
+                                <span className="block py-[0.3em]"><span className="skeleton-shimmer block h-[1.025em] w-3/5 rounded-md" /></span>
+                            </span>
+                        ) : summaryLine}
+                    </p>
+                    {summaryPending ? (
+                        <>
+                            <p aria-hidden="true" className="mt-3 text-[15px] text-[var(--text-3)] md:hidden">
+                                <span className="skeleton-shimmer inline-block h-[1em] w-52 rounded-md align-middle" />
+                            </p>
+                            <div aria-hidden="true" className="mt-8 hidden max-w-sm grid-cols-3 gap-6 md:grid">
+                                {[0, 1, 2].map((i) => (
+                                    <div key={i}>
+                                        <Skeleton className="h-7 w-12" />
+                                        <Skeleton className="mt-2 h-3.5 w-16" />
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : summary?.total > 0 && (
+                        <>
+                            <p className="mt-3 text-[15px] text-[var(--text-3)] tabular md:hidden">
+                                {summary.total} on your list · {(summary.episodes_watched || 0) + episodeDelta} episodes watched
+                            </p>
+                            {/* Wide screens: the same facts as three quiet numbers,
+                                so the column beside Continue watching is not bare. */}
+                            <dl className="mt-8 hidden max-w-sm grid-cols-3 gap-6 md:grid">
+                                <ListStat label="Watching" value={summary.counts?.Watching ?? 0} to="/list?status=watching" />
+                                <ListStat label="Completed" value={summary.counts?.Completed ?? 0} to="/list?status=completed" />
+                                <ListStat label="Episodes" value={(summary.episodes_watched || 0) + episodeDelta} to="/list?status=all" />
+                            </dl>
+                        </>
                     )}
                     <Tonight items={tonight} now={now} timezone={timezone} />
                 </div>
@@ -285,17 +338,21 @@ export default function ContinueSection() {
                 <div className="panel">
                     <h2 id="continue-heading" className="section-title mb-2">{!isPending && rows.length === 0 ? (airingSoon.length ? 'Airing soon' : 'Start watching') : 'Continue watching'}</h2>
                     {isPending ? (
-                        <ul aria-hidden="true">
-                            {Array.from({ length: 3 }, (_, i) => (
-                                <li key={i} className="flex items-center gap-4 py-3">
-                                    <Skeleton className="h-[72px] w-12 shrink-0" />
-                                    <div className="flex-1">
-                                        <Skeleton className="h-4 w-1/2" />
-                                        <Skeleton className="mt-2 h-3.5 w-1/3" />
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
+                        <div aria-hidden="true">
+                            <ul>
+                                {Array.from({ length: 3 }, (_, i) => (
+                                    <li key={i} className="flex items-center gap-4 py-3">
+                                        <Skeleton className="h-[72px] w-12 shrink-0" />
+                                        <div className="flex-1">
+                                            <Skeleton className="h-4 w-1/2" />
+                                            <Skeleton className="mt-2 h-3.5 w-1/3" />
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                            {/* Holds the "All of my list" link's line. */}
+                            <div className="mt-5 flex h-11 items-center"><Skeleton className="h-3.5 w-24" /></div>
+                        </div>
                     ) : rows.length === 0 ? (
                         <>
                             {airingSoon.length > 0 && (

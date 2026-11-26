@@ -12,6 +12,9 @@ import MobileTopBar from './navbar/MobileTopBar';
 import useNavbarSearch from './navbar/useNavbarSearch';
 import useNavbarAutoHide from './navbar/useNavbarAutoHide';
 import useNavbarNotifications from './navbar/useNavbarNotifications';
+import useActivePill from '../hooks/useActivePill';
+import usePendingPath from '../hooks/usePendingPath';
+import { hasSession } from '../api/httpClient';
 
 /** Desktop bell with the unread count, one click from anywhere (N1). */
 function NotificationBell({ count = 0 }) {
@@ -21,7 +24,7 @@ function NotificationBell({ count = 0 }) {
             to="/notifications"
             aria-label={label}
             title={label}
-            className={({ isActive }) => `relative mr-1 flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${isActive ? 'text-[var(--text-1)]' : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
+            className={({ isActive }) => `press relative mr-1 flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${isActive ? 'bg-white/[0.07] text-[var(--text-1)]' : 'text-[var(--text-2)] hover:bg-white/[0.06] hover:text-[var(--text-1)]'}`}
         >
             <Bell aria-hidden="true" className="h-5 w-5" />
             {count > 0 && (
@@ -53,6 +56,9 @@ export default function Navbar() {
     // Browse has its own search box at the top of the page; one is enough.
     const location = useLocation();
     const showNavSearch = location.pathname.replace(/\/+$/, '') !== '/browse';
+    const navPill = useActivePill();
+    const pendingPath = usePendingPath();
+    const isCurrent = (to) => pendingPath === to || pendingPath.startsWith(`${to}/`);
 
     return (
         <>
@@ -72,11 +78,14 @@ export default function Navbar() {
 
                         {/* Desktop Nav */}
                         <div className="hidden md:flex items-center gap-1 flex-1 ml-8">
-                            <NavItem to="/browse" label="Browse" />
-                            <NavItem to="/schedule" label="Schedule" />
-                            {(isAuthenticated || authLoading) && (
-                                <NavItem to="/list" label="My list" />
-                            )}
+                            <div ref={navPill.hostRef} className="pill-host flex items-center gap-1">
+                                <span ref={navPill.pillRef} aria-hidden="true" className="active-pill" />
+                                <NavItem to="/browse" active={isCurrent('/browse')} label="Browse" />
+                                <NavItem to="/schedule" active={isCurrent('/schedule')} label="Schedule" />
+                                {(isAuthenticated || authLoading) && (
+                                    <NavItem to="/list" active={isCurrent('/list')} label="My list" />
+                                )}
+                            </div>
 
                             {/* Search - Collapsible */}
                             {showNavSearch ? <NavbarSearch search={search} /> : <div className="flex-1" />}
@@ -100,10 +109,12 @@ export default function Navbar() {
                 </div>
             </nav>
 
-            {/* Mobile Bottom Navigation Island */}
+            {/* Mobile Bottom Navigation Island. While a returning member's
+                session is being restored, it already shows the member tabs,
+                so it never switches from 4 tabs (with Sign in) to 5. */}
             <MobileNav
                 user={user}
-                isAuthenticated={isAuthenticated}
+                isAuthenticated={isAuthenticated || (authLoading && hasSession())}
                 logout={logout}
                 mobileUnreadCount={mobileUnreadCount}
                 currentUserProfilePath={currentUserProfilePath}

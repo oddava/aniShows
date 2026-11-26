@@ -43,7 +43,8 @@
   /* Text */
   --text-1: #e6e9ee;
   --text-2: #a3abb6;
-  --text-3: #7d8591;
+  /* AA (4.5:1+) for small text on ink-0..ink-2 (ANISHOWS-006; was #7d8591, 4.44:1 on panels). */
+  --text-3: #878f9b;
 
   /* Fixed status colours (text-safe on every ink surface, AA). */
   --status-watching: #86cc90;
@@ -93,6 +94,13 @@
   --dur-fast: 150ms;
   --dur-base: 200ms;
   --dur-slow: 250ms;
+  /* Springs, sampled into linear() (scratch: damped oscillator).
+     glide: indicators that move between items, settles with a hair of give.
+     pop: small confirmations (a status dot, a heart, a press release). */
+  --ease-glide: var(--ease-out);
+  --ease-pop: var(--ease-out);
+  --dur-glide: 400ms;
+  --dur-pop: 440ms;
 
   /* Layout */
   --page-max: 80rem;
@@ -130,6 +138,13 @@
   --color-focus-ring-strong: var(--signature);
 }
 
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    --ease-glide: linear(0, 0.0334, 0.1134, 0.2169, 0.3284, 0.4379, 0.5394, 0.6298, 0.7078, 0.7734, 0.8275, 0.8711, 0.9057, 0.9326, 0.9532, 0.9687, 0.98, 0.9882, 0.9939, 0.9978, 1.0003, 1.0018, 1.0026, 1.0029, 1.0029, 1.0028, 1.0025, 1.0022, 1);
+    --ease-pop: linear(0, 0.0537, 0.1838, 0.351, 0.5256, 0.6875, 0.825, 0.9325, 1.0098, 1.0594, 1.0859, 1.0947, 1.0909, 1.0793, 1.0638, 1.0472, 1.0316, 1.0182, 1.0076, 0.9999, 0.9949, 0.9921, 0.9911, 0.9913, 0.9923, 0.9937, 0.9953, 0.9968, 1);
+  }
+}
+
 @theme {
   --color-dark: var(--color-surface-base);
   --color-dark-50: var(--color-surface-deep);
@@ -149,7 +164,7 @@
   --color-gray-300: #c9ced6;
   --color-gray-400: #a3abb6;
   --color-gray-500: #8a929e;
-  --color-gray-600: #7d8591;
+  --color-gray-600: #878f9b;
   --color-gray-700: #3a414c;
   --color-gray-800: #2f3640;
   --color-gray-900: #1b1f25;
@@ -393,13 +408,8 @@
     background-color: var(--color-overlay-base);
   }
 
-  /* A small press response: confirms the click without decoration. */
-  .btn-primary:active:not(:disabled),
-  .btn-secondary:active:not(:disabled),
-  .ui-pill-button:active:not(:disabled),
-  .ui-icon-button:active:not(:disabled) {
-    transform: scale(0.98);
-  }
+  /* Press response: animations.css (unlayered, so it outlives the
+     transition-colors utilities on the same elements). */
 
   .badge {
     @apply rounded-md px-2 py-0.5 text-xs font-semibold;
@@ -436,15 +446,15 @@
   }
 
   .ui-pill-button {
-    @apply rounded-lg border border-gray-800 bg-dark-100 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-white/20 hover:text-white;
+    @apply rounded-lg bg-dark-100 px-4 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-dark-200 hover:text-white;
   }
 
   .ui-icon-button {
-    @apply flex h-11 w-11 items-center justify-center rounded-lg border border-gray-800 bg-dark-100 text-gray-400 transition-colors hover:border-white/20 hover:text-white;
+    @apply flex h-11 w-11 items-center justify-center rounded-lg bg-dark-100 text-gray-400 transition-colors hover:bg-dark-200 hover:text-white;
   }
 
   .ui-avatar-fallback {
-    @apply flex items-center justify-center rounded-xl border border-gray-800 bg-dark-200 font-semibold text-gray-500;
+    @apply flex items-center justify-center rounded-xl bg-dark-200 font-semibold text-gray-500;
   }
 
   .anime-card-grid-gap {
@@ -641,6 +651,14 @@
   .divide-white\/\[0\.04\] > :not([hidden]) ~ :not([hidden]) {
     border-color: var(--color-border-subtle) !important;
   }
+
+  /* Sliding active fill (hooks/useActivePill): once the pill is placed, the
+     current item drops its own fill. In this layer and more specific, so it
+     outranks the legacy !important fills above (an !important inside a layer
+     beats an unlayered one). */
+  .pill-host[data-pill-ready] :is([aria-current="page"], [aria-selected="true"], [aria-pressed="true"], [data-active="true"]) {
+    background-color: transparent !important;
+  }
 }
 
 /* Toasts sit above the phone tab bar. */
@@ -694,4 +712,9 @@ html[data-sheet-open] .toast-container {
 }
 .range-field input[type="range"]:focus-visible::-moz-range-thumb {
   background: var(--signature);
+}
+
+/* No footer while a page loader is up (components/common/PageLoader.jsx). */
+html[data-page-loading] .site-footer {
+  display: none;
 }

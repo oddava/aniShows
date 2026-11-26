@@ -3,8 +3,10 @@ import React, { Suspense } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import VerificationBanner from './VerificationBanner';
+import AnnouncementBanner from './AnnouncementBanner';
 import PageLoader from './common/PageLoader';
 import RouteProgress from './common/RouteProgress';
+import DataPrefetch from './common/DataPrefetch';
 
 // Pages are keyed by their first two path segments, so a route change fades the
 // new page in, while sub-paths of one page (anime tabs, profile tabs) and query
@@ -21,11 +23,14 @@ export default function Layout() {
         <div className="min-h-screen bg-dark flex flex-col">
             <a href="#main-content" className="skip-link">Skip to content</a>
             <RouteProgress />
+            <DataPrefetch />
             <Suspense fallback={null}>
                 <Navbar />
             </Suspense>
             {!isFlushPage && <div aria-hidden="true" className="h-14 md:h-16 shrink-0" />}
             <VerificationBanner />
+            {/* Flush pages start under the fixed navbar, so the banner clears it. */}
+            <AnnouncementBanner className={isFlushPage ? 'mt-14 md:mt-16' : ''} />
             <main
                 id="main-content"
                 tabIndex={-1}

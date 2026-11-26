@@ -62,24 +62,26 @@ def site_status_cache_key(anime_id) -> str:
     return f"site_status:v1:{anime_id}"
 
 
-def site_status_counts(anime_id) -> dict[str, int]:
-    """How many aniShows users have ``anime_id`` in each list status (G3 contract for G2).
+def site_score_cache_key(anime_id) -> str:
+    return f"site_score:v1:{anime_id}"
 
-    One aggregate on ``UserAnimeList(anime_id, status)``, cached 10 minutes and dropped
-    by every list change. ``Anime.status_distribution`` is left to the catalog provider
-    (AniList's global counts, D-3); list writes never touch the Anime row.
-    """
-    empty = dict.fromkeys(SITE_STATUS_KEYS, 0)
-    if not anime_id:
-        return empty
-    key = site_status_cache_key(anime_id)
+
+SITE_SCORE_VALUES = tuple(range(1, 11))
+
+
+def _cached(key):
     try:
-        cached = cache.get(key)
+        return cache.get(key)
     except CACHE_ERRORS:
-        cached = None
-    if cached is not None:
-        return cached
+        return None
 
+
+def _count_site_lists(anime_id) -> tuple[dict[str, int], dict[str, int]]:
+    """Status and score counts for one anime in a single aggregate, both cached.
+
+    ``UserAnimeList(anime_id, status)`` and ``(anime, score)`` are indexed; one
+    query fills both caches so the detail page pays for one, not two.
+    """
     status = UserAnimeList.UserAnimeStatus
     aggregate = UserAnimeList.objects.filter(anime_id=anime_id).aggregate(
         watching=Count("id", filter=Q(status=status.watching)),
@@ -87,17 +89,53 @@ def site_status_counts(anime_id) -> dict[str, int]:
         on_hold=Count("id", filter=Q(status=status.on_hold)),
         dropped=Count("id", filter=Q(status=status.dropped)),
         plan_to_watch=Count("id", filter=Q(status=status.plan_to_watch)),
+        **{f"score_{score}": Count("id", filter=Q(score=score)) for score in SITE_SCORE_VALUES},
     )
-    counts = {name: int(aggregate.get(name) or 0) for name in SITE_STATUS_KEYS}
+    statuses = {name: int(aggregate.get(name) or 0) for name in SITE_STATUS_KEYS}
+    scores = {str(score): int(aggregate.get(f"score_{score}") or 0) for score in SITE_SCORE_VALUES}
     try:
-        cache.set(key, counts, timeout=SITE_STATUS_CACHE_TIMEOUT)
+        cache.set_many(
+            {site_status_cache_key(anime_id): statuses, site_score_cache_key(anime_id): scores},
+            timeout=SITE_STATUS_CACHE_TIMEOUT,
+        )
     except CACHE_ERRORS:
-        logger.warning("Could not cache site status counts for anime %s", anime_id, exc_info=True)
-    return counts
+        logger.warning("Could not cache site list counts for anime %s", anime_id, exc_info=True)
+    return statuses, scores
+
+
+def site_status_counts(anime_id) -> dict[str, int]:
+    """How many aniShows users have ``anime_id`` in each list status (G3 contract for G2).
+
+    Cached 10 minutes and dropped by every list change. ``Anime.status_distribution``
+    is left to the catalog provider (AniList's global counts, D-3); list writes
+    never touch the Anime row.
+    """
+    if not anime_id:
+        return dict.fromkeys(SITE_STATUS_KEYS, 0)
+    cached = _cached(site_status_cache_key(anime_id))
+    if cached is not None:
+        return cached
+    return _count_site_lists(anime_id)[0]
+
+
+def site_score_counts(anime_id) -> dict[str, int]:
+    """How many aniShows users gave ``anime_id`` each score, "1" to "10" (0 is unscored).
+
+    Shares the status counts' aggregate and cache lifetime.
+    """
+    if not anime_id:
+        return {str(score): 0 for score in SITE_SCORE_VALUES}
+    cached = _cached(site_score_cache_key(anime_id))
+    if cached is not None:
+        return cached
+    return _count_site_lists(anime_id)[1]
 
 
 def invalidate_site_status_counts(anime_ids) -> None:
-    keys = [site_status_cache_key(anime_id) for anime_id in anime_ids if anime_id]
+    """Drop the cached status and score counts for these anime."""
+    ids = [anime_id for anime_id in anime_ids if anime_id]
+    keys = [site_status_cache_key(anime_id) for anime_id in ids]
+    keys += [site_score_cache_key(anime_id) for anime_id in ids]
     if not keys:
         return
     try:

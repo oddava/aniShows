@@ -35,6 +35,25 @@ __all__ = [
 ]
 
 
+def _is_owner(serializer, obj) -> bool:
+    """Whether the request's user owns ``obj`` (a list entry or activity row)."""
+    request = serializer.context.get("request")
+    user = getattr(request, "user", None)
+    return bool(user and user.is_authenticated and obj.user_id == user.id)
+
+
+def _drop_private_notes(serializer, obj, data):
+    """Personal notes are owner-only (ANISHOWS-004).
+
+    A public profile shows its list and activity to anyone, but the free-text
+    notes on an entry are the owner's own: other viewers, signed in or not,
+    get the rest of the row without them.
+    """
+    if "notes" in data and not _is_owner(serializer, obj):
+        data.pop("notes")
+    return data
+
+
 class UserAnimeListSerializer(ModelSerializer):
     anime = AnimeListSerializer(read_only=True)
     anime_id = PrimaryKeyRelatedField(
@@ -74,6 +93,9 @@ class UserAnimeListSerializer(ModelSerializer):
         if obj.anime.episode_count and obj.anime.episode_count > 0:
             return int((obj.episodes_watched / obj.anime.episode_count) * 100)
         return 0
+
+    def to_representation(self, instance):
+        return _drop_private_notes(self, instance, super().to_representation(instance))
 
     def to_internal_value(self, data):
         # P2-1: accept the snake_case keys (``plan_to_watch``) the frontend uses
@@ -126,6 +148,9 @@ class UserActivitySerializer(ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+    def to_representation(self, instance):
+        return _drop_private_notes(self, instance, super().to_representation(instance))
 
     def get_activity_description(self, obj):
         """Generate human-readable activity description."""

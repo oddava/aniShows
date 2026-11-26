@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ...shared.celery import observed_shared_task, retry_on_error
 from ...shared.task_lock import cache_lock
+from ..services.announcement_service import broadcast_announcement
 from ..services.notification_tasks_service import NotificationTaskService
 
 # Overlapping runs would deliver (or create) the same notifications twice.
@@ -50,3 +51,12 @@ def check_new_episodes(self):
 def cleanup_old_notifications_task(self, days: int = 90):
     with retry_on_error(self, "Notification cleanup task failed", extra={"days": days}):
         return NotificationTaskService.cleanup_old_notifications(days=days)
+
+
+@observed_shared_task(retry_policy="standard", queue="notifications")
+def broadcast_announcement_task(self, announcement_id: int, audience: str = "all"):
+    """In-app notice of an announcement to an audience (admin "Notify users")."""
+    with retry_on_error(
+        self, "Announcement broadcast failed", extra={"announcement_id": announcement_id}
+    ):
+        return broadcast_announcement(announcement_id, audience)

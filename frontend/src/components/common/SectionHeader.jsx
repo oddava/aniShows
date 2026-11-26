@@ -15,7 +15,9 @@ export default function SectionHeader({
     className = '',
 }) {
     return (
-        <div className={`flex ${subtitle ? 'items-end' : 'items-center'} justify-between gap-4 mb-5 md:mb-6 ${className}`}>
+        // min-h-11: the "See all" link's line box, so a header is the same
+        // height whether or not its link has arrived yet.
+        <div className={`flex min-h-11 ${subtitle ? 'items-end' : 'items-center'} justify-between gap-4 mb-5 md:mb-6 ${className}`}>
             <div className="min-w-0">
                 <h2 id={id} className="section-title">{title}</h2>
                 {subtitle && <p className="text-[15px] text-[var(--text-2)] mt-1">{subtitle}</p>}

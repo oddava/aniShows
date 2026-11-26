@@ -140,6 +140,14 @@ class ReviewInline(admin.TabularInline):
 class AnimeAdmin(admin.ModelAdmin):
     """Admin for anime management with Celery task integration."""
 
+    def save_model(self, request, obj, form, change):
+        # Same rule as the staff admin: writing the SEO text takes it over from
+        # the syncs; clearing it hands it back.
+        if "meta_description" in form.changed_data:
+            obj.meta_description = (obj.meta_description or "").strip()
+            obj.meta_description_locked = bool(obj.meta_description)
+        super().save_model(request, obj, form, change)
+
     list_display = [
         "title",
         "cover_preview",
@@ -208,7 +216,10 @@ class AnimeAdmin(admin.ModelAdmin):
                 "classes": ("collapse",),
             },
         ),
-        ("SEO", {"fields": ("meta_description",), "classes": ("collapse",)}),
+        (
+            "SEO",
+            {"fields": ("meta_description", "meta_description_locked"), "classes": ("collapse",)},
+        ),
         (
             "Metadata",
             {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},

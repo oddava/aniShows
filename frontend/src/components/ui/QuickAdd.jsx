@@ -3,6 +3,7 @@ import usePresence from '../../hooks/usePresence';
 import { ChevronDown, Loader2, Plus } from 'lucide-react';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import useDelayedLoading from '../../hooks/useDelayedLoading';
+import useChangeKey from '../../hooks/useChangeKey';
 import { statusMeta } from '../../utils/listStatus';
 import BottomSheet from './BottomSheet';
 import { ScoreStep, StatusOptions } from './StatusMenu';
@@ -17,14 +18,6 @@ const TOUCH_QUERY = '(hover: none), (pointer: coarse), (max-width: 639px)';
  *
  * Presentational: the card owns the writes (`onSelect`, `onScore`, `onRemove`).
  */
-/** The line under Completed: what it will do to progress, or nothing. */
-function completeHint(watched, total, aired) {
-    if (aired && (!total || aired < total)) {
-        return watched < aired ? `marks the ${aired} aired episodes watched` : null;
-    }
-    return total && watched < total ? `marks all ${total} watched` : null;
-}
-
 export default function QuickAdd({
     status,
     score = 0,
@@ -87,6 +80,9 @@ export default function QuickAdd({
     const buttonRef = useRef(null);
     const menuId = useId();
     const meta = statusMeta(status);
+    // The dot pops when the status changes (never on first paint).
+    const statusChange = useChangeKey(status);
+    const dotPop = statusChange.changed ? ' change-pop' : '';
     // Writes are optimistic: only a slow one earns a spinner.
     const showSpinner = useDelayedLoading(pending, 400);
 
@@ -147,9 +143,6 @@ export default function QuickAdd({
                 onSelect={handleSelect}
                 onRemove={onRemove ? handleRemove : undefined}
                 autoFocus
-                // Say what Completed does to progress before it happens: every
-                // episode, or every aired one while the show is still airing.
-                completeHint={completeHint(watched, total, aired)}
             />
         );
 
@@ -180,10 +173,10 @@ export default function QuickAdd({
                 aria-label={label}
                 title={variant === 'icon' ? (meta ? meta.label : 'Add to list') : undefined}
                 className={variant === 'chip'
-                    ? `inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-lg ${compact && meta ? 'w-11 justify-center' : labelFrom === 'sm' ? 'max-sm:w-11 max-sm:justify-center sm:px-3' : 'px-3'} text-sm font-medium transition-colors duration-150 touch-manipulation ${meta ? (quiet ? 'text-[var(--text-2)] hover:bg-white/[0.06] hover:text-[var(--text-1)]' : 'bg-white/[0.06] text-[var(--text-1)] hover:bg-white/[0.1]') : 'bg-[var(--signature-soft)] text-[var(--signature)] hover:bg-[rgb(141_177_255/0.2)]'}`
+                    ? `press inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-lg ${compact && meta ? 'w-11 justify-center' : labelFrom === 'sm' ? 'max-sm:w-11 max-sm:justify-center sm:px-3' : 'px-3'} text-sm font-medium transition-colors duration-150 touch-manipulation ${meta ? (quiet ? 'text-[var(--text-2)] hover:bg-white/[0.06] hover:text-[var(--text-1)]' : 'bg-white/[0.06] text-[var(--text-1)] hover:bg-white/[0.1]') : 'bg-[var(--signature-soft)] text-[var(--signature)] hover:bg-[rgb(141_177_255/0.2)]'}`
                     : variant === 'button'
-                    ? `flex h-11 w-full items-center gap-2.5 rounded-[var(--radius-md)] px-3.5 text-sm font-semibold transition-colors duration-150 touch-manipulation ${meta ? 'bg-white/[0.07] text-white hover:bg-white/[0.11]' : 'bg-[var(--signature)] text-[var(--on-signature)] hover:bg-[var(--signature-hover)]'}`
-                    : `quick-add relative flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[rgb(27_31_37/0.88)] text-[var(--text-1)] backdrop-blur-sm transition-colors duration-150 hover:bg-[rgb(40_46_54/0.95)] after:absolute after:-inset-1.5 after:content-[''] touch-manipulation ${meta && !compact ? 'px-2.5 text-[12.5px] font-medium' : 'w-8'}`}
+                    ? `press flex h-11 w-full items-center gap-2.5 rounded-[var(--radius-md)] px-3.5 text-sm font-semibold transition-colors duration-150 touch-manipulation ${meta ? 'bg-white/[0.07] text-white hover:bg-white/[0.11]' : 'bg-[var(--signature)] text-[var(--on-signature)] hover:bg-[var(--signature-hover)]'}`
+                    : `press quick-add relative flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[rgb(27_31_37/0.88)] text-[var(--text-1)] backdrop-blur-sm transition-colors duration-150 hover:bg-[rgb(40_46_54/0.95)] after:absolute after:-inset-1.5 after:content-[''] touch-manipulation ${meta && !compact ? 'px-2.5 text-[12.5px] font-medium' : 'w-8'}`}
             >
                 {variant === 'chip' && compact && meta ? (
                     showSpinner
@@ -194,7 +187,7 @@ export default function QuickAdd({
                         {showSpinner ? (
                             <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
                         ) : meta ? (
-                            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />
+                            <span key={statusChange.key} aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full${dotPop}`} style={{ backgroundColor: meta.color }} />
                         ) : (
                             <Plus aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
                         )}
@@ -205,7 +198,7 @@ export default function QuickAdd({
                         {showSpinner ? (
                             <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
                         ) : meta ? (
-                            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />
+                            <span key={statusChange.key} aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full${dotPop}`} style={{ backgroundColor: meta.color }} />
                         ) : (
                             <Plus aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
                         )}
@@ -216,7 +209,7 @@ export default function QuickAdd({
                     <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
                 ) : meta ? (
                     <>
-                        <span aria-hidden="true" className={`${compact ? 'h-2.5 w-2.5' : 'h-2 w-2'} shrink-0 rounded-full`} style={{ backgroundColor: meta.color }} />
+                        <span key={statusChange.key} aria-hidden="true" className={`${compact ? 'h-2.5 w-2.5' : 'h-2 w-2'} shrink-0 rounded-full${dotPop}`} style={{ backgroundColor: meta.color }} />
                         {!compact && <span aria-hidden="true">{meta.label}</span>}
                     </>
                 ) : (
@@ -229,6 +222,8 @@ export default function QuickAdd({
                     id={menuId}
                     ref={menuRef}
                     data-state={popover.closing ? 'closing' : 'open'}
+                    data-side={placement === 'down' ? 'bottom' : 'top'}
+                    data-align={variant === 'button' ? 'center' : 'end'}
                     style={variant === 'button' || !nudge ? undefined : { right: -nudge }}
                     className={`popover-in absolute ${variant === 'button' ? 'left-0 right-0 min-w-52' : 'right-0 w-52'} z-[300] rounded-[var(--radius-md)] bg-[var(--ink-3)] p-1 shadow-[var(--shadow-pop)] ${placement === 'down' ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                 >

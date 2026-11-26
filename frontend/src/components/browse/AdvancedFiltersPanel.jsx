@@ -3,6 +3,8 @@ import PropTypes from 'prop-types';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import usePresence from '../../hooks/usePresence';
+import './advancedFiltersPanel.css';
 
 const ADULT_GENRES = new Set(['ecchi', 'hentai']);
 
@@ -24,7 +26,7 @@ const Chip = ({ active, label, onClick }) => (
     type="button"
     onClick={onClick}
     aria-pressed={Boolean(active)}
-    className={`h-11 whitespace-nowrap rounded-lg px-3 text-sm transition-colors duration-150 sm:h-9 ${active
+    className={`press h-11 whitespace-nowrap rounded-lg px-3 text-sm sm:h-9 ${active
       ? 'bg-[var(--signature-soft)] font-medium text-[var(--signature)]'
       : 'bg-white/[0.04] text-[var(--text-2)] hover:bg-white/[0.08] hover:text-[var(--text-1)]'}`}
   >
@@ -39,24 +41,30 @@ function SelectField({ label, value, onChange, options, anyLabel = 'Any' }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const ref = useRef(null);
+  const triggerRef = useRef(null);
   const labelId = useId();
+  // Stays mounted for the menu's 120ms exit (popover-in + data-state).
+  const menu = usePresence(open, 120);
 
   useEffect(() => {
-    if (!open) {
-      setQuery('');
-      return undefined;
-    }
+    if (!open) return undefined;
     const onPointer = (event) => {
       if (!ref.current?.contains(event.target)) setOpen(false);
     };
+    // Capture phase, and the Escape stops there: it closes this menu only,
+    // never the filters panel (or the page's Escape shortcut) around it.
     const onKey = (event) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      event.preventDefault();
+      setOpen(false);
+      if (ref.current?.contains(document.activeElement)) triggerRef.current?.focus();
     };
     document.addEventListener('mousedown', onPointer);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('mousedown', onPointer);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
     };
   }, [open]);
 
@@ -71,19 +79,28 @@ function SelectField({ label, value, onChange, options, anyLabel = 'Any' }) {
     <div ref={ref} className="relative">
       <Label id={labelId}>{label}</Label>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (!open) setQuery('');
+          setOpen((current) => !current);
+        }}
         aria-expanded={open}
         aria-labelledby={labelId}
-        className={`flex h-11 w-full items-center justify-between gap-2 rounded-lg px-3 text-sm transition-colors duration-150 sm:h-10 ${value
+        className={`press flex h-11 w-full items-center justify-between gap-2 rounded-lg px-3 text-sm sm:h-10 ${value
           ? 'bg-[var(--signature-soft)] text-[var(--signature)]'
           : 'bg-white/[0.05] text-[var(--text-2)] hover:bg-white/[0.08] hover:text-[var(--text-1)]'}`}
       >
         <span className="truncate">{selected?.label || anyLabel}</span>
         <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 opacity-70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && (
-        <div className="popover-in absolute left-0 right-0 top-full z-40 mt-2 rounded-xl bg-[var(--ink-3)] p-1.5 shadow-[var(--shadow-pop)]">
+      {menu.mounted && (
+        <div
+          data-side="bottom"
+          data-align="center"
+          data-state={menu.closing ? 'closing' : 'open'}
+          className="popover-in afp-menu absolute left-0 right-0 top-full z-40 mt-2 rounded-xl bg-[var(--ink-3)] p-1.5 shadow-[var(--shadow-pop)]"
+        >
           {searchable && (
             <div className="relative mb-1">
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-3)]" />
@@ -186,7 +203,8 @@ RangeField.propTypes = {
 
 /**
  * "More filters" (B3): everything the one-row toolbar leaves out, on one
- * quiet panel. Desktop: inline under the toolbar. Phones: a full-screen sheet
+ * quiet panel. Desktop: an overlay under the toolbar (the results under it
+ * never move; outside click and Escape close it). Phones: a full-screen sheet
  * that also carries format, season, year and genres (hidden from the phone
  * toolbar), with "Show results" at the bottom. Every change applies at once.
  */
@@ -213,15 +231,26 @@ export default function AdvancedFiltersPanel({
 }) {
   const [tagQuery, setTagQuery] = useState('');
   // Phones: a full-screen sheet, so it behaves as a dialog (focus inside,
-  // Escape closes, focus returns to Filters). Desktop: an inline panel.
+  // Escape closes, focus returns to Filters). Desktop: an overlay panel.
   const isSheet = useMediaQuery('(max-width: 639px)');
   const trapRef = useFocusTrap(isOpen && isSheet, onClose);
-  // Closing the sheet hands focus back to whatever opened it.
+  // Stays mounted exactly as long as its closing motion in
+  // advancedFiltersPanel.css: sinks on phones (220ms), fades on desktop (140ms).
+  const presence = usePresence(isOpen, isSheet ? 220 : 140);
+  const rootRef = useRef(null);
+  // Closing hands focus back to whatever opened it: always for the sheet;
+  // on desktop only when focus was inside the panel (or got lost with it),
+  // so an outside click keeps focus where the user put it.
   const openerRef = useRef(null);
   useEffect(() => {
-    if (!isOpen || !isSheet) return undefined;
+    if (!isOpen) return undefined;
     openerRef.current = document.activeElement;
-    return () => openerRef.current?.focus?.();
+    const root = rootRef.current;
+    return () => {
+      const active = document.activeElement;
+      const inside = !active || active === document.body || Boolean(root?.contains(active));
+      if (isSheet || inside) openerRef.current?.focus?.({ preventScroll: true });
+    };
   }, [isOpen, isSheet]);
   const selectedTags = localFilters.tags || [];
   const query = tagQuery.trim().toLowerCase();
@@ -246,23 +275,42 @@ export default function AdvancedFiltersPanel({
 
   useEffect(() => {
     if (!isOpen) return undefined;
-    const onKey = (event) => { if (event.key === 'Escape') onClose(); };
+    // A select inside the panel stops its own Escape before it gets here.
+    const onKey = (event) => { if (event.key === 'Escape' && !event.defaultPrevented) onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  // Desktop overlay: a press anywhere else closes it. The toggle in the
+  // toolbar is left to its own click, so it does not close and reopen.
+  useEffect(() => {
+    if (!isOpen || isSheet) return undefined;
+    const onPointer = (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (rootRef.current?.contains(target) || target.closest('[data-filters-toggle]')) return;
+      onClose();
+    };
+    document.addEventListener('pointerdown', onPointer);
+    return () => document.removeEventListener('pointerdown', onPointer);
+  }, [isOpen, isSheet, onClose]);
+
+  if (!presence.mounted) return null;
 
   const section = 'mt-7 first:mt-0';
 
   return (
-    <div className="fixed inset-0 z-[1100] flex flex-col bg-[var(--ink-0)] sm:static sm:z-auto sm:mb-6 sm:block sm:bg-transparent">
+    <div
+      ref={rootRef}
+      data-state={presence.closing ? 'closing' : 'open'}
+      className="afp-root fixed inset-0 z-[1100] flex flex-col bg-[var(--ink-0)] sm:absolute sm:inset-x-0 sm:bottom-auto sm:top-full sm:z-50 sm:mt-2 sm:block sm:bg-transparent"
+    >
       <div
         ref={trapRef}
         role={isSheet ? 'dialog' : 'region'}
         aria-modal={isSheet ? 'true' : undefined}
         aria-label={isSheet ? 'Filters' : 'More filters'}
-        className="popover-in flex min-h-0 flex-1 flex-col sm:block sm:rounded-[var(--radius-lg)] sm:bg-[var(--ink-1)]"
+        className="afp-panel flex min-h-0 flex-1 flex-col sm:block sm:rounded-[var(--radius-lg)] sm:bg-[var(--ink-2)] sm:shadow-[var(--shadow-pop)]"
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-4 sm:px-6 sm:pt-5">
@@ -278,7 +326,7 @@ export default function AdvancedFiltersPanel({
               type="button"
               onClick={onClose}
               aria-label="Close filters"
-              className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-2)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-1)]"
+              className="press flex h-11 w-11 items-center justify-center rounded-lg text-[var(--text-2)] hover:bg-white/[0.06] hover:text-[var(--text-1)]"
             >
               <X aria-hidden="true" className="h-5 w-5" />
             </button>

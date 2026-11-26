@@ -75,6 +75,7 @@ export default function TitleSection({
                             srcSet={coverSrcSet}
                             sizes="(min-width: 768px) 144px, 104px"
                             alt={anime.title}
+                            fetchPriority="high"
                             onLoad={() => setIsCoverLoaded(true)}
                             onError={(event) => {
                                 setIsCoverLoaded(false);

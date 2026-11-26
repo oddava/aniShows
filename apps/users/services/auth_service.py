@@ -4,6 +4,7 @@ from typing import Dict
 from allauth.account import app_settings as allauth_account_settings
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.http import HttpRequest
 from django.utils import timezone
 from django.utils.encoding import force_str
@@ -14,6 +15,7 @@ from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, Ou
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ...core.services.admin_settings_service import is_email_verification_required
+from ..authentication import SESSION_VERSION_CLAIM
 from ..models import UserProfile
 from ..tokens import email_verification_token_generator
 from .user_queryset import filter_username_ci, get_annotated_user_queryset
@@ -40,6 +42,15 @@ def add_session_claims(token, user, *, auth_time: int | None = None):
     token["user_id"] = user.id
     token["username"] = user.username
     token[AUTH_TIME_CLAIM] = int(time.time()) if auth_time is None else int(auth_time)
+    # Read from the row, not the instance: a session revoked a moment ago (a
+    # password change) must not mint a token under the old version.
+    token[SESSION_VERSION_CLAIM] = (
+        type(user)
+        ._default_manager.filter(pk=user.pk)
+        .values_list("session_version", flat=True)
+        .first()
+        or 0
+    )
     return token
 
 
@@ -132,7 +143,13 @@ def flush_expired_tokens(batch_size: int = 5000) -> int:
 
 
 def revoke_all_sessions(user) -> None:
-    """Blacklist every refresh token issued to ``user`` (all devices log out)."""
+    """End every session of ``user``: refresh tokens blacklisted, access tokens refused.
+
+    Access tokens are stateless, so blacklisting refresh tokens alone would leave
+    them working until they expire. Bumping ``session_version`` (on the user row,
+    which authentication reads anyway) voids every token issued before, at once
+    and durably; ``RevocableJWTAuthentication`` compares the token's claim.
+    """
     with transaction.atomic():
         lock_user_sessions(user.pk)
         BlacklistedToken.objects.bulk_create(
@@ -144,6 +161,10 @@ def revoke_all_sessions(user) -> None:
             ],
             ignore_conflicts=True,
         )
+        type(user)._default_manager.filter(pk=user.pk).update(
+            session_version=F("session_version") + 1
+        )
+        user.refresh_from_db(fields=["session_version"])
 
 
 class AuthService:

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Download, LayoutGrid, Loader2, Rows3, Search, Tv } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,9 @@ import { CardSkeleton, RowSkeleton } from '../components/ui/Skeleton';
 import { LIST_ORDERINGS, listQueries } from '../api/queries/lists';
 import { LIST_STATUSES, normalizeStatus, statusMeta } from '../utils/listStatus';
 import { progressText } from '../utils/episodes';
+import useActivePill from '../hooks/useActivePill';
+import useDelayedLoading from '../hooks/useDelayedLoading';
+import PageLoader from '../components/common/PageLoader';
 
 const ALL = 'All';
 
@@ -59,9 +62,15 @@ function useDebounced(value, delay) {
  * where they were, showing their new state, and a +1 never moves a card
  * from under your finger. Recency reorders on the next visit.
  */
-function useStickyEntries(fetched, viewKey) {
+function useStickyEntries(fetched, viewKey, isPlaceholder) {
     const shown = useRef({ key: viewKey, list: [] });
     return useMemo(() => {
+        // Placeholder data (the previous tab or search, dimmed) never becomes
+        // the kept order: the view's own first page replaces it outright.
+        if (isPlaceholder) {
+            shown.current = { key: null, list: [] };
+            return fetched;
+        }
         if (shown.current.key !== viewKey) {
             shown.current = { key: viewKey, list: fetched };
             return fetched;
@@ -77,7 +86,7 @@ function useStickyEntries(fetched, viewKey) {
         ];
         shown.current = { key: viewKey, list: merged };
         return merged;
-    }, [fetched, viewKey]);
+    }, [fetched, viewKey, isPlaceholder]);
 }
 
 /**
@@ -96,6 +105,7 @@ export default function Library() {
     const search = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
     const username = user?.username;
     const sentinel = useRef(null);
+    const queryClient = useQueryClient();
 
     useEffect(() => {
         try {
@@ -116,14 +126,22 @@ export default function Library() {
     } = useInfiniteQuery({
         ...listQueries.paged(username, statusFilter, search, ordering),
         enabled: Boolean(username),
-        placeholderData: (previous, previousQuery) => (
-            previousQuery?.queryKey?.[2] === statusFilter ? previous : undefined
-        ),
+        // The previous view stays on screen, dimmed, while the next one loads
+        // (another tab included), so a quick switch never flashes a skeleton.
+        placeholderData: (previous) => previous,
         staleTime: 60 * 1000,
     });
 
+    // Which status the cards on screen belong to. While a cold tab loads, the
+    // placeholder is the previous tab's cards: dimmed for up to 250ms, then a
+    // skeleton sized for the new tab if it is still loading.
+    const [shownStatus, setShownStatus] = useState(statusFilter);
+    if (data && !isPlaceholderData && shownStatus !== statusFilter) setShownStatus(statusFilter);
+    const otherTabShown = isPlaceholderData && shownStatus !== statusFilter;
+    const slowTabSwitch = useDelayedLoading(otherTabShown, 250);
+
     const fetched = useMemo(() => data?.pages?.flatMap((page) => page?.results || []) || [], [data]);
-    const entries = useStickyEntries(fetched, `${status}|${search}|${ordering}`);
+    const entries = useStickyEntries(fetched, `${status}|${search}|${ordering}`, isPlaceholderData);
     const total = summary?.total ?? 0;
 
     useEffect(() => {
@@ -139,11 +157,13 @@ export default function Library() {
     // A deep link or a tab change brings the active tab into view on phones;
     // nothing else (a +1, a save) moves the page.
     const tabsRef = useRef(null);
+    const statusPill = useActivePill();
+    const viewPill = useActivePill();
     useEffect(() => {
         tabsRef.current?.querySelector('[data-active-tab]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }, [status]);
 
-    if (!loading && !isAuthenticated) return <Navigate to="/login" replace state={{ from: '/list' }} />;
+    if (!loading && !isAuthenticated) return <><PageLoader /><Navigate to="/login" replace state={{ from: '/list' }} /></>;
 
     const setStatus = (value) => {
         const next = new URLSearchParams(params);
@@ -153,8 +173,22 @@ export default function Library() {
 
     const meta = status === ALL ? { label: 'All', value: ALL } : statusMeta(status);
     const tabs = [{ value: ALL, label: 'All', color: null }, ...LIST_STATUSES];
-    const showSkeleton = isPending || !username;
-    const empty = !showSkeleton && !isError && entries.length === 0;
+    const showSkeleton = isPending || !username || (otherTabShown && slowTabSwitch);
+    // Another tab's cards are dimmed from the first frame (no fade from full).
+    const dimClass = otherTabShown ? 'opacity-60' : `transition-opacity duration-200 ${isPlaceholderData ? 'opacity-60' : ''}`;
+    // As many placeholders as the tab will hold (up to a screenful), so a
+    // short list does not flash a full grid that then collapses.
+    const expected = status === ALL ? summary?.total : summary?.counts?.[status];
+    const skeletonCount = (max) => (Number.isFinite(expected) ? Math.min(expected, max) : max);
+    // Pointing at a status tab loads its first page, so the switch is instant.
+    const warmStatus = (value) => {
+        if (!username || value === status) return;
+        queryClient.prefetchInfiniteQuery({
+            ...listQueries.paged(username, value === ALL ? undefined : value, search, ordering),
+            staleTime: 60 * 1000,
+        }).catch(() => {});
+    };
+    const empty = !showSkeleton && !otherTabShown && !isError && entries.length === 0;
 
     return (
         <>
@@ -172,15 +206,16 @@ export default function Library() {
                             <Download aria-hidden="true" className="h-4 w-4" />
                             Import
                         </Link>
-                        {username && (
-                            <Link to={`/u/${username}`} className="btn-ghost text-sm">Profile</Link>
-                        )}
+                        {/* Always there, so the header wraps the same before and
+                            after the account loads (phones). */}
+                        <Link to={username ? `/u/${username}` : '/profile'} className="btn-ghost text-sm">Profile</Link>
                     </div>
                 </header>
 
                 {/* Status tabs: fixed colours, one label each (T7), counts from the summary. */}
                 <nav ref={tabsRef} aria-label="List status" className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
-                    <ul className="flex min-w-max gap-1">
+                    <ul ref={statusPill.hostRef} className="pill-host flex min-w-max gap-1">
+                        <li ref={statusPill.pillRef} aria-hidden="true" role="presentation" className="active-pill" />
                         {tabs.map((item) => {
                             const active = item.value === status;
                             const count = item.value === ALL ? summary?.total : summary?.counts?.[item.value];
@@ -191,13 +226,15 @@ export default function Library() {
                                     <button
                                         type="button"
                                         onClick={() => setStatus(item.value)}
+                                        onPointerEnter={() => warmStatus(item.value)}
+                                        onFocus={() => warmStatus(item.value)}
                                         data-active-tab={active ? 'true' : undefined}
                                         aria-current={active ? 'page' : undefined}
                                         className={`relative flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-colors ${active ? 'bg-white/[0.07] text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-gray-100'}`}
                                     >
                                         {item.color && <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />}
                                         {item.label}
-                                        {count != null && <span className="text-xs font-medium text-gray-500 tabular">{count}</span>}
+                                        <span className="min-w-[2ch] text-xs font-medium text-gray-500 tabular">{count ?? ''}</span>
                                     </button>
                                 </li>
                             );
@@ -224,7 +261,8 @@ export default function Library() {
                         ariaLabel="Sort"
                         triggerClassName="h-11 rounded-lg bg-dark-100 px-3 text-sm"
                     />
-                    <div role="group" aria-label="View" className="flex rounded-lg bg-white/[0.04] p-0.5">
+                    <div ref={viewPill.hostRef} role="group" aria-label="View" className="pill-host flex rounded-lg bg-white/[0.04] p-0.5" style={{ '--pill-bg': 'rgb(255 255 255 / 0.1)', '--pill-radius': '0.375rem' }}>
+                        <span ref={viewPill.pillRef} aria-hidden="true" className="active-pill" />
                         {[
                             { id: 'grid', label: 'Grid', icon: LayoutGrid },
                             { id: 'table', label: 'Table', icon: Rows3 },
@@ -265,9 +303,9 @@ export default function Library() {
                             {search ? 'Try another title, or another tab.' : EMPTY_COPY[status].body}
                         </EmptyState>
                     ) : view === 'grid' ? (
-                        <div className={`grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 anime-card-grid-gap transition-opacity duration-200 ${isPlaceholderData ? 'opacity-60' : ''}`}>
+                        <div className={`grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 anime-card-grid-gap ${showSkeleton ? '' : dimClass}`}>
                             {showSkeleton
-                                ? Array.from({ length: 12 }, (_, i) => <CardSkeleton key={i} />)
+                                ? Array.from({ length: skeletonCount(12) }, (_, i) => <CardSkeleton key={i} />)
                                 : entries.map((entry, index) => (
                                     <AnimeCard
                                         key={entry.id}
@@ -300,9 +338,9 @@ export default function Library() {
                                 )}
                             </div>
                             {showSkeleton ? (
-                                Array.from({ length: 8 }, (_, i) => <RowSkeleton key={i} />)
+                                Array.from({ length: skeletonCount(8) }, (_, i) => <RowSkeleton key={i} />)
                             ) : (
-                                <ul className={isPlaceholderData ? 'opacity-60' : ''}>
+                                <ul className={dimClass}>
                                     {entries.map((entry) => <LibraryRow key={entry.id} entry={entry} quietStatus={status !== ALL} />)}
                                 </ul>
                             )}

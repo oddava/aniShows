@@ -1,0 +1,8 @@
+/* Content that replaces other content in place (a tab switch, data that
+   lands where a skeleton was) arrives with a short fade. Opacity only: a
+   transform on the wrapper would become the containing block of any
+   fixed-position popover inside it. The global reduced-motion rule in
+   animations.css zeroes the duration. */
+.content-fade {
+  animation: panel-in 180ms ease-out backwards;
+}

@@ -21,6 +21,7 @@ from django.db.models.deletion import Collector
 from ...animes.models import Anime, Character, Genre, Review, Staff, Studio, UserFavorite
 from ...core.models import AuditLog
 from .audit import mark_nothing_to_audit, record_admin_action
+from .review_removal import notify_review_removed
 from .user_admin_service import AdminUserActionError, clean_reason, set_user_active
 
 User = get_user_model()
@@ -153,12 +154,13 @@ def _check_catalog_links(entity: str, queryset, force: bool) -> None:
         )
 
 
-def _delete(entity: str, queryset) -> dict[str, int]:
+def _delete(entity: str, queryset, reason: str = "") -> dict[str, int]:
     if entity == "review":
         counts: Counter[str] = Counter()
-        for review in queryset:
+        for review in queryset.select_related("user", "anime"):
             _total, by_model = review.delete()
             counts.update(by_model)
+            notify_review_removed(review, reason)
         return dict(counts)
     _total, by_model = queryset.delete()
     return dict(by_model)
@@ -191,7 +193,10 @@ def perform_bulk_operation(request, data) -> BulkOperationResult:
     dry_run = _truthy(data.get("dry_run"))
     force = _truthy(data.get("force"))
     reason = ""
-    if operation in {"ban", "unban"}:
+    # Bans need a reason; so does removing reviews (each author is told why).
+    if operation in {"ban", "unban"} or (
+        entity == "review" and operation == "delete" and not dry_run
+    ):
         try:
             reason = clean_reason(data.get("reason"))
         except AdminUserActionError as exc:
@@ -230,7 +235,7 @@ def perform_bulk_operation(request, data) -> BulkOperationResult:
                     f"Confirm the delete by sending confirm={matched}.", 400, {"matched": matched}
                 )
             _check_catalog_links(entity, queryset, force)
-            deleted_by_model = _delete(entity, queryset)
+            deleted_by_model = _delete(entity, queryset, reason)
             metadata["deleted_by_model"] = deleted_by_model
             payload = {
                 **base,

@@ -12,10 +12,17 @@ import GuestLanding from '../components/home/GuestLanding';
 import ContinueSection from '../components/home/ContinueSection';
 import AiringRibbon from '../components/home/AiringRibbon';
 import { animeQueries } from '../api/queries/anime';
+import { hasSession } from '../api/httpClient';
 import { recommendationMutations, recommendationQueries } from '../api/queries/recommendations';
 
 export default function Home() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, loading: authLoading } = useAuth();
+    // A returning member's session is restored after the first paint. Until
+    // then the page already has the member layout (its skeletons), so nothing
+    // is inserted above the shelves when it lands and the guest landing never
+    // flashes; the queries that need the member wait for the session.
+    const restoring = authLoading && hasSession();
+    const memberView = isAuthenticated || restoring;
     const revealRefs = useRef([]);
     const observer = useRef(null);
 
@@ -26,6 +33,7 @@ export default function Home() {
         refetch: refetchTrending,
     } = useQuery({
         ...animeQueries.trending(isAuthenticated ? 'member-home' : 'guest-home'),
+        enabled: !restoring,
         staleTime: 1000 * 60 * 15,
         gcTime: 1000 * 60 * 30,
     });
@@ -103,11 +111,15 @@ export default function Home() {
         <>
             <SEO page="home" />
             <div className="min-h-screen home-page">
-                {!isAuthenticated && <GuestLanding />}
+                {!memberView && <GuestLanding />}
 
                 {/* Main Content Area */}
                 <div className="relative space-y-16 md:space-y-20 pb-16 md:pb-24">
-                    {isAuthenticated && <ContinueSection />}
+                    {memberView && <ContinueSection />}
+                    {/* The shelves wait for the session (they depend on it);
+                        a screen of space holds their place meanwhile. */}
+                    {restoring ? <div aria-hidden="true" className="min-h-[100dvh]" /> : (
+                    <>
                     {isAuthenticated && <AiringRibbon />}
 
                     {/* Recommended For You Section */}
@@ -134,6 +146,8 @@ export default function Home() {
                         isLoading={topRatedLoading}
                         hideWhenEmpty
                     />
+                    </>
+                    )}
                 </div>
 
             </div>
@@ -163,7 +177,7 @@ function AnimeShelf({ revealRef, title, subtitle, viewAllTo, items, isLoading, i
                 <div className={SHELF_ROW_CLASSES}>
                     {isLoading ? (
                         Array.from({ length: 6 }, (_, i) => (
-                            <div key={i} className={SHELF_ITEM_CLASSES} aria-hidden="true">
+                            <div key={`sk-${i}`} className={SHELF_ITEM_CLASSES} aria-hidden="true">
                                 <AnimeCardSkeleton />
                             </div>
                         ))
@@ -255,7 +269,7 @@ function RecommendedForYouSection({ revealRef }) {
                         onClick={(event) => handleDismiss(event, rec.anime.id)}
                         aria-label={`Not interested in ${rec.anime.title}`}
                         title="Not interested"
-                        className="absolute top-2 right-2 z-[200] w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg border bg-black/50 border-white/20 text-white hover:bg-black/70 hover:border-white/30 transition-opacity duration-200 opacity-0 group-hover/rec:opacity-100 group-focus-within/rec:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 touch-manipulation after:absolute after:-inset-2 sm:after:inset-0 after:content-['']"
+                        className="absolute top-2 right-2 z-[200] w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg bg-[rgb(27_31_37/0.88)] backdrop-blur-sm text-white hover:bg-[rgb(44_50_59/0.94)] press opacity-0 group-hover/rec:opacity-100 group-focus-within/rec:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 touch-manipulation after:absolute after:-inset-2 sm:after:inset-0 after:content-['']"
                     >
                         <X aria-hidden="true" className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>

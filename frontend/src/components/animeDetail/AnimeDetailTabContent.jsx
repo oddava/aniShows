@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { OverviewTab, CharactersTab, StaffTab, ThemesTab } from '../DetailTabs';
 import EpisodesTab from '../EpisodesTab';
+import useSwitchFade from '../../hooks/useSwitchFade';
 
 // recharts is heavy; load it only when the Stats tab is opened.
 const StatsTab = lazy(() => import('../StatsTab'));
@@ -35,9 +36,12 @@ export default function AnimeDetailTabContent({ activeTab, anime, accentColor, i
         handleEpisodeRatingChange,
         handleEpisodeRatingClear,
     } = tabData;
+    const fade = useSwitchFade(activeTab);
 
+    // Keyed by the tab, so each switch fades the new tab in (opacity only;
+    // see contentFade.css).
     return (
-        <div className="min-h-[300px]">
+        <div key={activeTab} className={`${fade} min-h-[300px]`}>
             {activeTab === 'overview' && (
                 <OverviewTab
                     anime={anime}

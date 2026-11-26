@@ -16,20 +16,10 @@ const open = (props) => {
     fireEvent.click(screen.getByRole('button', { name: /change list status for Airing Show/i }));
 };
 
-describe('QuickAdd Completed hint', () => {
-    it('promises only the aired episodes while a show is airing', () => {
+describe('QuickAdd status menu', () => {
+    it('lists the statuses without any progress hint under Completed', () => {
         open({ watched: 3, total: 12, aired: 8 });
-        expect(screen.getByText('marks the 8 aired episodes watched')).toBeInTheDocument();
-        expect(screen.queryByText(/marks all 12/)).not.toBeInTheDocument();
-    });
-
-    it('promises every episode for a finished show', () => {
-        open({ watched: 3, total: 12, aired: null });
-        expect(screen.getByText('marks all 12 watched')).toBeInTheDocument();
-    });
-
-    it('says nothing when you are already caught up', () => {
-        open({ watched: 8, total: 12, aired: 8 });
+        expect(screen.getByRole('menuitemradio', { name: 'Completed' })).toBeInTheDocument();
         expect(screen.queryByText(/marks/)).not.toBeInTheDocument();
     });
 });

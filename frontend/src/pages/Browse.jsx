@@ -230,46 +230,51 @@ export default function Browse() {
           {/* Main Layout */}
           <div className="w-full">
             {/* Main Content */}
-            <main className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0">
 
               <div className="max-w-7xl mx-auto w-full">
-                <TopFilterBar
-                  genres={browseGenres}
-                  isGenresError={isGenresError}
-                  typeOptions={TYPE_OPTIONS}
-                  statusOptions={STATUS_OPTIONS}
-                  seasonOptions={SEASON_OPTIONS}
-                  yearOptions={YEAR_OPTIONS}
-                  searchInputRef={searchInputRef}
-                  onOpenMobileFilters={() => setShowFilters(!showFilters)}
-                  hasActiveFilters={hasActiveFilters}
-                  adultContentEnabled={adultContentEnabled}
-                  trailing={isGridMode ? (
-                    <>
-                      <SortSelect value={currentSort} hasSearch={Boolean(currentSearch)} onChange={setSort} />
-                      <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
-                      <button
-                        onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
-                        className="flex h-10 min-w-10 items-center justify-center rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)] max-sm:bg-white/[0.05] max-sm:px-0"
-                        type="button"
-                        title="Toggle title language"
-                        aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}
-                      >
-                        <Languages aria-hidden="true" className="h-4 w-4 sm:hidden" />
-                        <span className="hidden sm:inline">{titleLanguage === 'en' ? 'English titles' : 'Japanese titles'}</span>
-                      </button>
-                    </>
-                  ) : null}
-                />
+                {/* The toolbar anchors "More filters": on desktop it opens as an
+                    overlay right under the toolbar, so the results never move. */}
+                <div className="relative">
+                  <TopFilterBar
+                    genres={browseGenres}
+                    isGenresError={isGenresError}
+                    typeOptions={TYPE_OPTIONS}
+                    statusOptions={STATUS_OPTIONS}
+                    seasonOptions={SEASON_OPTIONS}
+                    yearOptions={YEAR_OPTIONS}
+                    searchInputRef={searchInputRef}
+                    onOpenMobileFilters={() => setShowFilters(!showFilters)}
+                    filtersOpen={showFilters}
+                    hasActiveFilters={hasActiveFilters}
+                    adultContentEnabled={adultContentEnabled}
+                    trailing={isGridMode ? (
+                      <>
+                        <SortSelect value={currentSort} hasSearch={Boolean(currentSearch)} onChange={setSort} />
+                        <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+                        <button
+                          onClick={() => setTitleLanguage(titleLanguage === 'en' ? 'jp' : 'en')}
+                          className="press flex h-10 min-w-10 items-center justify-center rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)] max-sm:bg-white/[0.05] max-sm:px-0"
+                          type="button"
+                          title="Toggle title language"
+                          aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}
+                        >
+                          <Languages aria-hidden="true" className="h-4 w-4 sm:hidden" />
+                          <span className="hidden sm:inline">{titleLanguage === 'en' ? 'English titles' : 'Japanese titles'}</span>
+                        </button>
+                      </>
+                    ) : null}
+                  />
 
-                <AdvancedFiltersPanel
-                  isOpen={showFilters}
-                  onClose={() => setShowFilters(false)}
-                  adultContentEnabled={adultContentEnabled}
-                  hasActiveFilters={hasActiveFilters}
-                  onClearAll={clearAllFilters}
-                  {...filterSidebarProps}
-                />
+                  <AdvancedFiltersPanel
+                    isOpen={showFilters}
+                    onClose={() => setShowFilters(false)}
+                    adultContentEnabled={adultContentEnabled}
+                    hasActiveFilters={hasActiveFilters}
+                    onClearAll={clearAllFilters}
+                    {...filterSidebarProps}
+                  />
+                </div>
 
                 {(seasonLabel || currentSearch) ? (
                   <h1 className={seasonLabel ? 'page-title mb-6' : 'section-title mb-5'}>
@@ -344,7 +349,7 @@ export default function Browse() {
                   />
                 ) : <BrowseRowMode titleLanguage={titleLanguage} />}
               </div>
-            </main>
+            </div>
           </div>
         </div>
       </div>

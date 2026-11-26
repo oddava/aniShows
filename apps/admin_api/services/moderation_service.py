@@ -26,6 +26,7 @@ from ...animes.models import Review, ReviewReport
 from ...core.models import AuditLog
 from .audit import record_admin_action
 from .query_helpers import related_count
+from .review_removal import notify_review_removed
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -47,6 +48,7 @@ OUTCOMES = (OUTCOME_DISMISS, OUTCOME_REMOVE, OUTCOME_SPOILER)
 # and leave the review as it is.
 LEGACY_OUTCOME_RESOLVE = "resolve"
 LOW_RATING_MAX = 3
+REMOVAL_REASON_MIN = 3
 FORUM_MODERATION_MODULE = "apps.forums.services.moderation"
 
 
@@ -201,6 +203,11 @@ def resolve_review(request, review_id, outcome, notes=None, *, legacy: bool = Fa
     if outcome not in allowed:
         raise ModerationError(f"outcome must be one of: {', '.join(allowed)}.", 400)
     notes = _clean_notes(notes)
+    if outcome == OUTCOME_REMOVE and len(notes) < REMOVAL_REASON_MIN:
+        # The author is told why their review went; an empty reason helps no one.
+        raise ModerationError(
+            f"Give a reason of at least {REMOVAL_REASON_MIN} characters; the author sees it.", 400
+        )
     try:
         review_pk = int(review_id)
     except (TypeError, ValueError):
@@ -247,6 +254,7 @@ def resolve_review(request, review_id, outcome, notes=None, *, legacy: bool = Fa
         elif outcome == OUTCOME_REMOVE:
             review.delete()
             new_state = {"deleted": True}
+            notify_review_removed(review, notes)
 
         record_admin_action(
             request,

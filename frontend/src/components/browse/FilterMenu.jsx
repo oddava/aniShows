@@ -73,7 +73,7 @@ export default function FilterMenu({
                 aria-expanded={open}
                 aria-controls={open ? panelId : undefined}
                 aria-label={isActive ? `${label}: ${triggerText}` : label}
-                className={`flex h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm transition-colors duration-150 ${isActive
+                className={`press flex h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm transition-colors duration-150 ${isActive
                     ? 'bg-[var(--signature-soft)] font-medium text-[var(--signature)]'
                     : 'bg-white/[0.05] text-[var(--text-2)] hover:bg-white/[0.08] hover:text-[var(--text-1)]'}`}
             >
@@ -85,6 +85,8 @@ export default function FilterMenu({
                 <div
                     id={panelId}
                     data-state={panel.closing ? 'closing' : 'open'}
+                    data-side="bottom"
+                    data-align="start"
                     role="group"
                     aria-label={label}
                     className={`popover-in absolute left-0 top-full z-40 mt-2 rounded-xl bg-[var(--ink-3)] p-1.5 shadow-[var(--shadow-pop)] ${columns > 1 ? 'w-[26rem]' : 'min-w-48'}`}
@@ -95,6 +97,9 @@ export default function FilterMenu({
                                 {anyLabel || `Any ${label.toLowerCase()}`}
                                 {!isActive && <Check aria-hidden="true" className="h-4 w-4 text-[var(--signature)]" />}
                             </button>
+                        )}
+                        {options.length === 0 && (
+                            <p className={`px-3 py-2 text-sm text-[var(--text-3)] ${columns > 1 ? 'col-span-2' : ''}`}>Loading…</p>
                         )}
                         {options.map((option) => {
                             const on = selected.includes(String(option.value));

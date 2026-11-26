@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import useActivePill from '../../hooks/useActivePill';
 
 export const SETTINGS_TABS = [
     { key: 'profile', label: 'Profile' },
@@ -21,6 +22,7 @@ export const visibleSettingsTabs = (user) =>
 export default function SettingsTabs({ user, activeTab, setActiveTab }) {
     const tabs = visibleSettingsTabs(user);
     const tabRefs = useRef({});
+    const pill = useActivePill();
 
     const activate = (key) => {
         setActiveTab(key);
@@ -58,8 +60,10 @@ export default function SettingsTabs({ user, activeTab, setActiveTab }) {
             role="tablist"
             aria-label="Settings sections"
             onKeyDown={handleKeyDown}
-            className="mt-6 flex gap-1 overflow-x-auto scrollbar-hide whitespace-nowrap touch-pan-x -mx-4 px-4 md:mx-0 md:px-0"
+            ref={pill.hostRef}
+            className="pill-host mt-6 flex gap-1 overflow-x-auto scrollbar-hide whitespace-nowrap touch-pan-x -mx-4 px-4 md:mx-0 md:px-0"
         >
+            <span ref={pill.pillRef} aria-hidden="true" className="active-pill" />
             {tabs.map(({ key, label }) => {
                 const isActive = activeTab === key;
                 return (

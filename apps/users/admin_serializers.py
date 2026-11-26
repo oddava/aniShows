@@ -80,7 +80,11 @@ class SystemLogSerializer(ModelSerializer):
 
 
 class AuditLogSerializer(ModelSerializer):
-    """Serializer for administrative audit logs."""
+    """Serializer for administrative audit logs.
+
+    Staff read the audit log, but IP addresses are superuser-only (like the
+    request logs), so ``user_ip`` is blanked for everyone else.
+    """
 
     username = SerializerMethodField()
 
@@ -90,3 +94,11 @@ class AuditLogSerializer(ModelSerializer):
 
     def get_username(self, obj):
         return obj.user.username if obj.user else None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not (user and user.is_authenticated and user.is_superuser):
+            data["user_ip"] = None
+        return data

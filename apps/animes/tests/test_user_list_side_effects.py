@@ -15,6 +15,7 @@ from ..services.public_anime_service import AnimePublicPayloadService
 from ..services.user_list_side_effects import (
     SITE_STATUS_KEYS,
     schedule_recommendations_debounced,
+    site_score_counts,
     site_status_counts,
 )
 from ..tasks.recommendations import generate_recommendations
@@ -75,7 +76,7 @@ class NoAnimeWriteTests(ListSideEffectTestCase):
         self.assertEqual(self.anime.status_distribution, {"CURRENT": 10, "COMPLETED": 5})
 
 
-class SiteStatusCountsTests(ListSideEffectTestCase):
+class SiteListCountsTestCase(ListSideEffectTestCase):
     def _add(self, username, status):
         user = User.objects.create_user(
             username=username, email=f"{username}@example.com", password="x"
@@ -83,6 +84,8 @@ class SiteStatusCountsTests(ListSideEffectTestCase):
         with self.captureOnCommitCallbacks(execute=True):
             return UserAnimeList.objects.create(user=user, anime=self.anime, status=status)
 
+
+class SiteStatusCountsTests(SiteListCountsTestCase):
     def test_shape_and_counts(self):
         self._add("a1", "Watching")
         self._add("a2", "Watching")
@@ -119,6 +122,47 @@ class SiteStatusCountsTests(ListSideEffectTestCase):
         with self.captureOnCommitCallbacks(execute=True):
             entry.delete()
         self.assertEqual(site_status_counts(self.anime.id)["completed"], 0)
+
+
+class SiteScoreCountsTests(SiteListCountsTestCase):
+    def _scored(self, username, score):
+        entry = self._add(username, "Completed")
+        with self.captureOnCommitCallbacks(execute=True):
+            entry.score = score
+            entry.save()
+        return entry
+
+    def test_counts_scores_one_to_ten_and_skips_unscored(self):
+        self._scored("s1", 9)
+        self._scored("s2", 9)
+        self._scored("s3", 4)
+        self._add("s4", "Watching")  # unscored (0)
+
+        counts = site_score_counts(self.anime.id)
+
+        self.assertEqual(list(counts), [str(n) for n in range(1, 11)])
+        self.assertEqual(counts["9"], 2)
+        self.assertEqual(counts["4"], 1)
+        self.assertEqual(sum(counts.values()), 3)
+
+    def test_one_query_fills_status_and_score_caches(self):
+        self._scored("q1", 7)
+        with self.assertNumQueries(1):
+            site_status_counts(self.anime.id)
+            site_score_counts(self.anime.id)
+
+    def test_score_cache_drops_on_a_list_change(self):
+        entry = self._scored("d1", 6)
+        self.assertEqual(site_score_counts(self.anime.id)["6"], 1)
+        with self.captureOnCommitCallbacks(execute=True):
+            entry.score = 8
+            entry.save()
+        counts = site_score_counts(self.anime.id)
+        self.assertEqual((counts["6"], counts["8"]), (0, 1))
+
+    def test_empty_and_missing_anime_scores(self):
+        self.assertEqual(sum(site_score_counts(None).values()), 0)
+        self.assertEqual(sum(site_score_counts(self.anime.id).values()), 0)
 
 
 class RecommendationDebounceTests(TestCase):

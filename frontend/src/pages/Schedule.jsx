@@ -4,7 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import AnimeCard from '../components/AnimeCard';
-import { ScheduleGridSkeleton } from '../components/skeletons';
+import Skeleton from '../components/ui/Skeleton';
 import { LoadingBar } from '../components/LoadingBar';
 import SEO from '../components/SEO';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -20,6 +20,9 @@ import {
   resolveTimeZone,
 } from '../utils/dateUtils';
 import { scheduleQueries } from '../api/queries/anime';
+import { hasSession } from '../api/httpClient';
+import useActivePill from '../hooks/useActivePill';
+import useSwitchFade from '../hooks/useSwitchFade';
 
 // Day names for display
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -72,14 +75,19 @@ const addDays = (date, days) => {
 // Seven equal columns, so the whole strip fits on a phone without sideways
 // scrolling.
 const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToday, quietEmpty = false }) => {
+  const pill = useActivePill('[aria-pressed="true"]');
   return (
-    <div className="grid grid-cols-7 gap-1" role="group" aria-label="Day">
+    <div ref={pill.hostRef} className="pill-host grid grid-cols-7 gap-1" role="group" aria-label="Day" style={{ '--pill-radius': 'var(--radius-md)', '--pill-bg': 'rgb(255 255 255 / 0.08)' }}>
+      <span ref={pill.pillRef} aria-hidden="true" className="active-pill" />
       {Array.from({ length: 7 }, (_, position) => (todayDay + position) % 7).map((index, position) => {
         const isSelected = selectedDay === index;
         const count = animeCounts[position] || 0;
         const isToday = position === 0;
         const date = addDays(startOfToday, position);
         const dayOfMonth = formatCalendarDate(date, { day: 'numeric' });
+        const dayLabel = isToday ? 'Today' : DAY_SHORT[index];
+        const countLabel = count > 0 || !quietEmpty ? `${count} ep` : 'Free';
+        const episodes = `${count} ${count === 1 ? 'episode' : 'episodes'}`;
 
         return (
           <button
@@ -88,19 +96,25 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
             onClick={() => onSelect(index)}
             aria-pressed={isSelected}
             aria-current={isToday ? 'date' : undefined}
-            aria-label={`${DAY_NAMES[index]} ${dayOfMonth}, ${count} ${count === 1 ? 'episode' : 'episodes'}`}
-            className={`relative flex min-h-16 flex-col items-start rounded-[var(--radius-md)] px-2 py-2.5 text-left transition-colors duration-200 sm:px-3 ${isSelected
+            // The name starts with exactly what the button shows (WCAG 2.5.3,
+            // so voice users can say it), then spells it out.
+            aria-label={`${dayLabel} ${dayOfMonth} ${countLabel} (${DAY_NAMES[index]}, ${episodes})`}
+            className={`relative flex min-h-16 min-w-0 flex-col items-start rounded-[var(--radius-md)] px-1.5 py-2.5 text-left transition-colors duration-200 sm:px-3 ${isSelected
               ? 'bg-white/[0.08]'
               : 'hover:bg-white/[0.04]'}`}
           >
-            <span className={`text-sm font-semibold ${isSelected || isToday ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>
-              {isToday ? 'Today' : DAY_SHORT[index]}
+            <span className={`max-w-full truncate text-xs font-semibold sm:text-sm ${isSelected || isToday ? 'text-[var(--signature)]' : 'text-[var(--text-2)]'}`}>
+              {dayLabel}
             </span>
+            {/* Real spaces between the lines, so the text reads "Today 26 4 ep"
+                (a flex column does not render them). */}
+            {' '}
             <span className={`text-lg font-semibold leading-tight tabular ${isSelected ? 'text-[var(--text-1)]' : 'text-[var(--text-2)]'}`}>
               {dayOfMonth}
             </span>
-            <span aria-hidden="true" className={`text-xs tabular ${count > 0 ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}`}>
-              {count > 0 || !quietEmpty ? <><span>{count}</span> ep</> : 'Free'}
+            {' '}
+            <span className={`text-xs tabular ${count > 0 || isSelected ? 'text-[var(--text-2)]' : 'text-[var(--text-3)]'}`}>
+              {countLabel}
             </span>
           </button>
         );
@@ -113,9 +127,10 @@ const DaySelector = ({ selectedDay, onSelect, animeCounts, todayDay, startOfToda
 // shortcut back to today.
 const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle, myListOnly, onToggleMyList }) => {
   const end = addDays(startOfToday, 6);
+  const pill = useActivePill();
 
   return (
-    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mb-4 flex flex-col gap-3 sm:min-h-11 sm:flex-row sm:items-center sm:justify-between">
       <div className="whitespace-nowrap font-semibold text-[var(--text-1)] tabular">
         Next 7 days
         <span className="ml-2 font-normal text-[var(--text-2)]">
@@ -134,7 +149,8 @@ const RangeHeader = ({ startOfToday, onToday, isTodaySelected, showMyListToggle,
           </button>
         )}
         {showMyListToggle && (
-          <div role="group" aria-label="Show" className="flex rounded-lg bg-white/[0.04] p-0.5">
+          <div ref={pill.hostRef} role="group" aria-label="Show" className="pill-host flex rounded-lg bg-white/[0.04] p-0.5" style={{ '--pill-bg': 'rgb(255 255 255 / 0.1)', '--pill-radius': '0.375rem' }}>
+            <span ref={pill.pillRef} aria-hidden="true" className="active-pill" />
             {[
               { id: 'all', label: 'All', active: !myListOnly },
               { id: 'mine', label: 'My list', active: myListOnly },
@@ -176,6 +192,22 @@ const agendaGroups = (items, isAuthenticated) => {
   ].filter((group) => group.items.length > 0);
   return groups.map((group) => ({ ...group, showTitle: groups.length > 1 || group.untimed }));
 };
+
+// The day's agenda while it loads: rows shaped like AnimeCard's row variant.
+const AgendaSkeleton = () => (
+  <div aria-hidden="true" data-testid="schedule-grid-skeleton" className="panel">
+    {Array.from({ length: 6 }, (_, i) => (
+      <div key={i} className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-4 py-3">
+        <Skeleton className="h-[72px] w-12" />
+        <div>
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="mt-2 h-3.5 w-1/3" />
+        </div>
+        <Skeleton className="h-11 w-11 sm:w-24" rounded="rounded-lg" />
+      </div>
+    ))}
+  </div>
+);
 
 // The side column: every show on your list that airs this week, by day.
 // A row selects its day. Guests get one line on why to sign in.
@@ -236,7 +268,7 @@ const WeekAside = ({ isAuthenticated, isLoading, items, startOfToday, selectedOf
 // Main Schedule Page Component
 export default function Schedule() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
   const adultContentEnabled = Boolean(user?.show_adult_content);
   const preferredTimezone = user?.preferred_timezone;
   const timezoneLabel = useMemo(() => getTimezoneLabel(preferredTimezone), [preferredTimezone]);
@@ -296,6 +328,10 @@ export default function Schedule() {
   );
 
   const selectedDayAnime = scheduleByOffset[selectedOffset] || [];
+  // One keyed wrapper for the day's agenda or its empty state: every day or
+  // My list switch fades in the same way, and the first paint does not fade.
+  const dayKey = `${selectedDay}-${myListOnly ? 'mine' : 'all'}`;
+  const dayFade = useSwitchFade(dayKey);
 
   const handleToday = () => {
     setSelectedDay(todayDayIndex);
@@ -335,7 +371,8 @@ export default function Schedule() {
             startOfToday={startOfToday}
             onToday={handleToday}
             isTodaySelected={selectedDay === todayDayIndex}
-            showMyListToggle={isAuthenticated}
+            // Shown while a member's session restores too, so the header keeps its height.
+            showMyListToggle={isAuthenticated || (authLoading && hasSession())}
             myListOnly={myListOnly}
             onToggleMyList={() => setMyListParam(!myListOnly)}
           />
@@ -375,54 +412,58 @@ export default function Schedule() {
 
           {/* Anime Grid */}
           {isLoading ? (
-            <ScheduleGridSkeleton count={10} />
-          ) : selectedDayAnime.length > 0 ? (
-            <div className="flex flex-col gap-4">
-              {agendaGroups(selectedDayAnime, isAuthenticated).map((group, _index, groups) => (
-                group.untimed && groups.length > 1 ? (
-                  <details key={group.title} className="panel group/untimed">
-                    <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[15px] text-[var(--text-2)] [&::-webkit-details-marker]:hidden">
-                      <span>{group.items.length} more · time not announced</span>
-                      <ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-open/untimed:rotate-180" />
-                    </summary>
-                    <div className="mt-1">
+            <AgendaSkeleton />
+          ) : (
+            <div key={dayKey} className={dayFade}>
+              {selectedDayAnime.length > 0 ? (
+              <div className="flex flex-col gap-4">
+                {agendaGroups(selectedDayAnime, isAuthenticated).map((group, _index, groups) => (
+                  group.untimed && groups.length > 1 ? (
+                    <details key={group.title} className="panel group/untimed">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-[15px] text-[var(--text-2)] [&::-webkit-details-marker]:hidden">
+                        <span>{group.items.length} more · time not announced</span>
+                        <ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-open/untimed:rotate-180" />
+                      </summary>
+                      <div className="mt-1">
+                        {group.items.map((anime, index) => (
+                          <AnimeCard key={anime.id} variant="row" anime={anime} index={index} showAiringCountdown metaText={null} />
+                        ))}
+                      </div>
+                    </details>
+                  ) : (
+                  <section key={group.title} aria-label={group.title} className="panel">
+                    {group.showTitle && (
+                      <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-semibold text-[var(--text-2)]">
+                        {group.title}
+                        <span className="text-sm font-normal text-[var(--text-3)] tabular">{group.items.length}</span>
+                      </h3>
+                    )}
+                    <div>
                       {group.items.map((anime, index) => (
-                        <AnimeCard key={anime.id} variant="row" anime={anime} index={index} showAiringCountdown metaText={null} />
+                        <AnimeCard
+                          key={anime.id}
+                          variant="row"
+                          anime={anime}
+                          priority={index < 6}
+                          index={index}
+                          showAiringCountdown
+                          metaText={group.untimed ? null : formatAirTime(anime, preferredTimezone)}
+                        />
                       ))}
                     </div>
-                  </details>
-                ) : (
-                <section key={group.title} aria-label={group.title} className="panel">
-                  {group.showTitle && (
-                    <h3 className="mb-1 flex items-baseline gap-2 text-[15px] font-semibold text-[var(--text-2)]">
-                      {group.title}
-                      <span className="text-sm font-normal text-[var(--text-3)] tabular">{group.items.length}</span>
-                    </h3>
-                  )}
-                  <div>
-                    {group.items.map((anime, index) => (
-                      <AnimeCard
-                        key={anime.id}
-                        variant="row"
-                        anime={anime}
-                        priority={index < 6}
-                        index={index}
-                        showAiringCountdown
-                        metaText={group.untimed ? null : formatAirTime(anime, preferredTimezone)}
-                      />
-                    ))}
-                  </div>
-                </section>
-                )
-              ))}
+                  </section>
+                  )
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="No episodes scheduled">
+                {myListOnly
+                  ? `Nothing from your list airs on ${DAY_NAMES[selectedDay]}.`
+                  : `There are no anime episodes airing on ${DAY_NAMES[selectedDay]}.`}
+                {' '}Try another day in the strip above.
+              </EmptyState>
+              )}
             </div>
-          ) : (
-            <EmptyState title="No episodes scheduled">
-              {myListOnly
-                ? `Nothing from your list airs on ${DAY_NAMES[selectedDay]}.`
-                : `There are no anime episodes airing on ${DAY_NAMES[selectedDay]}.`}
-              {' '}Try another day in the strip above.
-            </EmptyState>
           )}
 
           {!isLoading && laterCount > 0 && (
@@ -434,8 +475,8 @@ export default function Schedule() {
 
           <aside aria-label="Your week" className="hidden lg:block lg:pt-[3rem]">
             <WeekAside
-              isAuthenticated={isAuthenticated}
-              isLoading={isLoading}
+              isAuthenticated={isAuthenticated || (authLoading && hasSession())}
+              isLoading={isLoading || authLoading}
               items={myWeek}
               startOfToday={startOfToday}
               selectedOffset={selectedOffset}

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Search } from 'lucide-react';
+import { ChevronLeft, LayoutDashboard, Search } from 'lucide-react';
 
 import Logo from '../Logo';
+import { useAuth } from '../../context/AuthContext';
 
 // Sections reachable from the bottom bar; anywhere else gets a back button.
 const TOP_LEVEL_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/notifications', '/settings', '/login', '/register'];
@@ -15,6 +16,8 @@ const TOP_LEVEL_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/noti
 export default function MobileTopBar() {
     const location = useLocation();
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const isStaff = Boolean(user?.is_staff || user?.is_superuser);
     const [scrolled, setScrolled] = useState(false);
     const [hidden, setHidden] = useState(false);
     const lastY = useRef(0);
@@ -44,7 +47,7 @@ export default function MobileTopBar() {
     const showSearch = path !== '/browse';
     // Over artwork (top of the page) the icon buttons get a dark backing so
     // they stay legible on bright banners.
-    const iconButtonClasses = `w-11 h-11 flex items-center justify-center rounded-full text-gray-100 transition-colors ${scrolled ? 'hover:bg-white/10' : 'bg-[rgb(21_24_29/0.6)] backdrop-blur-sm hover:bg-[rgb(21_24_29/0.8)]'}`;
+    const iconButtonClasses = `press w-11 h-11 flex items-center justify-center rounded-full text-gray-100 transition-colors ${scrolled ? 'hover:bg-white/10' : 'bg-[rgb(21_24_29/0.6)] backdrop-blur-sm hover:bg-[rgb(21_24_29/0.8)]'}`;
 
     const goBack = () => {
         // location.key is "default" on the first entry of a session: nothing to go back to.
@@ -73,16 +76,23 @@ export default function MobileTopBar() {
                         <Logo textClassName="text-lg font-bold text-white [text-shadow:0_1px_8px_rgb(0_0_0/0.45)]" />
                     </Link>
                 </div>
-                {showSearch && (
-                    <button
-                        type="button"
-                        onClick={() => navigate('/browse', { state: { focusSearch: true } })}
-                        aria-label="Search anime"
-                        className={iconButtonClasses}
-                    >
-                        <Search aria-hidden="true" className="w-5 h-5" />
-                    </button>
-                )}
+                <div className="flex items-center">
+                    {isStaff && (
+                        <Link to="/admin" aria-label="Admin" title="Admin" className={iconButtonClasses}>
+                            <LayoutDashboard aria-hidden="true" className="w-5 h-5" />
+                        </Link>
+                    )}
+                    {showSearch && (
+                        <button
+                            type="button"
+                            onClick={() => navigate('/browse', { state: { focusSearch: true } })}
+                            aria-label="Search anime"
+                            className={iconButtonClasses}
+                        >
+                            <Search aria-hidden="true" className="w-5 h-5" />
+                        </button>
+                    )}
+                </div>
             </div>
         </header>
     );

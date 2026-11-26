@@ -1,26 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { installLinkPrefetch, prefetchCommonRoutes } from '../../app/routePrefetch';
+import { HISTORY_EVENT, patchHistory } from '../../app/historyEvents';
 
 const SHOW_AFTER_MS = 150;
-const HISTORY_EVENT = 'anishows:history';
-
-// Router navigations run as transitions: the address changes at once, but the
-// page on screen stays until the next one is ready. Announce history changes
-// so the bar below can tell a navigation is under way.
-function patchHistory() {
-    const { history } = window;
-    if (history.__anishowsPatched) return;
-    history.__anishowsPatched = true;
-    ['pushState', 'replaceState'].forEach((method) => {
-        const original = history[method];
-        history[method] = function patched(...args) {
-            const result = original.apply(this, args);
-            window.dispatchEvent(new Event(HISTORY_EVENT));
-            return result;
-        };
-    });
-}
 
 const currentAddress = () => window.location.pathname + window.location.search;
 

@@ -3,6 +3,7 @@ from django.utils.html import format_html
 
 from .models import (
     AdminPanelSettings,
+    Announcement,
     AuditLog,
     CeleryTaskResult,
     Notification,
@@ -381,3 +382,13 @@ class AdminPanelSettingsAdmin(ReadOnlyAdmin):
 
     list_display = ["key", "updated_by", "updated_at"]
     readonly_fields = ["key", "data", "updated_by", "created_at", "updated_at"]
+
+
+@admin.register(Announcement)
+class AnnouncementAdmin(ReadOnlyAdmin):
+    """Edit announcements in the admin SPA (validated, audited, cache-invalidated)."""
+
+    list_display = ["title", "level", "is_active", "show_banner", "starts_at", "ends_at"]
+    list_filter = ["level", "is_active", "show_banner"]
+    search_fields = ["title", "body"]
+    readonly_fields = [field.name for field in Announcement._meta.fields]

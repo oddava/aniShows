@@ -558,10 +558,14 @@ class AnimePublicPayloadService:
         from . import user_list_side_effects
 
         site_status_counts = getattr(user_list_side_effects, "site_status_counts", None)
+        site_score_counts = getattr(user_list_side_effects, "site_score_counts", None)
         return {
             **data,
             "site_status_distribution": (
                 site_status_counts(data["id"]) if site_status_counts is not None else None
+            ),
+            "site_score_distribution": (
+                site_score_counts(data["id"]) if site_score_counts is not None else None
             ),
         }
 

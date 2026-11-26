@@ -6,6 +6,7 @@ import { getUniqueCharacterRoles } from '../../utils/characterRoles';
 import { meaningfulEpisodeTitle, orderCast, pickKeyStaff } from './format';
 import { getPortraitUrl } from './portraits';
 import { CharacterRow, StaffRow } from './PeopleRows';
+import OverviewStats from './OverviewStats';
 
 const getYouTubeId = (url) => {
     if (!url) return null;
@@ -26,7 +27,8 @@ function Section({ title, children }) {
  * Overview, most useful first: who's in it, what comes before and after,
  * the episodes (only when they say more than "Episode 1"), the trailer, the
  * music, then the crew. Score and key facts live in the page head; the
- * status distribution lives on the Stats tab.
+ * status and score distributions sit before the trailer (as on AniList), and
+ * the Stats tab has the full breakdown.
  */
 export default function OverviewTab({ anime, accentColor, characters, staff, episodes }) {
     const videoId = getYouTubeId(anime.trailer_url);
@@ -101,6 +103,8 @@ export default function OverviewTab({ anime, accentColor, characters, staff, epi
                     </div>
                 </Section>
             )}
+
+            <OverviewStats anime={anime} />
 
             {videoId && (
                 <Section title="Trailer">

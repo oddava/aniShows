@@ -9,11 +9,18 @@ import {
     getOptimizedImageUrl,
 } from '../utils/imageUtils';
 import { statusMeta } from '../utils/listStatus';
+import { cachedCoverAccent, coverAccent } from '../utils/coverAccent';
 import { airedEpisodeCount, knownEpisodeTotal, progressPercent } from '../utils/episodes';
 import QuickAdd from './ui/QuickAdd';
 import ProgressStepper from './ui/ProgressStepper';
 import { ScoreBadge } from './ui/Badge';
 import { CardSkeleton } from './ui/Skeleton';
+
+// Covers that have finished loading this visit, with the URL that actually
+// loaded (a fallback, when the optimised copy was missing). A card showing one
+// again (Back to a grid, a shelf re-rendered) starts visible on that URL
+// instead of fading in from blank a second time.
+const loadedCovers = new Map();
 
 function timeUntil(dateString) {
     if (!dateString) return null;
@@ -49,6 +56,10 @@ function AnimeCard({
     showProgress = false,
     variant = 'poster',
     showStatusDot = true,
+    // The first six cards of a grid load eagerly (they are on screen). Rows
+    // that decide for themselves (Browse shelves: only the first shelf) say
+    // so with `priority` and turn this off.
+    eagerFirstSix = true,
 }) {
     const { isAuthenticated } = useAuth();
     const listEntry = userListEntry || anime.user_list_status || null;
@@ -57,20 +68,49 @@ function AnimeCard({
         entry: listEntry,
     });
 
-    const [imageLoaded, setImageLoaded] = useState(false);
     const imageRef = useRef(null);
+    const cardRef = useRef(null);
 
     const imageUrl = useMemo(() => getOptimizedImageUrl(anime, 'cover', 'medium'), [anime]);
+
+    // Hovering a card tints its title with the cover's dominant colour. It is
+    // sampled on first hover (from the loaded poster, so usually no request)
+    // and written straight to a CSS variable, so the card doesn't re-render.
+    const tintTitle = useCallback(() => {
+        const img = imageRef.current;
+        const card = cardRef.current;
+        if (!img || !card) return;
+        coverAccent(img, imageUrl, [
+            getOptimizedImageUrl(anime, 'cover', 'small'),
+            imageUrl,
+            getImageFallbackUrl(anime, 'cover'),
+        ]).then((color) => {
+            if (color) card.style.setProperty('--cover-accent', color);
+        });
+    }, [anime, imageUrl]);
+    const [imageLoaded, setImageLoaded] = useState(() => loadedCovers.has(imageUrl));
+    const markLoaded = useCallback((event) => {
+        const loadedFrom = event?.currentTarget?.currentSrc || loadedCovers.get(imageUrl) || imageUrl;
+        if (imageUrl) loadedCovers.set(imageUrl, loadedFrom);
+        setImageLoaded(true);
+    }, [imageUrl]);
     const imageSrcSet = useMemo(() => getImageSrcSet(anime, 'cover'), [anime]);
     const fallbackImageUrl = useMemo(() => getImageFallbackUrl(anime, 'cover'), [anime]);
+    // Remembered from an earlier load: start on the URL that worked. Read once
+    // per cover (not every render), so a first load never swaps its own src.
+    const [remembered, setRemembered] = useState(() => ({ url: imageUrl, src: loadedCovers.get(imageUrl) }));
+    if (remembered.url !== imageUrl) setRemembered({ url: imageUrl, src: loadedCovers.get(imageUrl) });
+    const knownSrc = remembered.url === imageUrl ? remembered.src : undefined;
+    const posterSrc = knownSrc || imageUrl;
+    const posterSrcSet = knownSrc && knownSrc !== imageUrl ? undefined : imageSrcSet;
 
     useEffect(() => {
-        setImageLoaded(false);
+        setImageLoaded(loadedCovers.has(imageUrl));
         const frame = requestAnimationFrame(() => {
-            if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) setImageLoaded(true);
+            if (imageRef.current?.complete && imageRef.current.naturalWidth > 0) markLoaded();
         });
         return () => cancelAnimationFrame(frame);
-    }, [imageUrl]);
+    }, [imageUrl, markLoaded]);
 
     // A missing optimised cover swaps to the original; the skeleton stays and
     // the fallback fades in on its own load.
@@ -108,16 +148,19 @@ function AnimeCard({
         return [anime.anime_type, Number.isFinite(year) ? year : null].filter(Boolean).join(' · ') || null;
     }, [metaText, showMeta, anime.anime_type, anime.release_date]);
 
-    const loading = priority || index < 6 ? 'eager' : 'lazy';
+    const loading = priority || (eagerFirstSix && index < 6) ? 'eager' : 'lazy';
+    // The first posters on screen are the page's largest paint: fetch them first.
+    const fetchPriority = priority || (eagerFirstSix && index < 4) ? 'high' : undefined;
     const href = `/anime/${anime.slug}`;
     const smallUrl = getOptimizedImageUrl(anime, 'cover', 'small');
     const placeholderUrl = !lite && smallUrl && smallUrl !== imageUrl ? smallUrl : null;
+    const knownAccent = cachedCoverAccent(imageUrl);
 
     if (variant === 'row') {
         // The agenda row (Schedule): same facts and quick add, laid out like
         // oddava.me's list rows: thumb, title and what's next, action right.
         return (
-            <article className="group -mx-3 grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-4 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03]" aria-label={displayTitle}>
+            <article ref={cardRef} onPointerEnter={tintTitle} style={knownAccent ? { '--cover-accent': knownAccent } : undefined} className="group -mx-3 grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-4 rounded-[var(--radius-md)] px-3 py-3 transition-colors hover:bg-white/[0.03]" aria-label={displayTitle}>
                 <Link to={href} tabIndex={-1} aria-hidden="true" className="relative block h-[72px] w-12 overflow-hidden rounded-md bg-[var(--ink-2)]">
                     <img
                         ref={imageRef}
@@ -133,7 +176,7 @@ function AnimeCard({
                 </Link>
                 <div className="min-w-0">
                     <Link to={href} className="flex items-start gap-1.5">
-                        <span className="line-clamp-2 text-base font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] group-hover:text-[var(--signature)]">{displayTitle}</span>
+                        <span className="line-clamp-2 text-base font-semibold leading-snug tracking-[-0.01em] text-[var(--text-1)] group-hover:text-[var(--cover-accent,var(--signature))]">{displayTitle}</span>
                     </Link>
                     <p className="mt-0.5 text-sm text-[var(--text-2)] tabular">
                         {meta && <span className="sm:hidden" style={{ color: meta.color }}>{meta.label} · </span>}
@@ -175,7 +218,7 @@ function AnimeCard({
                     draggable={false}
                     loading={loading}
                     decoding="async"
-                    onLoad={() => setImageLoaded(true)}
+                    onLoad={markLoaded}
                     onError={handleImageError}
                     data-loaded={imageLoaded}
                     className="img-fade h-full w-full object-cover"
@@ -185,7 +228,13 @@ function AnimeCard({
     }
 
     return (
-        <article className="card-enter group relative flex h-full flex-col" style={{ '--stagger': index % 12 }} aria-label={displayTitle}>
+        <article
+            ref={cardRef}
+            onPointerEnter={tintTitle}
+            className="card-enter group relative flex h-full flex-col"
+            style={knownAccent ? { '--cover-accent': knownAccent } : undefined}
+            aria-label={displayTitle}
+        >
             <div className="relative aspect-[2/3] shrink-0 rounded-[var(--radius-md)] bg-[var(--ink-2)] has-[a:focus-visible]:shadow-[0_0_0_2px_var(--signature)]">
                 <Link
                     to={href}
@@ -205,17 +254,18 @@ function AnimeCard({
                     )}
                     <img
                         ref={imageRef}
-                        src={imageUrl}
-                        srcSet={imageSrcSet}
+                        src={posterSrc}
+                        srcSet={posterSrcSet}
                         sizes="(max-width: 767px) 160px, (max-width: 1023px) 33vw, 20vw"
                         alt=""
                         draggable={false}
                         loading={loading}
+                        fetchPriority={fetchPriority}
                         decoding="async"
-                        onLoad={() => setImageLoaded(true)}
+                        onLoad={markLoaded}
                         onError={handleImageError}
                         data-loaded={imageLoaded}
-                        className="img-fade relative h-full w-full object-cover transition-[opacity,filter] duration-300 ease-out [@media(hover:hover)]:group-hover:brightness-[1.08]"
+                        className="img-fade relative h-full w-full object-cover"
                     />
                 </Link>
 
@@ -231,7 +281,7 @@ function AnimeCard({
 
                 {percent !== null && !showProgress && (
                     <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[3px] overflow-hidden rounded-b-[var(--radius-md)] bg-black/50">
-                        <span className="block h-full bg-[var(--status-watching)]" style={{ width: `${percent}%` }} />
+                        <span className="progress-fill block h-full bg-[var(--status-watching)]" style={{ '--progress': percent / 100 }} />
                     </span>
                 )}
 
@@ -262,7 +312,7 @@ function AnimeCard({
                             style={{ backgroundColor: meta.color }}
                         />
                     )}
-                    <span className="line-clamp-2 text-[13.5px] font-medium leading-[1.3] text-gray-200 transition-colors group-hover:text-white">
+                    <span className="line-clamp-2 text-[13.5px] font-medium leading-[1.3] text-gray-200 transition-colors duration-200 group-hover:text-[var(--cover-accent,#fff)]">
                         {displayTitle}
                     </span>
                 </span>
@@ -299,6 +349,7 @@ const arePropsEqual = (prev, next) => {
     if (prev.showProgress !== next.showProgress) return false;
     if (prev.variant !== next.variant) return false;
     if (prev.showStatusDot !== next.showStatusDot) return false;
+    if (prev.eagerFirstSix !== next.eagerFirstSix) return false;
     if (prev.anime.episode_count !== next.anime.episode_count) return false;
     if (prev.anime.next_airing_date !== next.anime.next_airing_date) return false;
 

@@ -19,7 +19,9 @@ import {
 
 import OverviewTab from '../components/profile/OverviewTab';
 import ErrorState from '../components/common/ErrorState';
+import useSwitchFade from '../hooks/useSwitchFade';
 import { favoriteKeys, listQueries, profileKeys, profileQueries, reviewKeys } from '../api/queries/user';
+import PageLoader from '../components/common/PageLoader';
 const PROFILE_TABS = new Set(['overview', 'anime_list', 'friends', 'favorites', 'reviews', 'activity', 'insights']);
 
 function normalizeProfileTab(tab) {
@@ -295,6 +297,9 @@ export default function Profile({ forcedUsername }) {
         };
     }, [selectedPrimaryColor]);
 
+    // Each tab switch fades the new tab in (opacity only).
+    const tabFade = useSwitchFade(activeTab);
+
     // Handle loading states first
     if (isPublicView && profilePending && !isError) {
         return <ProfileSkeleton activeTab={activeTab} />;
@@ -305,7 +310,7 @@ export default function Profile({ forcedUsername }) {
     }
 
     if (!isPublicView && !isAuthenticated) {
-        return <Navigate to="/login" replace />;
+        return <><PageLoader /><Navigate to="/login" replace /></>;
     }
 
     if (isPublicView && isError && profileError?.response?.status !== 404) {
@@ -352,7 +357,7 @@ export default function Profile({ forcedUsername }) {
                     onTabChange={handleTabChange}
                 />
 
-                <div className="page-container mt-8 md:mt-10">
+                <div key={activeTab} className={`page-container mt-8 md:mt-10 ${tabFade}`}>
                     {activeTab === 'overview' ? (
                         <OverviewTab
                             displayUser={displayUser}

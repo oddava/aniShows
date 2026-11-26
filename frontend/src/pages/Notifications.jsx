@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import { notificationKeys, notificationQueries } from '../api/queries/notifications';
 import PageLoader from '../components/common/PageLoader';
@@ -19,6 +19,8 @@ import logger from '../utils/logger';
 import { getNotificationTarget } from '../utils/notificationUtils';
 import NotificationItem from '../components/notifications/NotificationItem';
 import { useNotificationSocket } from '../components/notifications/notificationSocket';
+import useActivePill from '../hooks/useActivePill';
+import useDelayedLoading from '../hooks/useDelayedLoading';
 
 /** Chips map to the API's server-side `category=` filter. */
 const NOTIFICATION_FILTERS = [
@@ -50,8 +52,10 @@ const sortNewestFirst = (items) => [...items].sort(
 );
 
 function FeedSkeleton() {
+    // Never taller than the feed's reserved region (50vh): whatever the feed
+    // turns out to hold, its arrival does not move the footer.
     return (
-        <div className="mt-4 space-y-1" aria-hidden="true">
+        <div className="mt-4 max-h-[calc(50vh-1rem)] space-y-1 overflow-hidden" aria-hidden="true">
             {Array.from({ length: 6 }, (_, index) => (
                 <div key={index} className="flex items-center gap-4 py-3">
                     <div className="h-[72px] w-12 shrink-0 animate-pulse rounded-[var(--radius-sm)] bg-white/[0.05]" />
@@ -94,6 +98,7 @@ export default function Notifications() {
     const queryClient = useQueryClient();
     const userId = user?.id;
     const [activeFilter, setActiveFilter] = useState('all');
+    const filterPill = useActivePill();
     const [actionError, setActionError] = useState('');
     const category = activeFilter === 'all' ? undefined : activeFilter;
 
@@ -111,6 +116,7 @@ export default function Notifications() {
 
     const notifications = useMemo(() => flattenFeed(feedQuery.data), [feedQuery.data]);
     const loadingInitial = feedQuery.isLoading;
+    const showFeedSkeleton = useDelayedLoading(loadingInitial, 300);
     const loadingMore = feedQuery.isFetchingNextPage;
     const nextPage = feedQuery.hasNextPage;
 
@@ -235,25 +241,21 @@ export default function Notifications() {
         return <PageLoader />;
     }
 
+    // Same as every other signed-in page (ANISHOWS-010): sign in, then back here.
     if (!isAuthenticated) {
-        return (
-            <div className="page-container pt-6 pb-16 md:pt-10">
-                <SEO page="notifications" noIndex />
-                <h1 className="page-title">Notifications</h1>
-                <p className="mt-2 text-sm text-[var(--text-2)]">Sign in to see your notifications.</p>
-                <Link to="/login" className="btn-primary mt-5 text-sm">Sign in</Link>
-            </div>
-        );
+        return <><PageLoader /><Navigate to="/login" replace state={{ from: '/notifications' }} /></>;
     }
 
     const emptyState = EMPTY_STATES[activeFilter] || EMPTY_STATES.all;
     let content;
     if (loadingInitial) {
-        content = <FeedSkeleton />;
+        // A fast load never flashes six placeholder rows that then collapse
+        // into a one-line empty state.
+        content = showFeedSkeleton ? <FeedSkeleton /> : null;
     } else if (feedError && notifications.length === 0) {
         content = <FeedError message="Couldn’t load notifications. Check your connection." onRetry={retryFeed} />;
     } else if (notifications.length === 0) {
-        content = <p className="mt-6 text-sm text-[var(--text-2)]">{emptyState}</p>;
+        content = <p className="swap-fade mt-6 text-sm text-[var(--text-2)]">{emptyState}</p>;
     } else {
         content = (
             <>
@@ -321,7 +323,8 @@ export default function Notifications() {
                 )}
 
                 <div className="scroll-fade -mx-4 mt-6 overflow-x-auto px-4 scrollbar-hide md:mx-0 md:px-0">
-                    <div className="flex min-w-max gap-1" role="group" aria-label="Filter notifications">
+                    <div ref={filterPill.hostRef} className="pill-host flex min-w-max gap-1" role="group" aria-label="Filter notifications">
+                        <span ref={filterPill.pillRef} aria-hidden="true" className="active-pill" />
                         {NOTIFICATION_FILTERS.map((filter) => {
                             const active = activeFilter === filter.value;
                             return (
@@ -342,7 +345,9 @@ export default function Notifications() {
                     </div>
                 </div>
 
-                {content}
+                {/* The feed keeps half a screen, so its outcome (a list, one
+                    line, an error) never pulls the footer up the page. */}
+                <div className="flow-root min-h-[50vh]">{content}</div>
             </div>
         </div>
     );

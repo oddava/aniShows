@@ -11,10 +11,12 @@
   }
 }
 
-/* Skeletons: a soft light sweeps across, slower than a blink and calmer. */
-@keyframes skeleton-sweep {
-  from { background-position: 160% 0; }
-  to { background-position: -60% 0; }
+/* Skeletons breathe: one slow, even pulse; placeholders that mount together
+   pulse together (no light sweeping across each tile on its own clock).
+   Opacity only, so it stays on the compositor. */
+@keyframes skeleton-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
 .shimmer,
@@ -24,9 +26,7 @@
 .shimmer-gradient,
 .shimmer-overlay {
   background-color: var(--color-overlay-base);
-  background-image: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.05) 50%, transparent 70%);
-  background-size: 220% 100%;
-  animation: skeleton-sweep 1.6s ease-in-out infinite;
+  animation: skeleton-breathe 1.8s ease-in-out infinite;
 }
 
 /* Panels fade in when they mount (opacity only: no transform is left on
@@ -36,16 +36,15 @@
   to { opacity: 1; }
 }
 
-/* Cards arrive with a short fade-up, a few at a time, instead of popping in.
-   The fill is "backwards", so no transform stays on the card afterwards. */
+/* Cards arrive together with a soft fade, not one after another across the
+   row. The fill is "backwards", so nothing stays on the card afterwards. */
 @keyframes card-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .card-enter {
-  animation: card-in 240ms var(--ease-out) backwards;
-  animation-delay: calc(min(var(--stagger, 0), 11) * 30ms);
+  animation: card-in 360ms var(--ease-out) backwards;
 }
 
 /* The small cover, blurred, holds the poster's place while the full image
@@ -225,15 +224,22 @@
 /* Bottom sheet */
 .sheet-backdrop {
   animation: fade-in var(--dur-base) ease-out;
+  transition: opacity var(--dur-base) ease-out;
 }
 
 .sheet-panel {
   animation: sheet-up var(--dur-slow) var(--ease-out);
-  transition: transform var(--dur-base) var(--ease-out);
+  transition: transform var(--dur-glide) var(--ease-glide);
 }
 
 [data-state="closing"] .sheet-backdrop {
-  animation: fade-out var(--dur-base) ease-out forwards;
+  animation: backdrop-out var(--dur-base) ease-out forwards;
+}
+
+/* A backdrop let go mid-drag fades out from how dim it already was. */
+@keyframes backdrop-out {
+  from { opacity: var(--backdrop-from, 1); }
+  to { opacity: 0; }
 }
 
 [data-state="closing"] .sheet-panel {
@@ -272,7 +278,8 @@
 }
 
 @keyframes sheet-down {
-  from { transform: translateY(0); }
+  /* A sheet let go mid-drag closes from where the finger left it. */
+  from { transform: translateY(var(--sheet-from, 0px)); }
   to { transform: translateY(100%); }
 }
 
@@ -290,22 +297,31 @@
 
 @keyframes popover-out {
   from { opacity: 1; transform: none; }
-  to { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 0; transform: translateY(var(--popover-from, 4px)) scale(0.98); }
 }
 
 @keyframes popover-in {
-  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  from { opacity: 0; transform: translateY(var(--popover-from, 4px)) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Images fade in once decoded; the box is sized beforehand, so nothing shifts. */
+/* Images develop rather than pop: once decoded they come in from a soft blur
+   and a hair of scale into focus. The box is sized beforehand (and clips),
+   so nothing shifts. */
 .img-fade {
   opacity: 0;
-  transition: opacity var(--dur-slow) var(--ease-out), filter var(--dur-base) var(--ease-out);
+  filter: blur(10px);
+  transform: scale(1.03);
+  transition:
+    opacity 420ms var(--ease-out),
+    filter 560ms var(--ease-out),
+    transform 560ms var(--ease-out);
 }
 
 .img-fade[data-loaded="true"] {
   opacity: 1;
+  filter: none;
+  transform: none;
 }
 
 /* Card quick-add: hidden until hover/focus with a pointer, always shown on touch (T1). */
@@ -390,4 +406,228 @@
 @keyframes route-progress-grow {
   from { transform: scaleX(0.08); }
   to { transform: scaleX(0.85); }
+}
+
+/* ======================================================================
+   Interaction polish: springs (index.css --ease-glide / --ease-pop),
+   transform and opacity only, all off under reduced motion (below).
+   ====================================================================== */
+
+/* Press: the control gives under the finger at once and springs back on
+   release. Unlayered on purpose: Tailwind's transition-colors on the same
+   element would otherwise drop the transform transition. */
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.ui-pill-button,
+.ui-icon-button,
+.press {
+  transition-property: background-color, color, opacity, transform;
+  transition-duration: var(--dur-fast), var(--dur-fast), var(--dur-fast), var(--dur-pop);
+  transition-timing-function: ease, ease, ease, var(--ease-pop);
+}
+
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled),
+.btn-ghost:active:not(:disabled),
+.ui-pill-button:active:not(:disabled),
+.ui-icon-button:active:not(:disabled),
+.press:active:not(:disabled) {
+  transform: scale(0.96);
+  transition-duration: var(--dur-fast), var(--dur-fast), var(--dur-fast), 90ms;
+  transition-timing-function: ease, ease, ease, ease-out;
+}
+
+/* Sliding active fill (hooks/useActivePill). One soft pill per group glides
+   to the current tab instead of the fill blinking from one tab to the next. */
+.pill-host {
+  position: relative;
+  isolation: isolate;
+}
+
+.active-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  z-index: -1;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  border-radius: var(--pill-radius, 0.5rem);
+  background: var(--pill-bg, rgb(255 255 255 / 0.07));
+}
+
+.pill-host[data-pill-animate] > .active-pill {
+  transition:
+    transform var(--dur-glide) var(--ease-glide),
+    opacity var(--dur-fast) ease;
+}
+
+/* Once the pill is placed, the current item drops its own fill: that rule is
+   in index.css, inside @layer utilities, so it outranks the legacy
+   !important fills there. */
+
+/* A value that just changed pops once (status dot, heart, score): see
+   hooks/useChangeKey. Never on first paint. */
+@keyframes change-pop {
+  0% { transform: scale(0.6); }
+  100% { transform: scale(1); }
+}
+
+.change-pop {
+  animation: change-pop var(--dur-pop) var(--ease-pop);
+}
+
+/* A count that moved: slides in from the side it came from. */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(45%); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes count-down {
+  from { opacity: 0; transform: translateY(-45%); }
+  to { opacity: 1; transform: none; }
+}
+
+.count-up,
+.count-down {
+  display: inline-block;
+}
+
+.count-up { animation: count-up 260ms var(--ease-out); }
+.count-down { animation: count-down 260ms var(--ease-out); }
+
+/* Phone tab bar: the icon of the tab just chosen gives a small spring. */
+@keyframes tab-icon-pop {
+  0% { transform: scale(0.82); }
+  100% { transform: scale(1); }
+}
+
+[aria-current="page"] > .tab-icon {
+  animation: tab-icon-pop var(--dur-pop) var(--ease-pop);
+}
+
+/* Card controls rise a few pixels as they fade in on hover (the poster
+   itself never moves: owner ruling). */
+@media (hover: hover) and (pointer: fine) {
+  .card-reveal,
+  .hover-reveal {
+    transform: translateY(4px);
+    transition: opacity var(--dur-fast) ease-out, transform var(--dur-glide) var(--ease-glide);
+  }
+
+  .group:hover .card-reveal,
+  .group:focus-within .card-reveal,
+  .card-reveal:has([aria-expanded="true"]),
+  .group:hover .hover-reveal,
+  .group:focus-within .hover-reveal,
+  .hover-reveal:has([aria-expanded="true"]) {
+    transform: none;
+  }
+}
+
+/* Popovers open with a spring settle from the edge they hang off, and close
+   quickly and plainly. data-side: where the menu sits relative to its
+   trigger (top | bottom); data-align: the edge it lines up with (start |
+   center | end, default end). */
+.popover-in {
+  animation: popover-in 320ms var(--ease-glide);
+}
+
+.popover-in[data-side="bottom"] {
+  transform-origin: top right;
+  --popover-from: -4px;
+}
+.popover-in[data-side="bottom"][data-align="start"] { transform-origin: top left; }
+.popover-in[data-side="bottom"][data-align="center"] { transform-origin: top center; }
+.popover-in[data-side="top"][data-align="start"] { transform-origin: bottom left; }
+.popover-in[data-side="top"][data-align="center"] { transform-origin: bottom center; }
+
+/* Toasts arrive with a little give. */
+.ui-toast[data-visible="true"] {
+  animation: toast-in var(--dur-pop) var(--ease-pop);
+}
+
+/* Bottom sheets rise on the glide spring. */
+.sheet-panel {
+  animation: sheet-up 380ms var(--ease-glide);
+}
+
+/* Detail page backdrop: drifts and dims as the page scrolls (scroll-driven,
+   compositor-only; browsers without it keep the still image). */
+@supports (animation-timeline: scroll()) {
+  .hero-drift {
+    animation: hero-drift linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 60vh;
+  }
+
+  @keyframes hero-drift {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(14%); opacity: 0.45; }
+  }
+}
+
+/* Progress fills: full width, scaled to the share watched (--progress,
+   0..1), so a change glides on the compositor. */
+.progress-fill {
+  width: 100%;
+  transform: scaleX(var(--progress, 0));
+  transform-origin: left center;
+  transition: transform 500ms var(--ease-glide);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .change-pop,
+  .count-up,
+  .count-down,
+  [aria-current="page"] > .tab-icon,
+  .hero-drift {
+    animation: none !important;
+  }
+
+  .pill-host[data-pill-animate] > .active-pill {
+    transition: none;
+  }
+
+  .card-reveal,
+  .hover-reveal {
+    transform: none !important;
+  }
+}
+
+
+
+/* Content that replaces other content in place (a day, a tab, a filter):
+   a quick fade, opacity only, so popovers inside stay viewport-anchored. */
+.swap-fade {
+  animation: panel-in 180ms ease-out backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swap-fade {
+    animation: none !important;
+  }
+}
+
+/* Content revealed in place (the score row under "Your score"): its space is
+   taken at once, the content settles in and fades out on its own. */
+.drawer-reveal {
+  animation: drawer-in 260ms var(--ease-glide) backwards;
+}
+
+.drawer-reveal[data-state="closing"] {
+  animation: drawer-out 140ms ease-in forwards;
+}
+
+@keyframes drawer-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes drawer-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
