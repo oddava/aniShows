@@ -221,8 +221,15 @@ export default function useBrowseAnimeList({ filters, adultContentEnabled }) {
     adultContentEnabled,
   ]);
 
+  // The API counts the matches up to a cap (BUG-009); null while loading.
+  const firstPage = data?.pages?.[0];
+  const totalCount = Number.isFinite(firstPage?.count) ? firstPage.count : null;
+  const totalCountCapped = Boolean(firstPage?.count_capped);
+
   return {
     allAnime,
+    totalCount,
+    totalCountCapped,
     loadMoreRef,
     isFetchingNextPage,
     isLoading,
