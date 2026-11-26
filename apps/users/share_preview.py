@@ -1,12 +1,20 @@
-import re
-from html import escape, unescape
+"""The <head> of a public profile (/u/<username>), for the SPA shell (RA-001).
+
+Every visitor gets the app's index.html with this profile's title,
+description, canonical URL, Open Graph card (banner, else avatar) and a
+ProfilePage JSON-LD; crawlers no longer get a separate page. A private
+profile, or one that does not exist, says nothing about the account.
+The banner is the page's LCP element (components/profile/ProfileHeader.jsx
+renders ``banner`` as is), so it is preloaded.
+"""
+
+from html import unescape
 from urllib.parse import quote
 
 from django.contrib.auth import get_user_model
-from django.http import HttpResponse
 from django.utils.html import strip_tags
-from django.views import View
 
+from ..core.spa_shell import ImagePreload, RouteHead, SpaShellView, absolute_url, truncate
 from ..shared.media_urls import field_media_url
 from .models import UserProfile, UserStats
 from .services.avatar_service import get_user_avatar_url
@@ -17,219 +25,113 @@ User = get_user_model()
 DEFAULT_PREVIEW_DESCRIPTION = "Discover your next anime adventure. Track your favorites, write reviews, and join the community."
 
 
-class ProfileSharePreviewView(View):
-    """Return crawler-friendly HTML metadata for public profile links."""
+def _related(user, name: str, model):
+    try:
+        return getattr(user, name)
+    except model.DoesNotExist:
+        return None
 
-    http_method_names = ["get", "head"]
-    CRAWLER_UA_RE = re.compile(
-        r"(facebookexternalhit|facebot|twitterbot|slackbot|discordbot|"
-        r"whatsapp|telegram(?:bot)?|linkedinbot|skypeuripreview|"
-        r"googlebot|bingbot|duckduckbot|applebot|pinterestbot|vkshare|"
-        r"line|kakaotalk-scrap)",
-        re.IGNORECASE,
+
+def clean_bio(value: str | None) -> str:
+    if not value:
+        return ""
+    return " ".join(strip_tags(unescape(value)).split())
+
+
+def section_title(section: str | None) -> str:
+    if not section:
+        return ""
+    title = section.split("/")[0].replace("-", " ").replace("_", " ").strip().title()
+    return "" if title.lower() == "overview" else title
+
+
+def build_title(username: str, section: str | None) -> str:
+    title = section_title(section)
+    return f"{username} - {title} | AniShows" if title else f"{username} on AniShows"
+
+
+def build_description(username: str, profile: UserProfile | None, stats: UserStats | None) -> str:
+    stat_parts: list[str] = []
+    if stats:
+        if stats.anime_count:
+            stat_parts.append(f"{stats.anime_count} anime tracked")
+        if stats.followers_count:
+            stat_parts.append(f"{stats.followers_count} followers")
+        if stats.reviews_count:
+            stat_parts.append(f"{stats.reviews_count} reviews")
+
+    bio_text = clean_bio(profile.bio if profile else "")
+    if bio_text:
+        summary = f" {', '.join(stat_parts)}." if stat_parts else ""
+        return truncate(f"{bio_text}{summary}")
+    if stat_parts:
+        return truncate(f"{username} on AniShows: {', '.join(stat_parts)}.")
+    return f"{username} on AniShows. {DEFAULT_PREVIEW_DESCRIPTION}"
+
+
+def profile_path(username: str, section: str | None = None) -> str:
+    base = f"/u/{quote(username)}"
+    if not section:
+        return base
+    return f"{base}/{quote(section.strip('/'), safe='/-_')}"
+
+
+def build_profile_head(username: str, section: str | None = None) -> RouteHead:
+    user = filter_username_ci(User.objects.select_related("userprofile", "stats"), username).first()
+    profile = _related(user, "userprofile", UserProfile) if user else None
+    if not user or not user.is_active or (profile and profile.is_private):
+        # Missing and private profiles look the same: nothing about the account.
+        return RouteHead(
+            title="Profile not found | AniShows",
+            description="This AniShows profile could not be found.",
+            canonical_path=profile_path(username, section),
+            og_type="profile",
+            noindex=True,
+            status=404,
+        )
+
+    stats = _related(user, "stats", UserStats)
+    canonical_path = profile_path(user.username, section)
+    banner = field_media_url(profile.banner) if profile and profile.banner else None
+    avatar = get_user_avatar_url(user) or None
+    description = build_description(user.username, profile, stats)
+
+    person = {
+        "@type": "Person",
+        "name": user.username,
+        "url": absolute_url(profile_path(user.username)),
+    }
+    if absolute_url(avatar):
+        person["image"] = absolute_url(avatar)
+    bio_text = clean_bio(profile.bio if profile else "")
+    if bio_text:
+        person["description"] = truncate(bio_text, 300)
+    if stats and stats.followers_count:
+        person["interactionStatistic"] = {
+            "@type": "InteractionCounter",
+            "interactionType": "https://schema.org/FollowAction",
+            "userInteractionCount": stats.followers_count,
+        }
+    json_ld = {
+        "@context": "https://schema.org",
+        "@type": "ProfilePage",
+        "url": absolute_url(canonical_path),
+        "mainEntity": person,
+    }
+
+    return RouteHead(
+        title=build_title(user.username, section),
+        description=description,
+        canonical_path=canonical_path,
+        og_type="profile",
+        image=banner or avatar,
+        image_alt=f"{user.username}'s profile",
+        large_image=bool(banner),
+        json_ld=[json_ld],
+        preloads=[ImagePreload(href=banner)] if banner else [],
     )
 
-    def get(self, request, username: str, section: str | None = None) -> HttpResponse:
-        should_redirect = not self._is_share_crawler(request)
-        user = filter_username_ci(
-            User.objects.select_related("userprofile", "stats"), username
-        ).first()
 
-        if not user:
-            return self._not_found_response(request, username, section, should_redirect)
-
-        profile = self._get_profile(user)
-        if (
-            profile
-            and profile.is_private
-            and not self._is_authorized_for_private_profile(request, user)
-        ):
-            return self._not_found_response(request, username, section, should_redirect)
-
-        stats = self._get_stats(user)
-        canonical_path = self._canonical_profile_path(user.username, section)
-        canonical_url = request.build_absolute_uri(canonical_path)
-        redirect_url = request.build_absolute_uri(self._legacy_profile_path(user.username, section))
-
-        title = self._build_title(user.username, section)
-        description = self._build_description(user.username, profile, stats)
-        image_url = self._build_image_url(request, user, profile)
-
-        html = self._render_html(
-            title=title,
-            description=description,
-            canonical_url=canonical_url,
-            image_url=image_url,
-            redirect_url=redirect_url if should_redirect else None,
-        )
-        return HttpResponse(html, content_type="text/html; charset=utf-8")
-
-    def _is_authorized_for_private_profile(self, request, user) -> bool:
-        viewer = getattr(request, "user", None)
-        if not viewer or not viewer.is_authenticated:
-            return False
-        return bool(viewer == user or viewer.is_staff or viewer.is_superuser)
-
-    def _not_found_response(
-        self, request, username: str, section: str | None, should_redirect: bool
-    ) -> HttpResponse:
-        canonical_url = request.build_absolute_uri(self._canonical_profile_path(username, section))
-        # Hand people to the SPA's route, as for found profiles; redirecting to
-        # the canonical /u/ URL would reload this same view forever.
-        app_url = request.build_absolute_uri(self._legacy_profile_path(username, section))
-        html = self._render_html(
-            title="Profile Not Found | AniShows",
-            description="This AniShows profile could not be found.",
-            canonical_url=canonical_url,
-            image_url=self._default_image_url(request),
-            redirect_url=app_url if should_redirect else None,
-        )
-        return HttpResponse(html, status=404, content_type="text/html; charset=utf-8")
-
-    def _is_share_crawler(self, request) -> bool:
-        user_agent = request.headers.get("User-Agent", "")
-        return bool(self.CRAWLER_UA_RE.search(user_agent))
-
-    def _build_title(self, username: str, section: str | None) -> str:
-        if not section or section.strip().lower() == "overview":
-            return f"{username} on AniShows"
-
-        section_title = section.split("/")[0].replace("-", " ").replace("_", " ").strip().title()
-        if not section_title:
-            return f"{username} on AniShows"
-        return f"{username} - {section_title} | AniShows"
-
-    def _build_description(
-        self,
-        username: str,
-        profile: UserProfile | None,
-        stats: UserStats | None,
-    ) -> str:
-        if profile and profile.is_private:
-            return f"{username}'s profile is private on AniShows."
-
-        stat_parts: list[str] = []
-        if stats:
-            if stats.anime_count:
-                stat_parts.append(f"{stats.anime_count} anime tracked")
-            if stats.followers_count:
-                stat_parts.append(f"{stats.followers_count} followers")
-            if stats.reviews_count:
-                stat_parts.append(f"{stats.reviews_count} reviews")
-
-        bio_text = self._clean_bio(profile.bio if profile else "")
-        if bio_text:
-            summary = f" {', '.join(stat_parts[:3])}." if stat_parts else ""
-            return self._truncate(f"{bio_text}{summary}", 190)
-
-        if stat_parts:
-            return self._truncate(f"{username} on AniShows: {', '.join(stat_parts[:3])}.", 190)
-
-        return f"{username} on AniShows. {DEFAULT_PREVIEW_DESCRIPTION}"
-
-    def _build_image_url(self, request, user, profile: UserProfile | None) -> str:
-        banner_url = field_media_url(profile.banner) if profile else None
-
-        avatar_url = get_user_avatar_url(user)
-        chosen = banner_url or avatar_url or self._default_image_url(request)
-        return self._absolute_url(request, chosen)
-
-    def _clean_bio(self, value: str | None) -> str:
-        if not value:
-            return ""
-        plain_text = strip_tags(unescape(value))
-        return " ".join(plain_text.split())
-
-    def _truncate(self, value: str, limit: int) -> str:
-        if len(value) <= limit:
-            return value
-        return value[: limit - 1].rstrip() + "…"
-
-    def _default_image_url(self, request) -> str:
-        return request.build_absolute_uri("/anishows-icon-512.png")
-
-    def _absolute_url(self, request, value: str) -> str:
-        if value.startswith("//"):
-            return f"https:{value}"
-        if value.startswith(("http://", "https://")):
-            return value
-        if not value.startswith("/"):
-            value = f"/{value}"
-        return request.build_absolute_uri(value)
-
-    def _canonical_profile_path(self, username: str, section: str | None) -> str:
-        base = f"/u/{quote(username)}"
-        if not section:
-            return base
-        return f"{base}/{quote(section, safe='/-_')}"
-
-    def _legacy_profile_path(self, username: str, section: str | None) -> str:
-        base = f"/profile/{quote(username)}"
-        if not section:
-            return base
-        return f"{base}/{quote(section, safe='/-_')}"
-
-    def _get_profile(self, user) -> UserProfile | None:
-        try:
-            return user.userprofile
-        except UserProfile.DoesNotExist:
-            return None
-
-    def _get_stats(self, user) -> UserStats | None:
-        try:
-            return user.stats
-        except UserStats.DoesNotExist:
-            return None
-
-    def _render_html(
-        self,
-        *,
-        title: str,
-        description: str,
-        canonical_url: str,
-        image_url: str,
-        redirect_url: str | None = None,
-    ) -> str:
-        title_esc = escape(title, quote=True)
-        desc_esc = escape(description, quote=True)
-        canonical_esc = escape(canonical_url, quote=True)
-        image_esc = escape(image_url, quote=True)
-        redirect_block = ""
-        body_link = ""
-
-        if redirect_url:
-            # Meta refresh only: an inline <script> is blocked by this page's own
-            # CSP (script-src 'self') and only logged a violation per visit (A17).
-            redirect_esc = escape(redirect_url, quote=True)
-            redirect_block = f"""
-  <meta http-equiv=\"refresh\" content=\"0;url={redirect_esc}\" />
-"""
-            body_link = f'\n  <p><a href="{redirect_esc}">Open the profile</a></p>'
-
-        return f"""<!doctype html>
-<html lang=\"en\">
-<head>
-  <meta charset=\"utf-8\" />
-  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
-  <title>{title_esc}</title>
-  <meta name=\"description\" content=\"{desc_esc}\" />
-  <link rel=\"canonical\" href=\"{canonical_esc}\" />
-
-  <meta property=\"og:site_name\" content=\"AniShows\" />
-  <meta property=\"og:type\" content=\"profile\" />
-  <meta property=\"og:title\" content=\"{title_esc}\" />
-  <meta property=\"og:description\" content=\"{desc_esc}\" />
-  <meta property=\"og:url\" content=\"{canonical_esc}\" />
-  <meta property=\"og:image\" content=\"{image_esc}\" />
-
-  <meta name=\"twitter:card\" content=\"summary_large_image\" />
-  <meta name=\"twitter:title\" content=\"{title_esc}\" />
-  <meta name=\"twitter:description\" content=\"{desc_esc}\" />
-  <meta name=\"twitter:image\" content=\"{image_esc}\" />
-{redirect_block}
-</head>
-<body>
-  <p>AniShows profile preview</p>{body_link}
-</body>
-</html>
-"""
+class ProfileShellView(SpaShellView):
+    def build_head(self, request, username: str, section: str | None = None, **kwargs) -> RouteHead:
+        return build_profile_head(username, section or None)

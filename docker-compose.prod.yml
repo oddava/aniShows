@@ -101,6 +101,9 @@ services:
       - "8000"
     volumes:
       - prometheus_multiproc:/tmp/prometheus
+      # The deployed SPA (read-only): /anime/* and /u/* are served from its
+      # index.html with their own <head> (apps/core/spa_shell.py).
+      - frontend_dist:/srv/frontend:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/health/"]
       interval: 30s

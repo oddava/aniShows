@@ -110,6 +110,30 @@
 	}
 }
 
+# The SPA's response headers (static files and the Django-rendered shell).
+(spa_headers) {
+	# Deferred, so they also replace whatever the Django shell sent.
+	header {
+		# No cache for HTML to ensure fresh content on every deploy
+		Cache-Control "public, max-age=0, must-revalidate, no-cache"
+		Last-Modified "{http.request.time}"
+		# Debug header to identify deployment
+		X-Deployment-Time "{http.request.time}"
+		# Content Security Policy for the React Frontend. UMAMI_PUBLIC_ORIGIN is
+		# the analytics script's origin (scripts/deploy/env.sh, deploy-prod.sh).
+		Content-Security-Policy "default-src 'self'; script-src 'self' {$UMAMI_PUBLIC_ORIGIN} https://static.cloudflareinsights.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: {$UMAMI_PUBLIC_ORIGIN} https://fonts.googleapis.com https://fonts.gstatic.com wss:; media-src 'self' https:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com;"
+		-Content-Security-Policy-Report-Only
+		defer
+	}
+}
+
+# The static index.html, for a shell route Django could not serve.
+(spa_index) {
+	root * /srv/frontend
+	rewrite * /index.html
+	file_server
+}
+
 (api_proxy) {
 	reverse_proxy {$WEB_UPSTREAMS:web:8000} {
 		import django
@@ -312,15 +336,26 @@
 		header Cache-Control "public, max-age=86400"
 	}
 
-	# Serve user-specific profile link previews for major crawlers/bots.
-	@profile_share_crawlers {
-		path /u/*
-		header_regexp User-Agent (?i)(facebookexternalhit|facebot|twitterbot|slackbot|discordbot|whatsapp|telegram(?:bot)?|linkedinbot|skypeuripreview|googlebot|bingbot|duckduckbot|applebot|pinterestbot|vkshare|line|kakaotalk-scrap)
-	}
-	handle @profile_share_crawlers {
+	# The app's dynamic pages, for every client: Django serves index.html with
+	# the page's own <head> (title, description, canonical, Open Graph, JSON-LD
+	# and a preload for the LCP image; apps/core/spa_shell.py). RA-001/RA-002.
+	# Same headers as the static SPA below. Any 5xx, or no healthy upstream,
+	# falls back to the static index.html, so the page never depends on it.
+	@spa_shell path /anime/* /u/*
+	handle @spa_shell {
 		reverse_proxy {$WEB_UPSTREAMS:web:8000} {
 			import django
+			lb_try_duration 2s
+			transport http {
+				dial_timeout 2s
+				response_header_timeout 5s
+			}
+			@shell_failed status 5xx
+			handle_response @shell_failed {
+				import spa_index
+			}
 		}
+		import spa_headers
 	}
 
 	# Frontend (STATIC) - Production mode
@@ -332,13 +367,22 @@
 		root * /srv/frontend
 		try_files {path} /index.html
 		file_server
-		# No cache for HTML to ensure fresh content on every deploy
-		header Cache-Control "public, max-age=0, must-revalidate, no-cache"
-		header Last-Modified "{http.request.time}"
-		# Debug header to identify deployment
-		header X-Deployment-Time "{http.request.time}"
-		# Content Security Policy for the React Frontend
-		header Content-Security-Policy "default-src 'self'; script-src 'self' {$UMAMI_PUBLIC_ORIGIN} https://static.cloudflareinsights.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https: {$UMAMI_PUBLIC_ORIGIN} https://fonts.googleapis.com https://fonts.gstatic.com wss:; media-src 'self' https:; frame-src 'self' https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com;"
+		import spa_headers
+	}
+
+	# No upstream answered for a shell route (all replicas down or restarting):
+	# the static index.html, as before the shell existed.
+	handle_errors {
+		@spa_shell_down path /anime/* /u/*
+		handle @spa_shell_down {
+			root * /srv/frontend
+			rewrite * /index.html
+			# A page, not an error: the app itself shows what it cannot load.
+			file_server {
+				status 200
+			}
+			import spa_headers
+		}
 	}
 
 	import access_log access.log

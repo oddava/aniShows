@@ -64,6 +64,11 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 
 # Frontend URL for OAuth callbacks
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# The deployed SPA's index.html (the frontend volume, mounted read-only into
+# web): /anime/* and /u/* are served from it with their own <head>
+# (apps/core/spa_shell.py). Missing, those routes answer 503 and Caddy serves
+# the static file instead.
+SPA_INDEX_PATH = os.getenv("SPA_INDEX_PATH", "/srv/frontend/index.html")
 # django-cors-headers' own default; development.py and production.py set the real list.
 CORS_ALLOWED_ORIGINS: list[str] = []
 # AniList GraphQL is the only catalog data source. AniList documents 90
