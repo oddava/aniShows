@@ -82,7 +82,8 @@ export default function UserMenu({
                         onClick={() => setIsProfileOpen(!isProfileOpen)}
                         aria-expanded={isProfileOpen}
                         aria-controls={isProfileOpen ? profileMenuId : undefined}
-                        aria-label={`Account menu for ${user?.username || 'you'}${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
+                        // The name starts with what the button shows, the username (WCAG 2.5.3).
+                        aria-label={`${user?.username || 'You'}, account menu${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
                         className="press relative group flex h-10 items-center gap-2.5 rounded-lg pl-1.5 pr-2.5 transition-colors duration-150 hover:bg-white/[0.06]"
                     >
                         {/* Avatar or Placeholder */}

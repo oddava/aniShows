@@ -146,7 +146,9 @@ export default function QuickAdd({
             />
         );
 
-    const label = meta ? `${meta.label}. Change list status for ${title}` : `Add ${title} to your list`;
+    // Starts with the visible text ("Add to list", "Add", or the status) so
+    // voice users can say what they see (WCAG 2.5.3), then names the title.
+    const label = meta ? `${meta.label}. Change list status for ${title}` : `Add to list: ${title}`;
 
     return (
         <div

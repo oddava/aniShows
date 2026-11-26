@@ -289,7 +289,7 @@ const ForumThreadDetail = () => {
                                 onClick={() => toggleSubscriptionMutation.mutate(!isSubscribed)}
                                 disabled={toggleSubscriptionMutation.isPending}
                                 aria-pressed={isSubscribed}
-                                aria-label={isSubscribed ? 'Unfollow thread' : 'Follow thread'}
+                                aria-label={isSubscribed ? 'Following thread' : 'Follow thread'}
                                 title={isSubscribed ? 'Unfollow thread' : 'Follow thread'}
                                 className={`shrink-0 flex items-center gap-1.5 text-xs font-medium transition-colors px-2 py-1 rounded-lg hover:bg-white/5 ${isSubscribed
                                     ? 'text-accent'

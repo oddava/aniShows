@@ -181,7 +181,8 @@ export default function CustomSelect({
                 id={selectId}
                 type="button"
                 disabled={disabled}
-                aria-label={ariaLabel}
+                // The field, then the value the trigger shows (WCAG 2.5.3).
+                aria-label={ariaLabel ? `${ariaLabel}: ${selectedOption?.label || placeholder || ''}`.replace(/: $/, '') : undefined}
                 aria-expanded={isOpen}
                 aria-haspopup="listbox"
                 className={`inline-flex w-full items-center justify-between gap-2 rounded-xl bg-dark-200 px-4 py-3 text-sm font-semibold text-white outline-none press hover:shadow-[inset_0_0_0_100vmax_rgb(255_255_255/0.06)] focus-visible:!outline-none focus-visible:!shadow-[inset_0_0_0_100vmax_rgb(255_255_255/0.1)] disabled:cursor-not-allowed disabled:opacity-60 ${triggerClassName}`}

@@ -75,11 +75,11 @@ describe('/list library (P2)', () => {
         renderAt('/list?status=completed');
 
         fireEvent.click(await screen.findByRole('button', { name: 'Table view' }));
-        fireEvent.click(await screen.findByRole('button', { name: 'Score Frieren' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Rate Frieren' }));
         fireEvent.click(screen.getByRole('radio', { name: '9 out of 10' }));
 
         await waitFor(() => expect(listApi.update).toHaveBeenCalledWith(2, { score: 9 }));
-        expect(await screen.findByRole('button', { name: 'Your score for Frieren: 9. Change' })).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: '9, your score for Frieren. Change' })).toBeInTheDocument();
     });
 
     it('keeps a show that just moved to Completed in place, so its score prompt stays open', async () => {

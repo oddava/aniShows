@@ -72,7 +72,7 @@ describe('AnimeCard list-status changes refresh Home\'s Currently Watching shelf
 
         await waitFor(() => expect(listApi.remove).toHaveBeenCalledWith(41));
         await waitFor(() => expect(invalidatedKeys()).toContain(WATCHING_SHELF));
-        expect(screen.getByRole('button', { name: 'Add Overgeared to your list' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Add to list: Overgeared' })).toBeInTheDocument();
     });
 
     it('invalidates the shelf when an episode is marked watched', async () => {

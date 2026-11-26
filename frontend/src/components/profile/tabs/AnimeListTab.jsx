@@ -306,7 +306,7 @@ function EditableListRow({ item }) {
                 type="button"
                 onClick={() => increment()}
                 disabled={isPending || atEnd}
-                aria-label={`Add one episode to ${item.anime?.title || 'this anime'}`}
+                aria-label={`+1 episode: ${item.anime?.title || 'this anime'}`}
                 className="min-h-[2.75rem] min-w-[2.75rem] shrink-0 rounded-lg bg-white/[0.05] px-2.5 text-sm font-medium text-[var(--text-1)] transition-colors hover:bg-white/[0.09] disabled:cursor-not-allowed disabled:opacity-40"
             >
                 +1

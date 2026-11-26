@@ -4,7 +4,7 @@
   // image fade-ins): Chrome counts the largest paint only once it is fully
   // shown, so each fade delayed LCP by its length (RA-002). Layout.jsx clears
   // this at the first in-app navigation; later pages fade in as designed.
-  document.documentElement.setAttribute('data-boot', '');
+  if (document.documentElement) document.documentElement.setAttribute('data-boot', '');
   // Safety net for stale service workers and caches. The app ships no caching
   // service worker (C-INT-7); the only one it registers is the web-push worker
   // (/service-worker.js), which caches nothing and is kept: unregistering it

@@ -54,7 +54,7 @@ describe('AnimeCard patches cached anime instead of refetching them (B20)', () =
     it('adding to the list updates the grid and Schedule in place', async () => {
         const { client, invalidatedKeys } = renderCard();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Add Overgeared to your list' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add to list: Overgeared' }));
         fireEvent.click(screen.getByRole('menuitemradio', { name: /Watching/ }));
 
         await waitFor(() => expect(listApi.add).toHaveBeenCalledWith({ anime_id: 1, status: 'Watching' }));

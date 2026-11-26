@@ -33,7 +33,7 @@ function SectionHead({ title, onSeeAll, seeAllLabel }) {
                 <button
                     type="button"
                     onClick={onSeeAll}
-                    aria-label={seeAllLabel || `See all: ${title}`}
+                    aria-label={`See all: ${seeAllLabel || title}`}
                     className="text-link shrink-0 text-[15px]"
                 >
                     See all
@@ -212,7 +212,7 @@ export default function OverviewTab({
     if (watching.length > 0) {
         sections.push(
             <section key="watching">
-                <SectionHead title="Watching" onSeeAll={() => onTabChange?.('anime_list')} seeAllLabel="See the whole list" />
+                <SectionHead title="Watching" onSeeAll={() => onTabChange?.('anime_list')} seeAllLabel="the whole list" />
                 <WatchingRows items={watching} />
             </section>,
         );
@@ -257,7 +257,7 @@ export default function OverviewTab({
                     <SectionHead
                         title="Activity"
                         onSeeAll={() => onTabChange?.('activity')}
-                        seeAllLabel="See all activity"
+                        seeAllLabel="activity"
                     />
                     {hasHeatmap && (
                         // The year spans the panel (its columns share the width);

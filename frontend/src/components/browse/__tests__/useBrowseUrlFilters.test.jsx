@@ -204,15 +204,15 @@ describe('SortSelect on Browse', () => {
         const Wrapper = makeWrapper('/browse?q=frieren');
         render(<Wrapper><SortHarness /></Wrapper>);
 
-        const trigger = screen.getByRole('button', { name: 'Sort by' });
+        const trigger = screen.getByRole('button', { name: /^Sort by: / });
         expect(trigger).toHaveTextContent('Best match');
 
         fireEvent.click(trigger);
         fireEvent.click(screen.getByRole('option', { name: 'Highest rated' }));
         expect(searchOf().get('sort')).toBe('rating');
-        expect(screen.getByRole('button', { name: 'Sort by' })).toHaveTextContent('Highest rated');
+        expect(screen.getByRole('button', { name: /^Sort by: / })).toHaveTextContent('Highest rated');
 
-        fireEvent.click(screen.getByRole('button', { name: 'Sort by' }));
+        fireEvent.click(screen.getByRole('button', { name: /^Sort by: / }));
         fireEvent.click(screen.getByRole('option', { name: 'Best match' }));
         expect(searchOf().has('sort')).toBe(false);
     });
@@ -221,7 +221,7 @@ describe('SortSelect on Browse', () => {
         const Wrapper = makeWrapper('/browse?genre=action');
         render(<Wrapper><SortHarness /></Wrapper>);
 
-        fireEvent.click(screen.getByRole('button', { name: 'Sort by' }));
+        fireEvent.click(screen.getByRole('button', { name: /^Sort by: / }));
         expect(screen.queryByRole('option', { name: 'Best match' })).not.toBeInTheDocument();
         expect(screen.getByRole('option', { name: 'Most popular' })).toHaveAttribute('aria-selected', 'true');
     });
