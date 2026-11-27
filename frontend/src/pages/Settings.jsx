@@ -60,6 +60,8 @@ export default function Settings() {
     setAvatarPreviewUrl,
     setBannerFile,
     setBannerPreviewUrl,
+    setAvatarCrop,
+    setBannerCrop,
   } = profile;
   const tabFade = useSwitchFade(activeTab);
 
@@ -140,6 +142,7 @@ export default function Settings() {
         aspect={cropModal.type === "banner" ? bannerCropAspect : 1}
         mediaType={cropModal.type}
         sourceMimeType={cropModal.sourceMimeType}
+        keepAnimation={Boolean(cropModal.keepAnimation)}
         cropShape={cropModal.type === "banner" ? "rect" : "rect"}
         title={
           cropModal.type === "banner" ? "Edit banner" : "Edit profile picture"
@@ -150,18 +153,25 @@ export default function Settings() {
             URL.revokeObjectURL(cropModal.imageSrc);
           }
         }}
-        onApply={(file, previewUrl) => {
-          if (cropModal.type === "banner") {
-            setBannerFile(file);
-            setBannerPreviewUrl(previewUrl);
+        onApply={(file, previewUrl, crop) => {
+          // A GIF comes back as a crop box: the original file is uploaded
+          // and cropped on the server, so it stays animated, and its own
+          // URL stays alive as the preview.
+          const banner = cropModal.type === "banner";
+          const setFile = banner ? setBannerFile : setAvatarFile;
+          const setPreview = banner ? setBannerPreviewUrl : setAvatarPreviewUrl;
+          const setCrop = banner ? setBannerCrop : setAvatarCrop;
+          if (crop) {
+            setFile(cropModal.sourceFile);
+            setPreview(cropModal.imageSrc);
+            setCrop(crop);
           } else {
-            setAvatarFile(file);
-            setAvatarPreviewUrl(previewUrl);
+            setFile(file);
+            setPreview(previewUrl);
+            setCrop(null);
+            if (cropModal.imageSrc) URL.revokeObjectURL(cropModal.imageSrc);
           }
           setCropModal({ ...cropModal, isOpen: false });
-          if (cropModal.imageSrc) {
-            URL.revokeObjectURL(cropModal.imageSrc);
-          }
         }}
       />
     </>

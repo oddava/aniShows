@@ -73,6 +73,10 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
     // Temporary ObjectURLs for previewing without storing in memory permanently
     const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null);
     const [bannerPreviewUrl, setBannerPreviewUrl] = useState(null);
+    // Where to crop a file the server crops itself (a GIF, which a canvas
+    // would flatten): {pixels: {x, y, width, height}, area: the same in %}.
+    const [avatarCrop, setAvatarCrop] = useState(null);
+    const [bannerCrop, setBannerCrop] = useState(null);
 
     const browserTimezone = useMemo(() => getBrowserTimeZone(), []);
     const supportedTimezones = useMemo(() => getSupportedTimeZones(), []);
@@ -243,9 +247,14 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             if (normalizedSelectedTimezone !== normalizedCurrentTimezone) {
                 formData.append('preferred_timezone', normalizedSelectedTimezone);
             }
-            if (avatarFile) formData.append('avatar', avatarFile);
-            else if (removeAvatar) formData.append('remove_avatar', 'true');
-            if (bannerFile) formData.append('banner', bannerFile);
+            if (avatarFile) {
+                formData.append('avatar', avatarFile);
+                if (avatarCrop) formData.append('avatar_crop', JSON.stringify(avatarCrop.pixels));
+            } else if (removeAvatar) formData.append('remove_avatar', 'true');
+            if (bannerFile) {
+                formData.append('banner', bannerFile);
+                if (bannerCrop) formData.append('banner_crop', JSON.stringify(bannerCrop.pixels));
+            }
             if (removeBanner) formData.append('remove_banner', 'true');
 
             const response = await authApi.updateProfile(formData);
@@ -264,6 +273,8 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
             // Clear file inputs immediately for better UX
             setAvatarFile(null);
             setBannerFile(null);
+            setAvatarCrop(null);
+            setBannerCrop(null);
             setAvatarPreviewUrl(null);
             setBannerPreviewUrl(null);
             setRemoveBanner(false);
@@ -325,6 +336,8 @@ export default function useProfileSettings({ user, refreshProfile, queryClient }
         bannerCropAspect,
         avatarPreviewUrl, setAvatarPreviewUrl,
         bannerPreviewUrl, setBannerPreviewUrl,
+        avatarCrop, setAvatarCrop,
+        bannerCrop, setBannerCrop,
         browserTimezone,
         timezoneOptions,
         resolvedTimezone,

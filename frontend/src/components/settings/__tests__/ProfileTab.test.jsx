@@ -26,6 +26,8 @@ const profileState = (overrides = {}) => ({
     setCropModal: vi.fn(),
     avatarPreviewUrl: null, setAvatarPreviewUrl: vi.fn(),
     bannerPreviewUrl: null, setBannerPreviewUrl: vi.fn(),
+    avatarCrop: null, setAvatarCrop: vi.fn(),
+    bannerCrop: null, setBannerCrop: vi.fn(),
     browserTimezone: 'UTC',
     timezoneOptions: [],
     resolvedTimezone: 'UTC',
@@ -55,10 +57,36 @@ describe('ProfileTab', () => {
         expect(screen.queryByText('Adjusted for readability')).not.toBeInTheDocument();
     });
 
-    it('says animated avatars are limited to 512x512', () => {
+    it('says big pictures are shrunk and GIFs stay animated', () => {
         render(<ProfileTab user={{ username: 'me' }} profile={profileState()} />);
 
-        expect(screen.getByText(/Animated GIF pictures stay animated up to 512×512/)).toBeInTheDocument();
+        expect(screen.getByText(/Up to 10 MB\. Big pictures are shrunk for you, and GIFs stay animated\./)).toBeInTheDocument();
+    });
+
+    it('opens the editor for a GIF too, keeping it animated', () => {
+        const profile = profileState();
+        const { container } = render(<ProfileTab user={{ username: 'me' }} profile={profile} />);
+        const gif = new File(['GIF89a'], 'clip.gif', { type: 'image/gif' });
+        window.URL.createObjectURL = vi.fn(() => 'blob:clip');
+
+        fireEvent.change(container.querySelectorAll('input[type="file"]')[0], { target: { files: [gif] } });
+
+        expect(profile.setCropModal).toHaveBeenCalledWith(expect.objectContaining({
+            isOpen: true, type: 'avatar', keepAnimation: true, sourceFile: gif, imageSrc: 'blob:clip',
+        }));
+        expect(profile.setAvatarFile).not.toHaveBeenCalled();
+    });
+
+    it('explains a file over 10 MB instead of uploading it', () => {
+        const profile = profileState();
+        const { container } = render(<ProfileTab user={{ username: 'me' }} profile={profile} />);
+        const huge = new File(['x'], 'huge.png', { type: 'image/png' });
+        Object.defineProperty(huge, 'size', { value: 11 * 1024 * 1024 });
+
+        fireEvent.change(container.querySelectorAll('input[type="file"]')[0], { target: { files: [huge] } });
+
+        expect(screen.getByRole('alert')).toHaveTextContent('over 10 MB');
+        expect(profile.setCropModal).not.toHaveBeenCalled();
     });
 
     it('labels the username field', () => {

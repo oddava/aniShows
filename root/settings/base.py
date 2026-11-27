@@ -490,8 +490,12 @@ DATA_UPLOAD_MAX_NUMBER_FILES = 10  # Max number of file uploads
 # FILE UPLOAD VALIDATION SETTINGS
 # =============================================================================
 
+# Largest stored file: uploads are shrunk and re-encoded to fit under these.
 MAX_AVATAR_SIZE = 2 * 1024 * 1024  # 2MB
 MAX_BANNER_SIZE = 5 * 1024 * 1024  # 5MB
+# Largest accepted upload (under Caddy's 12 MB request limit).
+MAX_AVATAR_UPLOAD_SIZE = 10 * 1024 * 1024
+MAX_BANNER_UPLOAD_SIZE = 10 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 MAX_ACTIVE_IMPORT_JOBS_PER_USER = _env_int("MAX_ACTIVE_IMPORT_JOBS_PER_USER", 1)
 MAX_IMPORT_JOBS_PER_DAY = _env_int("MAX_IMPORT_JOBS_PER_DAY", 5)

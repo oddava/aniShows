@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNowStrict } from 'date-fns';
 
 import { importExportApi } from '../../../api/client';
@@ -7,8 +7,21 @@ import { getApiErrorMessage } from '../../../api/errors';
 import { anilistLinkKeys } from '../../../api/queries/importJobs';
 import { formatDateTimeInUserTimezone } from '../../../utils/dateUtils';
 import SettingsSwitch from '../SettingsSwitch';
-import SourceMark from './SourceMark';
 import { SOURCES } from './importHelpers';
+
+const AVATAR_QUERY = 'query ($name: String) { User(name: $name) { avatar { medium } } }';
+
+/** A public AniList account's picture URL (https only), or null. */
+export async function fetchAniListAvatar(username) {
+    const response = await fetch('https://graphql.anilist.co', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ query: AVATAR_QUERY, variables: { name: username } }),
+    });
+    if (!response.ok) return null;
+    const url = (await response.json())?.data?.User?.avatar?.medium;
+    return typeof url === 'string' && url.startsWith('https://') ? url : null;
+}
 
 /** Re-render once `isoTime` has passed (the sync cooldown ending). */
 function useNowUntil(isoTime) {
@@ -60,6 +73,17 @@ export default function AniListLink({ user, link, running, disabled, onStarted, 
         onError: (err) => onError(getApiErrorMessage(err, 'AniList could not be unlinked.')),
     });
 
+    // The account's own AniList picture: stored by the last sync, else read
+    // from AniList's public API once (a link made before pictures were kept).
+    const avatarQuery = useQuery({
+        queryKey: ['anilistAvatar', link.username],
+        queryFn: () => fetchAniListAvatar(link.username),
+        enabled: !link.avatar_url && Boolean(link.username),
+        staleTime: Infinity,
+        retry: false,
+    });
+    const avatar = link.avatar_url || avatarQuery.data || null;
+
     const busy = syncMutation.isPending || dailyMutation.isPending || unlinkMutation.isPending;
     const coolingDown = link.sync_available_at && new Date(link.sync_available_at).getTime() > now;
     const daily = dailyMutation.isPending ? dailyMutation.variables : !!link.auto_sync && !link.auto_sync_paused;
@@ -67,21 +91,20 @@ export default function AniListLink({ user, link, running, disabled, onStarted, 
     return (
         <div className="rounded-xl bg-white/[0.03] p-4">
             <div className="flex flex-wrap items-center gap-3">
-                {link.avatar_url ? (
-                    // The account's own picture, with AniList's mark on its corner.
-                    <span className="relative shrink-0">
-                        <img
-                            src={link.avatar_url}
-                            alt=""
-                            draggable={false}
-                            className="h-10 w-10 rounded-full bg-[var(--ink-3)] object-cover"
-                        />
-                        <span className="absolute -bottom-1 -right-1 rounded-[5px] ring-2 ring-[var(--ink-2)]">
-                            <SourceMark source="anilist" size="xs" />
-                        </span>
-                    </span>
+                {avatar ? (
+                    <img
+                        src={avatar}
+                        alt=""
+                        draggable={false}
+                        className="h-10 w-10 shrink-0 rounded-full bg-[var(--ink-3)] object-cover"
+                    />
                 ) : (
-                    <SourceMark source="anilist" />
+                    <span
+                        aria-hidden="true"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--ink-3)] text-base font-semibold uppercase text-[var(--text-2)]"
+                    >
+                        {link.username?.charAt(0)}
+                    </span>
                 )}
                 <div className="min-w-0 flex-1">
                     <p className="truncate text-[15px] text-[var(--text-1)]">

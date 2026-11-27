@@ -17,7 +17,7 @@ from root.storage_backends import MediaStorage
 from ..adapters import MySocialAccountAdapter
 from ..models import UserProfile
 from ..utils import image_processing
-from ..utils.image_processing import ProfileImageError, normalize_profile_image
+from ..utils.image_processing import ProfileImageError, clean_crop, normalize_profile_image
 
 User = get_user_model()
 
@@ -38,14 +38,25 @@ def jpeg_with_exif(size=(1200, 800), orientation=None) -> bytes:
     return buffer.getvalue()
 
 
-def animated_gif(frames: int) -> bytes:
+def animated_gif(frames: int, size=(20, 20)) -> bytes:
     # Distinct colours: Pillow merges identical consecutive frames.
     images = [
-        Image.new("RGB", (20, 20), (index * 2 % 256, index, 255 - index)) for index in range(frames)
+        # Far apart, so a lossy encoder never merges two frames into one.
+        Image.new("RGB", size, (index * 67 % 256, index * 131 % 256, index * 29 % 256))
+        for index in range(frames)
     ]
     buffer = io.BytesIO()
     images[0].save(buffer, format="GIF", save_all=True, append_images=images[1:], duration=50)
     return buffer.getvalue()
+
+
+def total_duration(image: Image.Image) -> int:
+    total = 0
+    for index in range(image.n_frames):
+        image.seek(index)
+        image.load()  # WebP fills in a frame's timing when it is loaded
+        total += image.info.get("duration", 0)
+    return total
 
 
 def opened(file) -> Image.Image:
@@ -85,15 +96,16 @@ class NormalizeProfileImageTests(SimpleTestCase):
         Image.new("RGBA", (64, 64), (0, 0, 0, 0)).save(buffer, format="PNG")
         self.assertEqual(opened(self._normalize(buffer.getvalue())).mode, "RGBA")
 
-    def test_small_animated_gif_is_kept_as_is(self):
-        data = animated_gif(3)
-        result = self._normalize(data)
-        result.seek(0)
-        self.assertEqual(result.read(), data)
+    def test_animated_gif_stays_animated_as_webp(self):
+        image = opened(self._normalize(animated_gif(3)))
+        self.assertEqual(image.format, "WEBP")
+        self.assertTrue(image.is_animated)
+        self.assertEqual((image.n_frames, image.size), (3, (20, 20)))
 
-    def test_long_animated_gif_is_rejected(self):
-        with self.assertRaisesMessage(ProfileImageError, "at most 120 frames"):
-            self._normalize(animated_gif(121))
+    def test_a_long_animation_keeps_120_frames_and_its_timing(self):
+        image = opened(self._normalize(animated_gif(250)))
+        self.assertLessEqual(image.n_frames, 120)
+        self.assertEqual(total_duration(image), 250 * 50)
 
     def test_non_images_and_oversized_files_are_rejected(self):
         with self.assertRaises(ProfileImageError):
@@ -130,6 +142,21 @@ class UploadEndpointTests(APITestCase):
         image = opened(saved_content)
         self.assertEqual(image.format, "WEBP")
         self.assertEqual(dict(image.getexif()), {})
+
+    def test_big_animated_avatar_is_cropped_and_kept_animated(self, _save):
+        upload = SimpleUploadedFile(
+            "clip.gif", animated_gif(3, size=(540, 554)), content_type="image/gif"
+        )
+        response = self.client.patch(
+            reverse("user_profile"),
+            {"avatar": upload, "avatar_crop": '{"x": 0, "y": 10, "width": 540, "height": 540}'},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        image = opened(_save.call_args.args[2])
+        self.assertTrue(image.is_animated)
+        self.assertEqual(image.size, (512, 512))
 
     def test_bad_upload_is_a_400_with_a_message(self, _save):
         upload = SimpleUploadedFile("x.jpg", b"not an image" * 100, content_type="image/jpeg")
@@ -226,23 +253,64 @@ class UploadAndRemoveTogetherTests(APITestCase):
         self.assertIn("remove_avatar", response.data["errors"])
 
 
-class AnimatedGifSizeTests(SimpleTestCase):
-    def test_oversized_animated_avatar_is_rejected(self):
-        frames = [Image.new("RGB", (600, 600), (i, 0, 0)) for i in range(3)]
-        buffer = io.BytesIO()
-        frames[0].save(buffer, format="GIF", save_all=True, append_images=frames[1:])
-        with self.assertRaisesMessage(ProfileImageError, "at most 512x512"):
-            normalize_profile_image(
-                ContentFile(buffer.getvalue(), name="big.gif"), "avatar", max_size=5 * 1024 * 1024
-            )
+class AnimatedFitTests(SimpleTestCase):
+    """Animations are fitted, not refused: resized, cropped and compressed."""
 
-    def test_display_sized_animated_banner_is_kept(self):
-        frames = [Image.new("RGB", (800, 200), (0, i, 0)) for i in range(3)]
-        buffer = io.BytesIO()
-        frames[0].save(buffer, format="GIF", save_all=True, append_images=frames[1:])
-        data = buffer.getvalue()
-        result = normalize_profile_image(
-            ContentFile(data, name="ok.gif"), "banner", max_size=5 * 1024 * 1024
+    def _normalize(self, data, kind="avatar", **kwargs):
+        return normalize_profile_image(
+            ContentFile(data, name="clip.gif"), kind, max_size=10 * 1024 * 1024, **kwargs
         )
-        result.seek(0)
-        self.assertEqual(result.read(), data)
+
+    def test_an_oversized_animated_avatar_is_shrunk_to_512(self):
+        image = opened(self._normalize(animated_gif(3, size=(540, 554))))
+        self.assertTrue(image.is_animated)
+        self.assertEqual(image.size, (499, 512))
+
+    def test_the_crop_is_applied_to_every_frame(self):
+        crop = (20, 30, 300, 300)
+        image = opened(self._normalize(animated_gif(4, size=(540, 554)), crop=crop))
+        self.assertEqual((image.size, image.n_frames), ((300, 300), 4))
+
+    def test_a_display_sized_animated_banner_keeps_its_size(self):
+        image = opened(self._normalize(animated_gif(3, size=(800, 200)), kind="banner"))
+        self.assertEqual((image.format, image.size), ("WEBP", (800, 200)))
+
+    def test_quality_steps_down_to_fit_the_stored_size(self):
+        data = animated_gif(30, size=(400, 400))
+        roomy = self._normalize(data, stored_max=10 * 1024 * 1024)
+        roomy.seek(0)
+        size = len(roomy.read())
+        tight = self._normalize(data, stored_max=size - 1)
+        tight.seek(0)
+        self.assertLess(len(tight.read()), size)
+
+    def test_an_animation_that_cannot_fit_is_refused_plainly(self):
+        with self.assertRaisesMessage(ProfileImageError, "too heavy"):
+            self._normalize(animated_gif(5, size=(200, 200)), stored_max=10)
+
+    def test_a_huge_animation_is_refused_before_decoding(self):
+        with (
+            patch.object(image_processing, "MAX_ANIMATION_PIXELS", 1000),
+            self.assertRaisesMessage(ProfileImageError, "too long or too large"),
+        ):
+            self._normalize(animated_gif(3, size=(40, 40)))
+
+    def test_a_still_image_can_be_cropped_too(self):
+        result = normalize_profile_image(
+            ContentFile(jpeg_with_exif((1000, 800)), name="x.jpg"),
+            "avatar",
+            max_size=10**7,
+            crop=(100, 100, 400, 400),
+        )
+        self.assertEqual(opened(result).size, (400, 400))
+
+
+class CleanCropTests(SimpleTestCase):
+    def test_reads_numbers_and_rejects_nonsense(self):
+        self.assertIsNone(clean_crop(None))
+        self.assertEqual(
+            clean_crop({"x": "1.4", "y": 2, "width": 30.6, "height": 30}), (1, 2, 31, 30)
+        )
+        for bad in ("x", {"x": 1}, {"x": 1, "y": 1, "width": 0, "height": 5}):
+            with self.assertRaises(ProfileImageError):
+                clean_crop(bad)
