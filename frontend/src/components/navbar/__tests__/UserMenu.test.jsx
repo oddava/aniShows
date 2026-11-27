@@ -29,7 +29,6 @@ function Harness({ isAuthenticated = true }) {
                 authLoading={false}
                 isProfileOpen={isProfileOpen}
                 setIsProfileOpen={setIsProfileOpen}
-                mobileUnreadCount={0}
                 currentUserProfilePath="/u/oddava"
             />
             <a href="/after">After the menu</a>
@@ -74,11 +73,20 @@ describe('UserMenu (desktop account disclosure)', () => {
 
         const button = screen.getByRole('button', { name: /^oddava, account menu/ });
         await user.click(button);
-        // Profile, Notifications, Settings, Sign out, then out of the menu.
-        for (let i = 0; i < 5; i += 1) await user.tab();
+        // Profile, Settings, Sign out, then out of the menu (the bell beside
+        // it is the way to notifications).
+        for (let i = 0; i < 4; i += 1) await user.tab();
 
         expect(screen.getByRole('link', { name: 'After the menu' })).toHaveFocus();
         expect(button).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('leaves notifications to the bell beside it', async () => {
+        const user = userEvent.setup();
+        renderAt();
+
+        await user.click(screen.getByRole('button', { name: /^oddava, account menu/ }));
+        expect(screen.queryByRole('link', { name: /Notifications/ })).not.toBeInTheDocument();
     });
 
     it('deep-links Settings to the Account tab', async () => {
