@@ -320,6 +320,22 @@ export function formatRelativeTime(date, preference) {
 }
 
 /**
+ * Time left until `value`, compact: "45m", "7h 56m", "2d 3h"; "aired" once it
+ * has passed; null for no date. Timezone-agnostic (absolute timestamps).
+ */
+export function formatCountdown(value, now = Date.now()) {
+    if (!value) return null;
+    const diff = new Date(value).getTime() - now;
+    if (!Number.isFinite(diff)) return null;
+    if (diff < 0) return 'aired';
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    if (hours < 1) return `${minutes}m`;
+    if (hours < 24) return `${hours}h ${minutes % 60}m`;
+    return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
+
+/**
  * A full airing time in the selected timezone, 24-hour, no zone name:
  * "Tue 24 Nov · 17:43". Empty for no date.
  */

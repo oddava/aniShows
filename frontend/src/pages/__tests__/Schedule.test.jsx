@@ -6,8 +6,9 @@ import Schedule from '../Schedule';
 import { animeApi } from '../../api/client';
 
 vi.mock('../../components/AnimeCard', () => ({
-  default: ({ anime, showAiringCountdown, metaText }) => (
-    <div data-testid="anime-card">
+  default: ({ anime, showAiringCountdown, metaText, cornerLabel, cornerAccent }) => (
+    <div data-testid="anime-card" data-accent={cornerAccent ? 'true' : undefined}>
+      {cornerLabel ? <span>{cornerLabel}</span> : null}
       <span>{anime.title}</span>
       {showAiringCountdown && anime.next_airing_episode ? (
         <span>{`EP ${anime.next_airing_episode}`}</span>
@@ -148,8 +149,11 @@ describe('Schedule Component', () => {
 
     expect(screen.getByText('Demon Slayer')).toBeInTheDocument();
     expect(screen.getAllByTestId('anime-card')).toHaveLength(2);
-    expect(screen.getByText('EP 5')).toBeInTheDocument();
-    expect(screen.getByText('EP 12')).toBeInTheDocument();
+    // Each poster: its air time on the cover, episode and countdown under it.
+    expect(screen.getByText('12:00')).toBeInTheDocument();
+    expect(screen.getByText('13:00')).toBeInTheDocument();
+    expect(screen.getByText(/^Ep 5 · (in |out now)/)).toBeInTheDocument();
+    expect(screen.getByText(/^Ep 12 · (in |out now)/)).toBeInTheDocument();
   });
 
   it('handles API error gracefully', async () => {
@@ -536,7 +540,8 @@ describe('Schedule Component - calendar dates and My list', () => {
     await waitFor(() => {
       expect(screen.getByText('Aired This Morning')).toBeInTheDocument();
     });
-    expect(screen.getByText(/^09:00/)).toBeInTheDocument();
+    expect(screen.getByText('09:00')).toBeInTheDocument();
+    expect(screen.getByText('Ep 3 · out now')).toBeInTheDocument();
     expect(screen.queryByText('Stale Last Week')).not.toBeInTheDocument();
     expect(screen.getByText('1 more airs later')).toBeInTheDocument();
 
@@ -600,7 +605,8 @@ describe('Schedule Component - calendar dates and My list', () => {
     const toggle = screen.getByRole('button', { name: 'My list' });
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getAllByText('Planned Show').length).toBeGreaterThan(0);
-    expect(screen.getByRole('complementary', { name: 'Your week' })).toHaveTextContent('Watching Show');
+    // With My list on, the day already is your list: no separate Up next.
+    expect(screen.queryByRole('complementary', { name: 'Your week' })).not.toBeInTheDocument();
     expect(screen.queryByText('Completed Show')).not.toBeInTheDocument();
     expect(screen.queryByText('Dropped Show')).not.toBeInTheDocument();
     expect(screen.queryByText('Not Listed')).not.toBeInTheDocument();
@@ -610,6 +616,68 @@ describe('Schedule Component - calendar dates and My list', () => {
 
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getAllByTestId('anime-card')).toHaveLength(5);
+    expect(screen.getByRole('complementary', { name: 'Your week' })).toHaveTextContent('Watching Show');
+    // Shows on your list stand out in the full day.
+    const accented = screen.getAllByTestId('anime-card').filter((card) => card.dataset.accent === 'true');
+    expect(accented.map((card) => card.textContent)).toEqual([
+      expect.stringContaining('Watching Show'),
+      expect.stringContaining('Planned Show'),
+    ]);
     expect(dayButton('Monday 16')).toHaveAccessibleName(/^\S+ 16 \d+ ep \(Monday, 5 episodes\)$/);
+  });
+
+  it('leads with what is still to come and folds away what is already out', async () => {
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({
+      monday: [
+        show(1, 'Out This Morning', NOW - 3 * HOUR),
+        show(2, 'Coming Tonight', NOW + 6 * HOUR),
+      ],
+    }));
+
+    render(<Schedule />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByText('Coming Tonight')).toBeInTheDocument();
+    });
+    const toggle = screen.getByRole('button', { name: /Aired · 1/ });
+    const folded = document.getElementById('schedule-aired');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(folded).not.toBeVisible();
+    expect(folded).toHaveTextContent('Out This Morning');
+    expect(folded).not.toHaveTextContent('Coming Tonight');
+    // Headings never carry counts.
+    expect(screen.getByRole('heading', { level: 2, name: /Monday/ })).toHaveTextContent(/^Monday16 Nov$/);
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(folded).toBeVisible();
+  });
+
+  it('counts down only for today and tomorrow', async () => {
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({
+      wednesday: [show(4, 'Two Days Out', NOW + 2 * DAY)],
+    }));
+
+    render(<Schedule />, { wrapper: createWrapper('/schedule?day=wednesday') });
+
+    await waitFor(() => {
+      expect(screen.getByText('Two Days Out')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Ep 3')).toBeInTheDocument();
+    expect(screen.queryByText(/Ep 3 · in/)).not.toBeInTheDocument();
+  });
+
+  it('splits a busy day into parts of the day', async () => {
+    const evening = Date.UTC(2026, 10, 16, 18, 0);
+    animeApi.getSchedule.mockResolvedValue(buildScheduleResponse({
+      monday: Array.from({ length: 16 }, (_, i) => show(100 + i, `Evening Show ${i}`, evening + i * 5 * 60 * 1000)),
+    }));
+
+    render(<Schedule />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.getByText('Evening Show 0')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('region', { name: 'Evening' })).toHaveTextContent('Evening Show 15');
   });
 });

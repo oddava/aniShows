@@ -4,6 +4,7 @@
 @import "./styles/components/animations.css";
 @import "./styles/pages/forums.css";
 @import "./styles/pages/profile.css";
+@import "./styles/pages/schedule.css";
 
 /*
  * Design tokens (docs/ux-overhaul-plan.md).

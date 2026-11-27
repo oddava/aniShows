@@ -1,0 +1,38 @@
+/* Schedule: the day strip stays at the top while a long day scrolls. */
+.schedule-days {
+  background: var(--ink-0);
+  transition: transform 200ms var(--ease-out);
+}
+
+/* Stuck, the strip and the site navbar above it are one solid layer in the
+   page colour, with a hairline under the strip. */
+.schedule-days[data-stuck] {
+  box-shadow: 0 1px 0 var(--line-2);
+}
+
+:root:has(.schedule-days[data-stuck]) nav[data-autohide-nav] {
+  background: var(--ink-0) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* The strip slides down under the site's navbar while that shows (it comes
+   back on scroll-up), with the navbar's own timing. */
+@media (width < 48rem) {
+  :root[data-mobile-nav="shown"] .schedule-days[data-stuck] {
+    transform: translateY(calc(3.5rem + env(safe-area-inset-top)));
+    transition-duration: 300ms;
+  }
+}
+
+@media (width >= 48rem) {
+  :root[data-desktop-nav="shown"] .schedule-days[data-stuck] {
+    transform: translateY(4rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .schedule-days {
+    transition: none;
+  }
+}
