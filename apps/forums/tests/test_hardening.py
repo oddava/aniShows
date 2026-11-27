@@ -1,5 +1,6 @@
 """Hostile-content limits and moderation edge cases (council round 1)."""
 
+import gc
 import threading
 import time
 from unittest import mock
@@ -31,6 +32,33 @@ def _post_url(post, action=None):
     if action is None:
         return reverse("forums:post-detail", args=[post.id])
     return reverse(f"forums:post-{action}", args=[post.id])
+
+
+def _fastest_times(small, large, rounds=9):
+    """The fastest run of each callable, the two measured in alternation.
+
+    CI runs pytest with -n auto, so other workers share the CPU. Timing all the
+    small runs and then all the large ones lets a burst of load land on one side
+    and fake a growth ratio; alternating spreads it over both, and the fastest
+    run of each is the least disturbed. GC stays off so a collection triggered by
+    one side's garbage isn't billed to the other.
+    """
+    small()  # warm up
+    large()
+    best_small = best_large = float("inf")
+    gc.collect()
+    gc.disable()
+    try:
+        for _ in range(rounds):
+            started = time.perf_counter()
+            small()
+            best_small = min(best_small, time.perf_counter() - started)
+            started = time.perf_counter()
+            large()
+            best_large = min(best_large, time.perf_counter() - started)
+    finally:
+        gc.enable()
+    return best_small, best_large
 
 
 @pytest.fixture
@@ -227,21 +255,16 @@ class TestExcerpt:
         small_slice, large_slice = 4_000, 8_000
         assert len(hostile) > large_slice
 
-        def best_of(source_length, repeats=5, batch=10):
-            monkeypatch.setattr(excerpt_module, "EXCERPT_SOURCE_LENGTH", source_length)
-            # The fastest run is the least disturbed by a busy shared runner; a batch
-            # of calls keeps the cheap (linear) cases above the timer's noise.
-            best = float("inf")
-            for _ in range(repeats):
-                started = time.perf_counter()
+        def run_with(source_length, batch=10):
+            # A batch of calls keeps the cheap (linear) cases above the timer's noise.
+            def run():
+                monkeypatch.setattr(excerpt_module, "EXCERPT_SOURCE_LENGTH", source_length)
                 for _ in range(batch):
                     build_excerpt(hostile)
-                best = min(best, time.perf_counter() - started)
-            return best
 
-        best_of(small_slice, repeats=1)  # warm up
-        small = best_of(small_slice)
-        large = best_of(large_slice)
+            return run
+
+        small, large = _fastest_times(run_with(small_slice), run_with(large_slice))
 
         assert large / small < 3, f"time grew {large / small:.1f}x for 2x the slice"
         assert large < 2.0
@@ -481,18 +504,11 @@ class TestNesting:
         def body_of(scale):
             return "> " * (10_000 * scale) + "\n" + "- " * (10_000 * scale)
 
-        def best_of(body, repeats=5):
-            # The fastest run is the least disturbed by a busy shared runner.
-            best = float("inf")
-            for _ in range(repeats):
-                started = time.perf_counter()
-                max_container_nesting(body)
-                best = min(best, time.perf_counter() - started)
-            return best
-
-        best_of(body_of(1), repeats=1)  # warm up
-        small = best_of(body_of(1))
-        large = best_of(body_of(2))
+        small_body, large_body = body_of(1), body_of(2)
+        small, large = _fastest_times(
+            lambda: max_container_nesting(small_body),
+            lambda: max_container_nesting(large_body),
+        )
 
         # Linear work doubles with the input (ratio ~2); a rescan per marker would
         # quadruple it. Compare two sizes, with a generous ceiling as a backstop.
@@ -630,20 +646,13 @@ def test_whole_text_alignment_scan_stays_linear():
             20 * scale
         ) + '<p\nalign="left">\n' * (5_000 * scale)
 
-    def best_of(body, repeats=5):
-        # The fastest run is the least disturbed by a busy shared runner.
-        best = float("inf")
-        for _ in range(repeats):
-            started = time.perf_counter()
-            stats = container_stats(body)
-            best = min(best, time.perf_counter() - started)
-        return best, stats
+    small_body, large_body = body_of(1), body_of(2)
+    small, large = _fastest_times(
+        lambda: container_stats(small_body),
+        lambda: container_stats(large_body),
+    )
 
-    best_of(body_of(1), repeats=1)  # warm up
-    small, stats = best_of(body_of(1))
-    large, _ = best_of(body_of(2))
-
-    assert stats.depth >= 2_000
+    assert container_stats(small_body).depth >= 2_000
     # Linear work doubles with the input (ratio ~2); a per-line rescan would
     # quadruple it. A wall-clock budget alone is flaky on shared runners, so
     # compare two sizes and keep a generous absolute ceiling as a backstop.
