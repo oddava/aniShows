@@ -10,6 +10,7 @@ import {
 } from '../utils/imageUtils';
 import { statusMeta } from '../utils/listStatus';
 import { cachedCoverAccent, coverAccent } from '../utils/coverAccent';
+import { formatCountdown } from '../utils/dateUtils';
 import { airedEpisodeCount, knownEpisodeTotal, progressPercent } from '../utils/episodes';
 import QuickAdd from './ui/QuickAdd';
 import ProgressStepper from './ui/ProgressStepper';
@@ -22,23 +23,17 @@ import { CardSkeleton } from './ui/Skeleton';
 // instead of fading in from blank a second time.
 const loadedCovers = new Map();
 
-function timeUntil(dateString) {
-    if (!dateString) return null;
-    const diff = new Date(dateString).getTime() - Date.now();
-    if (!Number.isFinite(diff)) return null;
-    if (diff < 0) return 'aired';
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    if (hours < 1) return `${minutes}m`;
-    if (hours < 24) return `${hours}h ${minutes % 60}m`;
-    return `${Math.floor(hours / 24)}d ${hours % 24}h`;
-}
-
 /**
  * The one anime card (B4): poster, your status dot, your score, progress and
  * quick add, everywhere a show is listed (home, browse, search, schedule,
  * library). Every list write goes through useListEntryMutation, so each
  * change raises the same toast with Undo (T6).
+ *
+ * `cornerLabel`: a short tag on the poster's top-left corner (Schedule: the
+ * air time). A score badge then moves to the top-right. `cornerAccent` paints
+ * it in the signature colour (Schedule: a show on your list). The poster
+ * link's name then carries the label and the meta line too, so screen readers
+ * hear "Title, 19:00, Ep 9 · in 7h" and not just the title.
  *
  * `showProgress`: Watching entries get a visible − n / total + stepper under
  * the poster (T3); otherwise progress is a thin bar on the poster.
@@ -54,6 +49,8 @@ function AnimeCard({
     showMeta = false,
     metaText = null,
     showProgress = false,
+    cornerLabel = null,
+    cornerAccent = false,
     variant = 'poster',
     showStatusDot = true,
     // The first six cards of a grid load eagerly (they are on screen). Rows
@@ -135,7 +132,7 @@ function AnimeCard({
 
     const countdown = useMemo(() => {
         if (!showAiringCountdown) return null;
-        const left = timeUntil(anime.next_airing_date);
+        const left = formatCountdown(anime.next_airing_date);
         if (!left) return null;
         const ep = anime.next_airing_episode ? `Ep ${anime.next_airing_episode}` : 'Next ep';
         return left === 'aired' ? `${ep} is out` : `${ep} in ${left}`;
@@ -238,7 +235,7 @@ function AnimeCard({
             <div className="relative aspect-[2/3] shrink-0 rounded-[var(--radius-md)] bg-[var(--ink-2)] has-[a:focus-visible]:shadow-[0_0_0_2px_var(--signature)]">
                 <Link
                     to={href}
-                    aria-label={displayTitle}
+                    aria-label={cornerLabel ? [displayTitle, cornerLabel, metaLine].filter(Boolean).join(', ') : displayTitle}
                     className="absolute inset-0 block overflow-hidden rounded-[var(--radius-md)] focus-visible:!outline-none focus-visible:!shadow-none"
                 >
                     {!imageLoaded && <div aria-hidden="true" className="absolute inset-0 skeleton-shimmer rounded-[var(--radius-md)]" />}
@@ -269,8 +266,14 @@ function AnimeCard({
                     />
                 </Link>
 
+                {cornerLabel && (
+                    <span aria-hidden="true" className={`pointer-events-none absolute left-2 top-2 rounded-[var(--radius-sm)] px-1.5 py-0.5 text-xs font-semibold tabular ${cornerAccent ? 'bg-[var(--signature)] text-[var(--on-signature)]' : 'bg-[rgb(11_13_16/0.88)] text-white'}`}>
+                        {cornerLabel}
+                    </span>
+                )}
+
                 {entry.score > 0 && (
-                    <ScoreBadge score={entry.score} className="pointer-events-none absolute left-2 top-2" />
+                    <ScoreBadge score={entry.score} className={`pointer-events-none absolute top-2 ${cornerLabel ? 'right-2' : 'left-2'}`} />
                 )}
 
                 {countdown && (
@@ -317,7 +320,7 @@ function AnimeCard({
                     </span>
                 </span>
                 {metaLine && (
-                    <span className="mt-1 block truncate text-xs text-gray-500 tabular">{metaLine}</span>
+                    <span className="mt-1 block truncate text-xs text-[var(--text-3)] tabular">{metaLine}</span>
                 )}
             </Link>
             {meta && <span className="sr-only">On your list: {meta.label}</span>}
@@ -347,6 +350,8 @@ const arePropsEqual = (prev, next) => {
     if (prev.showMeta !== next.showMeta) return false;
     if (prev.metaText !== next.metaText) return false;
     if (prev.showProgress !== next.showProgress) return false;
+    if (prev.cornerLabel !== next.cornerLabel) return false;
+    if (prev.cornerAccent !== next.cornerAccent) return false;
     if (prev.variant !== next.variant) return false;
     if (prev.showStatusDot !== next.showStatusDot) return false;
     if (prev.eagerFirstSix !== next.eagerFirstSix) return false;
