@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 
 import OverviewTab from '../OverviewTab';
 
-const fixtures = vi.hoisted(() => ({ summary: null, heatmap: [], watching: [] }));
+const fixtures = vi.hoisted(() => ({ summary: null, heatmap: [], watching: [], characters: [] }));
 
 vi.mock('../../../api/queries/user', () => {
     const q = (key, data) => ({ queryKey: key, queryFn: async () => data() });
@@ -15,7 +15,7 @@ vi.mock('../../../api/queries/user', () => {
             summary: (u) => q(['summary', u], () => fixtures.summary),
         },
         favoriteQueries: { overview: (u) => q(['favs', u], () => []) },
-        characterFavoriteQueries: { overview: (u) => q(['chars', u], () => []) },
+        characterFavoriteQueries: { overview: (u) => q(['chars', u], () => fixtures.characters) },
         staffFavoriteQueries: { overview: (u) => q(['staff', u], () => []) },
         activityQueries: { heatmap: (u) => q(['heatmap', u], () => fixtures.heatmap) },
     };
@@ -31,8 +31,9 @@ vi.mock('../../ActivityHeatmap', () => ({
 
 const today = new Date().toISOString().split('T')[0];
 
-function renderOverview({ summary, heatmap = [{ date: today, count: 24 }], watching = [], isOwnProfile = true, user = {} }) {
+function renderOverview({ summary, heatmap = [{ date: today, count: 24 }], watching = [], characters = [], isOwnProfile = true, user = {}, onTabChange }) {
     fixtures.summary = summary;
+    fixtures.characters = characters;
     fixtures.heatmap = heatmap;
     fixtures.watching = watching;
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -44,6 +45,7 @@ function renderOverview({ summary, heatmap = [{ date: today, count: 24 }], watch
                     targetUsername="kiyo"
                     isPrivate={false}
                     isOwnProfile={isOwnProfile}
+                    onTabChange={onTabChange}
                 />
             </MemoryRouter>
         </QueryClientProvider>,
@@ -98,5 +100,27 @@ describe('OverviewTab with a list', () => {
         expect(screen.getByRole('heading', { name: 'Taste' })).toBeInTheDocument();
         expect(screen.getByRole('region', { name: 'Stats' })).toBeInTheDocument();
         expect(screen.queryByRole('heading', { name: 'Start your list' })).not.toBeInTheDocument();
+    });
+});
+
+describe('OverviewTab favourite people', () => {
+    const character = (id) => ({ id, character: { id: 100 + id, name: `Character ${id}`, image: '' } });
+
+    it('shows four and links to the Favorites tab for the rest', async () => {
+        const onTabChange = vi.fn();
+        const results = Array.from({ length: 9 }, (_, i) => character(i + 1));
+        renderOverview({ summary: { total: 3, top_genres: [] }, characters: { count: 9, results }, onTabChange });
+
+        expect(await screen.findByText('Character 4')).toBeInTheDocument();
+        expect(screen.queryByText('Character 5')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'See all: Favorite characters' }));
+        expect(onTabChange).toHaveBeenCalledWith('favorites');
+    });
+
+    it('has no See all when every one fits', async () => {
+        renderOverview({ summary: { total: 3, top_genres: [] }, characters: { count: 2, results: [character(1), character(2)] }, onTabChange: vi.fn() });
+
+        expect(await screen.findByText('Character 2')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /See all: Favorite characters/ })).not.toBeInTheDocument();
     });
 });

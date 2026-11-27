@@ -1,12 +1,19 @@
 // Profile "Favorites" tab body (G5 Community). Rendered by the ProfileContent shell (G1).
 import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { AnimeCardSkeleton } from '../../AnimeCard';
 import DraggableFavoritesGrid from '../../DraggableFavoritesGrid';
 import ErrorState from '../../common/ErrorState';
 import ProfileErrorBoundary, { ErrorVariant } from '../ProfileErrorBoundary';
-import { FAVORITES_REORDER_CAP, favoriteKeys, favoriteQueries } from '../../../api/queries/favorites';
+import {
+    FAVORITES_REORDER_CAP,
+    characterFavoriteQueries,
+    favoriteKeys,
+    favoriteQueries,
+    staffFavoriteQueries,
+} from '../../../api/queries/favorites';
+import FavoritePeople, { peopleFrom } from './FavoritePeople';
 import { miniProfileKeys } from '../../../api/queries/user';
 
 const GRID_CLASSES = 'grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 md:gap-4';
@@ -79,6 +86,14 @@ export default function FavoritesContent({
     const totalFavorites = favoritesData?.pages?.[0]?.count ?? favorites.length;
     const canReorder = Boolean(isOwnProfile && targetUsername) && totalFavorites > 1;
 
+    // Characters and voice actors, each with its own pages.
+    const peopleQuery = { enabled: Boolean(targetUsername), staleTime: 60 * 1000 };
+    const charactersQuery = useInfiniteQuery({ ...characterFavoriteQueries.all(targetUsername), ...peopleQuery });
+    const staffQuery = useInfiniteQuery({ ...staffFavoriteQueries.all(targetUsername), ...peopleQuery });
+    const hasPeople = peopleFrom(charactersQuery).count > 0 || peopleFrom(staffQuery).count > 0;
+    const peoplePending = Boolean(targetUsername) && (charactersQuery.isPending || staffQuery.isPending);
+    const hasAnime = favorites.length > 0;
+
     const exitReorder = () => {
         setIsReordering(false);
         // The paginated grid (and the overview/hover-card previews) reload in the new order.
@@ -98,49 +113,72 @@ export default function FavoritesContent({
     }
 
     return (
-        <div className="space-y-8 animate-tab-content">
+        <div className="space-y-10 animate-tab-content">
             {favoritesLoading ? (
                 <FavoritesSkeleton />
-            ) : favorites?.length > 0 ? (
-                <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorites">
-                    {canReorder && (
-                        <div className="mb-4 flex justify-end">
-                            <button
-                                type="button"
-                                onClick={() => setIsReordering(true)}
-                                className="btn-secondary px-4 text-[15px]"
-                            >
-                                Reorder
-                            </button>
+            ) : hasAnime ? (
+                <section>
+                    {(hasPeople || canReorder) && (
+                        <div className="mb-4 flex items-center justify-between gap-4">
+                            {hasPeople ? (
+                                <h2 className="section-title">
+                                    Anime <span className="font-normal text-[var(--text-3)] tabular">{totalFavorites.toLocaleString()}</span>
+                                </h2>
+                            ) : <span />}
+                            {canReorder && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsReordering(true)}
+                                    className="btn-secondary px-4 text-[15px]"
+                                >
+                                    Reorder
+                                </button>
+                            )}
                         </div>
                     )}
-                    <DraggableFavoritesGrid
-                        favorites={favorites}
-                        isOwnProfile={isOwnProfile}
-                        username={targetUsername}
-                    />
-                </ProfileErrorBoundary>
-            ) : (
+                    <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorites">
+                        <DraggableFavoritesGrid
+                            favorites={favorites}
+                            isOwnProfile={isOwnProfile}
+                            username={targetUsername}
+                        />
+                    </ProfileErrorBoundary>
+                    {hasNextFavorites && (
+                        <button
+                            type="button"
+                            onClick={() => fetchNextFavorites()}
+                            disabled={isFetchingNextFavorites}
+                            className="btn-secondary mt-4 px-5 text-[15px]"
+                        >
+                            {isFetchingNextFavorites ? 'Loading…' : 'Load more'}
+                        </button>
+                    )}
+                </section>
+            ) : !hasPeople && !peoplePending ? (
                 <p className=" pt-6 text-[17px] text-[var(--text-2)]">
-                    {isPublicView ? 'No favorites yet.' : 'No favorites yet. The heart on a show’s page puts it here.'}
+                    {isPublicView ? 'No favorites yet.' : 'No favorites yet. The heart on a show, character or voice actor puts it here.'}
                     {!isPublicView && (
                         <> <Link to="/browse?sort=rating" className="text-link">See the top rated</Link></>
                     )}
                 </p>
-            )}
+            ) : null}
 
-            {hasNextFavorites && (
-                <div>
-                    <button
-                        type="button"
-                        onClick={() => fetchNextFavorites()}
-                        disabled={isFetchingNextFavorites}
-                        className="btn-secondary px-5 text-[15px]"
-                    >
-                        {isFetchingNextFavorites ? 'Loading…' : 'Load more'}
-                    </button>
-                </div>
-            )}
+            <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorite characters">
+                <FavoritePeople
+                    title="Characters"
+                    query={charactersQuery}
+                    itemKey="character"
+                    hrefBuilder={(character) => `/character/${character?.id}`}
+                />
+            </ProfileErrorBoundary>
+            <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorite voice actors">
+                <FavoritePeople
+                    title="Voice actors"
+                    query={staffQuery}
+                    itemKey="staff"
+                    hrefBuilder={(staff) => `/staff/${staff?.id}`}
+                />
+            </ProfileErrorBoundary>
         </div>
     );
 }

@@ -125,6 +125,9 @@ export default function OverviewTab({
     const favorites = resultsOf(favsData).slice(0, FAVORITES_SHOWN);
     const characters = resultsOf(characterFavsData).slice(0, PEOPLE_SHOWN);
     const staff = resultsOf(staffFavsData).slice(0, PEOPLE_SHOWN);
+    // The card shows a few; the Favorites tab has every one.
+    const totalOf = (data) => Number(data?.count ?? resultsOf(data).length) || 0;
+    const morePeople = totalOf(characterFavsData) > PEOPLE_SHOWN || totalOf(staffFavsData) > PEOPLE_SHOWN;
 
     // The summary is the source of truth for "is there a list": the profile's
     // cached anime_count can lag behind a removal.
@@ -236,6 +239,7 @@ export default function OverviewTab({
                 key="people"
                 className={ORDER.people}
                 title={both ? 'Favorite people' : showCharacters ? 'Favorite characters' : 'Favorite voice actors'}
+                onSeeAll={morePeople && onTabChange ? () => onTabChange('favorites') : undefined}
             >
                 {showCharacters && (
                     <>
