@@ -18,6 +18,37 @@ function linkLabel(link) {
     return handle ? `@${handle}` : platform;
 }
 
+/**
+ * An image shown cropped to `area` (percentages from the cropper) without
+ * re-encoding it, so an animated GIF keeps moving. The crop fills the
+ * box's width and is centred like object-cover.
+ */
+function CroppedImage({ src, area, aspect }) {
+    if (!area?.width || !area?.height) {
+        return <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />;
+    }
+    return (
+        <span className="absolute inset-0 overflow-hidden">
+            <span
+                className="absolute left-0 top-1/2 block w-full -translate-y-1/2 overflow-hidden"
+                style={{ aspectRatio: aspect || 1 }}
+            >
+                <img
+                    src={src}
+                    alt=""
+                    className="absolute max-w-none"
+                    style={{
+                        width: `${10000 / area.width}%`,
+                        height: `${10000 / area.height}%`,
+                        left: `${(-area.x * 100) / area.width}%`,
+                        top: `${(-area.y * 100) / area.height}%`,
+                    }}
+                />
+            </span>
+        </span>
+    );
+}
+
 export default function ProfilePreview({
     username,
     displayName,
@@ -27,6 +58,8 @@ export default function ProfilePreview({
     statusText,
     avatarUrl,
     bannerUrl,
+    avatarCrop = null,
+    bannerCrop = null,
     primaryColor,
     badges = [],
     links = [],
@@ -40,7 +73,11 @@ export default function ProfilePreview({
         <figure className="overflow-hidden rounded-[var(--radius-lg)] bg-[var(--ink-0)]" aria-label="Preview of your profile header">
             <div className="relative aspect-[9/2] min-h-24 bg-[var(--ink-2)]">
                 {bannerUrl ? (
-                    <img src={bannerUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                    <CroppedImage
+                        src={bannerUrl}
+                        area={bannerCrop?.area}
+                        aspect={bannerCrop ? bannerCrop.pixels.width / bannerCrop.pixels.height : undefined}
+                    />
                 ) : (
                     <div aria-hidden="true" className="absolute inset-0" style={{ background: `color-mix(in srgb, ${accent} 28%, var(--ink-1))` }} />
                 )}
@@ -49,7 +86,7 @@ export default function ProfilePreview({
                 <div className="flex items-end justify-between gap-3">
                     <span className="relative -mt-10 block h-20 w-20 overflow-hidden rounded-full border-4 border-[var(--ink-0)] bg-[var(--ink-2)]">
                         {avatarUrl ? (
-                            <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                            <CroppedImage src={avatarUrl} area={avatarCrop?.area} aspect={1} />
                         ) : (
                             <span className="flex h-full w-full items-center justify-center text-2xl font-semibold uppercase text-[var(--text-2)]">
                                 {username?.charAt(0) || '?'}

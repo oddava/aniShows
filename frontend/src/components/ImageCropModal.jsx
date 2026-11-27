@@ -19,6 +19,7 @@ function CropDialog({
     aspect,
     mediaType = 'image',
     sourceMimeType = '',
+    keepAnimation = false,
     cropShape = 'rect',
     onClose,
     onApply,
@@ -27,6 +28,7 @@ function CropDialog({
     const [crop, setCrop] = useState({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(1);
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+    const [croppedArea, setCroppedArea] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const titleId = useId();
     const zoomId = useId();
@@ -48,12 +50,20 @@ function CropDialog({
         };
     }, []);
 
-    const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
-        setCroppedAreaPixels(croppedAreaPixels);
+    const onCropComplete = useCallback((area, areaPixels) => {
+        setCroppedArea(area);
+        setCroppedAreaPixels(areaPixels);
     }, []);
 
     const handleApply = async () => {
         if (!croppedAreaPixels || !imageSrc) return;
+
+        // An animation is cropped on the server (a canvas keeps one frame):
+        // hand back where, in its pixels and in percent for the preview.
+        if (keepAnimation) {
+            onApply(null, null, { pixels: croppedAreaPixels, area: croppedArea });
+            return;
+        }
 
         try {
             setIsProcessing(true);
@@ -145,6 +155,11 @@ function CropDialog({
 
                 {/* Controls */}
                 <div className="px-6 py-3 sm:py-4 bg-dark-200 shrink-0 z-10">
+                    {keepAnimation && (
+                        <p className="mb-2 text-center text-sm text-[var(--text-2)]">
+                            Stays animated. It is cropped and resized when you save.
+                        </p>
+                    )}
                     <div className="flex items-center gap-4 max-w-md mx-auto">
                         <button
                             type="button"

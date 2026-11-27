@@ -3,7 +3,18 @@ import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ImageCropModal from '../ImageCropModal';
 
-vi.mock('react-easy-crop', () => ({ default: () => <div data-testid="cropper" /> }));
+// The cropper reports one crop as soon as it mounts, as the real one does.
+vi.mock('react-easy-crop', async () => {
+    const { useEffect } = await vi.importActual('react');
+    return {
+        default: function Cropper({ onCropComplete }) {
+            useEffect(() => {
+                onCropComplete?.({ x: 10, y: 0, width: 80, height: 100 }, { x: 54, y: 0, width: 432, height: 540 });
+            }, [onCropComplete]);
+            return <div data-testid="cropper" />;
+        },
+    };
+});
 vi.mock('../../utils/cropImage', () => ({ default: vi.fn() }));
 
 function Harness({ onClose = () => {} }) {
@@ -79,5 +90,20 @@ describe('ImageCropModal', () => {
 
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(opener).toHaveFocus();
+    });
+
+    it('hands back the crop box for an animation instead of flattening it', async () => {
+        const onApply = vi.fn();
+        render(
+            <ImageCropModal isOpen imageSrc="blob:gif" aspect={1} keepAnimation onApply={onApply} onClose={() => {}} />,
+        );
+
+        expect(screen.getByText(/Stays animated/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+        await waitFor(() => expect(onApply).toHaveBeenCalledWith(null, null, {
+            pixels: { x: 54, y: 0, width: 432, height: 540 },
+            area: { x: 10, y: 0, width: 80, height: 100 },
+        }));
     });
 });

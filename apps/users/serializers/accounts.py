@@ -32,7 +32,7 @@ from ..services.profile_expression import (
     expression_payload,
 )
 from ..services.username_sanitizer import validate_username
-from ..utils.image_processing import ProfileImageError, normalize_profile_image
+from ..utils.image_processing import ProfileImageError, clean_crop, normalize_profile_image
 
 __all__ = [
     "ALLOWED_BIO_ATTRIBUTES",
@@ -55,6 +55,8 @@ User = get_user_model()
 
 MAX_AVATAR_SIZE = settings.MAX_AVATAR_SIZE
 MAX_BANNER_SIZE = settings.MAX_BANNER_SIZE
+MAX_AVATAR_UPLOAD_SIZE = settings.MAX_AVATAR_UPLOAD_SIZE
+MAX_BANNER_UPLOAD_SIZE = settings.MAX_BANNER_UPLOAD_SIZE
 MAX_BIO_LENGTH = settings.MAX_BIO_LENGTH
 ALLOWED_BIO_TAGS = [
     "p",
@@ -344,6 +346,10 @@ class UserProfileUpdateSerializer(Serializer):
     username = CharField(max_length=150, required=False)
     avatar = ImageField(required=False, allow_null=True)
     banner = ImageField(required=False, allow_null=True)
+    # Where to crop an uploaded file, in its own pixels: {x, y, width, height}.
+    # Animations are cropped here (a browser canvas would flatten them).
+    avatar_crop = JSONField(required=False, write_only=True)
+    banner_crop = JSONField(required=False, write_only=True)
     remove_banner = BooleanField(required=False)
     remove_avatar = BooleanField(required=False)
     bio = CharField(required=False, allow_blank=True, max_length=MAX_BIO_LENGTH)
@@ -381,11 +387,29 @@ class UserProfileUpdateSerializer(Serializer):
         return clean_hidden_sections(value)
 
     def validate(self, attrs):
+        limits = {
+            "avatar": (MAX_AVATAR_UPLOAD_SIZE, MAX_AVATAR_SIZE),
+            "banner": (MAX_BANNER_UPLOAD_SIZE, MAX_BANNER_SIZE),
+        }
         for field in ("avatar", "banner"):
+            crop = attrs.pop(f"{field}_crop", None)
             if attrs.get(field) is not None and attrs.get(f"remove_{field}"):
                 raise ValidationError(
                     {f"remove_{field}": f"Upload a new {field} or remove it, not both."}
                 )
+            if attrs.get(field) is None:
+                continue
+            upload_max, stored_max = limits[field]
+            try:
+                attrs[field] = normalize_profile_image(
+                    attrs[field],
+                    field,
+                    max_size=upload_max,
+                    stored_max=stored_max,
+                    crop=clean_crop(crop),
+                )
+            except ProfileImageError as exc:
+                raise ValidationError({field: str(exc)}) from exc
         return attrs
 
     def validate_profile_primary_color(self, value):
@@ -420,24 +444,6 @@ class UserProfileUpdateSerializer(Serializer):
             return validate_social_links_input(value)
         except SocialLinkValidationError as e:
             raise ValidationError(str(e))
-
-    def validate_avatar(self, value):
-        """Validate the avatar and re-encode it (WebP, no metadata, <= 512 px)."""
-        if value is None:
-            return value
-        try:
-            return normalize_profile_image(value, "avatar", max_size=MAX_AVATAR_SIZE)
-        except ProfileImageError as exc:
-            raise ValidationError(str(exc)) from exc
-
-    def validate_banner(self, value):
-        """Validate the banner and re-encode it (WebP, no metadata, <= 2560 px wide)."""
-        if value is None:
-            return value
-        try:
-            return normalize_profile_image(value, "banner", max_size=MAX_BANNER_SIZE)
-        except ProfileImageError as exc:
-            raise ValidationError(str(exc)) from exc
 
 
 class RegisterSerializer(ModelSerializer):

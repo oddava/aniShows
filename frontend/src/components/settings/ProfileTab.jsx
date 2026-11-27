@@ -13,6 +13,9 @@ import logger from '../../utils/logger';
 // Quick picks for the status emoji (shared with the profile's pill editor); any emoji can be typed instead.
 import { STATUS_EMOJIS } from '../profile/statusOptions';
 
+// Largest picture or banner accepted; the server shrinks it to fit.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 // A field's label and its quiet help line.
 const LABEL = 'block text-sm font-medium text-[var(--text-1)] mb-2';
 const HELP = 'text-sm text-[var(--text-3)] mt-2';
@@ -97,6 +100,8 @@ export default function ProfileTab({ user, profile }) {
         setCropModal,
         avatarPreviewUrl, setAvatarPreviewUrl,
         bannerPreviewUrl, setBannerPreviewUrl,
+        avatarCrop, setAvatarCrop,
+        bannerCrop, setBannerCrop,
         timezoneOptions,
         resolvedTimezone,
         timezonePreview,
@@ -117,51 +122,60 @@ export default function ProfileTab({ user, profile }) {
     const previewAvatar = avatarPreviewUrl || (removeAvatar ? null : user?.avatar);
     const previewBanner = bannerPreviewUrl || (removeBanner ? null : user?.banner);
 
+    // A file too big to send is explained here; anything else is shrunk on the server.
+    const [pickError, setPickError] = useState('');
+    const fitsUpload = (file) => {
+        if (file.size <= MAX_UPLOAD_BYTES) {
+            setPickError('');
+            return true;
+        }
+        setPickError('That file is over 10 MB. Pick a smaller one.');
+        return false;
+    };
+    // Every picture opens the editor. A GIF is cropped on the server (with the
+    // box chosen here) so it stays animated.
+    const openEditor = (file, url, type) => setCropModal({
+        isOpen: true,
+        imageSrc: url,
+        sourceMimeType: file.type || '',
+        sourceFile: file,
+        keepAnimation: isGifFile(file),
+        type,
+    });
     const pickAvatar = (e) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const url = URL.createObjectURL(file);
-            setRemoveAvatar(false);
-            // Keep GIF avatars animated by uploading the original file directly.
-            if (isGifFile(file)) {
-                setAvatarFile(file);
-                setAvatarPreviewUrl((currentUrl) => {
-                    if (currentUrl) URL.revokeObjectURL(currentUrl);
-                    return url;
-                });
-            } else {
-                setCropModal({ isOpen: true, imageSrc: url, sourceMimeType: file.type || '', type: 'avatar' });
-            }
-        }
         // Reset the input so picking the same file again still fires onChange.
         e.target.value = null;
+        if (!file || !fitsUpload(file)) return;
+        setRemoveAvatar(false);
+        openEditor(file, URL.createObjectURL(file), 'avatar');
     };
     const pickBanner = (e) => {
         const file = e.target.files?.[0];
         e.target.value = null;
-        if (!file) return;
+        if (!file || !fitsUpload(file)) return;
         setRemoveBanner(false);
         const url = URL.createObjectURL(file);
-        // A banner already in the 3:1 shape is used whole, with no crop step
-        // (and a GIF keeps its animation); anything else opens the cropper.
+        // A banner already in the 3:1 shape is used whole, with no crop step;
+        // anything else opens the editor.
         const probe = new Image();
         probe.onload = () => {
             if (fitsBannerAspect(probe.naturalWidth, probe.naturalHeight)) {
                 setBannerFile(file);
+                setBannerCrop(null);
                 setBannerPreviewUrl(url);
             } else {
-                setCropModal({ isOpen: true, imageSrc: url, sourceMimeType: file.type || '', type: 'banner' });
+                openEditor(file, url, 'banner');
             }
         };
-        probe.onerror = () => {
-            setCropModal({ isOpen: true, imageSrc: url, sourceMimeType: file.type || '', type: 'banner' });
-        };
+        probe.onerror = () => openEditor(file, url, 'banner');
         probe.src = url;
     };
     const dropAvatar = () => {
         // Only a saved avatar needs removing on the server; an unsaved pick is just discarded.
         setRemoveAvatar(Boolean(user?.avatar));
         setAvatarFile(null);
+        setAvatarCrop(null);
         setAvatarPreviewUrl((currentUrl) => {
             if (currentUrl) URL.revokeObjectURL(currentUrl);
             return null;
@@ -170,6 +184,7 @@ export default function ProfileTab({ user, profile }) {
     const dropBanner = () => {
         setRemoveBanner(Boolean(user?.banner));
         setBannerFile(null);
+        setBannerCrop(null);
         setBannerPreviewUrl(null);
     };
 
@@ -191,6 +206,8 @@ export default function ProfileTab({ user, profile }) {
                 statusText={expression?.status_text}
                 avatarUrl={previewAvatar}
                 bannerUrl={previewBanner}
+                avatarCrop={avatarPreviewUrl ? avatarCrop : null}
+                bannerCrop={bannerPreviewUrl ? bannerCrop : null}
                 primaryColor={pickedColor}
                 badges={user?.badges || []}
                 links={(socialLinks || []).filter((link) => link.platform?.trim() && link.value?.trim())}
@@ -231,7 +248,8 @@ export default function ProfileTab({ user, profile }) {
                     </button>
                 </p>
             )}
-            <p className={HELP}>Saved as WebP without photo metadata. Animated GIF pictures stay animated up to 512×512.</p>
+            {pickError && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{pickError}</p>}
+            <p className={HELP}>Up to 10 MB. Big pictures are shrunk for you, and GIFs stay animated.</p>
 
             <div className="mt-7">
                 <p className={LABEL}>Profile color</p>
