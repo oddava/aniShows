@@ -67,7 +67,22 @@ export default function AniListLink({ user, link, running, disabled, onStarted, 
     return (
         <div className="rounded-xl bg-white/[0.03] p-4">
             <div className="flex flex-wrap items-center gap-3">
-                <SourceMark source="anilist" />
+                {link.avatar_url ? (
+                    // The account's own picture, with AniList's mark on its corner.
+                    <span className="relative shrink-0">
+                        <img
+                            src={link.avatar_url}
+                            alt=""
+                            draggable={false}
+                            className="h-10 w-10 rounded-full bg-[var(--ink-3)] object-cover"
+                        />
+                        <span className="absolute -bottom-1 -right-1 rounded-[5px] ring-2 ring-[var(--ink-2)]">
+                            <SourceMark source="anilist" size="xs" />
+                        </span>
+                    </span>
+                ) : (
+                    <SourceMark source="anilist" />
+                )}
                 <div className="min-w-0 flex-1">
                     <p className="truncate text-[15px] text-[var(--text-1)]">
                         <span className="font-medium">{link.username}</span>

@@ -193,6 +193,20 @@ describe('Import', () => {
         await waitFor(() => expect(api.unlinkAniList).toHaveBeenCalled());
     });
 
+    it('shows the linked account picture when AniList gave one', async () => {
+        api.getAniListLink.mockResolvedValue({
+            data: { linked: true, username: 'kiyo', auto_sync: true, avatar_url: 'https://s4.anilist.co/a.png' },
+        });
+        const { container } = render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <MemoryRouter><DataTab user={USER} /></MemoryRouter>
+            </QueryClientProvider>,
+        );
+
+        await screen.findByText('kiyo');
+        expect(container.querySelector('img[src="https://s4.anilist.co/a.png"]')).toBeInTheDocument();
+    });
+
     it('turns daily sync off on a linked account', async () => {
         api.getAniListLink.mockResolvedValue({ data: { linked: true, username: 'kiyo', auto_sync: true } });
         api.saveAniListLink.mockResolvedValue({ data: { linked: true, username: 'kiyo', auto_sync: false } });

@@ -190,7 +190,7 @@ function Changes({ job, detail, detailPending }) {
             {rows.map((group) => (
                 <div key={group.key} className="mt-5">
                     <p className="text-sm font-medium text-[var(--text-1)]">
-                        {group.label} <span className="font-normal text-[var(--text-3)] tabular">{group.entries.length}</span>
+                        {group.label}
                     </p>
                     {group.key === 'left_out' && (
                         <p className="text-sm text-[var(--text-3)]">AniShows lists Japanese anime, without music videos.</p>

@@ -68,24 +68,30 @@ export function FavoritesShowcase({ favorites }) {
 }
 
 /**
- * Favourite characters or voice actors: two columns of rows, a small
- * portrait and the whole name beside it (two lines if it needs them).
+ * Favourite characters or voice actors: a grid of round portraits, five to
+ * a row, so many fit. The name shows in a tooltip on hover or keyboard
+ * focus, and is the link's accessible name.
  */
 export function PeopleList({ items, itemKey, hrefBuilder }) {
     return (
-        <ul className="-mx-2 grid grid-cols-2 gap-x-1">
+        <ul className="grid grid-cols-5 gap-2.5">
             {items.map((entry) => {
                 const person = entry[itemKey] || {};
                 return (
-                    <li key={entry.id} className="min-w-0">
+                    <li key={entry.id} className="group relative">
                         <Link
                             to={hrefBuilder(person)}
-                            className="group flex min-h-12 items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/[0.04] sm:gap-2.5"
-                            title={person.name}
+                            aria-label={person.name}
+                            className="block rounded-full transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--signature)]"
                         >
-                            <Portrait src={person.image} alt="" sizes="40px" className="h-8 w-8 shrink-0 rounded-full sm:h-9 sm:w-9" />
-                            <span className="min-w-0 truncate text-[13px] leading-tight text-[var(--text-1)] sm:line-clamp-2 sm:whitespace-normal sm:text-sm">{person.name}</span>
+                            <Portrait src={person.image} alt="" sizes="64px" className="aspect-square w-full rounded-full" />
                         </Link>
+                        <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-[var(--radius-md)] bg-[var(--ink-3)] px-2.5 py-1.5 text-[13px] font-medium text-[var(--text-1)] opacity-0 shadow-lg shadow-black/30 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100"
+                        >
+                            {person.name}
+                        </span>
                     </li>
                 );
             })}

@@ -106,13 +106,15 @@ describe('OverviewTab with a list', () => {
 describe('OverviewTab favourite people', () => {
     const character = (id) => ({ id, character: { id: 100 + id, name: `Character ${id}`, image: '' } });
 
-    it('shows four and links to the Favorites tab for the rest', async () => {
+    it('shows ten as round portraits named by link and tooltip, and links to the rest', async () => {
         const onTabChange = vi.fn();
-        const results = Array.from({ length: 9 }, (_, i) => character(i + 1));
-        renderOverview({ summary: { total: 3, top_genres: [] }, characters: { count: 9, results }, onTabChange });
+        const results = Array.from({ length: 12 }, (_, i) => character(i + 1));
+        renderOverview({ summary: { total: 3, top_genres: [] }, characters: { count: 14, results }, onTabChange });
 
-        expect(await screen.findByText('Character 4')).toBeInTheDocument();
-        expect(screen.queryByText('Character 5')).not.toBeInTheDocument();
+        expect(await screen.findByRole('link', { name: 'Character 10' })).toHaveAttribute('href', '/character/110');
+        expect(screen.queryByRole('link', { name: 'Character 11' })).not.toBeInTheDocument();
+        // The name is a hover tooltip, not a caption beside the picture.
+        expect(screen.getByText('Character 10')).toHaveAttribute('aria-hidden', 'true');
         fireEvent.click(screen.getByRole('button', { name: 'See all: Favorite characters' }));
         expect(onTabChange).toHaveBeenCalledWith('favorites');
     });

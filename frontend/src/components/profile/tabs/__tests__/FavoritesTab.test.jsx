@@ -49,15 +49,21 @@ beforeEach(() => {
 });
 
 describe('Favorites tab', () => {
-    it('lists favourite characters with their total, under the anime', async () => {
+    it('switches between anime and characters, one kind at a time, with no counts', async () => {
         api.characters.mockResolvedValue(page([person('character', 1), person('character', 2)], { count: 2 }));
         renderTab(animePages(['Frieren']));
 
-        expect(await screen.findByRole('heading', { name: 'Characters 2' })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'character 1' })).toHaveAttribute('href', '/character/501');
-        expect(screen.getByRole('heading', { name: 'Anime 1' })).toBeInTheDocument();
+        const animeSwitch = await screen.findByRole('button', { name: 'Characters' });
+        expect(screen.getByRole('button', { name: 'Anime' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.queryByRole('button', { name: 'Voice actors' })).not.toBeInTheDocument();
         expect(screen.getByText('Frieren')).toBeInTheDocument();
-        expect(screen.queryByRole('heading', { name: /Voice actors/ })).not.toBeInTheDocument();
+        expect(screen.queryByText('character 1')).not.toBeInTheDocument();
+
+        fireEvent.click(animeSwitch);
+        expect(screen.getByRole('link', { name: 'character 1' })).toHaveAttribute('href', '/character/501');
+        expect(screen.queryByText('Frieren')).not.toBeInTheDocument();
+        // The switch names each kind: no heading, so no count beside one.
+        expect(screen.queryByRole('heading')).not.toBeInTheDocument();
     });
 
     it('shows characters even with no anime favourites, and loads more pages', async () => {
@@ -67,6 +73,7 @@ describe('Favorites tab', () => {
         renderTab();
 
         expect(await screen.findByText('character 1')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Characters' })).toBeInTheDocument();
         expect(screen.queryByText(/No favorites yet/)).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
