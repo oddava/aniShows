@@ -9,7 +9,6 @@ import { getApiErrorMessage } from '../../../api/errors';
 import { importJobQueries } from '../../../api/queries/importJobs';
 import CoverThumb, { animeCoverSources } from '../../ui/CoverThumb';
 import { formatDateTimeInUserTimezone } from '../../../utils/dateUtils';
-import SourceMark from './SourceMark';
 import {
     OUTSIDE_CATALOG,
     RERUNNABLE_SOURCES,
@@ -19,7 +18,6 @@ import {
     jobCounts,
     jobFailureMessage,
     jobOutcome,
-    jobSite,
     jobSourceLabel,
 } from './importHelpers';
 
@@ -226,7 +224,6 @@ function EarlierImport({ job, userId }) {
                 aria-controls={open ? panelId : undefined}
                 className="flex w-full items-center gap-3 text-left"
             >
-                <SourceMark source={jobSite(job)} size="sm" />
                 <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-4">
                         <span className="truncate text-[15px] text-[var(--text-1)]">{jobSourceLabel(job)}</span>
@@ -239,7 +236,7 @@ function EarlierImport({ job, userId }) {
                 <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-[var(--text-3)] transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
             </button>
             {open && (
-                <div id={panelId} className="pl-11">
+                <div id={panelId}>
                     <Breakdown job={job} />
                     <Changes job={job} detail={detailQuery.data} detailPending={detailQuery.isPending} />
                 </div>
@@ -306,7 +303,6 @@ export default function ImportActivity({ userId, imports, link, disabled }) {
     return (
         <section className="panel" aria-labelledby="latest-import-title">
             <div className="flex items-center gap-3" data-testid={`import-job-${job.id}`}>
-                <SourceMark source={jobSite(job)} />
                 <div className="min-w-0 flex-1">
                     <h2 id="latest-import-title" className="section-title">{running ? 'Importing now' : 'Latest import'}</h2>
                     <p className="truncate text-sm text-[var(--text-2)]">

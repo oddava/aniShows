@@ -207,6 +207,24 @@ describe('Import', () => {
         expect(container.querySelector('img[src="https://s4.anilist.co/a.png"]')).toBeInTheDocument();
     });
 
+    it('asks AniList for the picture when the link has none stored yet', async () => {
+        api.getAniListLink.mockResolvedValue({ data: { linked: true, username: 'kiyo', auto_sync: true } });
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: { User: { avatar: { medium: 'https://s4.anilist.co/b.png' } } } }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const { container } = render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <MemoryRouter><DataTab user={USER} /></MemoryRouter>
+            </QueryClientProvider>,
+        );
+
+        await waitFor(() => expect(container.querySelector('img[src="https://s4.anilist.co/b.png"]')).toBeInTheDocument());
+        expect(fetchMock).toHaveBeenCalledWith('https://graphql.anilist.co', expect.objectContaining({ method: 'POST' }));
+        vi.unstubAllGlobals();
+    });
+
     it('turns daily sync off on a linked account', async () => {
         api.getAniListLink.mockResolvedValue({ data: { linked: true, username: 'kiyo', auto_sync: true } });
         api.saveAniListLink.mockResolvedValue({ data: { linked: true, username: 'kiyo', auto_sync: false } });

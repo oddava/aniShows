@@ -38,7 +38,6 @@ const LOGOS = { mal: MyAnimeListLogo, anilist: AniListLogo };
 const SIZES = {
     md: 'h-10 w-10 rounded-[10px]',
     sm: 'h-8 w-8 rounded-lg',
-    xs: 'h-[18px] w-[18px] rounded-[5px]',
 };
 
 export default function SourceMark({ source, size = 'md' }) {
