@@ -218,6 +218,9 @@
   font-weight: 650;
   letter-spacing: -0.03em;
   color: var(--text-1);
+  /* A figure to read, not text to copy: no text cursor, no selection. */
+  cursor: default;
+  user-select: none;
 }
 
 @media (width >= 40rem) {
