@@ -20,7 +20,8 @@ import {
 const WATCHING_SHOWN = 6;
 const FAVORITES_SHOWN = 6;
 // Two rows of two in the side column.
-const PEOPLE_SHOWN = 4;
+// Two rows of five round portraits per kind.
+const PEOPLE_SHOWN = 10;
 
 /** An own profile with an empty list: one line and two ways to start. */
 function GettingStarted() {
@@ -228,7 +229,7 @@ export default function OverviewTab({
             <TasteCard key="taste" className={ORDER.taste} summary={summary} user={displayUser} />,
         );
     }
-    // Characters and voice actors share one side card, two rows of two each,
+    // Characters and voice actors share one side card, up to two rows of five each,
     // which keeps the two columns close to one height.
     const showCharacters = shows('characters') && characters.length > 0;
     const showStaff = shows('staff') && staff.length > 0;

@@ -90,9 +90,18 @@ export default function FavoritesContent({
     const peopleQuery = { enabled: Boolean(targetUsername), staleTime: 60 * 1000 };
     const charactersQuery = useInfiniteQuery({ ...characterFavoriteQueries.all(targetUsername), ...peopleQuery });
     const staffQuery = useInfiniteQuery({ ...staffFavoriteQueries.all(targetUsername), ...peopleQuery });
-    const hasPeople = peopleFrom(charactersQuery).count > 0 || peopleFrom(staffQuery).count > 0;
     const peoplePending = Boolean(targetUsername) && (charactersQuery.isPending || staffQuery.isPending);
-    const hasAnime = favorites.length > 0;
+
+    // One kind at a time: the anime, the characters or the voice actors. A
+    // kind with nothing in it is left out; one that failed to load stays so
+    // its retry can be reached.
+    const kinds = [
+        { key: 'anime', label: 'Anime', shown: favoritesLoading || favorites.length > 0 },
+        { key: 'characters', label: 'Characters', shown: peopleFrom(charactersQuery).count > 0 || charactersQuery.isError },
+        { key: 'staff', label: 'Voice actors', shown: peopleFrom(staffQuery).count > 0 || staffQuery.isError },
+    ].filter((kind) => kind.shown);
+    const [picked, setPicked] = useState(null);
+    const active = kinds.find((kind) => kind.key === picked)?.key ?? kinds[0]?.key;
 
     const exitReorder = () => {
         setIsReordering(false);
@@ -112,30 +121,61 @@ export default function FavoritesContent({
         );
     }
 
+    if (!kinds.length) {
+        if (peoplePending) return <FavoritesSkeleton />;
+        return (
+            <p className="pt-6 text-[17px] text-[var(--text-2)] animate-tab-content">
+                {isPublicView ? 'No favorites yet.' : 'No favorites yet. The heart on a show, character or voice actor puts it here.'}
+                {!isPublicView && (
+                    <> <Link to="/browse?sort=rating" className="text-link">See the top rated</Link></>
+                )}
+            </p>
+        );
+    }
+
+    const showReorder = active === 'anime' && canReorder;
+    const single = kinds.length === 1;
+
     return (
-        <div className="space-y-10 animate-tab-content">
-            {favoritesLoading ? (
-                <FavoritesSkeleton />
-            ) : hasAnime ? (
-                <section>
-                    {(hasPeople || canReorder) && (
-                        <div className="mb-4 flex items-center justify-between gap-4">
-                            {hasPeople ? (
-                                <h2 className="section-title">
-                                    Anime <span className="font-normal text-[var(--text-3)] tabular">{totalFavorites.toLocaleString()}</span>
-                                </h2>
-                            ) : <span />}
-                            {canReorder && (
+        <div className="animate-tab-content">
+            {(!single || showReorder || active !== 'anime') && (
+                <div className="mb-5 flex min-h-11 flex-wrap items-center justify-between gap-3">
+                    {single ? (
+                        active !== 'anime' ? <h2 className="section-title">{kinds[0].label}</h2> : <span />
+                    ) : (
+                        <div role="group" aria-label="Favorites" className="-ml-3.5 flex gap-1">
+                            {kinds.map((kind) => (
                                 <button
+                                    key={kind.key}
                                     type="button"
-                                    onClick={() => setIsReordering(true)}
-                                    className="btn-secondary px-4 text-[15px]"
+                                    aria-pressed={active === kind.key}
+                                    onClick={() => setPicked(kind.key)}
+                                    className={`inline-flex min-h-11 items-center rounded-lg px-3.5 text-[15px] font-medium transition-colors duration-150
+                                    ${active === kind.key
+                                        ? 'bg-white/[0.07] text-[var(--text-1)]'
+                                        : 'text-[var(--text-2)] hover:bg-white/[0.04] hover:text-[var(--text-1)]'}`}
                                 >
-                                    Reorder
+                                    {kind.label}
                                 </button>
-                            )}
+                            ))}
                         </div>
                     )}
+                    {showReorder && (
+                        <button
+                            type="button"
+                            onClick={() => setIsReordering(true)}
+                            className="btn-secondary px-4 text-[15px]"
+                        >
+                            Reorder
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {active === 'anime' && (favoritesLoading ? (
+                <FavoritesSkeleton />
+            ) : (
+                <section aria-label="Favorite anime">
                     <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorites">
                         <DraggableFavoritesGrid
                             favorites={favorites}
@@ -154,31 +194,28 @@ export default function FavoritesContent({
                         </button>
                     )}
                 </section>
-            ) : !hasPeople && !peoplePending ? (
-                <p className=" pt-6 text-[17px] text-[var(--text-2)]">
-                    {isPublicView ? 'No favorites yet.' : 'No favorites yet. The heart on a show, character or voice actor puts it here.'}
-                    {!isPublicView && (
-                        <> <Link to="/browse?sort=rating" className="text-link">See the top rated</Link></>
-                    )}
-                </p>
-            ) : null}
+            ))}
 
-            <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorite characters">
-                <FavoritePeople
-                    title="Characters"
-                    query={charactersQuery}
-                    itemKey="character"
-                    hrefBuilder={(character) => `/character/${character?.id}`}
-                />
-            </ProfileErrorBoundary>
-            <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorite voice actors">
-                <FavoritePeople
-                    title="Voice actors"
-                    query={staffQuery}
-                    itemKey="staff"
-                    hrefBuilder={(staff) => `/staff/${staff?.id}`}
-                />
-            </ProfileErrorBoundary>
+            {active === 'characters' && (
+                <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorite characters">
+                    <FavoritePeople
+                        label="Favorite characters"
+                        query={charactersQuery}
+                        itemKey="character"
+                        hrefBuilder={(character) => `/character/${character?.id}`}
+                    />
+                </ProfileErrorBoundary>
+            )}
+            {active === 'staff' && (
+                <ProfileErrorBoundary variant={ErrorVariant.SECTION} section="Favorite voice actors">
+                    <FavoritePeople
+                        label="Favorite voice actors"
+                        query={staffQuery}
+                        itemKey="staff"
+                        hrefBuilder={(staff) => `/staff/${staff?.id}`}
+                    />
+                </ProfileErrorBoundary>
+            )}
         </div>
     );
 }

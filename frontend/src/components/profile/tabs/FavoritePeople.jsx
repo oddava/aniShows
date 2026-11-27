@@ -13,17 +13,16 @@ export const peopleFrom = (query) => {
 
 /**
  * One kind of favourite person (characters or voice actors) on the
- * Favorites tab: a heading with the total, a grid of portraits with the
- * name under each, and Load more while the server has more.
+ * Favorites tab: a grid of portraits with the name under each, and Load
+ * more while the server has more. The switch above names the kind.
  */
-export default function FavoritePeople({ title, query, itemKey, hrefBuilder }) {
-    const { items, count } = peopleFrom(query);
+export default function FavoritePeople({ label, query, itemKey, hrefBuilder }) {
+    const { items } = peopleFrom(query);
 
     if (query.isError && !items.length) {
         return (
-            <section>
-                <h2 className="section-title">{title}</h2>
-                <p className="mt-2 text-[15px] text-[var(--text-2)]">
+            <section aria-label={label}>
+                <p className="text-[15px] text-[var(--text-2)]">
                     These couldn’t be loaded.{' '}
                     <button type="button" onClick={() => query.refetch()} className="text-link">Try again</button>
                 </p>
@@ -33,11 +32,8 @@ export default function FavoritePeople({ title, query, itemKey, hrefBuilder }) {
     if (!items.length) return null;
 
     return (
-        <section>
-            <h2 className="section-title">
-                {title} <span className="font-normal text-[var(--text-3)] tabular">{count.toLocaleString()}</span>
-            </h2>
-            <ul className={`mt-4 ${GRID}`}>
+        <section aria-label={label}>
+            <ul className={GRID}>
                 {items.map((entry) => {
                     const person = entry[itemKey] || {};
                     return (
