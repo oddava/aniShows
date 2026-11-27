@@ -59,19 +59,8 @@ class UserImportJobSerializer(ModelSerializer):
 
         items = stored.get("items") or []
         ids = {item.get("anime_id") for item in items}
-        anime = {
-            row.id: row
-            for row in Anime.objects.filter(id__in=ids).only(
-                "id",
-                "title",
-                "title_jp",
-                "slug",
-                "cover_image",
-                "cover_image_small",
-                "cover_image_external_url",
-                "rating",
-            )
-        }
+        # Whole rows: the cover thumbnail is an ImageKit spec, not a column `only()` takes.
+        anime = {row.id: row for row in Anime.objects.filter(id__in=ids)}
         compact = AnimeCompactSerializer(context=self.context)
         payload["items"] = [
             {**item, "anime": compact.to_representation(anime[item["anime_id"]])}
