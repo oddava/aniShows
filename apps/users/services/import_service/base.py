@@ -65,6 +65,9 @@ def _updated_sort_key(entry: ImportedEntry) -> datetime:
 RETRYABLE_DB_ERRORS = (OperationalError, InterfaceError)
 
 ACTIVE_STATUSES = (UserImportJob.ImportStatus.pending, UserImportJob.ImportStatus.processing)
+# Fields a change record shows (old and new value) when an update touches them.
+SHOWN_CHANGE_FIELDS = ("status", "episodes_watched", "score")
+
 # Fields an import writes on an existing entry.
 ENTRY_FIELDS = (
     "status",
@@ -104,6 +107,7 @@ class BaseImporter:
     WRITE_BATCH_SIZE = 500
     MAX_UNKNOWN_FETCHES = 500
     MAX_UNMATCHED_STORED = 200
+    MAX_CHANGES_STORED = 300
     MAX_ERRORS_STORED = 10
     MISSING_ANIME_CACHE_TTL_SECONDS = 6 * 60 * 60
     source_name = "import"
@@ -125,6 +129,13 @@ class BaseImporter:
         self._to_create: list[UserAnimeList] = []
         self._to_update: list[UserAnimeList] = []
         self._touched_anime_ids: set[int] = set()
+        # What was written (counts, and up to MAX_CHANGES_STORED records), and the
+        # records of the pending batch, in step with ``_to_create`` / ``_to_update``.
+        self.added_count = 0
+        self.updated_count = 0
+        self.change_items: list[dict[str, Any]] = []
+        self._create_changes: list[dict[str, Any]] = []
+        self._update_changes: dict[int, dict[str, Any]] = {}
         # ``updated_at`` of each row to update as the import read it; a row the user
         # changed since then is left alone at write time.
         self._seen_updated_at: dict[int, Any] = {}
@@ -196,7 +207,31 @@ class BaseImporter:
             "fetched_entries": self.fetched_count,
             "errors": self.errors[-self.MAX_ERRORS_STORED :],
             "unmatched": self.unmatched,
+            "changes": self._changes_payload(),
         }
+
+    def _changes_payload(self) -> dict[str, Any]:
+        """Written changes plus the pending batch (which ``imported_count`` already counts)."""
+        pending = [*self._create_changes, *self._update_changes.values()]
+        room = max(self.MAX_CHANGES_STORED - len(self.change_items), 0)
+        return {
+            "added": self.added_count + len(self._create_changes),
+            "updated": self.updated_count + len(self._update_changes),
+            "items": [*self.change_items, *pending[:room]],
+        }
+
+    @staticmethod
+    def _change_record(anime: Anime, kind: str, row: UserAnimeList) -> dict[str, Any]:
+        return {
+            "anime_id": anime.id,
+            "kind": kind,
+            **{field: getattr(row, field) for field in SHOWN_CHANGE_FIELDS},
+        }
+
+    def _keep_changes(self, records) -> None:
+        room = self.MAX_CHANGES_STORED - len(self.change_items)
+        if room > 0:
+            self.change_items.extend(list(records)[:room])
 
     def flush(self, *, force: bool = False) -> None:
         """Write progress + heartbeat; stop the run if the job is no longer processing."""
@@ -413,7 +448,9 @@ class BaseImporter:
             attrs = normalize_entry(
                 None, self._remote_fields(entry), anime, self._today, strict=False
             )
-            self._to_create.append(UserAnimeList(user=self.user, anime=anime, **attrs))
+            row = UserAnimeList(user=self.user, anime=anime, **attrs)
+            self._to_create.append(row)
+            self._create_changes.append(self._change_record(anime, "added", row))
             self._touched_anime_ids.add(anime.id)
             self.imported_count += 1
             return
@@ -439,6 +476,7 @@ class BaseImporter:
             # local ones. Without a remote timestamp the local dates are kept.
             prefer_incoming_dates=entry.remote_updated_at is not None,
         )
+        before = {field: getattr(local, field) for field in SHOWN_CHANGE_FIELDS}
         changed = False
         for field in ENTRY_FIELDS:
             if field in attrs and getattr(local, field) != attrs[field]:
@@ -450,6 +488,11 @@ class BaseImporter:
         self._seen_updated_at[local.pk] = local.updated_at
         local.updated_at = timezone.now()
         self._to_update.append(local)
+        record = self._change_record(anime, "updated", local)
+        shown = {field: old for field, old in before.items() if record[field] != old}
+        if shown:
+            record["from"] = shown
+        self._update_changes[local.pk] = record
         self._touched_anime_ids.add(anime.id)
         self.imported_count += 1
 
@@ -457,6 +500,7 @@ class BaseImporter:
         """Drop writes that will not happen (the job was cancelled before them)."""
         self.imported_count -= len(self._to_create) + len(self._to_update)
         self._to_create, self._to_update = [], []
+        self._create_changes, self._update_changes = [], {}
 
     def write_pending(self, *, force: bool = False) -> None:
         """Write the pending batch, if the job is still running and the rows unchanged.
@@ -484,6 +528,8 @@ class BaseImporter:
                 UserAnimeList.objects.bulk_create(
                     self._to_create, batch_size=self.WRITE_BATCH_SIZE, ignore_conflicts=True
                 )
+                self.added_count += len(self._to_create)
+                self._keep_changes(self._create_changes)
             if self._to_update:
                 current = dict(
                     UserAnimeList.objects.select_for_update()
@@ -504,7 +550,10 @@ class BaseImporter:
                         [*ENTRY_FIELDS, "updated_at"],
                         batch_size=self.WRITE_BATCH_SIZE,
                     )
+                self.updated_count += len(unchanged)
+                self._keep_changes(self._update_changes[row.pk] for row in unchanged)
         self._to_create, self._to_update = [], []
+        self._create_changes, self._update_changes = [], {}
         self._seen_updated_at.clear()
 
     # ------------------------------------------------------------------ lifecycle

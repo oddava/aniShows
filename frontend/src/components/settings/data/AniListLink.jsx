@@ -7,6 +7,8 @@ import { getApiErrorMessage } from '../../../api/errors';
 import { anilistLinkKeys } from '../../../api/queries/importJobs';
 import { formatDateTimeInUserTimezone } from '../../../utils/dateUtils';
 import SettingsSwitch from '../SettingsSwitch';
+import SourceMark from './SourceMark';
+import { SOURCES } from './importHelpers';
 
 /** Re-render once `isoTime` has passed (the sync cooldown ending). */
 function useNowUntil(isoTime) {
@@ -63,38 +65,53 @@ export default function AniListLink({ user, link, running, disabled, onStarted, 
     const daily = dailyMutation.isPending ? dailyMutation.variables : !!link.auto_sync && !link.auto_sync_paused;
 
     return (
-        <div>
-            <p className="text-[15px] text-[var(--text-1)]">
-                Linked to <span className="font-medium">{link.username}</span>
-            </p>
-            <p className="text-sm text-[var(--text-2)]">{syncedAgo(link.last_synced_at)}</p>
-            {link.last_error && <p className="mt-1 text-sm text-[var(--danger)]">{link.last_error}</p>}
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                    type="button"
-                    onClick={() => syncMutation.mutate()}
-                    disabled={disabled || busy || running || coolingDown}
-                    className="btn-secondary text-sm"
-                >
-                    {syncMutation.isPending ? 'Starting...' : 'Sync now'}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => unlinkMutation.mutate()}
-                    disabled={disabled || busy}
-                    className="btn-ghost text-sm"
-                >
-                    {unlinkMutation.isPending ? 'Unlinking...' : 'Unlink'}
-                </button>
-                {coolingDown && !running && (
-                    <span className="text-sm text-[var(--text-3)]">
-                        You can sync again at {timeOfDay(link.sync_available_at)}.
-                    </span>
-                )}
+        <div className="rounded-xl bg-white/[0.03] p-4">
+            <div className="flex flex-wrap items-center gap-3">
+                <SourceMark source="anilist" />
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] text-[var(--text-1)]">
+                        <span className="font-medium">{link.username}</span>
+                        <a
+                            href={SOURCES.anilist.profileUrl(link.username)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ml-2 text-sm text-[var(--text-3)] hover:text-[var(--text-1)]"
+                        >
+                            on AniList
+                        </a>
+                    </p>
+                    <p className="text-sm text-[var(--text-2)]">
+                        {syncedAgo(link.last_synced_at)}
+                        {daily && <span className="text-[var(--text-3)]"> · syncs daily</span>}
+                    </p>
+                </div>
+                <div className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={() => syncMutation.mutate()}
+                        disabled={disabled || busy || running || coolingDown}
+                        className="btn-secondary text-sm"
+                    >
+                        {syncMutation.isPending ? 'Starting...' : 'Sync now'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => unlinkMutation.mutate()}
+                        disabled={disabled || busy}
+                        className="btn-ghost text-sm"
+                    >
+                        {unlinkMutation.isPending ? 'Unlinking...' : 'Unlink'}
+                    </button>
+                </div>
             </div>
+            {link.last_error && <p className="mt-3 text-sm text-[var(--danger)]">{link.last_error}</p>}
+            {coolingDown && !running && (
+                <p className="mt-3 text-sm text-[var(--text-3)]">
+                    Sync now is available again at {timeOfDay(link.sync_available_at)}.
+                </p>
+            )}
 
-            <div className="mt-4 flex items-center justify-between gap-4">
+            <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/[0.06] pt-4">
                 <div>
                     <p id={`${ids}-daily`} className="text-[15px] text-[var(--text-1)]">Keep in sync</p>
                     <p id={`${ids}-daily-help`} className="text-sm text-[var(--text-2)]">

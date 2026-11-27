@@ -578,6 +578,73 @@ class ImportPipelineTests(ImportTestMixin, TestCase):
         self.assertEqual(UserAnimeList.objects.filter(user=self.user).count(), 100)
 
 
+class ChangeRecordTests(ImportTestMixin, TestCase):
+    """``job.changes``: what an import wrote, for the import page to show."""
+
+    def test_added_and_updated_entries_are_recorded_with_old_values(self):
+        new = make_anime(1, anilist_id=101)
+        known = make_anime(2, anilist_id=102)
+        local = UserAnimeList.objects.create(
+            user=self.user, anime=known, status=Status.watching, episodes_watched=2, score=5
+        )
+        UserAnimeList.objects.filter(pk=local.pk).update(
+            updated_at=timezone.now() - timedelta(days=2)
+        )
+        updated = int((timezone.now() - timedelta(days=1)).timestamp())
+        job, _ = self.run_anilist(
+            FakeFetcher(
+                [
+                    anilist_row(101, status="PLANNING", updated=updated),
+                    anilist_row(102, status="CURRENT", progress=6, score=50, updated=updated),
+                ]
+            )
+        )
+
+        self.assertEqual((job.changes["added"], job.changes["updated"]), (1, 1))
+        items = {item["anime_id"]: item for item in job.changes["items"]}
+        self.assertEqual(items[new.id]["kind"], "added")
+        self.assertEqual(items[new.id]["status"], "Plan to Watch")
+        self.assertNotIn("from", items[new.id])
+        self.assertEqual(items[known.id]["kind"], "updated")
+        self.assertEqual(items[known.id]["episodes_watched"], 6)
+        self.assertEqual(items[known.id]["from"], {"episodes_watched": 2})
+
+    def test_an_update_the_user_beat_is_not_recorded(self):
+        anime = make_anime(1, anilist_id=101)
+        local = UserAnimeList.objects.create(
+            user=self.user, anime=anime, status=Status.watching, episodes_watched=2
+        )
+        UserAnimeList.objects.filter(pk=local.pk).update(
+            updated_at=timezone.now() - timedelta(days=2)
+        )
+        real_write = BaseImporter.write_pending
+
+        def user_edits_first(importer, **kwargs):
+            UserAnimeList.objects.filter(pk=local.pk).update(
+                episodes_watched=3, updated_at=timezone.now()
+            )
+            return real_write(importer, **kwargs)
+
+        updated = int((timezone.now() - timedelta(days=1)).timestamp())
+        with patch.object(BaseImporter, "write_pending", user_edits_first):
+            job, _ = self.run_anilist(
+                FakeFetcher([anilist_row(101, status="CURRENT", progress=8, updated=updated)])
+            )
+
+        self.assertEqual(job.changes, {"added": 0, "updated": 0, "items": []})
+
+    def test_records_are_capped_but_counts_are_not(self):
+        rows = []
+        for n in range(1, 6):
+            make_anime(n, anilist_id=100 + n)
+            rows.append(anilist_row(100 + n, status="PLANNING"))
+        with patch.object(BaseImporter, "MAX_CHANGES_STORED", 3):
+            job, _ = self.run_anilist(FakeFetcher(rows))
+
+        self.assertEqual(job.changes["added"], 5)
+        self.assertEqual(len(job.changes["items"]), 3)
+
+
 class ImportLifecycleTests(ImportTestMixin, TestCase):
     def test_cancel_during_fetch_stops_and_never_completes(self):
         def cancel_on_first_page(page):
@@ -1151,6 +1218,29 @@ class ImportExportApiTests(APITestCase):
         for field in ("mode", "failure_reason", "unmatched", "heartbeat_at"):
             self.assertIn(field, response.data)
         self.assertEqual(response.data["status_display"], "Cancelled")
+
+    def test_job_detail_lists_the_changes_with_their_anime_and_the_list_only_counts(self):
+        anime = make_anime(1, anilist_id=101, title="Frieren")
+        job = UserImportJob.objects.create(
+            user=self.user,
+            source=UserImportJob.ImportSource.anilist,
+            status=JobStatus.completed,
+            changes={
+                "added": 1,
+                "updated": 0,
+                "items": [
+                    {"anime_id": anime.id, "kind": "added", "status": "Watching"},
+                    {"anime_id": 999_999, "kind": "added", "status": "Watching"},
+                ],
+            },
+        )
+        detail = self.client.get(reverse("import_job_status", args=[job.pk])).data["changes"]
+        self.assertEqual((detail["added"], detail["updated"]), (1, 0))
+        self.assertEqual([item["anime"]["title"] for item in detail["items"]], ["Frieren"])
+
+        listed = self.client.get(reverse("import_jobs")).data
+        rows = listed["results"] if isinstance(listed, dict) else listed
+        self.assertEqual(rows[0]["changes"], {"added": 1, "updated": 0})
 
     def test_cancel_endpoint(self):
         self._set_email_verified(True)
