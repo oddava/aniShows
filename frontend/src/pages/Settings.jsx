@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
 import SEO from "../components/SEO";
@@ -14,6 +14,7 @@ import ProfileTab from "../components/settings/ProfileTab";
 import BadgesTab from "../components/settings/BadgesTab";
 import AccountTab from "../components/settings/AccountTab";
 import NotificationsTab from "../components/settings/NotificationsTab";
+import DataTab from "../components/settings/data/DataTab";
 import useProfileSettings from "../components/settings/useProfileSettings";
 import useAccountSettings from "../components/settings/useAccountSettings";
 import useNotificationPreferences from "../components/settings/useNotificationPreferences";
@@ -23,6 +24,7 @@ export default function Settings() {
   const { user, isAuthenticated, loading, refreshProfile, logout } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
 
   // The open tab lives in ?tab= so it can be linked to. Unknown values, and
   // Badges for a user without badges, fall back to Profile.
@@ -75,7 +77,12 @@ export default function Settings() {
   }
 
   if (!isAuthenticated) {
-    return <><PageLoader /><Navigate to="/login" replace /></>;
+    return (
+      <>
+        <PageLoader />
+        <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />
+      </>
+    );
   }
 
   return (
@@ -86,7 +93,7 @@ export default function Settings() {
           <header>
             <h1 className="page-title">Settings</h1>
             <p className="mt-1 text-sm text-[var(--text-2)]">
-              Your profile, account and notifications.
+              Your profile, account, notifications and data.
             </p>
           </header>
 
@@ -117,6 +124,8 @@ export default function Settings() {
                 handlePrivacyToggle={profile.handlePrivacyToggle}
               />
             )}
+
+            {activeTab === "data" && <DataTab user={user} />}
 
             {activeTab === "notifications" && (
               <NotificationsTab notifications={notifications} />

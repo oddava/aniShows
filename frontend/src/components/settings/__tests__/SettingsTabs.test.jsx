@@ -41,11 +41,12 @@ describe('SettingsTabs', () => {
 
     it.each([
         ['ArrowRight', 'account', 'notifications'],
-        ['ArrowRight', 'notifications', 'profile'],
-        ['ArrowLeft', 'profile', 'notifications'],
+        ['ArrowRight', 'notifications', 'data'],
+        ['ArrowRight', 'data', 'profile'],
+        ['ArrowLeft', 'profile', 'data'],
         ['ArrowLeft', 'account', 'profile'],
         ['Home', 'notifications', 'profile'],
-        ['End', 'profile', 'notifications'],
+        ['End', 'profile', 'data'],
     ])('%s from %s selects %s', (key, from, to) => {
         const setActiveTab = vi.fn();
         render(<SettingsTabs user={{}} activeTab={from} setActiveTab={setActiveTab} />);

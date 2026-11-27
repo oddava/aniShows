@@ -13,6 +13,7 @@ vi.mock('../../components/settings/ProfileTab', () => ({ default: () => <div>pro
 vi.mock('../../components/settings/BadgesTab', () => ({ default: () => <div>badges panel</div> }));
 vi.mock('../../components/settings/AccountTab', () => ({ default: () => <div>account panel</div> }));
 vi.mock('../../components/settings/NotificationsTab', () => ({ default: () => <div>notifications panel</div> }));
+vi.mock('../../components/settings/data/DataTab', () => ({ default: () => <div>data panel</div> }));
 vi.mock('../../components/settings/useProfileSettings', () => ({
     default: () => ({ cropModal: { isOpen: false }, isPrivate: false }),
 }));
@@ -99,6 +100,13 @@ describe('Settings', () => {
         expect(screen.getByRole('tab', { name: 'Profile' })).toHaveAttribute('aria-selected', 'true');
 
         fireEvent.keyDown(screen.getByRole('tab', { name: 'Profile' }), { key: 'End' });
-        expect(screen.getByRole('tab', { name: 'Notifications' })).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByRole('tab', { name: 'Import & export' })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('opens Import & export from ?tab=data', () => {
+        renderAt('/settings?tab=data');
+
+        expect(screen.getByText('data panel')).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Import & export' })).toHaveAttribute('aria-selected', 'true');
     });
 });

@@ -103,7 +103,7 @@ describe('Home', () => {
         expect(registerLinks[0]).toHaveAttribute('href', '/register');
         // The header offers Sign in; the hero does not ask twice.
         expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument();
-        expect(screen.getByRole('link', { name: /import from mal or anilist/i })).toHaveAttribute('href', '/import');
+        expect(screen.getByRole('link', { name: /import from mal or anilist/i })).toHaveAttribute('href', '/settings?tab=data');
 
         // Beside the headline: this week's most trending show, from the
         // same request as the Trending shelf.
@@ -127,7 +127,7 @@ describe('Home', () => {
         expect(screen.queryByRole('region', { name: 'Continue watching' })).not.toBeInTheDocument();
         // One primary action and one plain link, no "or" between them.
         expect(screen.getByRole('link', { name: 'Find something to watch' })).toHaveClass('btn-primary');
-        expect(screen.getByRole('link', { name: 'Import a list' })).toHaveAttribute('href', '/import');
+        expect(screen.getByRole('link', { name: 'Import a list' })).toHaveAttribute('href', '/settings?tab=data');
         expect(screen.queryByText('or')).not.toBeInTheDocument();
         expect(screen.queryByText('View Details')).not.toBeInTheDocument();
     });

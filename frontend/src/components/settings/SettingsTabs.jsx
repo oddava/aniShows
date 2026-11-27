@@ -6,6 +6,7 @@ export const SETTINGS_TABS = [
     { key: 'badges', label: 'Badges' },
     { key: 'account', label: 'Account' },
     { key: 'notifications', label: 'Notifications' },
+    { key: 'data', label: 'Import & export' },
 ];
 
 export const settingsTabId = (key) => `settings-tab-${key}`;

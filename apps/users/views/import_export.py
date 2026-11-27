@@ -12,7 +12,7 @@ from ...animes.serializers.imports import UserImportJobSerializer
 from ...core.api_errors import api_response, error_response
 from ..models import UserImportJob
 from ..permissions import VerifiedEmailForWrites
-from ..services.export_service import ExportService
+from ..services.export_service import EXPORT_FORMATS, ExportService
 from ..services.import_job_service import (
     cancel_import_job,
     create_anilist_import_job,
@@ -121,13 +121,13 @@ class ImportExportViewSet(ViewSet):
 
     @action(detail=False, methods=["get"])
     def export_user_data(self, request):
-        """``?type=json|xml``; ``download=false`` (JSON only) returns ``{"data": <object>}``."""
+        """``?type=json|xml|csv``; ``download=false`` (JSON only) returns ``{"data": <object>}``."""
         export_format = request.query_params.get("type", "json")
         download = request.query_params.get("download", "true").lower() == "true"
 
-        if export_format not in ["json", "xml"]:
+        if export_format not in EXPORT_FORMATS:
             return error_response(
-                'Type must be "json" or "xml"',
+                'Type must be "json", "xml" or "csv"',
                 code="invalid_export_type",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )

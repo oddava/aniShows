@@ -15,8 +15,7 @@ const importers = [
     [/^\/(u\/|profile)/, () => import('../pages/Profile')],
     [/^\/settings/, () => import('../pages/Settings')],
     [/^\/notifications$/, () => import('../pages/Notifications')],
-    [/^\/import/, () => import('../pages/ImportPage')],
-    [/^\/export/, () => import('../pages/ExportPage')],
+    [/^\/(import|export)$/, () => import('../pages/Settings')],
     [/^\/forums/, () => import('./routes/community').then((module) => module.preloadForumChunks?.())],
     [/^\/(login|register)/, () => import('../pages/Auth')],
 ];

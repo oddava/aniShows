@@ -15,7 +15,7 @@ export default function Footer({ className = '' }) {
                     <nav aria-label="Footer" className="flex flex-wrap gap-x-6">
                         <Link to="/browse" className={linkClass}>Browse</Link>
                         <Link to="/schedule" className={linkClass}>Schedule</Link>
-                        <Link to="/import" className={linkClass}>Import</Link>
+                        <Link to="/settings?tab=data" className={linkClass}>Import</Link>
                         <Link to="/terms" className={linkClass}>Terms</Link>
                         <Link to="/privacy" className={linkClass}>Privacy</Link>
                     </nav>

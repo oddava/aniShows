@@ -1,7 +1,9 @@
-"""Export a user's data: everything as JSON, or the anime list as a MAL-compatible XML file."""
+"""Export a user's data: everything as JSON, or the anime list as MAL XML or CSV."""
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from dataclasses import dataclass
 from typing import Any
@@ -230,6 +232,66 @@ class MALXMLExporter:
         return "\n".join(lines)
 
 
+# A spreadsheet runs a cell that starts with one of these as a formula (CWE-1236).
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_text(value: str | None) -> str:
+    text = value or ""
+    return "'" + text if text.startswith(_FORMULA_PREFIXES) else text
+
+
+class ListCSVExporter:
+    """The anime list as RFC 4180 CSV (UTF-8 with a BOM, so spreadsheets read titles right)."""
+
+    HEADER = (
+        "title",
+        "status",
+        "score",
+        "episodes_watched",
+        "episodes_total",
+        "started_at",
+        "finished_at",
+        "times_rewatched",
+        "rewatching",
+        "notes",
+        "updated_at",
+        "mal_id",
+        "anilist_id",
+    )
+
+    def __init__(self, user):
+        self.user = user
+
+    def export(self) -> str:
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, lineterminator="\r\n")
+        writer.writerow(self.HEADER)
+        for entry in self.user.anime_lists.select_related("anime").order_by("id"):
+            anime = entry.anime
+            writer.writerow(
+                (
+                    _csv_text(anime.title),
+                    entry.get_status_display(),
+                    entry.score or "",
+                    entry.episodes_watched,
+                    anime.episode_count or "",
+                    _iso(entry.started_at) or "",
+                    _iso(entry.finished_at) or "",
+                    entry.total_rewatches,
+                    "yes" if entry.is_rewatching else "no",
+                    _csv_text(entry.notes),
+                    _iso(entry.updated_at) or "",
+                    anime.mal_id or "",
+                    anime.anilist_id or "",
+                )
+            )
+        return "\ufeff" + buffer.getvalue()
+
+
+EXPORT_FORMATS = ("json", "xml", "csv")
+
+
 @dataclass(slots=True)
 class ExportFile:
     content: str
@@ -248,7 +310,7 @@ class ExportService:
 
     @staticmethod
     def export_user_data(user, format: str = "json") -> str:
-        """The export as text: JSON, or MAL XML."""
+        """The export as text: JSON, MAL XML or CSV."""
         return ExportService.export_file(user, format).content
 
     @staticmethod
@@ -262,6 +324,12 @@ class ExportService:
         elif format == "xml":
             exporter = MALXMLExporter(user)
             content, content_type, skipped = exporter.export(), "application/xml", exporter.skipped
+        elif format == "csv":
+            content, content_type, skipped = (
+                ListCSVExporter(user).export(),
+                "text/csv; charset=utf-8",
+                0,
+            )
         else:
             raise ValueError(f"Unsupported export format: {format}")
         return ExportFile(

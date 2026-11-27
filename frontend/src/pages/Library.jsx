@@ -202,7 +202,7 @@ export default function Library() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Link to="/import" className="btn-ghost text-sm">
+                        <Link to="/settings?tab=data" className="btn-ghost text-sm">
                             <Download aria-hidden="true" className="h-4 w-4" />
                             Import
                         </Link>
@@ -296,7 +296,7 @@ export default function Library() {
                             actions={search ? null : (
                                 <>
                                     <Link to="/browse" className="btn-primary text-sm">Browse anime</Link>
-                                    {total === 0 && <Link to="/import" className="btn-secondary text-sm">Import from MAL or AniList</Link>}
+                                    {total === 0 && <Link to="/settings?tab=data" className="btn-secondary text-sm">Import from MAL or AniList</Link>}
                                 </>
                             )}
                         >
