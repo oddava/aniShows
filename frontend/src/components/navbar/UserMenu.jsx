@@ -89,7 +89,7 @@ export default function UserMenu({
                         {/* Avatar or Placeholder */}
                         <div aria-hidden="true" className="w-7 h-7 rounded-full overflow-hidden ">
                             {user?.avatar ? (
-                                <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                                <img src={user.avatar} alt={user.username} draggable={false} className="w-full h-full object-cover" />
                             ) : (
                                 <div className="w-full h-full bg-[var(--signature-soft)] flex items-center justify-center">
                                     <span className="text-sm font-semibold uppercase text-[var(--signature)]">{user?.username?.charAt(0)}</span>
@@ -113,7 +113,7 @@ export default function UserMenu({
                                 <div className="flex items-center gap-3">
                                     <div className="w-9 h-9 rounded-full overflow-hidden">
                                         {user?.avatar ? (
-                                            <img src={user.avatar} alt={user.username} className="w-full h-full object-cover" />
+                                            <img src={user.avatar} alt={user.username} draggable={false} className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full bg-[var(--signature-soft)] flex items-center justify-center">
                                                 <span className="text-base font-semibold uppercase text-[var(--signature)]">{user?.username?.charAt(0)}</span>

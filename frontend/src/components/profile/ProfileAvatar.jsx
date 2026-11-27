@@ -15,6 +15,7 @@ export default function ProfileAvatar({ avatar, username, className = 'h-20 w-20
                 <img
                     src={avatar}
                     alt={username}
+                    draggable={false}
                     className="h-full w-full object-cover"
                     onError={() => setFailed(true)}
                 />

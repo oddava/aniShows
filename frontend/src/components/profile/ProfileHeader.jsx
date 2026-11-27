@@ -74,7 +74,7 @@ export default function ProfileHeader({
         <header className="profile-hero">
             <div className={`profile-hero__banner relative w-full overflow-hidden ${displayUser.banner ? '' : 'profile-hero__banner--empty'}`}>
                 {displayUser.banner ? (
-                    <img src={displayUser.banner} alt="" className="absolute inset-0 h-full w-full object-cover" fetchPriority="high" />
+                    <img src={displayUser.banner} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" fetchPriority="high" />
                 ) : (
                     <div aria-hidden="true" className="profile-hero__fill absolute inset-0" />
                 )}

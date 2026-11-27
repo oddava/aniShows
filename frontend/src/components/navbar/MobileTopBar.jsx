@@ -115,7 +115,7 @@ export default function MobileTopBar() {
                                 className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[var(--signature-soft)] ${isOwnProfile ? 'ring-2 ring-[var(--signature)]' : 'ring-1 ring-white/15'}`}
                             >
                                 {user.avatar ? (
-                                    <img src={user.avatar} alt="" className="h-full w-full object-cover" />
+                                    <img src={user.avatar} alt="" draggable={false} className="h-full w-full object-cover" />
                                 ) : (
                                     <span className="text-sm font-semibold uppercase text-[var(--signature)]">
                                         {user.username.charAt(0)}
