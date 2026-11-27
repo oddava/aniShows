@@ -81,8 +81,14 @@ export default function ExportSection({ user }) {
 
             <ul className="mt-4 divide-y divide-white/[0.06]">
                 {EXPORT_FORMATS.map((item) => (
-                    <li key={item.key} className="flex items-center justify-between gap-4 py-3">
-                        <div className="min-w-0">
+                    <li key={item.key} className="flex items-center gap-3 py-3">
+                        <span
+                            aria-hidden="true"
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white/[0.05] text-[10px] font-bold uppercase tracking-wide text-[var(--text-2)]"
+                        >
+                            {item.key}
+                        </span>
+                        <div className="min-w-0 flex-1">
                             <p className="text-[15px] text-[var(--text-1)]">
                                 {item.name}
                                 <span className="text-[var(--text-3)]"> · {item.format}</span>

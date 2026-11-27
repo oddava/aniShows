@@ -202,6 +202,10 @@ class UserImportJobViewSet(ReadOnlyModelViewSet):
     def get_queryset(self):
         return UserImportJob.objects.filter(user=self.request.user).order_by("-created_at")
 
+    def get_serializer_context(self):
+        # One job's detail lists what it changed, with covers; the list keeps counts only.
+        return {**super().get_serializer_context(), "change_items": self.action == "retrieve"}
+
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         """Cancel a pending or processing import job (404 for someone else's)."""

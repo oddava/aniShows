@@ -157,6 +157,10 @@ class UserImportJob(CreatedAtMixin, Model):
     failure_reason = TextField(blank=True, default="")
     # Entries that could not be matched to the catalog: ``{title, mal_id, anilist_id, reason}``.
     unmatched = JSONField(default=list, blank=True)
+    # What the import wrote: ``{"added": n, "updated": n, "items": [...]}``; each item is
+    # ``{anime_id, kind: added|updated, status, episodes_watched, score, from?: {...}}``
+    # (``from`` holds the old values of the shown fields an update changed).
+    changes = JSONField(default=dict, blank=True)
     # Parsed entries for sources that upload a file (MAL XML), so a requeue still has them.
     # Cleared when the job finishes.
     payload = JSONField(null=True, blank=True)

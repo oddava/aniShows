@@ -6,13 +6,14 @@ import { getApiErrorMessage } from '../../../api/errors';
 import { anilistLinkKeys, anilistLinkQueries } from '../../../api/queries/importJobs';
 import SettingsSwitch from '../SettingsSwitch';
 import AniListLink from './AniListLink';
-import ImportHistory from './ImportHistory';
+import SourceMark from './SourceMark';
 import { SOURCES, parseListInput, usernameError, validateXmlFile } from './importHelpers';
 
 /**
  * Import: pick the site, type (or paste a profile link to) a username, and go.
  * AniList imports link the account so later changes can be pulled; a private
- * MyAnimeList list comes in through its export file. History sits underneath.
+ * MyAnimeList list comes in through its export file. What an import did is
+ * ImportActivity's, below.
  */
 export default function ImportSection({ user, imports }) {
     const queryClient = useQueryClient();
@@ -110,28 +111,37 @@ export default function ImportSection({ user, imports }) {
         <section className="panel" aria-labelledby={`${ids}-title`}>
             <h2 id={`${ids}-title`} className="section-title">Import your list</h2>
             <p className="mt-1 max-w-xl text-sm leading-relaxed text-[var(--text-2)]">
-                Importing adds to your list and never removes anything. If you changed a title
-                here more recently, your version is kept.
+                Bring your list over from another site. Nothing here is ever removed, and titles
+                you changed here more recently keep your version.
             </p>
 
-            <div role="group" aria-label="Import from" className="mt-5 inline-flex gap-1 rounded-lg bg-white/[0.04] p-1">
-                {Object.entries(SOURCES).map(([key, { label }]) => (
-                    <button
-                        key={key}
-                        type="button"
-                        aria-pressed={source === key}
-                        onClick={() => pick(key)}
-                        className={`min-h-9 rounded-md px-3.5 text-sm font-medium transition-colors duration-150
-                        ${source === key
-                            ? 'bg-white/[0.08] text-[var(--text-1)]'
-                            : 'text-[var(--text-2)] hover:text-[var(--text-1)]'}`}
-                    >
-                        {label}
-                    </button>
-                ))}
+            <div role="group" aria-label="Import from" className="mt-5 grid gap-2 sm:grid-cols-2">
+                {Object.entries(SOURCES).map(([key, { label, hint }]) => {
+                    const selected = source === key;
+                    return (
+                        <button
+                            key={key}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => pick(key)}
+                            className={`flex min-h-16 items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors duration-150
+                            ${selected
+                                ? 'bg-[var(--ink-3)] shadow-[inset_0_0_0_1px_var(--signature-line)]'
+                                : 'bg-white/[0.03] hover:bg-white/[0.05]'}`}
+                        >
+                            <SourceMark source={key} />
+                            <span className="min-w-0">
+                                <span className="block text-[15px] font-medium text-[var(--text-1)]">{label}</span>
+                                <span className="block truncate text-sm text-[var(--text-2)]">
+                                    {key === 'anilist' && link ? `Linked as ${link.username}` : hint}
+                                </span>
+                            </span>
+                        </button>
+                    );
+                })}
             </div>
 
-            <div className="mt-5 max-w-xl">
+            <div className={`mt-6 ${showForm ? 'max-w-xl' : ''}`}>
                 {showForm ? (
                     <form onSubmit={handleSubmit} noValidate>
                         <label htmlFor={`${ids}-username`} className="block text-sm font-medium text-[var(--text-1)]">
@@ -229,8 +239,6 @@ export default function ImportSection({ user, imports }) {
                     )}
                 </div>
             </div>
-
-            <ImportHistory imports={imports} link={link} disabled={blocked} onStarted={started} onError={setError} />
         </section>
     );
 }

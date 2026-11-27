@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import DataTab from '../DataTab';
 import {
+    changeDescription,
     jobFailureMessage,
     jobOutcome,
     parseListInput,
@@ -96,8 +97,17 @@ describe('import helpers', () => {
         expect(jobFailureMessage({ failure_reason: '', errors: ['first', 'last'] })).toBe('last');
     });
 
+    it('describes a change in a few words', () => {
+        expect(changeDescription({ kind: 'added', status: 'Plan to Watch' })).toBe('Planning');
+        expect(changeDescription({ kind: 'updated', status: 'Completed', episodes_watched: 12, from: { status: 'Watching', episodes_watched: 10 } }))
+            .toBe('Watching → Completed · Ep 10 → 12');
+        expect(changeDescription({ kind: 'updated', score: 8, from: { score: 0 } })).toBe('Score – → 8');
+        expect(changeDescription({ kind: 'updated', status: 'Watching' })).toBe('Dates or notes');
+    });
+
     it('says what a job did', () => {
         expect(jobOutcome(job())).toBe('80 titles added or updated · 5 skipped · 5 not matched');
+        expect(jobOutcome(job({ changes: { added: 70, updated: 10 } }))).toBe('70 added · 10 updated · 5 skipped · 5 not matched');
         expect(jobOutcome(job({ status: 'processing', processed_entries: 30 }))).toBe('30 of 90 entries');
         expect(jobOutcome(job({ mode: 'incremental', imported_entries: 0, skipped_entries: 0, failed_entries: 0 }))).toBe('Already up to date');
         expect(jobOutcome(job({ status: 'cancelled', imported_entries: 1, skipped_entries: 0, failed_entries: 0 }))).toBe('Cancelled. 1 title added or updated');
@@ -115,8 +125,8 @@ describe('Import', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
         await waitFor(() => expect(api.importMAL).toHaveBeenCalledWith('kiyo'));
-        const row = await screen.findByTestId('import-job-2');
-        expect(within(row).getByText('Waiting to start')).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Importing now' })).toBeInTheDocument();
+        expect(screen.getByText('Waiting to start')).toBeInTheDocument();
         expect(screen.getByLabelText('MyAnimeList username')).toHaveValue('');
     });
 
@@ -129,7 +139,7 @@ describe('Import', () => {
         });
         const input = screen.getByLabelText('AniList username');
         expect(input).toHaveValue('Kiyo');
-        expect(screen.getByRole('button', { name: 'AniList' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByRole('button', { name: /^AniList/ })).toHaveAttribute('aria-pressed', 'true');
         expect(screen.getByRole('switch', { name: 'Keep in sync' })).toHaveAttribute('aria-checked', 'true');
 
         fireEvent.click(screen.getByRole('button', { name: 'Import' }));
@@ -200,55 +210,82 @@ describe('Import', () => {
     });
 });
 
-describe('Import history', () => {
-    it('shows a running job with its progress and cancels it', async () => {
+describe('Latest import', () => {
+    const withDetail = (jobs, items = []) => {
+        api.getImportJobs.mockResolvedValue({ data: jobs });
+        api.getImportJobStatus.mockImplementation((id) => {
+            const found = jobs.find((item) => item.id === id);
+            return Promise.resolve({ data: { ...found, changes: { ...found.changes, items: id === jobs[0].id ? items : [] } } });
+        });
+    };
+    const anime = (id, title) => ({ id, title, slug: `s-${id}`, cover_image: '' });
+
+    it('shows a running import with its progress and cancels it', async () => {
         const running = job({ status: 'processing', processed_entries: 30, progress_percentage: 33 });
-        api.getImportJobs.mockResolvedValue({ data: [running] });
-        api.getImportJobStatus.mockResolvedValue({ data: running });
+        withDetail([running]);
         api.cancelImportJob.mockResolvedValue({});
         renderTab();
 
-        const row = await screen.findByTestId('import-job-1');
-        expect(within(row).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '33');
-        expect(within(row).getByText('30 of 90 entries')).toBeInTheDocument();
+        expect(await screen.findByRole('heading', { name: 'Importing now' })).toBeInTheDocument();
+        expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '33');
+        expect(screen.getByText('30 of 90 entries')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
 
-        fireEvent.click(within(row).getByRole('button', { name: 'Cancel' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
         await waitFor(() => expect(api.cancelImportJob).toHaveBeenCalledWith(1));
     });
 
-    it('shows why a job failed and lets it run again', async () => {
-        api.getImportJobs.mockResolvedValue({
-            data: [job({
-                status: 'failed',
-                failure_reason: 'Took too long; 40 of 90 processed. Run it again to continue.',
-                unmatched: [{ title: 'Rare OVA', mal_id: 5, reason: 'not_in_catalog_yet' }],
-            })],
-        });
+    it('breaks the result down and shows each changed title with what changed', async () => {
+        withDetail(
+            [job({ imported_entries: 2, skipped_entries: 4, failed_entries: 0, changes: { added: 1, updated: 1 } })],
+            [
+                { anime_id: 10, kind: 'added', status: 'Watching', episodes_watched: 1, anime: anime(10, 'Frieren') },
+                { anime_id: 11, kind: 'updated', status: 'Watching', episodes_watched: 6, from: { episodes_watched: 2 }, anime: anime(11, 'Dandadan') },
+            ],
+        );
+        renderTab();
+
+        expect(await screen.findByRole('heading', { name: 'Latest import' })).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'Added 1, Updated 1, Skipped 4' })).toBeInTheDocument();
+        expect(await screen.findByRole('link', { name: /Frieren.*Added:.*Watching/ })).toHaveAttribute('href', '/anime/s-10');
+        expect(screen.getByRole('link', { name: /Dandadan.*Updated:.*Ep 2 → 6/ })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /^Updated\s*1$/ }));
+        expect(screen.queryByText('Frieren')).not.toBeInTheDocument();
+        expect(screen.getByText('Dandadan')).toBeInTheDocument();
+    });
+
+    it('shows why an import failed, what it could not match, and runs it again', async () => {
+        withDetail([job({
+            status: 'failed',
+            failure_reason: 'Took too long; 40 of 90 processed. Run it again to continue.',
+            unmatched: [{ title: 'Rare OVA', mal_id: 5, reason: 'not_in_catalog_yet' }],
+            changes: { added: 0, updated: 0 },
+        })]);
         api.importMAL.mockResolvedValue({ data: { job_id: 2 } });
         renderTab();
 
-        const row = await screen.findByTestId('import-job-1');
-        expect(within(row).getByText(/Took too long/)).toBeInTheDocument();
+        expect(await screen.findByText(/Took too long/)).toBeInTheDocument();
+        expect(await screen.findByText('Rare OVA')).toBeInTheDocument();
 
-        fireEvent.click(within(row).getByRole('button', { name: 'Details' }));
-        expect(within(row).getByText('Rare OVA')).toBeInTheDocument();
-
-        fireEvent.click(within(row).getByRole('button', { name: 'Try again' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
         await waitFor(() => expect(api.importMAL).toHaveBeenCalledWith('kiyo'));
     });
 
-    it('shows the latest three and the rest on request', async () => {
-        api.getImportJobs.mockResolvedValue({ data: [1, 2, 3, 4].map((id) => job({ id, source: 'mal_xml' })) });
+    it('lists earlier imports, five at first, and opens one', async () => {
+        withDetail([1, 2, 3, 4, 5, 6, 7].map((id) => job({ id, source: 'mal_xml' })));
         renderTab();
 
-        await screen.findByTestId('import-job-1');
-        expect(screen.queryByTestId('import-job-4')).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Show all 4' }));
-        expect(screen.getByTestId('import-job-4')).toBeInTheDocument();
+        await screen.findByTestId('import-job-2');
+        expect(screen.queryByTestId('import-job-7')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Show all 6' }));
+        const row = screen.getByTestId('import-job-7');
+
+        fireEvent.click(within(row).getByRole('button', { name: /MyAnimeList file/ }));
+        await waitFor(() => expect(api.getImportJobStatus).toHaveBeenCalledWith(7));
     });
 
-    it('says when the history could not be loaded instead of showing nothing', async () => {
+    it('says when imports could not be loaded instead of showing nothing', async () => {
         api.getImportJobs.mockRejectedValue(new Error('down'));
         renderTab();
 

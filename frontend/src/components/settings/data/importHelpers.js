@@ -1,13 +1,25 @@
 /* Pure helpers for the Import & export tab: input parsing, file checks, job wording. */
 import { ACTIVE_IMPORT_STATUSES } from '../../../api/queries/importJobs';
+import { statusLabel } from '../../../utils/listStatus';
 
 export const MAX_XML_UPLOAD_BYTES = 10 * 1024 * 1024;
 const XML_FILE_PATTERN = /\.(xml|xml\.gz|gz)$/i;
 
 export const SOURCES = {
-    mal: { label: 'MyAnimeList', exportUrl: 'https://myanimelist.net/panel.php?go=export' },
-    anilist: { label: 'AniList' },
+    mal: {
+        label: 'MyAnimeList',
+        hint: 'Public list or export file',
+        exportUrl: 'https://myanimelist.net/panel.php?go=export',
+    },
+    anilist: {
+        label: 'AniList',
+        hint: 'Public list, kept in sync',
+        profileUrl: (username) => `https://anilist.co/user/${encodeURIComponent(username)}/`,
+    },
 };
+
+/** A job's site, as a SOURCES key. */
+export const jobSite = (job) => (job?.source === 'anilist' ? 'anilist' : 'mal');
 
 /** The username rule the server enforces (import_job_service.USERNAME_PATTERN). */
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{1,50}$/;
@@ -81,6 +93,25 @@ export const jobSourceLabel = (job) => {
 
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 
+/**
+ * What a job did, as numbers. `split` says whether the job recorded added and
+ * updated apart (jobs from before change records only have the sum).
+ */
+export const jobCounts = (job) => {
+    const changes = job?.changes || {};
+    const split = Number.isFinite(changes.added) && Number.isFinite(changes.updated);
+    const changed = split ? changes.added + changes.updated : (job?.imported_entries || 0);
+    return {
+        split,
+        added: split ? changes.added : 0,
+        updated: split ? changes.updated : 0,
+        changed,
+        skipped: job?.skipped_entries || 0,
+        notMatched: job?.failed_entries || 0,
+        remaining: isActiveJob(job) ? Math.max((job.total_entries || 0) - (job.processed_entries || 0), 0) : 0,
+    };
+};
+
 /** One line that says what a job did, in the words the person cares about. */
 export const jobOutcome = (job) => {
     if (job.status === 'pending') return 'Waiting to start';
@@ -91,14 +122,26 @@ export const jobOutcome = (job) => {
     }
     if (job.status === 'failed') return jobFailureMessage(job);
 
-    const parts = [];
-    const changed = job.imported_entries || 0;
-    if (job.mode === 'incremental' && changed === 0 && job.status === 'completed') {
+    const counts = jobCounts(job);
+    if (job.mode === 'incremental' && counts.changed === 0 && job.status === 'completed') {
         return 'Already up to date';
     }
-    parts.push(`${plural(changed, 'title', 'titles')} added or updated`);
-    if (job.skipped_entries) parts.push(`${job.skipped_entries} skipped`);
-    if (job.failed_entries) parts.push(`${job.failed_entries} not matched`);
+    const parts = counts.split
+        ? [`${counts.added} added`, `${counts.updated} updated`]
+        : [`${plural(counts.changed, 'title', 'titles')} added or updated`];
+    if (counts.skipped) parts.push(`${counts.skipped} skipped`);
+    if (counts.notMatched) parts.push(`${counts.notMatched} not matched`);
     const line = parts.join(' · ');
     return job.status === 'cancelled' ? `Cancelled. ${line}` : line;
+};
+
+/** How one recorded change reads under its cover: "Watching", "Ep 2 → 6". */
+export const changeDescription = (item) => {
+    if (item.kind === 'added') return statusLabel(item.status) || 'Added';
+    const from = item.from || {};
+    const parts = [];
+    if ('status' in from) parts.push(`${statusLabel(from.status)} → ${statusLabel(item.status)}`);
+    if ('episodes_watched' in from) parts.push(`Ep ${from.episodes_watched} → ${item.episodes_watched}`);
+    if ('score' in from) parts.push(`Score ${from.score || '–'} → ${item.score || '–'}`);
+    return parts.length ? parts.join(' · ') : 'Dates or notes';
 };
