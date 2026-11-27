@@ -8,10 +8,11 @@ The `urlpatterns` list routes URLs to views. For more information please see:
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 
+from apps.animes.page_head import AnimeShellView
 from apps.core.views import MetricsView, seo
-from apps.users.share_preview import ProfileSharePreviewView
+from apps.users.share_preview import ProfileShellView
 
 urlpatterns = [
     # API v1 - includes all domain app URLs
@@ -30,19 +31,14 @@ urlpatterns = [
     path("sitemap.xml", seo.sitemap_index, name="sitemap_index"),
     path("sitemap-pages.xml", seo.sitemap_pages, name="sitemap_pages"),
     path("sitemap-anime-<int:number>.xml", seo.sitemap_anime, name="sitemap_anime"),
-    path("u/<str:username>", ProfileSharePreviewView.as_view(), name="profile_share_preview"),
-    path(
-        "u/<str:username>/", ProfileSharePreviewView.as_view(), name="profile_share_preview_slash"
-    ),
-    path(
-        "u/<str:username>/<path:section>",
-        ProfileSharePreviewView.as_view(),
-        name="profile_share_preview_section",
-    ),
-    path(
-        "u/<str:username>/<path:section>/",
-        ProfileSharePreviewView.as_view(),
-        name="profile_share_preview_section_slash",
+    # The app's dynamic pages: index.html with the page's own <head> (meta,
+    # Open Graph, JSON-LD, LCP image preload). Caddy routes /anime/* and /u/*
+    # here and falls back to the static index.html on a 5xx (apps/core/spa_shell.py).
+    re_path(r"^anime/(?P<slug>[^/]+)(?:/.*)?$", AnimeShellView.as_view(), name="anime_shell"),
+    re_path(
+        r"^u/(?P<username>[^/]+)(?:/(?P<section>.*))?$",
+        ProfileShellView.as_view(),
+        name="profile_shell",
     ),
 ]
 

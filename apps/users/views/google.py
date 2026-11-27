@@ -10,6 +10,7 @@ from ...core.api_errors import error_response
 from ...shared.logger import logger
 from ..auth_cookies import cookie_auth_rejected, end_django_session, set_refresh_cookie
 from ..serializers.social_auth import CODE_REQUIRED_MESSAGE
+from ..services.device_sessions import begin_device_session
 from .social_auth import SocialLoginView
 
 
@@ -108,5 +109,7 @@ class GoogleLogin(SocialLoginView):
         # The refresh token goes out only as the httpOnly cookie.
         response.data.pop("refresh", None)
         if getattr(self, "refresh_token", None):
+            if response.status_code == 200:
+                begin_device_session(request, str(self.refresh_token))
             set_refresh_cookie(response, str(self.refresh_token))
         return response

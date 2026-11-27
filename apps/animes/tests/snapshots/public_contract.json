@@ -433,7 +433,8 @@
     "user_review": "null"
   },
   "list": {
-    "count": "null",
+    "count": "int",
+    "count_capped": "bool",
     "next": "null",
     "previous": "null",
     "results": [
@@ -470,7 +471,8 @@
     ]
   },
   "list_authenticated": {
-    "count": "null",
+    "count": "int",
+    "count_capped": "bool",
     "next": "null",
     "previous": "null",
     "results": [
@@ -602,7 +604,8 @@
     "total": "int"
   },
   "search": {
-    "count": "null",
+    "count": "int",
+    "count_capped": "bool",
     "next": "null",
     "previous": "null",
     "results": [

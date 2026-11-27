@@ -16,6 +16,7 @@ vi.mock('../../../api/client', () => ({
         cancelEmailChange: vi.fn(),
         getSessions: vi.fn(),
         revokeOtherSessions: vi.fn(),
+        revokeSession: vi.fn(),
     },
     clearSession: vi.fn(),
     setAccessToken: vi.fn(),
@@ -137,6 +138,36 @@ describe('AccountTab', () => {
         expect(await screen.findByText('Signed out 2 other devices.')).toBeInTheDocument();
         expect(screen.getByText(/this device only/i)).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /sign out everywhere else/i })).not.toBeInTheDocument();
+    });
+
+    it('lists each device and signs out one of them (BUG-008)', async () => {
+        const recent = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        authApi.getSessions.mockResolvedValue({
+            data: {
+                active: 2,
+                current_since: null,
+                sessions: [
+                    { id: 1, device: 'Firefox on Windows', current: true, last_active_at: recent, signed_in_at: recent },
+                    { id: 7, device: 'Safari on iPhone', current: false, last_active_at: recent, signed_in_at: recent },
+                ],
+            },
+        });
+        authApi.revokeSession.mockResolvedValue({ data: { active: 1 } });
+        renderTab();
+
+        const list = await screen.findByRole('list', { name: 'Signed-in devices' });
+        expect(list).toHaveTextContent('Firefox on Windows');
+        expect(list).toHaveTextContent('This device');
+        // Only other devices get a Sign out button.
+        const signOut = screen.getByRole('button', { name: /^Sign out: Safari on iPhone, active 5 minutes ago$/ });
+        expect(screen.queryByRole('button', { name: /^Sign out: Firefox/ })).not.toBeInTheDocument();
+
+        fireEvent.click(signOut);
+
+        expect(authApi.revokeSession).toHaveBeenCalledWith(7);
+        expect(await screen.findByText('Signed out Safari on iPhone.')).toBeInTheDocument();
+        expect(screen.queryByText('Safari on iPhone')).not.toBeInTheDocument();
+        expect(screen.getByText(/this device only/i)).toBeInTheDocument();
     });
 
     it('renders the re-auth prompt with a Google button', () => {

@@ -1,4 +1,3 @@
-import { useId } from 'react';
 import { Heart, LoaderCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -15,7 +14,6 @@ export default function EntityFavoriteButton({
     onToggle,
     entityLabel = 'favorite',
 }) {
-    const countId = useId();
     const compactCount = Intl.NumberFormat('en-US', {
         notation: 'compact',
         maximumFractionDigits: 1,
@@ -45,8 +43,8 @@ export default function EntityFavoriteButton({
             onClick={onToggle}
             disabled={isPending}
             aria-pressed={Boolean(isFavorite)}
-            aria-label={actionLabel}
-            aria-describedby={countId}
+            // The visible count is part of the name (WCAG 2.5.3).
+            aria-label={`${actionLabel}, ${countLabel}`}
             aria-busy={isPending || undefined}
             className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold tabular transition-colors duration-150 ${
                 isFavorite
@@ -60,7 +58,7 @@ export default function EntityFavoriteButton({
             ) : (
                 <Heart className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} aria-hidden="true" />
             )}
-            <span id={countId}>{countText}</span>
+            <span>{countText}</span>
         </button>
     );
 }

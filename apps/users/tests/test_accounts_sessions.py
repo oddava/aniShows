@@ -204,3 +204,166 @@ class RevokeOthersRaceTests(APITestCase):
         issue_refresh_token(user)
         self.assertIsNone(revoke_other_sessions(user, keep_jti="not-live"))
         self.assertEqual(BlacklistedToken.objects.count(), 0)
+
+
+FIREFOX_WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0"
+SAFARI_IPHONE = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1"
+)
+
+
+class PerDeviceSessionTests(APITestCase):
+    """BUG-008: devices listed one by one, signed out one by one, no pile-up."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="devices", email="devices@example.com", password="securepass123"
+        )
+
+    def _sign_in(self, client=None, agent=FIREFOX_WINDOWS, username="devices"):
+        client = client or APIClient()
+        response = client.post(
+            reverse("token_obtain_pair"),
+            {"username": username, "password": "securepass123"},
+            format="json",
+            HTTP_USER_AGENT=agent,
+            **XHR,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return client
+
+    def _sessions(self, client):
+        response = client.get(reverse("auth_sessions"), **XHR)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.data
+
+    def test_signing_in_again_in_the_same_browser_adds_no_device(self):
+        browser = self._sign_in()
+        for _ in range(3):
+            self._sign_in(browser)
+
+        data = self._sessions(browser)
+
+        self.assertEqual(data["active"], 1)
+        self.assertEqual(len(data["sessions"]), 1)
+
+    def test_devices_are_labelled_and_the_current_one_comes_first(self):
+        self._sign_in(agent=SAFARI_IPHONE)
+        laptop = self._sign_in(agent=FIREFOX_WINDOWS)
+
+        sessions = self._sessions(laptop)["sessions"]
+
+        self.assertEqual(
+            [s["device"] for s in sessions], ["Firefox on Windows", "Safari on iPhone"]
+        )
+        self.assertEqual([s["current"] for s in sessions], [True, False])
+        for session in sessions:
+            self.assertEqual(
+                set(session), {"id", "device", "signed_in_at", "last_active_at", "current"}
+            )
+
+    def test_a_refresh_keeps_the_device_row(self):
+        laptop = self._sign_in()
+        before = self._sessions(laptop)["sessions"][0]["id"]
+
+        self.assertEqual(laptop.post(reverse("token_refresh"), **XHR).status_code, 200)
+
+        after = self._sessions(laptop)["sessions"]
+        self.assertEqual([s["id"] for s in after], [before])
+
+    def test_one_device_can_be_signed_out(self):
+        phone = self._sign_in(agent=SAFARI_IPHONE)
+        tablet = self._sign_in(agent=SAFARI_IPHONE)
+        laptop = self._sign_in()
+        sessions = self._sessions(laptop)["sessions"]
+        phone_id = next(
+            s["id"] for s in sessions if not s["current"]
+        )  # the most recent other device: the tablet
+
+        response = laptop.post(
+            reverse("auth_session_revoke", kwargs={"session_id": phone_id}), **XHR
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["active"], 2)
+        self.assertEqual(tablet.post(reverse("token_refresh"), **XHR).status_code, 401)
+        self.assertEqual(phone.post(reverse("token_refresh"), **XHR).status_code, 200)
+        self.assertEqual(laptop.post(reverse("token_refresh"), **XHR).status_code, 200)
+
+    def test_this_device_is_not_revoked_from_the_list(self):
+        laptop = self._sign_in()
+        current = self._sessions(laptop)["sessions"][0]
+
+        response = laptop.post(
+            reverse("auth_session_revoke", kwargs={"session_id": current["id"]}), **XHR
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(laptop.post(reverse("token_refresh"), **XHR).status_code, 200)
+
+    def test_another_users_device_is_not_found(self):
+        User.objects.create_user(
+            username="someone", email="someone@example.com", password="securepass123"
+        )
+        theirs = self._sign_in(username="someone")
+        their_id = self._sessions(theirs)["sessions"][0]["id"]
+        mine = self._sign_in()
+
+        response = mine.post(reverse("auth_session_revoke", kwargs={"session_id": their_id}), **XHR)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(theirs.post(reverse("token_refresh"), **XHR).status_code, 200)
+
+    def test_revoke_needs_the_csrf_header_and_a_cookie(self):
+        laptop = self._sign_in()
+        session_id = self._sessions(laptop)["sessions"][0]["id"]
+        url = reverse("auth_session_revoke", kwargs={"session_id": session_id})
+
+        self.assertEqual(laptop.post(url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(APIClient().post(url, **XHR).status_code, 401)
+        self.assertTrue(url.startswith("/api/v1/auth/refresh/"))
+
+    def test_devices_signed_in_before_rows_existed_are_listed(self):
+        laptop = self._sign_in()
+        issue_refresh_token(self.user)  # a token with no device row
+
+        sessions = self._sessions(laptop)["sessions"]
+
+        self.assertEqual(len(sessions), 2)
+        self.assertEqual(sessions[1]["device"], "Unknown device")
+
+    def test_logout_and_sign_out_everywhere_forget_the_rows(self):
+        from ..models import UserSession
+
+        laptop = self._sign_in()
+        self._sign_in(agent=SAFARI_IPHONE)
+        laptop.post(reverse("auth_sessions_revoke_others"), **XHR)
+        self.assertEqual(UserSession.objects.filter(user=self.user).count(), 1)
+
+        laptop.post(reverse("token_logout"), **XHR)
+        self.assertEqual(UserSession.objects.filter(user=self.user).count(), 0)
+
+
+class DeviceLabelTests(APITestCase):
+    def test_labels(self):
+        from ..services.device_sessions import device_label
+
+        self.assertEqual(device_label(FIREFOX_WINDOWS), "Firefox on Windows")
+        self.assertEqual(device_label(SAFARI_IPHONE), "Safari on iPhone")
+        self.assertEqual(
+            device_label(
+                "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0 Mobile Safari/537.36"
+            ),
+            "Chrome on Android",
+        )
+        self.assertEqual(
+            device_label(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/131.0 Safari/537.36 Edg/131.0"
+            ),
+            "Edge on macOS",
+        )
+        self.assertEqual(device_label(""), "Unknown device")
+        self.assertEqual(device_label(None), "Unknown device")

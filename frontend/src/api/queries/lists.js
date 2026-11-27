@@ -35,7 +35,7 @@ export const listKeys = {
     byStatus: (username, status) => ['lists', username, status],
     overview: (username, status) => ['lists', username, status, 'overview'],
     /** The profile list tab: every page of one status, filtered and sorted on the server. */
-    paged: (username, status, search, ordering) => ['lists', username, status, 'paged', search || '', ordering],
+    paged: (username, status, search, ordering, genre) => ['lists', username, status, 'paged', search || '', ordering, genre || ''],
     /** A short first page (Insights' "Progress" card). */
     preview: (username, status, pageSize) => ['lists', username, status, 'preview', pageSize],
 };
@@ -84,8 +84,8 @@ export const listQueries = {
         }).then(resultsOrData),
     }),
     /** All of one status, `LIST_PAGE_SIZE` per page; pages are DRF `{count, next, results}`. */
-    paged: (username, status, search, ordering) => infiniteQueryOptions({
-        queryKey: listKeys.paged(username, status, search, ordering),
+    paged: (username, status, search, ordering, genre) => infiniteQueryOptions({
+        queryKey: listKeys.paged(username, status, search, ordering, genre),
         queryFn: ({ pageParam }) => listApi.getAll({
             username,
             status,
@@ -93,6 +93,7 @@ export const listQueries = {
             page: pageParam,
             page_size: LIST_PAGE_SIZE,
             ...(search ? { q: search } : {}),
+            ...(genre ? { genre } : {}),
         }).then((res) => res.data),
         initialPageParam: 1,
         getNextPageParam: nextListPage,

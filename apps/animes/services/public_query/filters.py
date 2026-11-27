@@ -75,6 +75,13 @@ class RankedSearchResults:
             self._ranked_pks = list(self._ranked.values_list("pk", flat=True)[: self._limit])
         return self._ranked_pks
 
+    def count_upto(self, limit: int) -> int:
+        """How many matches there are, counting no further than ``limit``.
+
+        The ranked candidates are matches too, so every match is in ``rest``.
+        """
+        return self._rest.order_by()[:limit].count()
+
     def __getitem__(self, item):
         if not isinstance(item, slice) or item.step not in (None, 1) or item.stop is None:
             raise TypeError("RankedSearchResults only supports [start:stop] slices")

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { animeQueries } from '../../api/queries/anime';
-import { applyImageFallback, getImageFallbackUrl, getOptimizedImageUrl } from '../../utils/imageUtils';
+import { applyImageFallback, getImageFallbackUrl, getImageSrcSet, getOptimizedImageUrl } from '../../utils/imageUtils';
 import Skeleton from '../ui/Skeleton';
 import useDelayedLoading from '../../hooks/useDelayedLoading';
 import { countdown } from './continueModel';
@@ -68,6 +68,9 @@ export default function GuestLanding() {
                         <Link to={`/anime/${featured.slug}`} tabIndex={-1} aria-hidden="true" className="block aspect-[2/1] overflow-hidden">
                             <img
                                 src={getOptimizedImageUrl(featured, 'banner', 'large')}
+                                // The page's largest paint: phones take a smaller variant (RA-002).
+                                srcSet={getImageSrcSet(featured, 'banner') || undefined}
+                                sizes="(min-width: 768px) 58vw, 100vw"
                                 onError={(event) => applyImageFallback(event, getImageFallbackUrl(featured, 'banner'))}
                                 alt=""
                                 fetchPriority="high"

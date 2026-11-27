@@ -2,13 +2,11 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import PropTypes from 'prop-types';
-import { animeApi } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import CategoryRow from './CategoryRow';
-import { animeKeys } from '../../api/queries/anime';
+import { animeQueries } from '../../api/queries/anime';
 
 const ROW_PAGE_SIZE = 6;
-const BROWSE_ROWS_TIMEOUT_MS = 12000;
 const PLACEHOLDER_ROWS = [
     { key: 'trending', title: 'Trending now' },
     { key: 'popular-season', title: 'Popular this season' },
@@ -42,22 +40,7 @@ export default function BrowseRowMode({ titleLanguage = 'en' }) {
     const adultContentEnabled = Boolean(user?.show_adult_content);
 
     const { data: browseRows = [], isLoading, isError, isFetching, refetch } = useQuery({
-        queryKey: animeKeys.browseRow(adultContentEnabled),
-        queryFn: ({ signal }) => {
-            let timeoutId;
-            const request = animeApi.getBrowseRows(signal).then((res) => res.data || []);
-            const timeout = new Promise((_, reject) => {
-                timeoutId = setTimeout(
-                    () => reject(new Error('Browse rows request timed out')),
-                    BROWSE_ROWS_TIMEOUT_MS,
-                );
-            });
-
-            return Promise.race([request, timeout]).finally(() => {
-                if (timeoutId) clearTimeout(timeoutId);
-            });
-        },
-        staleTime: 1000 * 60 * 15,
+        ...animeQueries.browseRows(adultContentEnabled),
         retry: 1,
     });
 

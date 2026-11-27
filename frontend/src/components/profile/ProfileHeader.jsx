@@ -1,10 +1,11 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Link2, MapPin, Pencil } from 'lucide-react';
+import { MapPin, Pencil } from 'lucide-react';
 import FollowButton from '../FollowButton';
 import ProfileAvatar from './ProfileAvatar';
 import UserBadges from './UserBadges';
 import NowWatchingCard from './NowWatchingCard';
+import ShareProfileButton from './ShareProfileButton';
+import StatusPill from './StatusPill';
 import { PlatformIcon } from './SocialLinks';
 
 function linkHref(link) {
@@ -13,36 +14,10 @@ function linkHref(link) {
     return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
 }
 
-function ShareButton({ username }) {
-    const [copied, setCopied] = useState(false);
-    const share = async () => {
-        const url = `${window.location.origin}/u/${username}`;
-        try {
-            if (navigator.share && window.matchMedia?.('(pointer: coarse)').matches) {
-                await navigator.share({ title: `${username} on AniShows`, url });
-                return;
-            }
-            await navigator.clipboard.writeText(url);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1800);
-        } catch {
-            // Share sheet dismissed or clipboard blocked: nothing to report.
-        }
-    };
-    return (
-        <>
-            <button type="button" onClick={share} className="profile-icon-btn" aria-label="Share profile" title={copied ? 'Link copied' : 'Share profile'}>
-                {copied ? <Check aria-hidden="true" className="h-[18px] w-[18px]" /> : <Link2 aria-hidden="true" className="h-[18px] w-[18px]" />}
-            </button>
-            <span role="status" className="sr-only">{copied ? 'Profile link copied' : ''}</span>
-        </>
-    );
-}
-
 function HeroActions({ displayUser, isPublicView, targetUsername }) {
     return (
         <>
-            <ShareButton username={displayUser.username} />
+            <ShareProfileButton username={displayUser.username} />
             {!isPublicView ? (
                 <Link to="/settings" className="btn-secondary gap-2 px-4 text-[15px]">
                     <Pencil aria-hidden="true" className="h-4 w-4" />
@@ -129,15 +104,19 @@ export default function ProfileHeader({
                             </div>
                         )}
 
-                        {(displayUser.status_emoji || displayUser.status_text) && (
-                            <p className="profile-status mt-3 flex w-fit max-w-full items-start gap-2 rounded-xl px-3.5 py-2 text-[15px] leading-snug text-[var(--text-1)] sm:mt-4 sm:max-w-2xl">
-                                {displayUser.status_emoji && <span aria-hidden="true">{displayUser.status_emoji}</span>}
-                                <span className="min-w-0 break-words">{displayUser.status_text}</span>
-                            </p>
-                        )}
+                        {/* Your own status is editable in place; visitors see a plain pill. */}
+                        <StatusPill
+                            emoji={displayUser.status_emoji || ''}
+                            text={displayUser.status_text || ''}
+                            editable={!isPublicView}
+                            username={username}
+                        />
 
                         {(displayUser.location || links.length > 0) && (
-                        <div className="mt-0.5 grid grid-cols-2 items-center gap-x-4 text-sm text-[var(--text-2)] md:mt-4 md:flex md:flex-wrap md:gap-x-5 md:gap-y-1">
+                        // One wrapping row, left-aligned, at every width: on phones a
+                        // two-column grid put the second link halfway across the
+                        // screen instead of next to the first.
+                        <div data-testid="profile-links" className="mt-0.5 flex flex-wrap items-center justify-start gap-x-4 text-sm text-[var(--text-2)] md:mt-4 md:gap-x-5 md:gap-y-1">
                             {displayUser.location && (
                                 <span className="inline-flex min-h-11 min-w-0 items-center gap-1.5 md:min-h-0">
                                     <MapPin aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--text-3)]" />

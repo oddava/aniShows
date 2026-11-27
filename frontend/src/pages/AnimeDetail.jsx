@@ -296,7 +296,7 @@ export default function AnimeDetail() {
                         }
                         applyImageFallback(event, bannerFallbackUrl);
                     }}
-                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isBannerLoaded && showBanner ? 'opacity-100' : 'opacity-0'}`}
+                    className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out fade-on-load ${isBannerLoaded && showBanner ? 'opacity-100' : 'opacity-0'}`}
                 />
                 </div>
                 )}

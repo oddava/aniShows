@@ -197,7 +197,7 @@ export default function OverviewTab({
                 className={ORDER.watching}
                 title="Watching"
                 onSeeAll={() => onOpenListStatus?.('Watching')}
-                seeAllLabel="See everything they are watching"
+                seeAllLabel="everything they are watching"
             >
                 <WatchingShelf entries={watching} />
             </ProfileCard>,

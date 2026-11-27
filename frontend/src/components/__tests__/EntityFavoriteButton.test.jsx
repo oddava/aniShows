@@ -22,24 +22,24 @@ const renderButton = (props = {}) => render(
 );
 
 describe('EntityFavoriteButton', () => {
-    it('is named for its action, carries aria-pressed and keeps the count visible', () => {
+    it('is named for its action and its visible count, and carries aria-pressed', () => {
         renderButton();
-        const button = screen.getByRole('button', { name: 'Favorite Frieren' });
+        // The visible count is part of the name (WCAG 2.5.3 Label in Name).
+        const button = screen.getByRole('button', { name: 'Favorite Frieren, 1.2K favorites' });
         expect(button).toHaveAttribute('aria-pressed', 'false');
         expect(button).toHaveTextContent('1.2K');
-        expect(button).toHaveAccessibleDescription('1.2K');
     });
 
     it('says Unfavorite and is pressed when favorited', () => {
         renderButton({ isFavorite: true });
-        const button = screen.getByRole('button', { name: 'Unfavorite Frieren' });
+        const button = screen.getByRole('button', { name: /^Unfavorite Frieren, / });
         expect(button).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('calls onToggle and is disabled while pending', () => {
         const onToggle = vi.fn();
         const { rerender } = renderButton({ onToggle });
-        fireEvent.click(screen.getByRole('button', { name: 'Favorite Frieren' }));
+        fireEvent.click(screen.getByRole('button', { name: /^Favorite Frieren, / }));
         expect(onToggle).toHaveBeenCalledTimes(1);
 
         rerender(
@@ -47,7 +47,7 @@ describe('EntityFavoriteButton', () => {
                 <EntityFavoriteButton isAuthenticated isFavorite={false} favoriteCount={1234} onToggle={onToggle} entityLabel="Frieren" isPending />
             </MemoryRouter>,
         );
-        expect(screen.getByRole('button', { name: 'Favorite Frieren' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /^Favorite Frieren, / })).toBeDisabled();
     });
 
     it('links signed-out viewers to login', () => {

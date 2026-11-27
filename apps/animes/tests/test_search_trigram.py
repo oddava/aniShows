@@ -219,3 +219,44 @@ def test_ranked_results_reject_unsupported_indexing():
 
 def test_one_or_two_letters_keep_the_popular_order(catalog):
     assert _titles("ru") == _titles("ru", sort="popular")
+
+
+def _page(**params) -> dict:
+    cache.clear()
+    response = APIClient().get("/api/v1/anime/", params)
+    assert response.status_code == 200
+    return response.json()
+
+
+@pytest.mark.parametrize("window", [1, 100])
+def test_search_reports_how_many_matches_there_are(catalog, monkeypatch, window):
+    # BUG-009: "count" was null, so the UI could not say "N results". Both the
+    # ranked path (window 1: a common word) and the plain one count every match.
+    monkeypatch.setattr("apps.animes.services.public_query.filters.RELEVANCE_WINDOW", window)
+    for page_size, page in ((1, 1), (1, 3), (3, 2), (20, 1)):
+        body = _page(q="naruto", page_size=page_size, page=page)
+        assert body["count"] == 4, (page_size, page)
+        assert body["count_capped"] is False
+
+
+def test_count_stops_at_the_cap(catalog, monkeypatch):
+    from apps.shared.pagination import NoCountPagination
+
+    monkeypatch.setattr(NoCountPagination, "count_cap", 2)
+    monkeypatch.setattr("apps.animes.services.public_query.filters.RELEVANCE_WINDOW", 1)
+
+    body = _page(q="naruto", page_size=1)
+
+    assert body["count"] == 2
+    assert body["count_capped"] is True
+    assert body["next"]
+
+
+def test_ranked_results_count_every_match_up_to_a_limit(catalog):
+    from apps.animes.services.public_query.filters import RankedSearchResults
+
+    matches = Anime.objects.filter(title__icontains="ruto")
+    results = RankedSearchResults(ranked=matches[:1], rest=matches)
+
+    assert results.count_upto(100) == matches.count()
+    assert results.count_upto(2) == 2

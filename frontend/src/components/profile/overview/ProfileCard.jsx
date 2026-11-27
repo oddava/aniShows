@@ -22,7 +22,8 @@ export default function ProfileCard({
                         <button
                             type="button"
                             onClick={onSeeAll}
-                            aria-label={seeAllLabel || `See all: ${title}`}
+                            // Starts with the visible "See all" (WCAG 2.5.3, RA-004).
+                            aria-label={`See all: ${seeAllLabel || title}`}
                             className="-my-2 inline-flex min-h-[2.75rem] shrink-0 items-center gap-0.5 text-sm font-medium text-[var(--signature)] transition-colors hover:text-[var(--signature-hover)]"
                         >
                             See all

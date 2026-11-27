@@ -162,13 +162,13 @@ describe('AnimeListTab', () => {
         listApi.getAll.mockResolvedValue(page([1]));
         const { unmount } = renderTab({ isPublicView: false, initialView: 'list' });
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Add one episode to Anime 1' }));
+        fireEvent.click(await screen.findByRole('button', { name: '+1 episode: Anime 1' }));
         expect(increment).toHaveBeenCalledTimes(1);
         expect(screen.getByText('2/12')).toBeInTheDocument();
         unmount();
 
         renderTab({ isPublicView: true, initialView: 'list' }, '/u/mio/anime_list');
         await screen.findByText('Anime 1');
-        expect(screen.queryByRole('button', { name: /Add one episode/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^\+1 episode/ })).not.toBeInTheDocument();
     });
 });

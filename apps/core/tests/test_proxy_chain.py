@@ -189,6 +189,24 @@ class CaddyfileKeepsItsSideTests(SimpleTestCase):
         self.assertEqual(headers.count('Referrer-Policy "strict-origin-when-cross-origin"'), 1)
         self.assertIn("header @referrer_default {", headers)
 
+    def test_dynamic_pages_get_the_shell_and_fall_back_to_the_static_index(self):
+        # RA-001/RA-002: every client, not just crawler user agents.
+        self.assertIn("@spa_shell path /anime/* /u/*", self.text)
+        self.assertNotIn("header_regexp User-Agent", self.text)
+        block = self.text.split("handle @spa_shell {", 1)[1].split("\n\t}\n", 1)[0]
+        self.assertIn("@shell_failed status 5xx", block)
+        self.assertIn("import spa_index", block)
+        self.assertIn("import spa_headers", block)
+        # No upstream at all: the static index.html, as a 200 page.
+        errors = self.text.split("handle_errors {", 1)[1]
+        self.assertIn("@spa_shell_down path /anime/* /u/*", errors)
+        self.assertIn("status 200", errors)
+        # One SPA policy for the static files and the shell; it replaces Django's.
+        headers = self._snippet("spa_headers")
+        self.assertIn("script-src 'self' {$UMAMI_PUBLIC_ORIGIN}", headers)
+        self.assertIn("defer", headers)
+        self.assertEqual(self.text.count("Content-Security-Policy \"default-src 'self'"), 1)
+
     def test_liveness_stays_the_upstream_health_check(self):
         self.assertNotIn("health_uri /api/v1/health/ready/", self.text)
         self.assertIn("health_uri /api/v1/health/", self.text)

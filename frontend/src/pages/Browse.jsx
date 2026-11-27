@@ -33,6 +33,7 @@ import TopFilterBar from '../components/browse/TopFilterBar';
 import BrowseRowMode from '../components/browse/BrowseRowMode';
 import { filterBrowseGenres } from '../utils/realGenres';
 import { genreQueries, studioQueries } from '../api/queries/anime';
+import { formatResultCount } from '../components/browse/resultCount';
 
 // localStorage can throw (private mode, blocked storage); these preferences
 // are conveniences, so a failure only means the default is used.
@@ -171,6 +172,8 @@ export default function Browse() {
   // Fetch anime
   const {
     allAnime,
+    totalCount,
+    totalCountCapped,
     loadMoreRef,
     isFetchingNextPage,
     isLoading,
@@ -257,7 +260,8 @@ export default function Browse() {
                           className="press flex h-10 min-w-10 items-center justify-center rounded-lg px-3 text-sm text-[var(--text-2)] transition-colors hover:bg-white/[0.05] hover:text-[var(--text-1)] max-sm:bg-white/[0.05] max-sm:px-0"
                           type="button"
                           title="Toggle title language"
-                          aria-label={`Title language: ${titleLanguage === 'en' ? 'English' : 'Japanese'}. Switch`}
+                          // Starts with the visible text (WCAG 2.5.3).
+                          aria-label={titleLanguage === 'en' ? 'English titles: switch to Japanese' : 'Japanese titles: switch to English'}
                         >
                           <Languages aria-hidden="true" className="h-4 w-4 sm:hidden" />
                           <span className="hidden sm:inline">{titleLanguage === 'en' ? 'English titles' : 'Japanese titles'}</span>
@@ -282,6 +286,11 @@ export default function Browse() {
                   </h1>
                 ) : (
                   <h1 className="sr-only">Browse anime</h1>
+                )}
+                {(currentSearch || hasActiveFilters) && !isError && totalCount !== null && totalCount > 0 && (
+                  <p className="-mt-3 mb-5 text-sm text-[var(--text-2)] tabular">
+                    {formatResultCount(totalCount, totalCountCapped)}
+                  </p>
                 )}
 
                 {/* Active Filter Chips */}

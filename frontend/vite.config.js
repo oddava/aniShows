@@ -1,5 +1,19 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+
+// The origin of a third-party script the build loads (Umami), or '' when none
+// or malformed. deploy-prod.sh reads dist/csp-script-origins.txt and adds it
+// to the SPA's Content-Security-Policy (BUG-001): the script URL is a CI build
+// secret the server's .env often does not repeat.
+export function scriptOrigin(url) {
+  if (!url) return ''
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' ? parsed.origin : ''
+  } catch {
+    return ''
+  }
+}
 
 // Parse ALLOWED_HOSTS from environment variable
 const allowedHosts = process.env.ALLOWED_HOSTS
@@ -39,6 +53,17 @@ export default defineConfig(({ mode }) => ({
           `  <meta name="deployment-time" content="${deploymentTime}">\n  </head>`
         )
       }
+    },
+    {
+      name: 'csp-script-origins',
+      apply: 'build',
+      generateBundle() {
+        const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env }
+        const origin = scriptOrigin(env.VITE_UMAMI_SCRIPT_URL)
+        if (origin) {
+          this.emitFile({ type: 'asset', fileName: 'csp-script-origins.txt', source: `${origin}\n` })
+        }
+      },
     },
     // No Workbox/VitePWA service worker (C-INT-7). The only service worker is the
     // web-push worker, public/service-worker.js, registered at scope `/` by

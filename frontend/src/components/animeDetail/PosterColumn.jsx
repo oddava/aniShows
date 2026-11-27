@@ -36,7 +36,7 @@ export default function PosterColumn({
                             setIsCoverLoaded(false);
                             applyImageFallback(event, coverFallbackUrl);
                         }}
-                        className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out ${isCoverLoaded ? 'opacity-100' : 'opacity-0'}`}
+                        className={`w-full h-full object-cover text-transparent transition-opacity duration-500 ease-out fade-on-load ${isCoverLoaded ? 'opacity-100' : 'opacity-0'}`}
                     />
                 </div>
             </div>

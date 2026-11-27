@@ -64,6 +64,11 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,web").split(",")
 
 # Frontend URL for OAuth callbacks
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# The deployed SPA's index.html (the frontend volume, mounted read-only into
+# web): /anime/* and /u/* are served from it with their own <head>
+# (apps/core/spa_shell.py). Missing, those routes answer 503 and Caddy serves
+# the static file instead.
+SPA_INDEX_PATH = os.getenv("SPA_INDEX_PATH", "/srv/frontend/index.html")
 # django-cors-headers' own default; development.py and production.py set the real list.
 CORS_ALLOWED_ORIGINS: list[str] = []
 # AniList GraphQL is the only catalog data source. AniList documents 90
@@ -559,7 +564,9 @@ from datetime import timedelta
 
 SIMPLE_JWT: dict[str, Any] = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    # Rotation renews it on every refresh, so this is how long a device may
+    # stay idle before it has to sign in again (BUG-008: was 30 days).
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("JWT_REFRESH_TOKEN_DAYS", "14"))),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),

@@ -9,14 +9,16 @@ import { useAuth } from '../../context/AuthContext';
 const TOP_LEVEL_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/notifications', '/settings', '/login', '/register'];
 
 /**
- * Phone-only top bar: the wordmark (or Back on detail pages) and search.
+ * Phone-only top bar: the wordmark (or Back on detail pages), search and,
+ * when signed in, the avatar: one tap to your own profile from any page
+ * (the tab bar has no profile tab).
  * Transparent at the top of the page so hero art shows through, a glass bar
  * once scrolled; it slides away while scrolling down and returns on scroll up.
  */
 export default function MobileTopBar() {
     const location = useLocation();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, isAuthenticated } = useAuth();
     const isStaff = Boolean(user?.is_staff || user?.is_superuser);
     const [scrolled, setScrolled] = useState(false);
     const [hidden, setHidden] = useState(false);
@@ -45,10 +47,15 @@ export default function MobileTopBar() {
     }, [location.pathname]);
 
     const path = location.pathname.replace(/\/+$/, '') || '/';
-    // Profiles are reached from the tab bar's account entry: no back arrow there either.
+    // Profiles are reached from the avatar here: no back arrow there either.
     const isTopLevel = TOP_LEVEL_PATHS.includes(path) || /^\/u\/[^/]+(\/[^/]+)?$/.test(path);
     // Browse has its own search box at the top of the page.
     const showSearch = path !== '/browse';
+    const profilePath = user?.username ? `/u/${encodeURIComponent(user.username)}` : null;
+    const isOwnProfile = Boolean(
+        profilePath && (path === profilePath || path.startsWith(`${profilePath}/`)
+            || path.toLowerCase() === profilePath.toLowerCase()),
+    );
     // Over artwork (top of the page) the icon buttons get a dark backing so
     // they stay legible on bright banners.
     const iconButtonClasses = `press w-11 h-11 flex items-center justify-center rounded-full text-gray-100 transition-colors ${scrolled ? 'hover:bg-white/10' : 'bg-[rgb(21_24_29/0.6)] backdrop-blur-sm hover:bg-[rgb(21_24_29/0.8)]'}`;
@@ -95,6 +102,27 @@ export default function MobileTopBar() {
                         >
                             <Search aria-hidden="true" className="w-5 h-5" />
                         </button>
+                    )}
+                    {isAuthenticated && user?.username && (
+                        <Link
+                            to={profilePath}
+                            aria-label={`Your profile (${user.username})`}
+                            aria-current={isOwnProfile ? 'page' : undefined}
+                            className={`${iconButtonClasses} ml-0.5`}
+                        >
+                            <span
+                                aria-hidden="true"
+                                className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[var(--signature-soft)] ${isOwnProfile ? 'ring-2 ring-[var(--signature)]' : 'ring-1 ring-white/15'}`}
+                            >
+                                {user.avatar ? (
+                                    <img src={user.avatar} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                    <span className="text-sm font-semibold uppercase text-[var(--signature)]">
+                                        {user.username.charAt(0)}
+                                    </span>
+                                )}
+                            </span>
+                        </Link>
                     )}
                 </div>
             </div>

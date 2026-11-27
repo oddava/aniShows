@@ -56,7 +56,7 @@ describe('UserMenu (desktop account disclosure)', () => {
         const user = userEvent.setup();
         renderAt();
 
-        const button = screen.getByRole('button', { name: /Account menu for oddava/ });
+        const button = screen.getByRole('button', { name: /^oddava, account menu/ });
         await user.click(button);
         expect(button).toHaveAttribute('aria-expanded', 'true');
 
@@ -72,7 +72,7 @@ describe('UserMenu (desktop account disclosure)', () => {
         const user = userEvent.setup();
         renderAt();
 
-        const button = screen.getByRole('button', { name: /Account menu for oddava/ });
+        const button = screen.getByRole('button', { name: /^oddava, account menu/ });
         await user.click(button);
         // Profile, Notifications, Settings, Sign out, then out of the menu.
         for (let i = 0; i < 5; i += 1) await user.tab();
@@ -85,7 +85,7 @@ describe('UserMenu (desktop account disclosure)', () => {
         const user = userEvent.setup();
         renderAt();
 
-        await user.click(screen.getByRole('button', { name: /Account menu for oddava/ }));
+        await user.click(screen.getByRole('button', { name: /^oddava, account menu/ }));
         expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
             'href',
             '/settings?tab=account',
@@ -96,7 +96,7 @@ describe('UserMenu (desktop account disclosure)', () => {
         const user = userEvent.setup();
         renderAt('/settings');
 
-        await user.click(screen.getByRole('button', { name: /Account menu for oddava/ }));
+        await user.click(screen.getByRole('button', { name: /^oddava, account menu/ }));
         await user.click(screen.getByRole('button', { name: 'Sign out' }));
 
         await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/));

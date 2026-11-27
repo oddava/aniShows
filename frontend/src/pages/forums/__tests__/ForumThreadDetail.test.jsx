@@ -181,7 +181,7 @@ describe('ForumThreadDetail', () => {
         expect(follow).toHaveAttribute('aria-pressed', 'false');
         await userEvent.click(follow);
 
-        const unfollow = await screen.findByRole('button', { name: 'Unfollow thread' });
+        const unfollow = await screen.findByRole('button', { name: 'Following thread' });
         expect(unfollow).toHaveAttribute('aria-pressed', 'true');
         await waitFor(() => expect(forumsApi.subscribeThread).toHaveBeenCalledWith('5'));
     });

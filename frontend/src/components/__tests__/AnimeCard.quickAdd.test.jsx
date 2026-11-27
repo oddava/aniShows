@@ -48,7 +48,7 @@ describe('AnimeCard quick add (T1) with toast and Undo (T6)', () => {
         listApi.remove.mockResolvedValue({});
         renderCard();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Add Frieren to your list' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add to list: Frieren' }));
         fireEvent.click(screen.getByRole('menuitemradio', { name: 'Planning' }));
 
         await waitFor(() => expect(listApi.add).toHaveBeenCalledWith({ anime_id: 5, status: 'Plan to Watch' }));
@@ -59,7 +59,7 @@ describe('AnimeCard quick add (T1) with toast and Undo (T6)', () => {
         fireEvent.click(within(toast).getByRole('button', { name: 'Undo' }));
 
         await waitFor(() => expect(listApi.remove).toHaveBeenCalledWith(77));
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Add Frieren to your list' })).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Add to list: Frieren' })).toBeInTheDocument());
     });
 
     it('Completed asks for a score in the same menu: three taps for the whole loop', async () => {
@@ -67,7 +67,7 @@ describe('AnimeCard quick add (T1) with toast and Undo (T6)', () => {
         listApi.update.mockResolvedValue({ data: { id: 78, status: 'Completed', episodes_watched: 28, score: 9 } });
         renderCard();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Add Frieren to your list' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add to list: Frieren' }));
         fireEvent.click(screen.getByRole('menuitemradio', { name: 'Completed' }));
         await waitFor(() => expect(listApi.add).toHaveBeenCalledWith({ anime_id: 5, status: 'Completed' }));
 
@@ -83,13 +83,13 @@ describe('AnimeCard quick add (T1) with toast and Undo (T6)', () => {
         listApi.add.mockRejectedValue({ response: { data: { detail: 'Lists are read-only right now.' } } });
         renderCard();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Add Frieren to your list' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add to list: Frieren' }));
         fireEvent.click(screen.getByRole('menuitemradio', { name: 'Watching' }));
 
         // A toast from the previous test may still be leaving: look for this
         // message, not "the only alert".
         expect(await screen.findByText('Lists are read-only right now.')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Add Frieren to your list' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Add to list: Frieren' })).toBeInTheDocument();
     });
 
     it('shows your score and a visible stepper on Watching cards (T2, T3)', async () => {

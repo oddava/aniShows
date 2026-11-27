@@ -35,14 +35,25 @@ export function prefetchRoute(pathname) {
 
 const COMMON = ['/', '/browse', '/anime/x', '/list', '/schedule', '/u/x', '/notifications'];
 
-/** Prefetch the common pages once the browser is idle (not on data saver or 2G). */
+// After the page's own load, this much longer: the first page's images and
+// API calls finish first. Idle time before that is mostly the page waiting on
+// its API, and other pages' code fetched then competed with its LCP image
+// (RA-002: ~180 KB of Home/Browse/Profile/Markdown chunks on a phone link).
+const COMMON_PREFETCH_DELAY_MS = 3000;
+
+/** Prefetch the common pages once the page has loaded and the browser is idle (not on data saver or 2G). */
 export function prefetchCommonRoutes() {
     if (typeof window === 'undefined') return;
     const connection = navigator.connection;
     if (connection?.saveData || /2g/.test(connection?.effectiveType || '')) return;
     const run = () => COMMON.forEach(prefetchRoute);
-    if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 4000 });
-    else window.setTimeout(run, 2500);
+    const whenIdle = () => {
+        if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 4000 });
+        else run();
+    };
+    const afterLoad = () => window.setTimeout(whenIdle, COMMON_PREFETCH_DELAY_MS);
+    if (document.readyState === 'complete') afterLoad();
+    else window.addEventListener('load', afterLoad, { once: true });
 }
 
 // Page data, not just page code: components/common/DataPrefetch.jsx registers

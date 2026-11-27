@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom';
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect, useRef } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import VerificationBanner from './VerificationBanner';
@@ -18,6 +18,14 @@ export default function Layout() {
     const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
     const isBrowsePage = normalizedPath === '/browse';
     const isFlushPage = normalizedPath === '/' || normalizedPath.startsWith('/profile') || normalizedPath.startsWith('/u/') || normalizedPath.startsWith('/anime/');
+    const pageKey = getPageKey(normalizedPath);
+
+    // The first page of a visit skips its entry fades (html[data-boot], set by
+    // public/boot.js, for LCP); from the first in-app navigation on, pages fade in.
+    const firstPageKey = useRef(pageKey);
+    useEffect(() => {
+        if (pageKey !== firstPageKey.current) document.documentElement.removeAttribute('data-boot');
+    }, [pageKey]);
 
     return (
         <div className="min-h-screen bg-dark flex flex-col">
@@ -40,7 +48,7 @@ export default function Layout() {
                     router navigations run as transitions, so the current page
                     stays up until the next one's chunk has loaded. */}
                 <Suspense fallback={<PageLoader />}>
-                    <div key={getPageKey(normalizedPath)} className="page-enter">
+                    <div key={pageKey} className="page-enter">
                         <Outlet />
                     </div>
                 </Suspense>

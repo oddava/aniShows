@@ -197,7 +197,28 @@ export const nextPageFromUrl = (lastPage) => {
     }
 };
 
+// A slow browse-rows response fails (and retries) instead of hanging the page.
+const BROWSE_ROWS_TIMEOUT_MS = 12000;
+
 export const animeQueries = {
+    /** Browse's rows (BrowseRowMode); app/bootData.js starts it at boot for guests. */
+    browseRows: (adultContentEnabled) => queryOptions({
+        queryKey: animeKeys.browseRow(adultContentEnabled),
+        queryFn: ({ signal }) => {
+            let timeoutId;
+            const request = animeApi.getBrowseRows(signal).then((res) => res.data || []);
+            const timeout = new Promise((_, reject) => {
+                timeoutId = setTimeout(
+                    () => reject(new Error('Browse rows request timed out')),
+                    BROWSE_ROWS_TIMEOUT_MS,
+                );
+            });
+            return Promise.race([request, timeout]).finally(() => {
+                if (timeoutId) clearTimeout(timeoutId);
+            });
+        },
+        staleTime: 1000 * 60 * 15,
+    }),
     detail: (slug, viewerId) => queryOptions({
         queryKey: animeKeys.detail(slug, viewerId),
         queryFn: () => animeApi.getBySlug(slug).then(data),

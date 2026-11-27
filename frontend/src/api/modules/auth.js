@@ -37,6 +37,8 @@ export const authApi = {
     getSessions: () => api.get('/auth/refresh/sessions/', { _skipProactiveRefresh: true }),
     revokeOtherSessions: () =>
         api.post('/auth/refresh/sessions/revoke-others/', null, { _skipProactiveRefresh: true }),
+    revokeSession: (sessionId) =>
+        api.post(`/auth/refresh/sessions/${encodeURIComponent(sessionId)}/revoke/`, null, { _skipProactiveRefresh: true }),
     googleLogin: (code, callbackUrl) =>
         api.post('/auth/google/', { code, callback_url: callbackUrl }),
     deleteAccount: (data) => api.delete('/auth/delete-account/', { data }),

@@ -29,6 +29,9 @@ DATABASES["default"]["TEST"] = {
 }
 ALLOWED_HOSTS = [*ALLOWED_HOSTS, "testserver"]
 
+# A stand-in for the deployed index.html (apps/core/spa_shell.py).
+SPA_INDEX_PATH = str(BASE_DIR / "apps" / "core" / "tests" / "fixtures" / "spa_index.html")
+
 # Use very high throttle rates during tests (effectively disabled), derived from
 # base so new scopes can't go missing. Scopes whose limits are under test keep
 # their real rates.

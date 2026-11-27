@@ -19,7 +19,7 @@ User = get_user_model()
 XHR: dict[str, Any] = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 BUDGETS = {
-    "login": 12,  # includes UPDATE_LAST_LOGIN's UPDATE
+    "login": 13,  # includes UPDATE_LAST_LOGIN's UPDATE; +1: the device row (BUG-008)
     "refresh": 25,  # includes the user-row lock that serializes rotation with revocation
     "me_cold": 28,  # +1: the live list totals (P1, one stats calculation)
     "me_warm": 1,  # the JWT user lookup only; the payload comes from the cache

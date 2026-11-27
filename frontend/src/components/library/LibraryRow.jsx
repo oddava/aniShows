@@ -50,7 +50,7 @@ function ScoreCell({ score, title, onChange, disabled }) {
                 type="button"
                 onClick={() => setOpen((value) => !value)}
                 aria-expanded={open}
-                aria-label={score ? `Your score for ${title}: ${score}. Change` : `Score ${title}`}
+                aria-label={score ? `${score}, your score for ${title}. Change` : `Rate ${title}`}
                 className="flex h-11 min-w-16 items-center justify-center gap-1 rounded-[var(--radius-sm)] px-2 text-sm font-semibold tabular hover:bg-white/[0.06]"
             >
                 {score ? (
