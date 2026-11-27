@@ -104,7 +104,6 @@ export default function Navbar() {
                             logout={logout}
                             isProfileOpen={isProfileOpen}
                             setIsProfileOpen={setIsProfileOpen}
-                            mobileUnreadCount={mobileUnreadCount}
                             currentUserProfilePath={currentUserProfilePath}
                         />
 

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import usePresence from '../../hooks/usePresence';
 import { Link, useLocation } from 'react-router-dom';
-import { Bell, ChevronDown, LayoutDashboard, LogOut, Settings, User } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, LogOut, Settings, User } from 'lucide-react';
 import useSignOut from '../auth/useSignOut';
 import { isAuthFlowPath } from '../auth/authPaths';
 
@@ -18,7 +18,6 @@ export default function UserMenu({
     authLoading,
     isProfileOpen,
     setIsProfileOpen,
-    mobileUnreadCount,
     currentUserProfilePath,
 }) {
     const profileRef = useRef(null);
@@ -83,7 +82,7 @@ export default function UserMenu({
                         aria-expanded={isProfileOpen}
                         aria-controls={isProfileOpen ? profileMenuId : undefined}
                         // The name starts with what the button shows, the username (WCAG 2.5.3).
-                        aria-label={`${user?.username || 'You'}, account menu${mobileUnreadCount > 0 ? `, ${mobileUnreadCount} unread notifications` : ''}`}
+                        aria-label={`${user?.username || 'You'}, account menu`}
                         className="press relative group flex h-10 items-center gap-2.5 rounded-lg pl-1.5 pr-2.5 transition-colors duration-150 hover:bg-white/[0.06]"
                     >
                         {/* Avatar or Placeholder */}
@@ -96,9 +95,6 @@ export default function UserMenu({
                                 </div>
                             )}
                         </div>
-                        {isAuthenticated && mobileUnreadCount > 0 && (
-                            <span className="absolute top-1 left-7 w-2 h-2 bg-red-500 rounded-full ring-2 ring-dark shadow-sm z-10" />
-                        )}
                         <span className="text-[15px] font-medium text-[var(--text-1)] max-w-[120px] truncate">
                             {user?.username}
                         </span>
@@ -136,22 +132,6 @@ export default function UserMenu({
                                 >
                                     <User aria-hidden="true" className="w-4 h-4" />
                                     <span className="text-sm font-medium">Profile</span>
-                                </Link>
-                                <Link
-                                    to="/notifications"
-                                    onClick={() => setIsProfileOpen(false)}
-                                    className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
-                                >
-                                    <span className="flex items-center gap-3 min-w-0">
-                                        <Bell aria-hidden="true" className="w-4 h-4" />
-                                        <span className="text-sm font-medium">Notifications</span>
-                                    </span>
-                                    {mobileUnreadCount > 0 && (
-                                        <span
-                                            className="w-2 h-2 rounded-full bg-accent"
-                                            aria-label="New notifications"
-                                        />
-                                    )}
                                 </Link>
                                 <Link
                                     to="/settings?tab=account"

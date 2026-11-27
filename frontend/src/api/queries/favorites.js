@@ -1,5 +1,5 @@
 // Query keys and options owned by G5 Community (feature-revamp seams).
-import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
+import { infiniteQueryOptions, queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 
 import { characterFavoriteApi, favoriteApi, staffFavoriteApi } from '../client';
@@ -24,11 +24,15 @@ export const favoriteKeys = {
 export const characterFavoriteKeys = {
     byUser: (username) => ['character-favorites', username],
     overview: (username) => ['character-favorites', username, 'overview'],
+    /** Every page, for the profile's Favorites tab; covered by `byUser(username)`. */
+    all: (username) => ['character-favorites', username, 'all'],
 };
 
 export const staffFavoriteKeys = {
     byUser: (username) => ['staff-favorites', username],
     overview: (username) => ['staff-favorites', username, 'overview'],
+    /** Every page, for the profile's Favorites tab; covered by `byUser(username)`. */
+    all: (username) => ['staff-favorites', username, 'all'],
 };
 
 /** Reorder mode loads at most this many favorites (the server's reorder cap). */
@@ -73,11 +77,23 @@ export const favoriteQueries = {
     }),
 };
 
+/** Favourite characters / voice actors per page on the Favorites tab. */
+export const PEOPLE_PAGE_SIZE = 48;
+
+/** A paged list of one person kind, `Load more` following the server's `next`. */
+const allPeople = (queryKey, getAll, username) => infiniteQueryOptions({
+    queryKey,
+    queryFn: ({ pageParam }) => getAll({ username, page: pageParam, page_size: PEOPLE_PAGE_SIZE }).then((res) => res.data),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, pages) => (lastPage?.next ? pages.length + 1 : undefined),
+});
+
 export const characterFavoriteQueries = {
     overview: (username, pageSize) => queryOptions({
         queryKey: characterFavoriteKeys.overview(username),
         queryFn: () => characterFavoriteApi.getAll({ username, page: 1, page_size: pageSize }).then((res) => res.data),
     }),
+    all: (username) => allPeople(characterFavoriteKeys.all(username), (params) => characterFavoriteApi.getAll(params), username),
 };
 
 export const staffFavoriteQueries = {
@@ -85,6 +101,7 @@ export const staffFavoriteQueries = {
         queryKey: staffFavoriteKeys.overview(username),
         queryFn: () => staffFavoriteApi.getAll({ username, page: 1, page_size: pageSize }).then((res) => res.data),
     }),
+    all: (username) => allPeople(staffFavoriteKeys.all(username), (params) => staffFavoriteApi.getAll(params), username),
 };
 
 // Resolved lazily so module mocks of '../client' are read at call time.
