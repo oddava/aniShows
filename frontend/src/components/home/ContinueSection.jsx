@@ -375,7 +375,7 @@ export default function ContinueSection() {
                             </p>
                             <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-1 text-[15px]">
                                 <Link to="/browse?sort=trending" className="btn-primary px-4">Find something to watch</Link>
-                                <Link to="/import" className="text-link">Import a list</Link>
+                                <Link to="/settings?tab=data" className="text-link">Import a list</Link>
                             </div>
                         </div>
                         {airingSoon.length > 0 && (

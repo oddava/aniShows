@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -21,7 +23,7 @@ from ...animes.models import (
     UserFavoriteStaff,
 )
 from ..models import UserAnimeList, UserFollow, UserImportJob, UserProfile
-from ..services.export_service import ExportService, MALXMLExporter
+from ..services.export_service import ExportService, ListCSVExporter, MALXMLExporter
 from ..services.import_service import base as base_module
 from ..services.import_service.base import BaseImporter
 from ..services.import_service.mal_xml import MyAnimeListXMLImporter, parse_mal_xml
@@ -130,8 +132,15 @@ class ExportApiTests(ExportFixtureMixin, APITestCase):
         self.assertEqual(response["X-Export-Skipped"], "1")
         self.assertIn(b"1 entries without a MyAnimeList id", response.content)
 
-    def test_invalid_type_is_rejected(self):
+    def test_csv_download_is_a_utf8_attachment(self):
         response = self.client.get(reverse("export_user_data"), {"type": "csv"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn('.csv"', response["Content-Disposition"])
+        self.assertTrue(response.content.startswith("\ufeff".encode()))
+
+    def test_invalid_type_is_rejected(self):
+        response = self.client.get(reverse("export_user_data"), {"type": "pdf"})
         self.assertEqual(
             (response.status_code, response.data["code"]), (400, "invalid_export_type")
         )
@@ -139,6 +148,33 @@ class ExportApiTests(ExportFixtureMixin, APITestCase):
     def test_export_requires_authentication(self):
         self.client.force_authenticate(user=None)
         self.assertIn(self.client.get(reverse("export_user_data")).status_code, (401, 403))
+
+
+class CsvExportTests(ExportFixtureMixin, TestCase):
+    def rows(self):
+        content = ListCSVExporter(self.user).export()
+        self.assertTrue(content.startswith("\ufeff"))
+        return list(csv.DictReader(io.StringIO(content.removeprefix("\ufeff"))))
+
+    def test_every_entry_with_readable_status_and_ids(self):
+        rows = self.rows()
+        self.assertEqual(
+            [row["title"] for row in rows], ["Ends ]]> here & <there>", "Plain", "AniList only"]
+        )
+        first = rows[0]
+        self.assertEqual(first["status"], "Completed")
+        self.assertEqual(first["score"], "9")
+        self.assertEqual(first["started_at"], "2022-01-02")
+        self.assertEqual(first["times_rewatched"], "2")
+        self.assertEqual(first["notes"], "loved ]]> it & more")
+        self.assertEqual(first["mal_id"], "501")
+        self.assertEqual(rows[1]["rewatching"], "yes")
+        self.assertEqual(rows[2]["mal_id"], "")
+        self.assertEqual(rows[2]["anilist_id"], "903")
+
+    def test_formula_like_text_is_neutralised(self):
+        UserAnimeList.objects.filter(anime=self.plain).update(notes='=HYPERLINK("x")')
+        self.assertEqual(self.rows()[1]["notes"], '\'=HYPERLINK("x")')
 
 
 class XmlExportTests(ExportFixtureMixin, TestCase):

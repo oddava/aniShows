@@ -2,7 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 
 import { importExportApi } from '../client';
 
-/* The signed-in user's list imports (MAL / AniList / XML) on /import. */
+/* The signed-in user's list imports (MAL / AniList / XML) on Settings > Import & export. */
 export const importJobKeys = {
     all: ['importJobs'],
     forUser: (userId) => ['importJobs', userId ?? 'anonymous'],

@@ -6,7 +6,7 @@ import usePendingPath from '../../hooks/usePendingPath';
 
 const PILL_TARGET = '[aria-current="page"] > .tab-icon';
 
-const MAIN_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/profile', '/u', '/settings', '/notifications', '/import'];
+const MAIN_PATHS = ['/', '/browse', '/schedule', '/list', '/forums', '/profile', '/u', '/settings', '/notifications'];
 
 /**
  * The phone tab bar (M5): Home, Browse, Schedule, My list and Notifications

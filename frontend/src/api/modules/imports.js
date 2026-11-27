@@ -24,10 +24,9 @@ export const importExportApi = {
     }),
     unlinkAniList: () => api.delete('/import/anilist/link/'),
     syncAniList: () => api.post('/import/anilist/sync/'),
+    /** `json` (everything), `xml` (MAL list) or `csv` (list), as a Blob. */
     exportData: (format = 'json') => api.get('/export/', {
         params: { type: format },
         responseType: 'blob',
     }),
-    /** The JSON export as an object, for the preview: `response.data.data`. */
-    exportDataJSON: () => api.get('/export/', { params: { type: 'json', download: 'false' } }),
 };

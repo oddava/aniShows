@@ -54,7 +54,7 @@ export default function GuestLanding() {
                     </p>
                     <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2">
                         <Link to="/register" className="btn-primary">Create an account</Link>
-                        <Link to="/import" className="text-link">Import from MAL or AniList</Link>
+                        <Link to="/settings?tab=data" className="text-link">Import from MAL or AniList</Link>
                     </div>
                 </div>
 

@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { PASSWORD_HINT } from '../../utils/password';
 import SessionsCard from './SessionsCard';
@@ -11,7 +10,7 @@ const REVEAL = 'absolute inset-y-0 right-0 flex w-11 items-center justify-center
 const DESTRUCTIVE = 'btn-ghost text-sm !text-[var(--danger)] hover:!bg-[rgb(242_135_143/0.08)]';
 
 /**
- * The Account tab: email and password, privacy, import/export, sign out and
+ * The Account tab: email and password, privacy, sessions and sign out, and
  * delete. `account` is the state from useAccountSettings; the privacy toggle
  * comes from useProfileSettings because the profile form saves it too.
  */
@@ -246,30 +245,6 @@ export default function AccountTab({ user, account, isPrivate, handlePrivacyTogg
                         describedBy="private-profile-help"
                     />
                 </div>
-            </section>
-
-            <section className="panel">
-                <h2 className="section-title mb-2">Your data</h2>
-                <ul className="-mx-3 max-w-md">
-                    <li>
-                        <Link
-                            to="/import"
-                            className="block rounded-lg px-3 py-3 transition-colors hover:bg-white/[0.04]"
-                        >
-                            <span className="block text-[15px] font-medium text-[var(--text-1)]">Import a list</span>
-                            <span className="block text-sm text-[var(--text-2)]">From MyAnimeList or AniList</span>
-                        </Link>
-                    </li>
-                    <li>
-                        <Link
-                            to="/export"
-                            className="block rounded-lg px-3 py-3 transition-colors hover:bg-white/[0.04]"
-                        >
-                            <span className="block text-[15px] font-medium text-[var(--text-1)]">Export your data</span>
-                            <span className="block text-sm text-[var(--text-2)]">Download your list and reviews</span>
-                        </Link>
-                    </li>
-                </ul>
             </section>
 
             <section className="panel">

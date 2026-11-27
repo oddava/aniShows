@@ -33,7 +33,7 @@ function GettingStarted() {
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Link to="/browse?sort=trending" className="btn-primary px-4 text-[15px]">Find something to watch</Link>
-                <Link to="/import" className="text-link text-[15px]">Import a list</Link>
+                <Link to="/settings?tab=data" className="text-link text-[15px]">Import a list</Link>
             </div>
         </section>
     );

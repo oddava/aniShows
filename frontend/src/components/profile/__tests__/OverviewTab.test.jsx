@@ -69,7 +69,7 @@ describe('OverviewTab with an empty list', () => {
         const find = await screen.findByRole('link', { name: 'Find something to watch' });
         const importLink = screen.getByRole('link', { name: 'Import a list' });
         expect(find).toHaveAttribute('href', '/browse?sort=trending');
-        expect(importLink).toHaveAttribute('href', '/import');
+        expect(importLink).toHaveAttribute('href', '/settings?tab=data');
         expect(find.parentElement).toBe(importLink.parentElement);
         expect(find.parentElement.textContent).not.toMatch(/\bor\b/);
     });
