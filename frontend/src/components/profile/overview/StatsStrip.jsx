@@ -91,7 +91,7 @@ export default function StatsStrip({ user, summary, onOpenStatus, onOpenStats })
     const statusTotal = statuses.reduce((sum, status) => sum + status.count, 0);
 
     return (
-        <section aria-labelledby="profile-stats-title" className="profile-card @container">
+        <section aria-labelledby="profile-stats-title" className="profile-card @container cursor-default select-none">
             <div className="mb-4 flex items-center justify-between gap-4">
                 <h2 id="profile-stats-title" className="profile-card-title">Stats</h2>
                 {onOpenStats && (
