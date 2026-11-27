@@ -3,16 +3,16 @@ name: Deploy (Hetzner VPS)
 # Manual only: Actions → "Deploy (Hetzner VPS)" → Run workflow, on the branch
 # or tag to ship (usually main). Nothing deploys on push.
 #
-#   1. CI (ci.yml) on that commit
-#   2. backend and frontend images built and pushed to GHCR as sha-<7 chars>
-#   3. over SSH on the VPS (scripts/deploy/remote_deploy.sh): check out that
+#   1. backend and frontend images built and pushed to GHCR as sha-<7 chars>
+#      (no CI rerun: main only takes PRs that passed ci.yml's required checks)
+#   2. over SSH on the VPS (scripts/deploy/remote_deploy.sh): check out that
 #      commit in VPS_APP_DIR and run ./deploy-prod.sh, which pulls the images,
 #      backs the database up before any migration, migrates, rolls web, copies
 #      the frontend, reloads Caddy and runs its smoke tests
-#   4. the public health endpoint, checked from outside
+#   3. the public health endpoint, checked from outside
 #
-# Rollback / redeploy: set "rollback_to" to an earlier deployed commit; CI and
-# the build are skipped and that commit's images (already in GHCR) go live.
+# Rollback / redeploy: set "rollback_to" to an earlier deployed commit; the
+# build is skipped and that commit's images (already in GHCR) go live.
 # deploy-prod.sh also prints a local rollback recipe when a deploy fails.
 #
 # Secrets (Settings → Secrets and variables → Actions, environment "production"):
@@ -31,7 +31,7 @@ on:
   workflow_dispatch:
     inputs:
       rollback_to:
-        description: "Redeploy an earlier commit instead (its SHA; skips CI and the build)"
+        description: "Redeploy an earlier commit instead (its SHA; skips the build)"
         required: false
         default: ""
       health_url:
@@ -79,7 +79,7 @@ jobs:
             fi
             echo "commit=$ROLLBACK_TO" >> "$GITHUB_OUTPUT"
             echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "Rollback/redeploy of $ROLLBACK_TO (CI and build skipped)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Rollback/redeploy of $ROLLBACK_TO (build skipped)" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "commit=$HEAD_SHA" >> "$GITHUB_OUTPUT"
             echo "build=true" >> "$GITHUB_OUTPUT"
@@ -87,19 +87,11 @@ jobs:
           fi
 
   # ===========================================================================
-  # Lint and test (must pass before anything is built or deployed)
-  # ===========================================================================
-  ci:
-    needs: [resolve]
-    if: needs.resolve.outputs.build == 'true'
-    uses: ./.github/workflows/ci.yml
-
-  # ===========================================================================
   # Build and push the images (sha-<7 chars>, the tags deploy-prod.sh pulls)
   # ===========================================================================
   build:
     name: Build and push images
-    needs: [resolve, ci]
+    needs: [resolve]
     if: needs.resolve.outputs.build == 'true'
     # The VPS is ARM64 (Hetzner Cax): build natively on an ARM runner so the
     # images match it and the "Verify the frontend image" docker run works.
@@ -253,7 +245,7 @@ jobs:
   deploy:
     name: Deploy to the VPS
     needs: [resolve, build]
-    # A rollback skips ci/build; a normal run needs the build to have passed.
+    # A rollback skips the build; a normal run needs the build to have passed.
     if: >-
       always() && needs.resolve.result == 'success' &&
       (needs.build.result == 'success' ||

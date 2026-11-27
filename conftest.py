@@ -1,3 +1,4 @@
+import os
 import socket
 
 import httpx
@@ -5,6 +6,23 @@ import pytest
 import requests
 from django.conf import settings
 from django.core.cache import cache
+
+
+def pytest_collection_modifyitems(config, items):
+    """Run one shard of the suite when PYTEST_SHARD is set ("2/3": the second of three).
+
+    CI runs the shards as parallel jobs. Every nth test in collection order goes to
+    the same shard, so the slow modules spread across all of them; the order is
+    deterministic, so each xdist worker keeps the same slice.
+    """
+    shard = os.environ.get("PYTEST_SHARD")
+    if not shard:
+        return
+    index, total = (int(part) for part in shard.split("/"))
+    kept = items[index - 1 :: total]
+    kept_ids = {id(item) for item in kept}
+    config.hook.pytest_deselected(items=[item for item in items if id(item) not in kept_ids])
+    items[:] = kept
 
 
 @pytest.fixture(autouse=True)

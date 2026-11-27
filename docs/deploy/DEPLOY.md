@@ -98,7 +98,8 @@ The images come from the Deploy workflow, so the first deploy is a workflow run 
 1. Set up the GitHub side once ([Deploying from GitHub Actions](#deploying-from-github-actions)).
 2. Actions → **Deploy (Hetzner VPS)** → Run workflow on `main`.
 
-It runs CI, builds and pushes `sha-<commit>` images, then on the server checks out that commit
+It builds and pushes `sha-<commit>` images (no CI rerun: main only takes PRs that passed the
+required checks), then on the server checks out that commit
 and runs `./deploy-prod.sh`: the refusals, `check --deploy`, the migration plan (and a database
 backup first whenever migrations are planned), `migrate`, workers, web, the frontend files,
 Caddy, and the smoke tests (liveness, readiness, the SPA, `https` through `127.0.0.1:8080`
@@ -221,7 +222,7 @@ server's `backups-data/.deploy.lock`); a running deploy is never cancelled.
 - *The new release is bad:* run the workflow with **rollback_to** = the previous commit. Its
   7-character SHA is in `backups-data/deployed.env` as `PREVIOUS_BACKEND_TAG=sha-<7 chars>` (the
   release before the live one; `BACKEND_TAG` is the live one), or in the previous successful run of
-  the Deploy workflow. CI and the build are skipped; that commit's images are already in GHCR.
+  the Deploy workflow. The build is skipped; that commit's images are already in GHCR.
   Without GitHub: the local-image recipe with `PREVIOUS_*_IMAGE_ID` ([runbook.md](runbook.md#rollback), step 2).
 - *Its migrations must be undone too*, or anything else: the failed deploy prints a recipe with the
   concrete image ids and migration names; [runbook.md](runbook.md#rollback) has the steps,
