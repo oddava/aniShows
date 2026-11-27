@@ -315,6 +315,78 @@ class IncrementalSyncTests(ImportTestMixin, TestCase):
         self.assertEqual(self.link.cursor_updated_at, 200)
 
 
+class AvatarFetcher(FakeFetcher):
+    """A fake that also answers the account query, or fails it."""
+
+    def __init__(self, *args, avatar="https://s4.anilist.co/file/avatar.png", fail=False, **kw):
+        super().__init__(*args, **kw)
+        self.avatar = avatar
+        self.fail = fail
+
+    def fetch_user(self, username):
+        self.calls.append("user")
+        if self.fail:
+            raise AniListFetchError("unavailable", USER_MESSAGES["unavailable"])
+        return {"id": 1, "avatar": self.avatar}
+
+
+class AvatarTests(ImportTestMixin, TestCase):
+    """The linked account's AniList picture, for the import page."""
+
+    def setUp(self):
+        super().setUp()
+        self.link = UserListLink.objects.create(user=self.user, external_username="remote-name")
+
+    def test_a_full_import_stores_the_avatar(self):
+        fetcher = AvatarFetcher([anilist_row(11, updated=50)])
+        self.run_anilist(fetcher)
+        self.link.refresh_from_db()
+        self.assertEqual(self.link.external_avatar_url, "https://s4.anilist.co/file/avatar.png")
+        self.assertEqual(fetcher.calls, ["collection", "user"])
+
+    def test_a_sync_fetches_it_once_when_missing_then_not_again(self):
+        UserListLink.objects.filter(pk=self.link.pk).update(cursor_updated_at=200)
+        first = AvatarFetcher(recent=[])
+        self.run_anilist(first, mode=UserImportJob.ImportMode.incremental)
+        self.assertEqual(first.calls, ["recent:200", "user"])
+
+        second = AvatarFetcher(recent=[])
+        self.run_anilist(second, mode=UserImportJob.ImportMode.incremental)
+        self.assertEqual(second.calls, ["recent:200"])
+
+    def test_anilist_not_answering_keeps_the_stored_avatar_and_the_sync(self):
+        UserListLink.objects.filter(pk=self.link.pk).update(external_avatar_url="https://x/a.png")
+        job, _ = self.run_anilist(AvatarFetcher([anilist_row(11, updated=50)], fail=True))
+        self.link.refresh_from_db()
+        self.assertEqual(job.status, JobStatus.completed)
+        self.assertEqual(self.link.external_avatar_url, "https://x/a.png")
+
+    def test_fetcher_reads_the_avatar_and_drops_a_non_https_one(self):
+        fetcher, requests = graphql_transport(
+            lambda q, v: {"User": {"id": 7, "avatar": {"medium": "https://s4.anilist.co/a.png"}}}
+        )
+        self.assertEqual(
+            fetcher.fetch_user("remote-name"), {"id": 7, "avatar": "https://s4.anilist.co/a.png"}
+        )
+        self.assertEqual(requests[0]["variables"], {"name": "remote-name"})
+
+        fetcher, _ = graphql_transport(
+            lambda q, v: {"User": {"id": 7, "avatar": {"medium": "javascript:alert(1)"}}}
+        )
+        self.assertEqual(fetcher.fetch_user("remote-name")["avatar"], "")
+
+    def test_the_link_payload_carries_it_and_a_rename_forgets_it(self):
+        UserListLink.objects.filter(pk=self.link.pk).update(external_avatar_url="https://x/a.png")
+        self.link.refresh_from_db()
+        self.assertEqual(
+            anilist_sync.link_payload(self.link, self.user)["avatar_url"], "https://x/a.png"
+        )
+        with patch(QUEUE):
+            anilist_sync.save_link(self.user, "someone-new", False)
+        self.link.refresh_from_db()
+        self.assertEqual(self.link.external_avatar_url, "")
+
+
 class DailySyncTests(TestCase):
     def setUp(self):
         cache.clear()

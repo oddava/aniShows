@@ -94,8 +94,28 @@ class AniListImporter(BaseImporter):
         }
         if self._anilist_user_id:
             fields["external_user_id"] = self._anilist_user_id
+        avatar = self._fresh_avatar()
+        if avatar is not None:
+            fields["external_avatar_url"] = avatar
         UserListLink.objects.filter(pk=self.link.pk).update(**fields)
         logger.info("AniList link synced", extra={"user_id": self.user.id, "cursor": cursor})
+
+    def _fresh_avatar(self) -> str | None:
+        """The account's avatar after a full import, or once for a link without one.
+
+        Best effort, one small request: ``None`` (keep what is stored) when it is not
+        due or AniList does not answer.
+        """
+        if self.link is None or (self.incremental and self.link.external_avatar_url):
+            return None
+        fetch_user = getattr(self.fetcher, "fetch_user", None)
+        if fetch_user is None:
+            return None
+        try:
+            return fetch_user(self.username).get("avatar", "")
+        except AniListFetchError:
+            logger.info("Could not read the AniList avatar", exc_info=True)
+            return None
 
     def on_source_error(self, error: ImportSourceError) -> None:
         if self.link is None:

@@ -67,6 +67,7 @@ def link_payload(link: UserListLink | None, user) -> dict[str, Any]:
     return {
         "linked": True,
         "username": link.external_username,
+        "avatar_url": link.external_avatar_url or None,
         "auto_sync": link.auto_sync,
         "last_synced_at": link.last_synced_at.isoformat() if link.last_synced_at else None,
         "last_error": link.last_error,
@@ -101,6 +102,7 @@ def save_link(user, username: str, auto_sync: bool) -> dict[str, Any]:
             link.cursor_updated_at = None
             link.last_synced_at = None
             link.external_user_id = None
+            link.external_avatar_url = ""
         link.save()
 
     job_id = None

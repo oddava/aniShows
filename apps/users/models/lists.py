@@ -22,6 +22,7 @@ from django.db.models.fields import (
     IntegerField,
     PositiveSmallIntegerField,
     TextField,
+    URLField,
 )
 
 from ...shared.models import CreatedAtMixin
@@ -230,6 +231,8 @@ class UserListLink(Model):
     provider = CharField(max_length=16, choices=Provider.choices, default=Provider.anilist)
     external_username = CharField(max_length=50)
     external_user_id = IntegerField(null=True, blank=True)
+    # The account's AniList avatar (their CDN URL), shown on the import page.
+    external_avatar_url = URLField(max_length=500, blank=True, default="")
     auto_sync = BooleanField(default=False)
     # Largest AniList ``updatedAt`` (unix seconds) applied so far; incremental syncs stop there.
     cursor_updated_at = BigIntegerField(null=True, blank=True)

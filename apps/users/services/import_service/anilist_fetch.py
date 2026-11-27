@@ -53,6 +53,12 @@ query ImportListCollection($userName: String) {{
 }}
 """
 
+USER_QUERY = """
+query ImportUser($name: String) {
+    User(name: $name) { id avatar { medium } }
+}
+"""
+
 RECENT_ENTRIES_QUERY = f"""
 query ImportRecentEntries($userName: String, $page: Int, $perPage: Int) {{
     Page(page: $page, perPage: $perPage) {{
@@ -230,6 +236,15 @@ class AniListFetcher:
                 entries.append(row)
         user = collection.get("user") or {}
         return entries, user.get("id")
+
+    def fetch_user(self, username: str) -> dict[str, Any]:
+        """The public account: ``{"id": int | None, "avatar": str}`` (avatar may be "")."""
+        data = self.run_query(USER_QUERY, {"name": username})
+        user = data.get("User") if isinstance(data, dict) else None
+        if not isinstance(user, dict):
+            raise _error("not_found")
+        avatar = (user.get("avatar") or {}).get("medium") or ""
+        return {"id": user.get("id"), "avatar": avatar if avatar.startswith("https://") else ""}
 
     def fetch_recent_entries(
         self,
